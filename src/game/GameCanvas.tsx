@@ -6,7 +6,7 @@ export function GameCanvas() {
     <Canvas
       id="museum-game"
       shadows
-      camera={{ fov: 75, near: 0.1, far: 100, position: [0, 1.65, 4] }}
+      camera={{ fov: 50, near: 0.1, far: 100, position: [0, 1.65, 4] }}
       gl={{ antialias: true }}
     >
       <MuseumRoomScene />

@@ -8,9 +8,9 @@ import { useGameStore } from '../store/gameStore'
 
 const TORCH_MODEL_PATH = '/models/Meshy_AI_Blazing_Torch_texture.glb'
 const TORCH_SCALE = 0.38
-const WALL_MARGIN = 0.35
-const MIN_VISIBLE_DISTANCE = 0.42
-const MIN_WALL_AVOIDANCE = 0.72
+const WALL_MARGIN = 0.5
+const MIN_VISIBLE_DISTANCE = 0.15
+const MIN_WALL_AVOIDANCE = 0.2
 const TORCH_LIGHT_INTENSITY = 10
 const TORCH_LIGHT_DISTANCE = 12
 const TORCH_LIGHT_DECAY = 1.2
@@ -130,9 +130,9 @@ export function HandTorch() {
     )
 
     torch.position.set(
-      MathUtils.lerp(desiredLocalPosition.x, desiredLocalPosition.x * wallAvoidanceRef.current, 0.35),
+      MathUtils.lerp(desiredLocalPosition.x, desiredLocalPosition.x * wallAvoidanceRef.current, 0.8),
       desiredLocalPosition.y - wallPressure * 0.28,
-      MathUtils.lerp(desiredLocalPosition.z, desiredLocalPosition.z * wallAvoidanceRef.current, 0.3),
+      MathUtils.lerp(desiredLocalPosition.z, desiredLocalPosition.z * wallAvoidanceRef.current, 0.8),
     )
 
     torch.rotation.set(
