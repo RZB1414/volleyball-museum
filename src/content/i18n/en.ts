@@ -1,0 +1,180 @@
+/**
+ * en — typed against pt-BR, so a missing key is a compile error rather than a
+ * blank plaque a player discovers.
+ */
+
+import type { TranslationKey } from './pt-BR'
+
+export const en = {
+  // ---------------------------------------------------------------------
+  // Shell
+  // ---------------------------------------------------------------------
+  'ui.title': 'Volleyball Museum',
+  'ui.subtitle': 'The history of world volleyball, one room at a time.',
+  'ui.enter': 'Enter the museum',
+  'ui.continue': 'Continue',
+  'ui.loading': 'Preparing the gallery…',
+  'ui.settings': 'Settings',
+  'ui.language': 'Language',
+  'ui.brightness': 'Brightness',
+  'ui.motion': 'Camera motion',
+  'ui.motion.headbob': 'Head bob while walking',
+  'ui.motion.fov': 'Field-of-view push when running',
+  'ui.quality': 'Graphics quality',
+  'ui.readingMode': 'Reading mode',
+  'ui.credits': 'Credits and collection',
+
+  'prompt.examine': 'Examine',
+  'prompt.read': 'Read',
+  'prompt.open': 'Open',
+  'prompt.rotate': 'Drag to rotate',
+  'prompt.locked': 'Locked',
+  'prompt.close': 'Close',
+
+  'map.title': 'Museum plan',
+  'map.state.unlit': 'No power',
+  'map.state.partial': 'Objects still uncatalogued',
+  'map.state.complete': 'Catalogued',
+  'map.legend': 'Legend',
+
+  'catalogue.title': 'Catalogue',
+  'catalogue.empty': 'Nothing catalogued yet. Examine an object and turn it over in your hands.',
+  'catalogue.incomplete': 'Seen, but not catalogued. Turn it over.',
+  'journal.title': "Curator's notebook",
+  'archive.title': 'Archive',
+  'archive.empty': 'No documents found yet. Look in drawers and filing cabinets.',
+  'archive.filed': 'Filed in your notebook — Tab to re-read',
+  'container.office.title': "Curator's locked drawer",
+  'document.predecessor.title': 'Note from the previous curator',
+  'document.predecessor.body':
+    'If you are reading this you found the combination, which means you read the labels instead of walking past them. Good. The rest of the collection is in the vault beneath the atrium, and it does not open with numbers: it opens with three medals. One for each era you catalogue in full. Take your time. The museum reopens tomorrow, but it has been here a hundred and thirty years.',
+  'lock.title': 'Combination lock',
+  'lock.prompt': 'Four digits',
+  'lock.submit': 'Open',
+  'lock.wrong': 'It does not give.',
+  'lock.opened': 'The drawer yields.',
+  'lock.hint.source': 'You saw this somewhere in Wing 1.',
+  'credits.note':
+    'Every image in this museum is public domain or Creative Commons licensed. Each is credited here and beneath the work itself in the gallery.',
+  'credits.source': 'Source',
+  'credits.licence': 'Licence',
+  'prompt.journal': 'Notebook',
+  'container.holyoke-a.title': 'Archive — provenance',
+  'container.holyoke-b.title': 'Archive — rules',
+
+  'intro.line1': 'You are the new curator.',
+  'intro.line2': 'It is the night before reopening. The power is out.',
+  'intro.line3': 'Your predecessor left something in the vault.',
+
+  // ---------------------------------------------------------------------
+  // Rooms
+  // ---------------------------------------------------------------------
+  'room.atrium.title': 'Atrium',
+  'room.atrium.nickname': 'the hall with the plinth',
+  'room.holyoke.title': 'Wing 1 · Holyoke',
+  'room.holyoke.subtitle': '1895 – 1929',
+  'room.holyoke.nickname': 'the room with the laced ball',
+  'room.office.title': "Curator's office",
+  'room.office.nickname': 'the room with the green lamp',
+
+  // ---------------------------------------------------------------------
+  // Wall lettering
+  // ---------------------------------------------------------------------
+  'sign.atrium.heading': 'MUSEUM OF VOLLEYBALL',
+  'sign.atrium.body':
+    'A game invented in 1895 for people who found basketball too rough. ' +
+    'Reopening tomorrow. You are the one who finishes the install.',
+
+  // ---------------------------------------------------------------------
+  // Wing 1 — Holyoke
+  // ---------------------------------------------------------------------
+  'exhibit.ball-improvised.title': 'The ball that did not exist',
+  'exhibit.ball-improvised.label':
+    'Morgan tried a basketball first: too heavy. Then the bare bladder with the leather stripped off: too light, it floated. Without a proper ball, the game he had just invented did not work. The answer came from a commission.',
+  'exhibit.ball-improvised.catalogue':
+    'Basketball rubber bladder, c. 1895. Reproduction. The first object in volleyball history is a failure: too soft to come down, too light to cross the net with intent. That inadequacy is what produced the Spalding commission.',
+
+  'exhibit.ball-spalding.title': 'The laced Spalding ball',
+  'exhibit.ball-spalding.label':
+    'A.G. Spalding & Bros. had a factory in Chicopee Falls, a few miles from Holyoke. Morgan commissioned a purpose-built ball: a rubber bladder inside hand-stitched leather, closed with a rawhide lace. Roughly 25 inches in circumference.',
+  'exhibit.ball-spalding.catalogue':
+    'Spalding volleyball, tanned leather with raised waxed-thread outseams and a lace closure, c. 1900–1920. The lace is what dates the object: it survived into the 1930s and vanished once the laceless ball became the official standard.',
+  'hotspot.ball-spalding.lacing.label': 'Rawhide lace over the inflation opening',
+  'hotspot.ball-spalding.maker.label': "Maker's mark embossed on the opposite panel",
+  'hotspot.ball-spalding.seam.label': 'Raised outseam, stitched by hand',
+
+  'exhibit.net-1897.title': 'The net at 1.98 metres',
+  'exhibit.net-1897.label':
+    'The first net stood 6 feet 6 inches off the floor — about half a foot above the average man of the period. The court measured 25 by 50 feet. The 1897 rules required a net at least 2 feet wide and 27 feet long.',
+  'exhibit.net-1897.catalogue':
+    'Cotton cord net with canvas edge tape and wooden posts seated in cast-iron floor sockets. The low height is not an accident: the game was designed to be easy, for middle-aged men who found basketball too strenuous.',
+  'hotspot.net-1897.tape.label': 'Canvas tape stitched along the top edge',
+  'hotspot.net-1897.socket.label': 'Cast-iron socket set into the floor',
+
+  'exhibit.handbook-1897.title': 'The first printed rulebook',
+  'exhibit.handbook-1897.label':
+    'The 1897 Official Handbook of the Athletic League of the YMCA of North America carries the first published specifications: a 25 by 50 foot court, a net at 6 feet 6 inches, and a ball of 25 to 27 inches circumference weighing 9 to 12 ounces. A game ran nine innings.',
+  'exhibit.handbook-1897.catalogue':
+    'Official Handbook of the Athletic League of the Y.M.C.A. of North America, 1897. Facsimile. The original ten rules had appeared a year earlier in the July 1896 issue of Physical Education magazine. The name stayed two words — volley ball — until 1952.',
+  'hotspot.handbook-1897.innings.label': 'The nine-innings clause, inherited from baseball',
+  'hotspot.handbook-1897.ball-spec.label': 'Ball specification: 25 to 27 inches, 9 to 12 ounces',
+
+  'exhibit.guide-1916.title': 'The guide that recorded the bomba',
+  'exhibit.guide-1916.label':
+    'In the Philippines, around 1916, players invented the combination that changed everything: a high pass followed by a second player striking the ball downward. They called the kill the bomba and the hitter the bomberino. Americans called it the Filipino bomb.',
+  'exhibit.guide-1916.catalogue':
+    'Spalding Athletic Library — Volley Ball Guide, 1916–17 edition. It is here that Morgan formally credited Dr. Frank Wood and fire chief John Lynch for their contributions to the first rules. The Filipino attack forced the rule changes that followed.',
+  'hotspot.guide-1916.credit.label': 'Morgan credits Frank Wood and John Lynch',
+  'hotspot.guide-1916.census.label': 'The 1916 census: roughly 200,000 players in the United States',
+
+  'exhibit.gym-suit.title': 'The gymnasium suit',
+  'exhibit.gym-suit.label':
+    'Ribbed worsted wool, knee-length trousers, canvas shoes with rubber soles. No synthetics, no white plastic: everything is a pigment, a dye or an oxide. Volleyball was born inside Victorian gymnasium dress, not inside sportswear.',
+  'exhibit.gym-suit.catalogue':
+    'YMCA gymnasium suit, c. 1895–1915. Reproduction. The wool knit was heavy and held sweat, which helps explain why the game was designed without contact and with a low net: it was recreation for a middle-aged body, not competition.',
+
+  'exhibit.portrait-morgan.title': 'William G. Morgan',
+  'exhibit.portrait-morgan.label':
+    'Physical director of the YMCA in Holyoke, Massachusetts. In 1895, aged 25, he built a non-contact game for older, sedentary members. He called it Mintonette. He had met James Naismith, the inventor of basketball, in 1891.',
+  'exhibit.portrait-morgan.catalogue':
+    'William George Morgan (Lockport, New York, 23 January 1870 — 27 December 1942). He graduated from the International YMCA Training School in 1894 and took up the Holyoke post on 30 August 1895. He left the YMCA in 1900 for industry.',
+  'hotspot.portrait-morgan.date.label': 'The invention date is disputed — see the catalogue entry',
+
+  'exhibit.photo-gym.title': 'The gymnasium where it happened',
+  'exhibit.photo-gym.label':
+    'The Holyoke YMCA gymnasium, photographed in 1897, at the corner of High and Appleton Streets. Wooden floor, riveted steel trusses, gymnastic apparatus stacked against the wall. This is the space the first match was played in.',
+  'exhibit.photo-gym.catalogue':
+    'Interior of the old Holyoke YMCA building, 1897. The building served from 1886 to 1943. On 7 July 1896 Morgan took two five-man teams from Holyoke to Springfield to demonstrate the game — that is where it got its lasting name.',
+
+  // ---------------------------------------------------------------------
+  // Documents
+  // ---------------------------------------------------------------------
+  'document.invention-date.title': 'Provenance note: the disputed date',
+  'document.invention-date.body':
+    'The date of 9 February 1895, repeated almost everywhere, does not survive the archive. The International Volleyball Hall of Fame found no verifiable citation for it and established that Morgan\'s posting in Auburn, Maine only ended in August 1895, and that he took up Holyoke on 30 August. The institution places the invention in December 1895. The plaques in this wing therefore say only 1895.',
+
+  'document.halstead.title': 'Springfield, 7 July 1896',
+  'document.halstead.body':
+    'Morgan demonstrated the game in the east gymnasium of the International YMCA Training School, during the physical directors\' conference convened by Luther Halsey Gulick. He brought two five-man teams from Holyoke, captained by mayor James J. Curran and fire chief John Lynch. Professor Alfred T. Halstead, watching the volleying nature of the play, proposed replacing Mintonette with Volley Ball. Morgan agreed.',
+
+  'document.rule-changes.title': 'The changes that made the modern game',
+  'document.rule-changes.body':
+    'In 1917 a game was shortened from 21 points to 15. In 1918 the number of players was fixed at six per side. In 1920 came the two rules that define volleyball to this day: a maximum of three contacts per team, and a restriction on attacking from the back row. All three answer the same problem — the attack invented in the Philippines had unbalanced the game.',
+
+  // ---------------------------------------------------------------------
+  // Facts
+  // ---------------------------------------------------------------------
+  'fact.springfield-renaming.claim': 'The year Mintonette was renamed Volley Ball',
+  'fact.first-rulebook.claim': 'The year of the first printed official rulebook',
+  'fact.filipino-spike.claim': 'The year the spike emerged in the Philippines',
+  'fact.six-a-side.claim': 'The year the side was fixed at six players',
+
+  // ---------------------------------------------------------------------
+  // Locks
+  // ---------------------------------------------------------------------
+  'lock.office-drawer.mapLabel': 'Combination drawer — 4 digits',
+  'lock.holyoke-power.mapLabel': 'Breaker panel — handle',
+  'lock.hint.highlight': 'The right plaque has lit up.',
+  'lock.hint.audio': 'The docent recording repeats the year.',
+  'lock.hint.reveal': 'The dial has caught on the correct digit.',
+} as const satisfies Record<TranslationKey, string>

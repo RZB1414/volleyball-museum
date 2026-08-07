@@ -1,0 +1,508 @@
+/**
+ * The bake.
+ *
+ *   npm run bake
+ *
+ * Generates every piece of museum geometry procedurally in Node, writes it as
+ * meshopt-compressed GLB, and emits a typed manifest describing what came out.
+ *
+ * WHY BUILD TIME AND NOT RUNTIME — the question the design brief forces a side
+ * on. Generating in the browser would mean: hundreds of milliseconds of
+ * main-thread jank per room with no way to yield; no meshopt, no quantisation,
+ * no texture compression, so strictly more bytes over the wire past trivial
+ * complexity; no CDN or browser caching between sessions; and nothing that can
+ * be inspected, diffed, screenshotted or regression-tested.
+ *
+ * The generator source stays in the repository — it IS the asset. The GLB is
+ * the compiled artefact, exactly like a bundled .js.
+ */
+
+import { createHash } from 'node:crypto'
+import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+import { MUSEUM } from '../src/content/museum.ts'
+import { MATERIALS, writeGLB } from './bake/lib/glb.mjs'
+import { renderMaterial, vramBytes } from './bake/lib/texture.mjs'
+import { buildMaterialRecipes } from './bake/materials.mjs'
+import {
+  buildArchiveCabinet,
+  buildBench,
+  buildBladder,
+  buildBooklet,
+  buildDressForm,
+  buildFrame,
+  buildLabelPlaque,
+  buildNet1897,
+  buildOpenBook,
+  buildPlinth,
+  buildRoomShell,
+  buildSpaldingBall,
+  buildMedallionSocket,
+  buildRopeSpan,
+  buildStanchion,
+  buildVitrineGlass,
+  buildVitrineTable,
+} from './bake/kit.mjs'
+
+const HERE = dirname(fileURLToPath(import.meta.url))
+const ROOT = resolve(HERE, '..')
+const OUT_MODELS = resolve(ROOT, 'public/models')
+const OUT_TEXTURES = resolve(ROOT, 'public/textures/materials')
+const OUT_MANIFEST = resolve(ROOT, 'src/content/bake.generated.ts')
+
+/**
+ * Which generated texture set each GLB material uses, and whether it is a
+ * plain colour. Textures are shipped as separate files rather than embedded in
+ * the GLBs: the same oak appears in three bundles, and embedding would ship
+ * three copies and defeat per-file caching.
+ */
+const MATERIAL_TEXTURES = {
+  'maple-floor': 'maple-floor',
+  'plaster': 'plaster',
+  'plaster-dark': 'plaster',
+  'oak-matte': 'oak-matte',
+  'oak-varnished': 'oak-matte',
+  'leather-tan': 'leather-tan',
+  'leather-worn': 'leather-tan',
+  'canvas': 'canvas',
+  'cord-hemp': 'canvas',
+  'rope-velvet': 'canvas',
+  // Brass, cast iron and vitrine glass stay as untextured solids: they are
+  // small, specular and read entirely off the environment, so a texture would
+  // cost VRAM for detail nobody perceives.
+  'brass': null,
+  'iron-cast': null,
+  'glass-vitrine': null,
+}
+
+/** Mobile VRAM ceiling for all material textures, uncompressed with mips. */
+const TEXTURE_VRAM_BUDGET = 45 * 1024 * 1024
+
+/**
+ * The shells come from the content set, because there is only one of them.
+ *
+ * They used to be redeclared here, with a comment promising that "the validator
+ * cross-checks the two sets so they cannot drift". No such validator was ever
+ * written, and they drifted immediately: Holyoke's one-way shortcut existed in
+ * this list and not in the content, and then a doorway added to the content
+ * never reached the geometry at all. A wall is only ever open where the bake
+ * says it is, so a second source of truth for portals is a second source of
+ * truth for whether the player can leave the room.
+ *
+ * Node strips the types on import, which is the same mechanism the content
+ * validator already runs on.
+ */
+const ROOM_SHELLS = MUSEUM.rooms.map((room) => ({
+  id: room.id,
+  shell: room.shell,
+  portals: room.portals.map((portal) => ({
+    id: portal.id,
+    position: portal.position,
+    width: portal.width,
+    height: portal.height,
+  })),
+}))
+
+/** Per-asset triangle budgets from the performance plan. Exceeding one fails the bake. */
+const TRIANGLE_BUDGET = {
+  shell: 30_000,
+  hero: 15_000,
+  prop: 2_500,
+  filler: 300,
+}
+
+function checkBudget(manifest, name, budget) {
+  const entry = manifest.find((item) => item.name === name)
+  if (!entry) return null
+  if (entry.triangles > budget) {
+    return `${name}: ${entry.triangles} triangles exceeds the ${budget} budget`
+  }
+  return null
+}
+
+/**
+ * A box collider derived from the geometry bounds. Good enough for walls,
+ * plinths and vitrines; the old build used the full AABB of every prop, which
+ * is why you could walk into thin air next to the desk. Exhibits get no
+ * collider at all — you should be able to lean into a display case.
+ */
+function boxColliderFrom(bounds) {
+  return {
+    kind: 'box',
+    halfExtents: bounds.size.map((value) => Number((value / 2).toFixed(4))),
+    centre: bounds.centre,
+  }
+}
+
+async function bakeBundle(name, parts) {
+  const { glb, manifest } = await writeGLB(parts)
+  const hash = createHash('sha256').update(glb).digest('hex').slice(0, 8)
+  const filename = `${name}.${hash}.glb`
+  const outPath = resolve(OUT_MODELS, filename)
+
+  let unchanged = false
+  try {
+    unchanged = (await readFile(outPath)).equals(Buffer.from(glb))
+  } catch {
+    unchanged = false
+  }
+  if (!unchanged) await writeFile(outPath, glb)
+
+  const triangles = manifest.reduce((total, item) => total + item.triangles, 0)
+  console.log(
+    `  ${unchanged ? '=' : '+'} ${filename.padEnd(38)} ` +
+      `${String(Math.round(glb.byteLength / 1024)).padStart(5)} KB  ` +
+      `${String(triangles).padStart(7)} tris  ${manifest.length} part(s)`,
+  )
+
+  return { name, url: `/models/${filename}`, bytes: glb.byteLength, manifest }
+}
+
+/**
+ * Removes superseded builds so public/models does not accumulate garbage.
+ *
+ * Scoped hard to files this script owns: `<known-bundle-name>.<8 hex>.glb` and
+ * nothing else. An earlier version matched every `*.glb` in the directory and
+ * deleted a hand-authored model that happened to live there. A bake step must
+ * never be able to reach outside its own output.
+ */
+async function pruneStale(bundleNames, keepFilenames) {
+  let entries = []
+  try {
+    entries = await readdir(OUT_MODELS, { withFileTypes: true })
+  } catch {
+    return
+  }
+
+  const ownedPattern = new RegExp(
+    `^(${bundleNames.map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})\\.[0-9a-f]{8}\\.glb$`,
+  )
+
+  for (const entry of entries) {
+    if (!entry.isFile()) continue
+    if (!ownedPattern.test(entry.name)) continue
+    if (keepFilenames.has(entry.name)) continue
+    await unlink(resolve(OUT_MODELS, entry.name))
+    console.log(`  - ${entry.name} (superseded)`)
+  }
+}
+
+/**
+ * Same containment rule as the GLB prune: only `<name>-<map>.<8 hex>.webp`
+ * under the materials directory, so this can never reach a hand-placed file.
+ */
+async function pruneStaleTextures(keepFilenames) {
+  let entries = []
+  try {
+    entries = await readdir(OUT_TEXTURES, { withFileTypes: true })
+  } catch {
+    return
+  }
+
+  const ownedPattern = /^[a-z0-9-]+-(albedo|normal|orm)\.[0-9a-f]{8}\.webp$/
+  for (const entry of entries) {
+    if (!entry.isFile()) continue
+    if (!ownedPattern.test(entry.name)) continue
+    if (keepFilenames.has(entry.name)) continue
+    await unlink(resolve(OUT_TEXTURES, entry.name))
+    console.log(`  - ${entry.name} (superseded)`)
+  }
+}
+
+/** Writes a texture with a content hash, skipping identical bytes. */
+async function writeTexture(dir, name, buffer) {
+  const hash = createHash('sha256').update(buffer).digest('hex').slice(0, 8)
+  const filename = `${name}.${hash}.webp`
+  const outPath = resolve(dir, filename)
+
+  let unchanged = false
+  try {
+    unchanged = (await readFile(outPath)).equals(buffer)
+  } catch {
+    unchanged = false
+  }
+  if (!unchanged) await writeFile(outPath, buffer)
+
+  return { src: `/textures/materials/${filename}`, filename, unchanged }
+}
+
+async function main() {
+  await mkdir(OUT_MODELS, { recursive: true })
+  await mkdir(OUT_TEXTURES, { recursive: true })
+  const bundles = []
+  const problems = []
+
+  // -------------------------------------------------------------------------
+  // Procedural material textures.
+  //
+  // Each material is one scalar height field; albedo, normal and roughness all
+  // derive from it, which is what makes a surface cohere instead of looking
+  // like three unrelated images stacked on one mesh.
+  // -------------------------------------------------------------------------
+  console.log('Materials:')
+  const textureSets = {}
+  const textureFilenames = new Set()
+  let textureBytes = 0
+  let textureVram = 0
+
+  for (const recipe of buildMaterialRecipes()) {
+    const rendered = await renderMaterial(recipe, OUT_TEXTURES, writeTexture)
+    textureSets[recipe.id] = rendered
+
+    const bytes = rendered.albedo.bytes + rendered.normal.bytes + rendered.orm.bytes
+    const vram =
+      vramBytes(rendered.albedo.size) + vramBytes(rendered.normal.size) + vramBytes(rendered.orm.size)
+    textureBytes += bytes
+    textureVram += vram
+
+    for (const map of [rendered.albedo, rendered.normal, rendered.orm]) {
+      textureFilenames.add(map.src.split('/').pop())
+    }
+
+    console.log(
+      `  + ${recipe.id.padEnd(16)} ` +
+        `albedo ${String(rendered.albedo.size).padStart(4)}  ` +
+        `normal ${String(rendered.normal.size).padStart(4)}  ` +
+        `orm ${String(rendered.orm.size).padStart(4)}  ` +
+        `${String(Math.round(bytes / 1024)).padStart(4)} KB wire  ` +
+        `${(vram / 1024 / 1024).toFixed(1)} MB vram`,
+    )
+  }
+
+  if (textureVram > TEXTURE_VRAM_BUDGET) {
+    problems.push(
+      `texture VRAM ${(textureVram / 1024 / 1024).toFixed(1)} MB exceeds the ` +
+        `${(TEXTURE_VRAM_BUDGET / 1024 / 1024).toFixed(0)} MB mobile budget`,
+    )
+  }
+
+  await pruneStaleTextures(textureFilenames)
+  console.log('')
+
+  // -------------------------------------------------------------------------
+  // Room shells — one bundle per room, streamed on demand.
+  // -------------------------------------------------------------------------
+  console.log('Room shells:')
+  for (const room of ROOM_SHELLS) {
+    const parts = buildRoomShell(room)
+    const bundle = await bakeBundle(`room-${room.id}`, parts)
+
+    for (const part of bundle.manifest) {
+      // Walls, floor and trim are what the player collides with.
+      part.collider = boxColliderFrom(part.bounds)
+      const problem = checkBudget(bundle.manifest, part.name, TRIANGLE_BUDGET.shell)
+      if (problem) problems.push(problem)
+    }
+
+    bundles.push(bundle)
+  }
+
+  // -------------------------------------------------------------------------
+  // The shared prop kit — loaded once, instanced everywhere.
+  // -------------------------------------------------------------------------
+  console.log('\nShared kit:')
+  const vitrineTable = buildVitrineTable()
+  const kitParts = [
+    { name: 'plinth-block', geometry: buildPlinth({ height: 1.0 }), material: 'oak-varnished' },
+    // The atrium hero plinth. It was 0.44 m square and 1.15 m tall, which in an
+    // eighteen-metre room read as a chimney rather than a pedestal; a landmark
+    // has to be wider than it is tall to hold the centre of a space this size.
+    { name: 'plinth-tapered', geometry: buildPlinth({ height: 0.98, top: 0.66, bottom: 0.9 }), material: 'oak-varnished' },
+    { name: 'medallion-socket', geometry: buildMedallionSocket(), material: 'brass' },
+    { name: 'vitrine-table', geometry: vitrineTable, material: 'oak-varnished' },
+    { name: 'vitrine-glass', geometry: buildVitrineGlass(), material: 'glass-vitrine' },
+    { name: 'label-plaque', geometry: buildLabelPlaque(), material: 'brass' },
+    { name: 'archive-cabinet', geometry: buildArchiveCabinet(), material: 'oak-varnished' },
+    { name: 'rope-stanchion', geometry: buildStanchion(), material: 'brass' },
+    { name: 'rope-span', geometry: buildRopeSpan(), material: 'rope-velvet' },
+    { name: 'bench', geometry: buildBench(), material: 'oak-varnished' },
+  ]
+  const kitBundle = await bakeBundle('kit', kitParts)
+  for (const part of kitBundle.manifest) {
+    if (part.name.startsWith('plinth') || part.name === 'vitrine-table') {
+      part.collider = boxColliderFrom(part.bounds)
+    }
+    const problem = checkBudget(kitBundle.manifest, part.name, TRIANGLE_BUDGET.prop)
+    if (problem) problems.push(problem)
+  }
+  bundles.push(kitBundle)
+
+  // -------------------------------------------------------------------------
+  // Wing 1 exhibits.
+  // -------------------------------------------------------------------------
+  console.log('\nHolyoke exhibits:')
+  const net = buildNet1897()
+  const dressForm = buildDressForm()
+  const exhibitParts = [
+    { name: 'ball/spalding-laced-1900', geometry: buildSpaldingBall(), material: 'leather-tan' },
+    { name: 'ball/basketball-bladder-1895', geometry: buildBladder(), material: 'leather-worn' },
+    { name: 'net/ymca-1897__structure', geometry: net.structure, material: 'oak-matte' },
+    { name: 'net/ymca-1897__cords', geometry: net.cords, material: 'cord-hemp' },
+    { name: 'paper/handbook-1897', geometry: buildOpenBook(), material: 'canvas' },
+    { name: 'paper/spalding-guide-1916', geometry: buildBooklet(), material: 'canvas' },
+    { name: 'apparel/gym-suit-1900__form', geometry: dressForm.structure, material: 'plaster-dark' },
+    { name: 'apparel/gym-suit-1900__garment', geometry: dressForm.garment, material: 'leather-worn' },
+    { name: 'frame/portrait-small', geometry: buildFrame({ width: 0.34, aspect: 0.6611 }), material: 'oak-varnished' },
+    { name: 'frame/panorama-wide', geometry: buildFrame({ width: 1.4, aspect: 2.5751 }), material: 'oak-varnished' },
+  ]
+  const exhibitBundle = await bakeBundle('exhibits-holyoke', exhibitParts)
+  for (const part of exhibitBundle.manifest) {
+    const budget = part.name.startsWith('ball/') ? TRIANGLE_BUDGET.hero : TRIANGLE_BUDGET.prop
+    const problem = checkBudget(exhibitBundle.manifest, part.name, budget)
+    if (problem) problems.push(problem)
+  }
+  bundles.push(exhibitBundle)
+
+  // -------------------------------------------------------------------------
+
+  await pruneStale(
+    bundles.map((bundle) => bundle.name),
+    new Set(bundles.map((bundle) => bundle.url.split('/').pop())),
+  )
+
+  const totalBytes = bundles.reduce((total, bundle) => total + bundle.bytes, 0)
+  const totalTriangles = bundles.reduce(
+    (total, bundle) => total + bundle.manifest.reduce((sum, part) => sum + part.triangles, 0),
+    0,
+  )
+
+  const module = `/**
+ * GENERATED FILE — do not edit.
+ *
+ * Produced by \`npm run bake\`. Describes what the procedural generators
+ * actually emitted: node names, bounds, triangle counts and collider
+ * primitives. The runtime reads this instead of guessing at GLB structure,
+ * which is why this project does not use gltfjsx — the bake authored the file,
+ * so the structure is already known.
+ */
+
+export type BakedBounds = {
+  readonly min: readonly [number, number, number]
+  readonly max: readonly [number, number, number]
+  readonly size: readonly [number, number, number]
+  readonly centre: readonly [number, number, number]
+}
+
+export type BakedCollider = {
+  readonly kind: 'box'
+  readonly halfExtents: readonly [number, number, number]
+  readonly centre: readonly [number, number, number]
+}
+
+export type BakedPart = {
+  readonly name: string
+  readonly material: string
+  readonly bounds: BakedBounds
+  readonly triangles: number
+  readonly collider?: BakedCollider
+}
+
+export type BakedBundle = {
+  readonly name: string
+  readonly url: string
+  readonly bytes: number
+  readonly parts: readonly BakedPart[]
+}
+
+export type BakedTextureSet = {
+  /** sRGB. */
+  readonly albedo: string
+  /** Linear data — must NOT be decoded as sRGB. */
+  readonly normal: string
+  /** Linear data. Occlusion in R, roughness in G, metalness in B. */
+  readonly orm: string
+}
+
+/**
+ * Runtime material definitions. The GLBs carry plain colour placeholders; the
+ * runtime looks a part's material up here and builds the real textured
+ * material, so shared textures are downloaded and uploaded to the GPU once.
+ */
+export type BakedMaterial = {
+  readonly baseColor: readonly [number, number, number, number]
+  readonly roughness: number
+  readonly metalness: number
+  readonly clearcoat?: number
+  readonly clearcoatRoughness?: number
+  readonly alphaMode?: string
+  readonly textures?: BakedTextureSet
+}
+
+export const BAKED_BUNDLES = ${JSON.stringify(
+    bundles.map((bundle) => ({
+      name: bundle.name,
+      url: bundle.url,
+      bytes: bundle.bytes,
+      parts: bundle.manifest,
+    })),
+    null,
+    2,
+  )} as const satisfies readonly BakedBundle[]
+
+export const BAKED_MATERIALS = ${JSON.stringify(
+    Object.fromEntries(
+      Object.entries(MATERIALS).map(([key, spec]) => {
+        const textureId = MATERIAL_TEXTURES[key]
+        const set = textureId ? textureSets[textureId] : null
+        // Textured materials get their colour from the albedo map; the factor
+        // is a tint on top of it and stays neutral unless declared. Untextured
+        // ones have nothing but the factor, so they keep their full colour.
+        const factor = set
+          ? [...(spec.tint ?? [1, 1, 1]), spec.baseColor[3]]
+          : spec.baseColor
+        return [
+          key,
+          {
+            baseColor: factor,
+            roughness: spec.roughness,
+            metalness: spec.metallic,
+            ...(spec.clearcoat ? { clearcoat: spec.clearcoat } : {}),
+            ...(spec.clearcoatRoughness ? { clearcoatRoughness: spec.clearcoatRoughness } : {}),
+            ...(spec.alphaMode ? { alphaMode: spec.alphaMode } : {}),
+            ...(set
+              ? {
+                  textures: {
+                    albedo: set.albedo.src,
+                    normal: set.normal.src,
+                    orm: set.orm.src,
+                  },
+                }
+              : {}),
+          },
+        ]
+      }),
+    ),
+    null,
+    2,
+  )} as const satisfies Record<string, BakedMaterial>
+
+export const BAKE_TOTALS = {
+  bytes: ${totalBytes},
+  triangles: ${totalTriangles},
+  textureBytes: ${textureBytes},
+  /** Uncompressed VRAM with mips. The wire size says nothing about this. */
+  textureVramBytes: ${Math.round(textureVram)},
+} as const
+`
+
+  await writeFile(OUT_MANIFEST, module, 'utf8')
+
+  console.log(
+    `\nTotal: ${(totalBytes / 1024).toFixed(0)} KB across ${bundles.length} bundle(s), ` +
+      `${totalTriangles.toLocaleString('en-US')} triangles`,
+  )
+
+  if (problems.length > 0) {
+    console.error('\nBudget violations:')
+    for (const problem of problems) console.error(`  ${problem}`)
+    process.exitCode = 1
+  }
+}
+
+main().catch((error) => {
+  console.error(`\nbake failed — ${error.message}`)
+  console.error(error.stack)
+  process.exitCode = 1
+})

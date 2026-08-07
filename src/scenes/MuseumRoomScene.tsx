@@ -4,6 +4,7 @@ import { FirstPersonController } from '../player/FirstPersonController'
 import { HandTorch } from '../player/HandTorch'
 import { useGameStore } from '../store/gameStore'
 import { MuseumRoom } from '../world/MuseumRoom'
+import { SceneWarmup } from './SceneWarmup'
 
 export function MuseumRoomScene() {
   const ambientLightEnabled = useGameStore((state) => state.ambientLightEnabled)
@@ -14,7 +15,7 @@ export function MuseumRoomScene() {
       {ambientLightEnabled && (
         <>
           <ambientLight intensity={0.75} />
-          <directionalLight castShadow intensity={1.2} position={[3, 6, 4]} />
+          <directionalLight intensity={1.2} position={[3, 6, 4]} />
           <pointLight intensity={1.4} position={[0, 3.2, 0]} distance={12} />
         </>
       )}
@@ -27,6 +28,7 @@ export function MuseumRoomScene() {
           <HandTorch />
         </Suspense>
       </Physics>
+      <SceneWarmup />
     </>
   )
 }

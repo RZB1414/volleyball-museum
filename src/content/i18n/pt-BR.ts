@@ -1,0 +1,195 @@
+/**
+ * pt-BR — the source of truth for every string in the museum.
+ *
+ * `en.ts` is typed against this object, so a missing English key is a compile
+ * error rather than a blank plaque discovered by a player.
+ *
+ * Two constraints the copy has to respect:
+ *   - Wall labels are budgeted at ~40 words. Eight per gallery, maximum. The
+ *     surplus belongs in the archive layer, not on the wall.
+ *   - Portuguese runs 15-25% longer than English. Plaques auto-fit, but text
+ *     that needs three lines in pt-BR and two in en will look wrong in one of
+ *     them — write to the Portuguese length and let English breathe.
+ */
+
+export const ptBR = {
+  // ---------------------------------------------------------------------
+  // Shell
+  // ---------------------------------------------------------------------
+  'ui.title': 'Museu do Vôlei',
+  'ui.subtitle': 'A história do vôlei mundial, sala por sala.',
+  'ui.enter': 'Entrar no museu',
+  'ui.continue': 'Continuar',
+  'ui.loading': 'Preparando a galeria…',
+  'ui.settings': 'Ajustes',
+  'ui.language': 'Idioma',
+  'ui.brightness': 'Brilho',
+  'ui.motion': 'Movimento de câmera',
+  'ui.motion.headbob': 'Balanço ao andar',
+  'ui.motion.fov': 'Ampliação de campo ao correr',
+  'ui.quality': 'Qualidade gráfica',
+  'ui.readingMode': 'Modo leitura',
+  'ui.credits': 'Créditos e acervo',
+
+  // Prompts
+  'prompt.examine': 'Examinar',
+  'prompt.read': 'Ler',
+  'prompt.open': 'Abrir',
+  'prompt.rotate': 'Arraste para girar',
+  'prompt.locked': 'Trancado',
+  'prompt.close': 'Fechar',
+
+  // Map
+  'map.title': 'Planta do museu',
+  'map.state.unlit': 'Sem energia',
+  'map.state.partial': 'Peças por catalogar',
+  'map.state.complete': 'Catalogada',
+  'map.legend': 'Legenda',
+
+  // Catalogue
+  'catalogue.title': 'Catálogo',
+  'catalogue.empty': 'Nada catalogado ainda. Examine uma peça e gire-a nas mãos.',
+  'catalogue.incomplete': 'Peça vista, mas não catalogada. Vire-a.',
+  'journal.title': 'Caderno do curador',
+  'archive.title': 'Arquivo',
+  'archive.empty': 'Nenhum documento encontrado. Procure gavetas e arquivos.',
+  'archive.filed': 'Arquivado no caderno — Tab para reler',
+  'container.office.title': 'Gaveta trancada do curador',
+  'document.predecessor.title': 'Bilhete do curador anterior',
+  'document.predecessor.body':
+    'Se você está lendo isto, achou a combinação — o que significa que leu as placas em vez de passar por elas. Bom. O resto do acervo está no cofre, sob o átrio, e não abre com números: abre com três medalhas. Uma de cada era que você catalogar por inteiro. Não tenha pressa. O museu reabre amanhã, mas ele existe há cento e trinta anos.',
+  'lock.title': 'Fechadura de combinação',
+  'lock.prompt': 'Quatro dígitos',
+  'lock.submit': 'Abrir',
+  'lock.wrong': 'Não abre.',
+  'lock.opened': 'A gaveta cede.',
+  'lock.hint.source': 'Você viu isto em algum lugar da Ala 1.',
+  'credits.note':
+    'As imagens deste museu são de domínio público ou licenciadas em Creative Commons. Cada uma é creditada aqui e sob a própria obra na galeria.',
+  'credits.source': 'Fonte',
+  'credits.licence': 'Licença',
+  'prompt.journal': 'Caderno',
+  'container.holyoke-a.title': 'Arquivo — proveniência',
+  'container.holyoke-b.title': 'Arquivo — regulamentos',
+
+  // The narrative alibi for everything: the dark, the torch, the drawers,
+  // the catalogue, the office, the vault, the ending.
+  'intro.line1': 'Você é o novo curador.',
+  'intro.line2': 'É a noite anterior à reabertura. A energia caiu.',
+  'intro.line3': 'Seu antecessor deixou alguma coisa no cofre.',
+
+  // ---------------------------------------------------------------------
+  // Rooms
+  // ---------------------------------------------------------------------
+  'room.atrium.title': 'Átrio',
+  'room.atrium.nickname': 'o saguão do plinto',
+  'room.holyoke.title': 'Ala 1 · Holyoke',
+  'room.holyoke.subtitle': '1895 – 1929',
+  'room.holyoke.nickname': 'a sala da bola de cadarço',
+  'room.office.title': 'Escritório do curador',
+  'room.office.nickname': 'a sala da luminária verde',
+
+  // ---------------------------------------------------------------------
+  // Wall lettering. Vinyl on plaster, so it has to survive being read at a
+  // glance from twelve metres away — short lines, no subordinate clauses.
+  // ---------------------------------------------------------------------
+  'sign.atrium.heading': 'MUSEU DO VOLEIBOL',
+  'sign.atrium.body':
+    'Um jogo inventado em 1895 para quem achava o basquete pesado demais. ' +
+    'Reabertura amanhã. Você é quem termina a montagem.',
+
+  // ---------------------------------------------------------------------
+  // Wing 1 — Holyoke. Eight wall labels, no more.
+  // ---------------------------------------------------------------------
+  'exhibit.ball-improvised.title': 'A bola que não existia',
+  'exhibit.ball-improvised.label':
+    'Morgan testou primeiro uma bola de basquete: pesada demais. Depois a câmara nua, sem o couro: leve demais, boiava. Sem uma bola adequada, o jogo que ele tinha acabado de inventar não funcionava. A solução veio de uma encomenda.',
+  'exhibit.ball-improvised.catalogue':
+    'Câmara de borracha de bola de basquete, c. 1895. Reprodução. O primeiro objeto da história do vôlei é um fracasso: mole demais para descer, leve demais para cruzar a rede com intenção. Foi essa insuficiência que gerou a encomenda à Spalding.',
+
+  'exhibit.ball-spalding.title': 'A bola Spalding de cadarço',
+  'exhibit.ball-spalding.label':
+    'A A.G. Spalding & Bros. tinha fábrica em Chicopee Falls, a poucos quilômetros de Holyoke. Morgan encomendou uma bola sob medida: câmara de borracha dentro de couro costurado à mão, fechada por um cadarço de couro cru. Cerca de 25 polegadas de circunferência.',
+  'exhibit.ball-spalding.catalogue':
+    'Bola de vôlei Spalding, couro curtido com costura externa em linha encerada e fechamento por cadarço, c. 1900–1920. O cadarço é o detalhe que data a peça: sobreviveu até os anos 1930 e sumiu quando a bola sem cadarço virou padrão oficial.',
+  'hotspot.ball-spalding.lacing.label': 'Cadarço de couro cru sobre a abertura de inflagem',
+  'hotspot.ball-spalding.maker.label': 'Marca em relevo do fabricante, no gomo oposto',
+  'hotspot.ball-spalding.seam.label': 'Costura externa erguida, feita à mão',
+
+  'exhibit.net-1897.title': 'A rede de 1,98 metro',
+  'exhibit.net-1897.label':
+    'A primeira rede ficava a 6 pés e 6 polegadas do chão — cerca de meio pé acima da cabeça de um homem médio da época. A quadra media 25 por 50 pés. O regulamento de 1897 exigia rede de no mínimo 2 pés de largura por 27 de comprimento.',
+  'exhibit.net-1897.catalogue':
+    'Rede de corda de algodão com fita de lona nas bordas e postes de madeira em soquetes de ferro fundido no piso. A altura baixa não é acidente: o jogo foi desenhado para ser fácil, para homens de meia-idade que achavam o basquete pesado demais.',
+  'hotspot.net-1897.tape.label': 'Fita de lona costurada na borda superior',
+  'hotspot.net-1897.socket.label': 'Soquete de ferro fundido embutido no piso',
+
+  'exhibit.handbook-1897.title': 'O primeiro regulamento impresso',
+  'exhibit.handbook-1897.label':
+    'O Official Handbook da Liga Atlética da YMCA da América do Norte, de 1897, traz as primeiras especificações publicadas: quadra de 25 por 50 pés, rede a 6 pés e 6 polegadas, bola de 25 a 27 polegadas de circunferência pesando de 9 a 12 onças. A partida tinha nove innings.',
+  'exhibit.handbook-1897.catalogue':
+    'Official Handbook of the Athletic League of the Y.M.C.A. of North America, 1897. Fac-símile. As dez regras originais haviam saído um ano antes, na edição de julho de 1896 da revista Physical Education. O nome permaneceu grafado em duas palavras — volley ball — até 1952.',
+  'hotspot.handbook-1897.innings.label': 'A cláusula dos nove innings, herdada do beisebol',
+  'hotspot.handbook-1897.ball-spec.label': 'Especificação da bola: 25 a 27 polegadas, 9 a 12 onças',
+
+  'exhibit.guide-1916.title': 'O guia que registrou a bomba',
+  'exhibit.guide-1916.label':
+    'Nas Filipinas, por volta de 1916, jogadores criaram a combinação que mudaria tudo: um passe alto seguido de um segundo jogador batendo a bola para baixo. Chamavam o golpe de bomba e o batedor de bomberino. Os americanos chamaram de bomba filipina.',
+  'exhibit.guide-1916.catalogue':
+    'Spalding Athletic Library — Volley Ball Guide, edição de 1916–17. Foi nele que Morgan creditou formalmente o Dr. Frank Wood e o chefe dos bombeiros John Lynch pelas contribuições às primeiras regras. O ataque filipino forçou as mudanças que vieram em seguida.',
+  'hotspot.guide-1916.credit.label': 'Morgan credita Frank Wood e John Lynch',
+  'hotspot.guide-1916.census.label': 'Censo de 1916: cerca de 200 mil praticantes nos Estados Unidos',
+
+  'exhibit.gym-suit.title': 'O uniforme de ginásio',
+  'exhibit.gym-suit.label':
+    'Lã penteada canelada, calça até o joelho, sapatilha de lona com sola de borracha. Nada de tecido sintético, nada de branco plástico: tudo é pigmento, tintura ou óxido. O vôlei nasceu dentro do vestuário de ginástica vitoriano, não do vestuário esportivo.',
+  'exhibit.gym-suit.catalogue':
+    'Traje de ginásio da YMCA, c. 1895–1915. Reprodução. A malha de lã pesava e retinha suor, o que ajuda a explicar por que o jogo foi projetado sem contato e com rede baixa: era recreação para o corpo de meia-idade, não competição.',
+
+  'exhibit.portrait-morgan.title': 'William G. Morgan',
+  'exhibit.portrait-morgan.label':
+    'Diretor de educação física da YMCA de Holyoke, Massachusetts. Em 1895, aos 25 anos, criou um jogo sem contato para sócios mais velhos e sedentários. Chamou-o de Mintonette. Havia conhecido James Naismith, o inventor do basquete, em 1891.',
+  'exhibit.portrait-morgan.catalogue':
+    'William George Morgan (Lockport, Nova York, 23 de janeiro de 1870 — 27 de dezembro de 1942). Formou-se pela International YMCA Training School em 1894 e assumiu Holyoke em 30 de agosto de 1895. Deixou a YMCA em 1900 para trabalhar na indústria.',
+  'hotspot.portrait-morgan.date.label': 'A data de invenção é contestada — veja a ficha',
+
+  'exhibit.photo-gym.title': 'O ginásio onde aconteceu',
+  'exhibit.photo-gym.label':
+    'O ginásio da YMCA de Holyoke, fotografado em 1897, na esquina das ruas High e Appleton. Piso de madeira, treliças de aço rebitado, aparelhos de ginástica encostados na parede. Foi neste espaço que a primeira partida foi jogada.',
+  'exhibit.photo-gym.catalogue':
+    'Interior do antigo prédio da YMCA de Holyoke, 1897. O edifício serviu de 1886 a 1943. Em 7 de julho de 1896, Morgan levou dois times de cinco jogadores de Holyoke a Springfield para demonstrar o jogo — foi lá que ele ganhou o nome definitivo.',
+
+  // ---------------------------------------------------------------------
+  // Documents — the archive layer, behind drawers
+  // ---------------------------------------------------------------------
+  'document.invention-date.title': 'Nota de proveniência: a data contestada',
+  'document.invention-date.body':
+    'A data de 9 de fevereiro de 1895, repetida em quase toda parte, não resiste ao arquivo. O International Volleyball Hall of Fame não encontrou citação verificável para ela e estabeleceu que o posto de Morgan em Auburn, no Maine, só terminou em agosto de 1895, e que ele assumiu Holyoke em 30 de agosto. A instituição situa a invenção em dezembro de 1895. Nesta ala, portanto, as placas dizem apenas 1895.',
+
+  'document.halstead.title': 'Springfield, 7 de julho de 1896',
+  'document.halstead.body':
+    'Morgan demonstrou o jogo no ginásio leste da International YMCA Training School, durante a conferência de diretores de educação física convocada por Luther Halsey Gulick. Levou dois times de cinco homens de Holyoke, capitaneados pelo prefeito James J. Curran e pelo chefe dos bombeiros John Lynch. O professor Alfred T. Halstead, assistindo ao caráter de voleio da partida, propôs trocar Mintonette por Volley Ball. Morgan aceitou.',
+
+  'document.rule-changes.title': 'As mudanças que criaram o jogo moderno',
+  'document.rule-changes.body':
+    'Em 1917 a partida encurtou de 21 para 15 pontos. Em 1918 o número de jogadores foi fixado em seis por lado. Em 1920 vieram as duas regras que definem o vôlei até hoje: no máximo três toques por equipe e restrição ao ataque vindo do fundo da quadra. As três respondem ao mesmo problema — o ataque inventado nas Filipinas havia desequilibrado o jogo.',
+
+  // ---------------------------------------------------------------------
+  // Facts
+  // ---------------------------------------------------------------------
+  'fact.springfield-renaming.claim': 'Ano em que Mintonette passou a se chamar Volley Ball',
+  'fact.first-rulebook.claim': 'Ano do primeiro regulamento oficial impresso',
+  'fact.filipino-spike.claim': 'Ano em que o ataque cortado surgiu nas Filipinas',
+  'fact.six-a-side.claim': 'Ano em que o número de jogadores foi fixado em seis',
+
+  // ---------------------------------------------------------------------
+  // Locks
+  // ---------------------------------------------------------------------
+  'lock.office-drawer.mapLabel': 'Gaveta com segredo — 4 dígitos',
+  'lock.holyoke-power.mapLabel': 'Quadro de força — alavanca',
+  'lock.hint.highlight': 'A placa correta acendeu.',
+  'lock.hint.audio': 'A gravação do docente repete o ano.',
+  'lock.hint.reveal': 'O disco travou no dígito certo.',
+} as const
+
+export type TranslationKey = keyof typeof ptBR

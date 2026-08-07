@@ -1,0 +1,14 @@
+import { Vector3 } from 'three'
+
+/**
+ * The player's world position, published as a mutable singleton.
+ *
+ * Deliberately NOT in the zustand store. Portal culling, positional audio and
+ * the interaction raycast all need this value, and all of them already run
+ * inside useFrame — routing a 60 Hz value through React state would re-render
+ * the entire tree every frame for no benefit.
+ *
+ * Its own module so PlayerController.tsx exports only a component and keeps
+ * fast refresh working.
+ */
+export const playerPosition = new Vector3()

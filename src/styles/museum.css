@@ -1,0 +1,733 @@
+/* Styles for the new museum build. Kept separate from global.css so the two
+   trees never fight while both are alive. */
+
+.title,
+.museum {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+}
+
+/* --- title screen --------------------------------------------------------- */
+
+.title {
+  display: grid;
+  place-items: center;
+  background:
+    radial-gradient(120% 90% at 50% 0%, #1c1a17 0%, #0a0b0d 62%),
+    #0a0b0d;
+  color: #e6e1d6;
+  font-family: Georgia, 'Times New Roman', serif;
+  padding: 6vmin;
+}
+
+.title-panel {
+  max-width: 34rem;
+  text-align: center;
+}
+
+.title h1 {
+  margin: 0;
+  font-size: clamp(2.2rem, 7vmin, 3.6rem);
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  color: #f2ead9;
+}
+
+.title-subtitle {
+  margin: 0.6rem 0 2.4rem;
+  font-size: 1rem;
+  color: #a49a88;
+  font-style: italic;
+}
+
+.title-intro {
+  margin-bottom: 2.6rem;
+  line-height: 1.85;
+  color: #cdc3b1;
+  font-size: 1.05rem;
+}
+
+.title-intro p {
+  margin: 0.15rem 0;
+}
+
+.title-enter {
+  appearance: none;
+  border: 1px solid #8a6a3a;
+  background: transparent;
+  color: #e9d9b8;
+  font: inherit;
+  font-size: 1.05rem;
+  letter-spacing: 0.08em;
+  padding: 0.85rem 2.6rem;
+  cursor: pointer;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.title-enter:hover,
+.title-enter:focus-visible {
+  background: #8a6a3a;
+  color: #14120f;
+}
+
+.title-locale {
+  margin-top: 2.4rem;
+  display: flex;
+  gap: 0.4rem;
+  justify-content: center;
+}
+
+.title-locale button {
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: #6f6759;
+  font: inherit;
+  font-size: 0.86rem;
+  padding: 0.35rem 0.8rem;
+  cursor: pointer;
+  border-bottom: 1px solid transparent;
+}
+
+.title-locale button.is-active {
+  color: #d9cbaa;
+  border-bottom-color: #8a6a3a;
+}
+
+/* --- in-museum ------------------------------------------------------------ */
+
+.museum {
+  background: #0a0b0d;
+  overflow: hidden;
+}
+
+.museum canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.loading {
+  position: absolute;
+  inset-inline: 0;
+  bottom: 2.2rem;
+  text-align: center;
+  color: #8d8375;
+  font-family: Georgia, serif;
+  font-style: italic;
+  pointer-events: none;
+}
+
+/* A crosshair rather than a dot: it reads as a museum-guide reticle and is
+   legible against both the dark unlit rooms and a lit gallery wall. */
+.crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.crosshair::before,
+.crosshair::after {
+  content: '';
+  position: absolute;
+  background: #f0e9da;
+  box-shadow: 0 0 2px rgb(0 0 0 / 70%);
+}
+
+.crosshair::before {
+  left: 50%;
+  top: 0;
+  width: 1px;
+  height: 100%;
+  margin-left: -0.5px;
+}
+
+.crosshair::after {
+  top: 50%;
+  left: 0;
+  height: 1px;
+  width: 100%;
+  margin-top: -0.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .title-enter {
+    transition: none;
+  }
+}
+
+/* --- interaction prompt --------------------------------------------------- */
+
+.prompt {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 2.6rem);
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.9rem;
+  background: rgb(12 12 14 / 72%);
+  border: 1px solid rgb(220 200 160 / 22%);
+  color: #e8e0cf;
+  font-family: Georgia, serif;
+  font-size: 0.92rem;
+  pointer-events: none;
+  white-space: nowrap;
+  backdrop-filter: blur(2px);
+}
+
+.prompt-key {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.4rem;
+  height: 1.4rem;
+  border: 1px solid #a98a52;
+  color: #f0dfb8;
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+}
+
+.prompt-label {
+  color: #b6ab95;
+}
+
+.prompt-title {
+  color: #f2ead9;
+}
+
+.prompt-done {
+  color: #8fb98a;
+}
+
+/* --- examine view --------------------------------------------------------- */
+
+.examine {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  align-items: end;
+  justify-items: center;
+  padding: 0 4vw 4vh;
+  pointer-events: none;
+  /* A vignette so the held object reads against the room behind it. */
+  background: radial-gradient(60% 60% at 50% 45%, transparent 40%, rgb(6 6 8 / 72%) 100%);
+}
+
+.examine-panel {
+  pointer-events: auto;
+  width: min(46rem, 92vw);
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: 1.3rem 1.6rem;
+  background: rgb(14 14 16 / 92%);
+  border: 1px solid rgb(220 200 160 / 20%);
+  color: #ddd5c4;
+  font-family: Georgia, serif;
+  line-height: 1.6;
+}
+
+.examine-panel h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.3rem;
+  font-weight: 400;
+  color: #f4ecdb;
+  letter-spacing: 0.02em;
+}
+
+.examine-label {
+  margin: 0 0 0.9rem;
+  font-size: 0.98rem;
+}
+
+.examine-catalogue {
+  margin: 0 0 0.9rem;
+  padding-left: 0.9rem;
+  border-left: 2px solid #8a6a3a;
+  color: #c3b9a4;
+  font-size: 0.92rem;
+}
+
+.examine-hint {
+  margin: 0 0 0.9rem;
+  color: #9a8f7c;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+.examine-hotspots {
+  margin: 0 0 0.7rem;
+  padding: 0;
+  list-style: none;
+  font-size: 0.88rem;
+  color: #7f7666;
+}
+
+.examine-hotspots li {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.12rem 0;
+}
+
+.examine-hotspots li.is-found {
+  color: #cfc5b0;
+}
+
+.examine-hotspots em {
+  color: #a98a52;
+  font-style: normal;
+}
+
+.examine-progress {
+  margin: 0 0 0.6rem;
+  font-family: ui-monospace, monospace;
+  font-size: 0.8rem;
+  color: #8a8070;
+}
+
+/* The credit travels with the artwork, in the panel as well as on the wall. */
+.examine-credit {
+  margin: 0 0 0.9rem;
+  font-size: 0.76rem;
+  color: #7d7263;
+}
+
+.examine-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  border-top: 1px solid rgb(220 200 160 / 14%);
+  padding-top: 0.8rem;
+}
+
+.examine-drag {
+  font-size: 0.82rem;
+  color: #8a8070;
+  font-style: italic;
+}
+
+.examine-actions button {
+  appearance: none;
+  border: 1px solid rgb(169 138 82 / 60%);
+  background: transparent;
+  color: #e9d9b8;
+  font: inherit;
+  font-size: 0.86rem;
+  padding: 0.4rem 1.1rem;
+  cursor: pointer;
+}
+
+.examine-actions button:hover,
+.examine-actions button:focus-visible {
+  background: #8a6a3a;
+  color: #14120f;
+}
+
+/* --- catalogue toast ------------------------------------------------------ */
+
+.toast {
+  position: absolute;
+  right: 1.6rem;
+  bottom: 1.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.65rem 1rem;
+  background: rgb(14 14 16 / 88%);
+  border-left: 2px solid #8fb98a;
+  color: #ddd5c4;
+  font-family: Georgia, serif;
+  font-size: 0.88rem;
+  pointer-events: none;
+}
+
+.toast-mark {
+  color: #8fb98a;
+}
+
+/* --- perf hud ------------------------------------------------------------- */
+
+.perf-hud {
+  position: absolute;
+  left: 0.8rem;
+  top: 0.8rem;
+  padding: 0.5rem 0.7rem;
+  background: rgb(8 8 10 / 78%);
+  color: #9fb0c4;
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+  line-height: 1.55;
+  pointer-events: none;
+}
+
+.perf-hud .is-over {
+  color: #d98a7a;
+}
+
+/* --- curator's journal ---------------------------------------------------- */
+
+.journal {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 4vh 4vw;
+  background: rgb(6 6 8 / 82%);
+}
+
+.journal-panel {
+  width: min(60rem, 96vw);
+  height: min(42rem, 88vh);
+  display: flex;
+  flex-direction: column;
+  background: #14140f;
+  border: 1px solid rgb(220 200 160 / 22%);
+  color: #ddd5c4;
+  font-family: Georgia, serif;
+}
+
+.journal-tabs {
+  display: flex;
+  gap: 0.2rem;
+  padding: 0.6rem 0.9rem 0;
+  border-bottom: 1px solid rgb(220 200 160 / 16%);
+}
+
+.journal-tabs button {
+  appearance: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #7f7666;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.5rem 1rem;
+  cursor: pointer;
+}
+
+.journal-tabs button.is-active {
+  color: #f2ead9;
+  border-bottom-color: #a98a52;
+}
+
+.journal-close {
+  margin-left: auto;
+  font-size: 0.8rem !important;
+  color: #6d6455 !important;
+}
+
+.journal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1.4rem 1.6rem;
+  line-height: 1.65;
+}
+
+.journal-empty {
+  color: #8a8070;
+  font-style: italic;
+}
+
+.journal-count,
+.journal-note {
+  margin: 0 0 1.1rem;
+  color: #8a8070;
+  font-size: 0.84rem;
+}
+
+.journal-entries div {
+  margin-bottom: 1.3rem;
+  padding-bottom: 1.1rem;
+  border-bottom: 1px solid rgb(220 200 160 / 10%);
+}
+
+.journal-entries dt {
+  color: #f2ead9;
+  font-size: 1.02rem;
+  margin-bottom: 0.35rem;
+}
+
+.journal-entries dd {
+  margin: 0;
+  color: #b8ae9a;
+  font-size: 0.92rem;
+}
+
+.journal-archive {
+  display: grid;
+  grid-template-columns: minmax(12rem, 18rem) 1fr;
+  gap: 1.6rem;
+  align-items: start;
+}
+
+.journal-doclist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.journal-doclist button {
+  appearance: none;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: #a89e8b;
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 0.45rem 0.8rem;
+  cursor: pointer;
+}
+
+.journal-doclist button.is-open {
+  color: #f2ead9;
+  border-left-color: #a98a52;
+  background: rgb(169 138 82 / 10%);
+}
+
+.journal-doc h3 {
+  margin: 0 0 0.6rem;
+  font-weight: 400;
+  font-size: 1.1rem;
+  color: #f2ead9;
+}
+
+.journal-doc p {
+  margin: 0;
+  color: #c3b9a4;
+  font-size: 0.94rem;
+}
+
+.journal-credits {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.journal-credits li {
+  display: grid;
+  gap: 0.15rem;
+  margin-bottom: 1.1rem;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid rgb(220 200 160 / 10%);
+  font-size: 0.86rem;
+}
+
+.credit-title {
+  color: #ece4d3;
+}
+
+.credit-author,
+.credit-detail {
+  color: #8a8070;
+  font-size: 0.8rem;
+}
+
+.credit-licence {
+  color: #a98a52;
+  font-family: ui-monospace, monospace;
+  font-size: 0.74rem;
+}
+
+.credit-links {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.2rem;
+}
+
+.credit-links a {
+  color: #7fa3c4;
+  font-size: 0.78rem;
+}
+
+/* --- map ------------------------------------------------------------------ */
+
+.map svg {
+  width: 100%;
+  max-height: 26rem;
+  display: block;
+}
+
+.map-room-name {
+  fill: #b8ae9a;
+  font-family: Georgia, serif;
+  font-size: 11px;
+}
+
+.map-pip {
+  fill: #d9a441;
+}
+
+.map-portal {
+  stroke: #6d6455;
+  stroke-width: 3;
+}
+
+.map-portal.is-oneway {
+  stroke: #8fb98a;
+  stroke-dasharray: 2 2;
+}
+
+.map-player circle {
+  fill: #f2ead9;
+  stroke: #14140f;
+  stroke-width: 1.5;
+}
+
+.map-legend,
+.map-locks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.1rem;
+  margin: 1rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.8rem;
+  color: #8a8070;
+}
+
+.map-legend li,
+.map-locks li {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.map-legend .swatch {
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 1px solid;
+}
+
+.swatch.is-unvisited {
+  background: #1b1c20;
+  border-color: #2a2c32;
+}
+
+.swatch.is-partial {
+  background: #4a3a1e;
+  border-color: #a98a52;
+}
+
+.swatch.is-complete {
+  background: #1e3040;
+  border-color: #5d87a8;
+}
+
+.map-locks {
+  border-top: 1px solid rgb(220 200 160 / 10%);
+  padding-top: 0.9rem;
+  color: #a89e8b;
+}
+
+.map-lock-mark {
+  display: inline-grid;
+  place-items: center;
+  width: 1.15rem;
+  height: 1.15rem;
+  border: 1px solid #a98a52;
+  color: #d9a441;
+  font-family: ui-monospace, monospace;
+  font-size: 0.72rem;
+}
+
+.document + .document {
+  margin-top: 1.4rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid rgb(220 200 160 / 12%);
+}
+
+.document h2 {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+  font-weight: 400;
+  color: #f4ecdb;
+}
+
+/* --- combination lock ----------------------------------------------------- */
+
+.lock-panel {
+  width: min(24rem, 92vw);
+}
+
+.lock-display {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  margin: 1rem 0;
+}
+
+.lock-digit {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3.6rem;
+  border: 1px solid rgb(169 138 82 / 45%);
+  background: #0d0d10;
+  color: #f0dfb8;
+  font-family: ui-monospace, monospace;
+  font-size: 1.7rem;
+}
+
+/* The last rung of the hint ladder fills one digit and leaves the rest. */
+.lock-digit.is-hint {
+  color: #8a7a52;
+  border-color: #8fb98a;
+}
+
+.lock-wrong {
+  margin: 0 0 0.8rem;
+  text-align: center;
+  color: #d98a7a;
+  font-size: 0.86rem;
+}
+
+.lock-keys {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+.lock-keys button {
+  appearance: none;
+  border: 1px solid rgb(169 138 82 / 35%);
+  background: transparent;
+  color: #ddd5c4;
+  font-family: ui-monospace, monospace;
+  font-size: 1rem;
+  padding: 0.55rem 0;
+  cursor: pointer;
+}
+
+.lock-keys button:hover,
+.lock-keys button:focus-visible {
+  background: #8a6a3a;
+  color: #14120f;
+}
+
+.lock-hints {
+  margin: 0 0 0.9rem;
+  padding-left: 1rem;
+  color: #9a8f7c;
+  font-size: 0.84rem;
+  font-style: italic;
+}
+
+.examine-actions button[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.examine-actions span button + button {
+  margin-left: 0.5rem;
+}

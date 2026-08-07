@@ -12,7 +12,12 @@ type GroundedModelProps = {
   rotation?: Vector3Tuple
 }
 
-export function GroundedModel({ modelPath, targetHeight, position, rotation = [0, 0, 0] }: GroundedModelProps) {
+export function GroundedModel({
+  modelPath,
+  targetHeight,
+  position,
+  rotation = [0, 0, 0],
+}: GroundedModelProps) {
   const { scene } = useGLTF(modelPath)
 
   const { modelScene, scale, size, meshOffset } = useMemo(() => {

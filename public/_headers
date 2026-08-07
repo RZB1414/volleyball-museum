@@ -1,0 +1,29 @@
+# Cloudflare Workers static-asset headers.
+#
+# The platform default is `Cache-Control: public, max-age=0, must-revalidate`,
+# which looks like caching works (assets ARE edge-cached) but still forces the
+# browser to issue a conditional request for every GLB, texture and JS chunk on
+# every navigation. On a multi-wing museum that is dozens of round-trips before
+# anything renders.
+#
+# Only content-hashed paths get `immutable`. The bake script and Vite both emit
+# hashed filenames, so a changed asset is a changed URL.
+
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/models/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/textures/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/audio/*
+  Cache-Control: public, max-age=31536000, immutable
+
+# The HTML shell must always revalidate or a deploy never reaches anyone.
+/
+  Cache-Control: public, max-age=0, must-revalidate
+
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate

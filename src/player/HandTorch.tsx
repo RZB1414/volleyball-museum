@@ -5,6 +5,7 @@ import { useMemo, useRef } from 'react'
 import { Box3, Group, MathUtils, Mesh, PointLight, Vector3 } from 'three'
 import { TorchFire } from '../effects/TorchFire'
 import { useGameStore } from '../store/gameStore'
+import { playerColliderRef } from './playerColliderRef'
 
 const TORCH_MODEL_PATH = '/models/Meshy_AI_Blazing_Torch_texture.glb'
 const TORCH_SCALE = 0.38
@@ -63,6 +64,9 @@ export function HandTorch() {
     return new Vector3(center.x, bounds.max.y, center.z)
   }, [torchScene])
 
+  // Reused every frame instead of allocating a new Rapier Ray per frame.
+  const wallAvoidanceRay = useMemo(() => new rapier.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: 0, z: 1 }), [rapier])
+
   useFrame((state, delta) => {
     const follower = followerRef.current
     const torch = torchRef.current
@@ -103,16 +107,23 @@ export function HandTorch() {
 
     if (desiredDistance > 0.001 && progress > 0.015) {
       rayDirection.normalize()
+      wallAvoidanceRay.origin.x = cameraWorldPosition.x
+      wallAvoidanceRay.origin.y = cameraWorldPosition.y
+      wallAvoidanceRay.origin.z = cameraWorldPosition.z
+      wallAvoidanceRay.dir.x = rayDirection.x
+      wallAvoidanceRay.dir.y = rayDirection.y
+      wallAvoidanceRay.dir.z = rayDirection.z
 
+      // Exclude the player's own capsule natively (Rapier-side) instead of a
+      // per-candidate JS predicate callback, which was crossing the JS/WASM
+      // boundary for every collider near the ray on every single frame.
       const hit = world.castRay(
-        new rapier.Ray(cameraWorldPosition, rayDirection),
+        wallAvoidanceRay,
         desiredDistance + WALL_MARGIN,
         false,
         undefined,
         undefined,
-        undefined,
-        undefined,
-        (collider) => collider.parent()?.isFixed() ?? false,
+        playerColliderRef.current ?? undefined,
       )
 
       if (hit) {

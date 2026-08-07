@@ -1,0 +1,287 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1180" height="1120" viewBox="0 0 1180 1120" role="img" aria-labelledby="title desc">
+  <title id="title">Mapa atual do jogo com coordenadas</title>
+  <desc id="desc">Planta tecnica do Volleyball Museum usando X horizontal e Y vertical, onde Y corresponde ao eixo Z do jogo.</desc>
+
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="5" refY="5" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#1f2937" />
+    </marker>
+
+    <clipPath id="mapClip">
+      <path d="M 255 130 H 927 V 578 H 759 V 1026 H 423 V 578 H 255 Z" />
+    </clipPath>
+
+    <pattern id="gridMinor" width="28" height="28" patternUnits="userSpaceOnUse">
+      <path d="M 28 0 H 0 V 28" fill="none" stroke="#cbd5e1" stroke-width="1" opacity="0.45" />
+    </pattern>
+
+    <pattern id="gridMajor" width="112" height="112" patternUnits="userSpaceOnUse">
+      <path d="M 112 0 H 0 V 112" fill="none" stroke="#94a3b8" stroke-width="1.5" opacity="0.55" />
+    </pattern>
+
+    <filter id="labelShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="1" stdDeviation="1" flood-color="#111827" flood-opacity="0.16" />
+    </filter>
+
+    <style>
+      .bg { fill: #f8fafc; }
+      .title { font: 700 30px "Segoe UI", Arial, sans-serif; fill: #111827; }
+      .subtitle { font: 500 15px "Segoe UI", Arial, sans-serif; fill: #475569; }
+      .room-name { font: 700 18px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+      .room-meta { font: 600 13px "Segoe UI", Arial, sans-serif; fill: #334155; }
+      .coord { font: 700 12px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+      .coord-small { font: 700 11px "Segoe UI", Arial, sans-serif; fill: #0f172a; }
+      .dim { font: 700 13px "Segoe UI", Arial, sans-serif; fill: #1f2937; }
+      .axis { font: 700 14px "Segoe UI", Arial, sans-serif; fill: #1f2937; }
+      .tick { font: 600 12px "Segoe UI", Arial, sans-serif; fill: #475569; }
+      .label-box { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1; rx: 5; filter: url(#labelShadow); }
+      .wall { stroke: #292524; stroke-width: 10; stroke-linecap: square; }
+      .divider { stroke: #292524; stroke-width: 8; stroke-linecap: square; }
+      .door { stroke: #0f766e; stroke-width: 6; stroke-linecap: round; stroke-dasharray: 9 7; }
+      .callout { stroke: #475569; stroke-width: 1.5; fill: none; }
+      .dot { fill: #111827; stroke: #ffffff; stroke-width: 2; }
+      .spawn { fill: #2563eb; stroke: #ffffff; stroke-width: 2; }
+      .desk { fill: #7c2d12; stroke: #ffffff; stroke-width: 2; }
+      .chair { fill: #9333ea; stroke: #ffffff; stroke-width: 2; }
+      .shelf { fill: #166534; stroke: #ffffff; stroke-width: 2; }
+      .photo { fill: #0e7490; stroke: #ffffff; stroke-width: 2; }
+      .plaque { fill: #b45309; stroke: #ffffff; stroke-width: 2; }
+      .legend-title { font: 700 16px "Segoe UI", Arial, sans-serif; fill: #111827; }
+      .legend-text { font: 600 13px "Segoe UI", Arial, sans-serif; fill: #334155; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1180" height="1120" />
+
+  <text class="title" x="40" y="48">Mapa atualizado do Volleyball Museum</text>
+  <text class="subtitle" x="40" y="75">Escala: 1 metro = 28 px. Coordenadas no desenho: X horizontal, Y vertical do mapa = Z do jogo.</text>
+
+  <!-- Dimension lines -->
+  <line x1="255" y1="100" x2="927" y2="100" stroke="#1f2937" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)" />
+  <text class="dim" x="591" y="91" text-anchor="middle">24 m total das salas traseiras</text>
+
+  <line x1="423" y1="1083" x2="759" y2="1083" stroke="#1f2937" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)" />
+  <text class="dim" x="591" y="1104" text-anchor="middle">12 m sala principal</text>
+
+  <line x1="213" y1="130" x2="213" y2="1026" stroke="#1f2937" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)" />
+  <text class="dim" x="199" y="582" text-anchor="middle" transform="rotate(-90 199 582)">32 m profundidade total</text>
+
+  <line x1="790" y1="578" x2="790" y2="1026" stroke="#1f2937" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)" />
+  <text class="dim" x="805" y="804" transform="rotate(90 805 804)" text-anchor="middle">16 m</text>
+
+  <line x1="958" y1="130" x2="958" y2="578" stroke="#1f2937" stroke-width="2" marker-start="url(#arrow)" marker-end="url(#arrow)" />
+  <text class="dim" x="973" y="356" transform="rotate(90 973 356)" text-anchor="middle">16 m</text>
+
+  <!-- Room fills -->
+  <rect x="255" y="130" width="336" height="448" fill="#d9f99d" opacity="0.64" />
+  <rect x="591" y="130" width="336" height="448" fill="#fed7aa" opacity="0.68" />
+  <rect x="423" y="578" width="336" height="448" fill="#bfdbfe" opacity="0.68" />
+
+  <!-- Grid clipped to playable floor shape -->
+  <rect x="255" y="130" width="672" height="896" fill="url(#gridMinor)" clip-path="url(#mapClip)" />
+  <rect x="255" y="130" width="672" height="896" fill="url(#gridMajor)" clip-path="url(#mapClip)" />
+
+  <!-- Axis ticks -->
+  <g>
+    <text class="tick" x="255" y="1054" text-anchor="middle">X -12</text>
+    <text class="tick" x="423" y="1054" text-anchor="middle">-6</text>
+    <text class="tick" x="591" y="1054" text-anchor="middle">0</text>
+    <text class="tick" x="759" y="1054" text-anchor="middle">6</text>
+    <text class="tick" x="927" y="1054" text-anchor="middle">12</text>
+
+    <text class="tick" x="232" y="134" text-anchor="end">Y -24</text>
+    <text class="tick" x="232" y="358" text-anchor="end">-16</text>
+    <text class="tick" x="232" y="582" text-anchor="end">-8</text>
+    <text class="tick" x="232" y="806" text-anchor="end">0</text>
+    <text class="tick" x="232" y="1030" text-anchor="end">8</text>
+  </g>
+
+  <!-- Axis arrows -->
+  <line x1="995" y1="1028" x2="1090" y2="1028" stroke="#1f2937" stroke-width="2.5" marker-end="url(#arrow)" />
+  <text class="axis" x="1100" y="1033">+X</text>
+  <line x1="995" y1="1028" x2="995" y2="1090" stroke="#1f2937" stroke-width="2.5" marker-end="url(#arrow)" />
+  <text class="axis" x="980" y="1105">+Y</text>
+  <text class="subtitle" x="1018" y="1068">+Y aponta para a frente</text>
+
+  <!-- Walls -->
+  <g>
+    <line class="wall" x1="255" y1="130" x2="927" y2="130" />
+    <line class="wall" x1="255" y1="130" x2="255" y2="578" />
+    <line class="wall" x1="927" y1="130" x2="927" y2="578" />
+    <line class="divider" x1="591" y1="130" x2="591" y2="578" />
+
+    <line class="wall" x1="255" y1="578" x2="465" y2="578" />
+    <line class="wall" x1="549" y1="578" x2="633" y2="578" />
+    <line class="wall" x1="717" y1="578" x2="927" y2="578" />
+
+    <line class="wall" x1="423" y1="578" x2="423" y2="1026" />
+    <line class="wall" x1="759" y1="578" x2="759" y2="1026" />
+    <line class="wall" x1="423" y1="1026" x2="759" y2="1026" />
+  </g>
+
+  <!-- Door openings -->
+  <line class="door" x1="465" y1="578" x2="549" y2="578" />
+  <line class="door" x1="633" y1="578" x2="717" y2="578" />
+
+  <!-- Room labels -->
+  <g text-anchor="middle">
+    <text class="room-name" x="423" y="333">Sala traseira esquerda</text>
+    <text class="room-meta" x="423" y="356">Centro (-6, -16)</text>
+    <text class="room-meta" x="423" y="377">X -12 a 0 / Y -24 a -8</text>
+    <text class="room-meta" x="423" y="398">12 m x 16 m</text>
+
+    <text class="room-name" x="759" y="333">Sala traseira direita</text>
+    <text class="room-meta" x="759" y="356">Centro (6, -16)</text>
+    <text class="room-meta" x="759" y="377">X 0 a 12 / Y -24 a -8</text>
+    <text class="room-meta" x="759" y="398">12 m x 16 m</text>
+
+    <text class="room-name" x="591" y="766">Sala principal</text>
+    <text class="room-meta" x="591" y="789">Centro (0, 0)</text>
+    <text class="room-meta" x="591" y="810">X -6 a 6 / Y -8 a 8</text>
+    <text class="room-meta" x="591" y="831">12 m x 16 m</text>
+  </g>
+
+  <!-- Door labels -->
+  <g>
+    <rect class="label-box" x="463" y="596" width="94" height="48" />
+    <text class="coord-small" x="510" y="615" text-anchor="middle">Porta E</text>
+    <text class="coord-small" x="510" y="632" text-anchor="middle">centro (-3,-8)</text>
+
+    <rect class="label-box" x="625" y="596" width="104" height="48" />
+    <text class="coord-small" x="677" y="615" text-anchor="middle">Porta D</text>
+    <text class="coord-small" x="677" y="632" text-anchor="middle">centro (3,-8)</text>
+
+    <text class="coord-small" x="465" y="560" text-anchor="middle">(-4.5,-8)</text>
+    <text class="coord-small" x="549" y="560" text-anchor="middle">(-1.5,-8)</text>
+    <text class="coord-small" x="633" y="560" text-anchor="middle">(1.5,-8)</text>
+    <text class="coord-small" x="717" y="560" text-anchor="middle">(4.5,-8)</text>
+    <text class="coord-small" x="591" y="607" text-anchor="middle">parede central</text>
+  </g>
+
+  <!-- Coordinate points: outer corners and key vertices -->
+  <g>
+    <circle class="dot" cx="255" cy="130" r="4" />
+    <text class="coord" x="248" y="118" text-anchor="end">(-12,-24)</text>
+
+    <circle class="dot" cx="591" cy="130" r="4" />
+    <text class="coord" x="591" y="118" text-anchor="middle">(0,-24)</text>
+
+    <circle class="dot" cx="927" cy="130" r="4" />
+    <text class="coord" x="934" y="118">(12,-24)</text>
+
+    <circle class="dot" cx="255" cy="578" r="4" />
+    <text class="coord" x="248" y="602" text-anchor="end">(-12,-8)</text>
+
+    <circle class="dot" cx="423" cy="578" r="4" />
+    <text class="coord" x="416" y="545" text-anchor="end">(-6,-8)</text>
+
+    <circle class="dot" cx="591" cy="578" r="4" />
+    <text class="coord" x="591" y="545" text-anchor="middle">(0,-8)</text>
+
+    <circle class="dot" cx="759" cy="578" r="4" />
+    <text class="coord" x="766" y="545">(6,-8)</text>
+
+    <circle class="dot" cx="927" cy="578" r="4" />
+    <text class="coord" x="934" y="602">(12,-8)</text>
+
+    <circle class="dot" cx="423" cy="1026" r="4" />
+    <text class="coord" x="416" y="1012" text-anchor="end">(-6,8)</text>
+
+    <circle class="dot" cx="591" cy="1026" r="4" />
+    <text class="coord" x="591" y="1012" text-anchor="middle">(0,8)</text>
+
+    <circle class="dot" cx="759" cy="1026" r="4" />
+    <text class="coord" x="766" y="1012">(6,8)</text>
+  </g>
+
+  <!-- Objects in the main room -->
+  <g>
+    <!-- Spawn: (0, 4) -->
+    <circle class="spawn" cx="591" cy="914" r="8" />
+    <line class="callout" x1="591" y1="914" x2="620" y2="895" />
+    <rect class="label-box" x="620" y="868" width="100" height="38" />
+    <text class="coord-small" x="670" y="883" text-anchor="middle">Spawn</text>
+    <text class="coord-small" x="670" y="899" text-anchor="middle">(0, 4)</text>
+
+    <!-- Desk: (-2.9, 5) -->
+    <rect class="desk" x="489" y="925" width="42" height="34" rx="3" />
+    <line class="callout" x1="510" y1="942" x2="540" y2="968" />
+    <rect class="label-box" x="540" y="951" width="112" height="39" />
+    <text class="coord-small" x="596" y="966" text-anchor="middle">Mesa</text>
+    <text class="coord-small" x="596" y="983" text-anchor="middle">(-2.9, 5)</text>
+
+    <!-- Chair: (-4.3, 5) -->
+    <rect class="chair" x="458" y="929" width="27" height="27" rx="4" />
+    <line class="callout" x1="472" y1="942" x2="440" y2="966" />
+    <rect class="label-box" x="332" y="950" width="108" height="40" />
+    <text class="coord-small" x="386" y="966" text-anchor="middle">Cadeira</text>
+    <text class="coord-small" x="386" y="983" text-anchor="middle">(-4.3, 5)</text>
+
+    <!-- Bookshelf: (-5.51, 1.9) -->
+    <rect class="shelf" x="429" y="822" width="16" height="67" rx="3" />
+    <line class="callout" x1="437" y1="856" x2="348" y2="837" />
+    <rect class="label-box" x="236" y="814" width="112" height="44" />
+    <text class="coord-small" x="292" y="832" text-anchor="middle">Estante</text>
+    <text class="coord-small" x="292" y="849" text-anchor="middle">(-5.51, 1.9)</text>
+
+    <!-- Back photo: (0, -7.775) -->
+    <rect class="photo" x="565" y="579" width="52" height="10" rx="2" />
+    <line class="callout" x1="591" y1="584" x2="591" y2="658" />
+    <rect class="label-box" x="530" y="658" width="122" height="42" />
+    <text class="coord-small" x="591" y="675" text-anchor="middle">Foto fundo</text>
+    <text class="coord-small" x="591" y="692" text-anchor="middle">(0, -7.775)</text>
+
+    <!-- Left plaque: (-5.775, -2.8) -->
+    <rect class="plaque" x="424" y="707" width="11" height="34" rx="2" />
+    <line class="callout" x1="430" y1="724" x2="348" y2="705" />
+    <rect class="label-box" x="230" y="680" width="118" height="44" />
+    <text class="coord-small" x="289" y="698" text-anchor="middle">Placa E</text>
+    <text class="coord-small" x="289" y="715" text-anchor="middle">(-5.775,-2.8)</text>
+
+    <!-- Right plaque: (5.775, 2.4) -->
+    <rect class="plaque" x="747" y="852" width="11" height="34" rx="2" />
+    <line class="callout" x1="753" y1="869" x2="835" y2="843" />
+    <rect class="label-box" x="835" y="816" width="118" height="44" />
+    <text class="coord-small" x="894" y="834" text-anchor="middle">Placa D</text>
+    <text class="coord-small" x="894" y="851" text-anchor="middle">(5.775,2.4)</text>
+  </g>
+
+  <!-- Legend -->
+  <g>
+    <rect x="975" y="155" width="165" height="280" rx="8" fill="#ffffff" stroke="#cbd5e1" />
+    <text class="legend-title" x="995" y="185">Legenda</text>
+
+    <rect x="997" y="207" width="18" height="18" fill="#d9f99d" stroke="#94a3b8" />
+    <text class="legend-text" x="1025" y="221">Sala traseira E</text>
+
+    <rect x="997" y="237" width="18" height="18" fill="#fed7aa" stroke="#94a3b8" />
+    <text class="legend-text" x="1025" y="251">Sala traseira D</text>
+
+    <rect x="997" y="267" width="18" height="18" fill="#bfdbfe" stroke="#94a3b8" />
+    <text class="legend-text" x="1025" y="281">Sala principal</text>
+
+    <line x1="997" y1="307" x2="1030" y2="307" class="wall" />
+    <text class="legend-text" x="1040" y="312">Parede</text>
+
+    <line x1="997" y1="337" x2="1030" y2="337" class="door" />
+    <text class="legend-text" x="1040" y="342">Porta 3 m</text>
+
+    <circle class="spawn" cx="1006" cy="371" r="7" />
+    <text class="legend-text" x="1025" y="376">Spawn</text>
+
+    <rect class="desk" x="997" y="393" width="18" height="14" rx="2" />
+    <text class="legend-text" x="1025" y="406">Mesa</text>
+
+    <rect class="chair" x="998" y="421" width="16" height="16" rx="3" />
+    <text class="legend-text" x="1025" y="435">Cadeira</text>
+  </g>
+
+  <!-- Notes -->
+  <g>
+    <rect x="975" y="465" width="165" height="106" rx="8" fill="#ffffff" stroke="#cbd5e1" />
+    <text class="legend-title" x="995" y="493">Medidas fixas</text>
+    <text class="legend-text" x="995" y="518">Cada sala: 12 x 16 m</text>
+    <text class="legend-text" x="995" y="542">Altura: 4 m</text>
+    <text class="legend-text" x="995" y="566">Parede: 0.35 m</text>
+  </g>
+</svg>

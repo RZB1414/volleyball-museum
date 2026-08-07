@@ -1,4 +1,3 @@
-import { PointerLockControls } from '@react-three/drei'
 import {
   CapsuleCollider,
   RigidBody,
@@ -10,10 +9,13 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { MathUtils, Vector3 } from 'three'
 import type { KinematicCharacterController } from '@dimforge/rapier3d-compat'
+import { recordHandledMouseMove, recordHandledPointerMove } from '../game/inputPerfStats'
 import { useGameStore } from '../store/gameStore'
 import { CHAIR_POSITION, SIT_APPROACH_RADIUS } from '../world/MuseumRoom'
+import { playerColliderRef } from './playerColliderRef'
 
 const MOVE_SPEED = 4.0
+const MOUSE_LOOK_SPEED = 0.0016
 const MOBILE_LOOK_SPEED = 0.62
 const MOBILE_LOOK_SMOOTHING = 7
 const MOBILE_LOOK_MAX_PITCH = Math.PI * 0.4
@@ -40,7 +42,7 @@ const SIT_LOOK_PITCH = 0
 // to see) or turn all the way around to look behind the chair.
 const SIT_MAX_YAW_OFFSET = Math.PI * 0.56
 const SIT_POLAR_MIN = Math.PI * 0.25
-const SIT_POLAR_MAX = Math.PI * 0.6
+const SIT_POLAR_MAX = Math.PI * 0.71
 const SIT_MOBILE_LOOK_MAX_PITCH = Math.PI * 0.22
 const STANDING_POLAR_MIN = Math.PI * 0.1
 const STANDING_POLAR_MAX = Math.PI * 0.9
@@ -55,6 +57,7 @@ const keys = new Set<string>()
 const forward = new Vector3()
 const right = new Vector3()
 const movement = new Vector3()
+const mobileMovement = new Vector3()
 const desiredVelocity = new Vector3()
 const desiredTranslation = new Vector3()
 const nextPosition = new Vector3()
@@ -83,6 +86,7 @@ export function FirstPersonController() {
   const characterControllerRef = useRef<KinematicCharacterController | null>(null)
   const currentVelocityRef = useRef(new Vector3())
   const currentMobileLookRef = useRef(new Vector3())
+  const pendingMouseLookRef = useRef({ x: 0, y: 0 })
   const walkProgressRef = useRef(0)
   const settleProgressRef = useRef(0)
   const wasSittingRef = useRef(false)
@@ -90,17 +94,25 @@ export function FirstPersonController() {
   const sitEntryYawRef = useRef(0)
   const sitEntryPitchRef = useRef(0)
   const camera = useThree((state) => state.camera)
+  const regressPerformance = useThree((state) => state.performance.regress)
   const { world } = useRapier()
   const playerStartPosition = useGameStore((state) => state.playerStartPosition)
   const setPointerLocked = useGameStore((state) => state.setPointerLocked)
   const toggleTorch = useGameStore((state) => state.toggleTorch)
   const toggleSit = useGameStore((state) => state.toggleSit)
-  const sitting = useGameStore((state) => state.sitting)
   const initialPosition = useMemo(() => playerStartPosition, [playerStartPosition])
 
   useEffect(() => {
     camera.rotation.order = 'YXZ'
   }, [camera])
+
+  useEffect(() => {
+    playerColliderRef.current = colliderRef.current
+
+    return () => {
+      playerColliderRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
     const characterController = world.createCharacterController(0.04)
@@ -114,6 +126,123 @@ export function FirstPersonController() {
       characterControllerRef.current = null
     }
   }, [world])
+
+  useEffect(() => {
+    const canvas = document.getElementById('museum-game') ?? document.querySelector('canvas')
+
+    if (!canvas) {
+      return undefined
+    }
+
+    let pointerMoveSeen = false
+    let mouseMoveFallbackEnabled = !('PointerEvent' in window)
+    let mouseMoveFallbackAttached = false
+    let fallbackTimer = 0
+
+    const addMouseMoveFallback = () => {
+      if (mouseMoveFallbackAttached) {
+        return
+      }
+
+      canvas.addEventListener('mousemove', handleMouseMove, { passive: true })
+      mouseMoveFallbackAttached = true
+    }
+
+    const removeMouseMoveFallback = () => {
+      if (!mouseMoveFallbackAttached) {
+        return
+      }
+
+      canvas.removeEventListener('mousemove', handleMouseMove)
+      mouseMoveFallbackAttached = false
+    }
+
+    const addMouseMovement = (movementX: number, movementY: number) => {
+      pendingMouseLookRef.current.x += movementX
+      pendingMouseLookRef.current.y += movementY
+    }
+
+    const handleMouseDown = (event: MouseEvent) => {
+      if (event.button !== 0 || document.pointerLockElement === canvas) {
+        return
+      }
+
+      // unadjustedMovement bypasses the OS mouse-acceleration path, which is the
+      // documented cause of pointer-lock stutter with high-polling-rate mice
+      // (trackpads don't go through it, hence "mouse stutters, trackpad fine").
+      canvas.requestPointerLock({ unadjustedMovement: true }).catch(() => {
+        canvas.requestPointerLock()
+      })
+    }
+
+    const handlePointerLockChange = () => {
+      const locked = document.pointerLockElement === canvas
+      setPointerLocked(locked)
+      window.clearTimeout(fallbackTimer)
+
+      if (!locked) {
+        pendingMouseLookRef.current.x = 0
+        pendingMouseLookRef.current.y = 0
+        pointerMoveSeen = false
+        mouseMoveFallbackEnabled = !('PointerEvent' in window)
+        removeMouseMoveFallback()
+        return
+      }
+
+      pointerMoveSeen = false
+      mouseMoveFallbackEnabled = !('PointerEvent' in window)
+
+      if (mouseMoveFallbackEnabled) {
+        addMouseMoveFallback()
+      } else {
+        fallbackTimer = window.setTimeout(() => {
+          if (!pointerMoveSeen && document.pointerLockElement === canvas) {
+            mouseMoveFallbackEnabled = true
+            addMouseMoveFallback()
+          }
+        }, 250)
+      }
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      if (document.pointerLockElement !== canvas) {
+        return
+      }
+
+      pointerMoveSeen = true
+      mouseMoveFallbackEnabled = false
+      removeMouseMoveFallback()
+      recordHandledPointerMove(event.movementX, event.movementY)
+      addMouseMovement(event.movementX, event.movementY)
+    }
+
+    const handleMouseMove = (event: MouseEvent) => {
+      if (document.pointerLockElement !== canvas || !mouseMoveFallbackEnabled) {
+        return
+      }
+
+      recordHandledMouseMove(event.movementX, event.movementY)
+      addMouseMovement(event.movementX, event.movementY)
+    }
+
+    canvas.addEventListener('mousedown', handleMouseDown)
+    document.addEventListener('pointerlockchange', handlePointerLockChange)
+
+    if ('PointerEvent' in window) {
+      canvas.addEventListener('pointermove', handlePointerMove, { passive: true })
+    } else {
+      addMouseMoveFallback()
+    }
+
+    return () => {
+      window.clearTimeout(fallbackTimer)
+      canvas.removeEventListener('mousedown', handleMouseDown)
+      document.removeEventListener('pointerlockchange', handlePointerLockChange)
+      canvas.removeEventListener('pointermove', handlePointerMove)
+      removeMouseMoveFallback()
+      setPointerLocked(false)
+    }
+  }, [setPointerLocked])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -157,7 +286,15 @@ export function FirstPersonController() {
     const translation = body.translation()
     const currentVelocity = currentVelocityRef.current
     const currentMobileLook = currentMobileLookRef.current
-    const { mobileLook, mobileMove, sitting: isSitting, setCanSit } = useGameStore.getState()
+    const pendingMouseLook = pendingMouseLookRef.current
+    const {
+      mobileLook,
+      mobileMove,
+      mobileLookSensitivity,
+      mobileMoveSensitivity,
+      sitting: isSitting,
+      setCanSit,
+    } = useGameStore.getState()
 
     const distanceToChair = Math.hypot(
       translation.x - CHAIR_POSITION[0],
@@ -199,23 +336,41 @@ export function FirstPersonController() {
     const isSitLocked = isSitting || walkProgress > 0.02 || settleProgress > 0.02
 
     if (isApproaching) {
+      pendingMouseLook.x = 0
+      pendingMouseLook.y = 0
       // Scripted turn to face the desk while walking in — mouse/touch look is ignored
       // for this brief moment, same as any other short contextual animation.
       camera.rotation.y = lerpAngle(sitEntryYawRef.current, SIT_LOOK_ROTATION_Y, walkEased)
       camera.rotation.x = MathUtils.lerp(sitEntryPitchRef.current, SIT_LOOK_PITCH, walkEased)
     } else {
+      if (pendingMouseLook.x !== 0 || pendingMouseLook.y !== 0) {
+        const minPitch = (Math.PI / 2) - (isSitLocked ? SIT_POLAR_MAX : STANDING_POLAR_MAX)
+        const maxPitch = (Math.PI / 2) - (isSitLocked ? SIT_POLAR_MIN : STANDING_POLAR_MIN)
+
+        regressPerformance()
+        camera.rotation.y -= pendingMouseLook.x * MOUSE_LOOK_SPEED
+        camera.rotation.x = MathUtils.clamp(
+          camera.rotation.x - pendingMouseLook.y * MOUSE_LOOK_SPEED,
+          minPitch,
+          maxPitch,
+        )
+        pendingMouseLook.x = 0
+        pendingMouseLook.y = 0
+      }
+
       mobileLookTarget.set(mobileLook.x, mobileLook.y, 0)
       currentMobileLook.lerp(mobileLookTarget, 1 - Math.exp(-MOBILE_LOOK_SMOOTHING * frameDelta))
 
       const mobilePitchLimit = isSitLocked ? SIT_MOBILE_LOOK_MAX_PITCH : MOBILE_LOOK_MAX_PITCH
+      const mobileLookSpeed = MOBILE_LOOK_SPEED * mobileLookSensitivity * frameDelta
 
       if (
         Math.abs(currentMobileLook.x) > MOBILE_LOOK_DEAD_ZONE ||
         Math.abs(currentMobileLook.y) > MOBILE_LOOK_DEAD_ZONE
       ) {
-        camera.rotation.y -= currentMobileLook.x * MOBILE_LOOK_SPEED * frameDelta
+        camera.rotation.y -= currentMobileLook.x * mobileLookSpeed
         camera.rotation.x = MathUtils.clamp(
-          camera.rotation.x - currentMobileLook.y * MOBILE_LOOK_SPEED * frameDelta,
+          camera.rotation.x - currentMobileLook.y * mobileLookSpeed,
           -mobilePitchLimit,
           mobilePitchLimit,
         )
@@ -262,17 +417,25 @@ export function FirstPersonController() {
         movement.add(right)
       }
 
-      if (mobileMove.y !== 0) {
-        movement.addScaledVector(forward, mobileMove.y)
-      }
-
-      if (mobileMove.x !== 0) {
-        movement.addScaledVector(right, mobileMove.x)
-      }
-
       if (movement.lengthSq() > 1) {
         movement.normalize()
       }
+
+      mobileMovement.set(0, 0, 0)
+
+      if (mobileMove.y !== 0) {
+        mobileMovement.addScaledVector(forward, mobileMove.y)
+      }
+
+      if (mobileMove.x !== 0) {
+        mobileMovement.addScaledVector(right, mobileMove.x)
+      }
+
+      if (mobileMovement.lengthSq() > 1) {
+        mobileMovement.normalize()
+      }
+
+      movement.addScaledVector(mobileMovement, mobileMoveSensitivity)
 
       desiredVelocity.copy(movement).multiplyScalar(MOVE_SPEED)
       currentVelocity.lerp(
@@ -308,16 +471,6 @@ export function FirstPersonController() {
 
   return (
     <>
-      <PointerLockControls
-        selector="#museum-game"
-        makeDefault
-        minPolarAngle={sitting ? SIT_POLAR_MIN : STANDING_POLAR_MIN}
-        maxPolarAngle={sitting ? SIT_POLAR_MAX : STANDING_POLAR_MAX}
-        pointerSpeed={0.8}
-        onLock={() => setPointerLocked(true)}
-        onUnlock={() => setPointerLocked(false)}
-      />
-
       <RigidBody
         ref={bodyRef}
         colliders={false}

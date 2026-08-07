@@ -126,11 +126,33 @@ button {
   box-shadow: 0 12px 30px rgba(0, 0, 0, 0.28);
 }
 
+.drawer-prompt {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  z-index: 6;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  transform: translate(-50%, -50%);
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.62);
+  border-radius: 50%;
+  background: rgba(12, 14, 16, 0.72);
+  color: #ffffff;
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 1;
+  pointer-events: none;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+}
+
 .game-menu {
   position: absolute;
   top: 16px;
   right: 16px;
-  z-index: 10;
+  z-index: 20;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
@@ -160,13 +182,17 @@ button {
 }
 
 .menu-button:focus-visible,
-.menu-toggle input:focus-visible {
+.menu-toggle input:focus-visible,
+.menu-range input:focus-visible {
   outline: 3px solid rgba(255, 255, 255, 0.66);
   outline-offset: 3px;
 }
 
 .menu-panel {
-  min-width: 190px;
+  display: flex;
+  min-width: 240px;
+  flex-direction: column;
+  gap: 14px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 8px;
   background: rgba(12, 14, 16, 0.82);
@@ -187,6 +213,39 @@ button {
 .menu-toggle input {
   width: 18px;
   height: 18px;
+  margin: 0;
+  accent-color: #ff9a3c;
+}
+
+.menu-range-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.menu-range {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  color: #eef0f3;
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.menu-range-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.menu-range-value {
+  color: #cfd4dc;
+  font-variant-numeric: tabular-nums;
+}
+
+.menu-range input {
+  width: 100%;
   margin: 0;
   accent-color: #ff9a3c;
 }
@@ -240,11 +299,11 @@ button {
   }
 
   .mobile-control-stick--move {
-    right: calc(env(safe-area-inset-right) + 22px);
+    left: calc(env(safe-area-inset-left) + 22px);
   }
 
   .mobile-control-stick--look {
-    left: calc(env(safe-area-inset-left) + 22px);
+    right: calc(env(safe-area-inset-right) + 22px);
   }
 
   .mobile-stick-ring {
@@ -372,11 +431,11 @@ button {
   }
 
   .mobile-control-stick--move {
-    right: calc(env(safe-area-inset-right) + 16px);
+    left: calc(env(safe-area-inset-left) + 16px);
   }
 
   .mobile-control-stick--look {
-    left: calc(env(safe-area-inset-left) + 16px);
+    right: calc(env(safe-area-inset-right) + 16px);
   }
 
   .mobile-stick-thumb {

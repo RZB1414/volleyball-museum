@@ -8,8 +8,16 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "media:fetch": "node scripts/fetch-media.mjs",
+    "bake": "node --experimental-strip-types scripts/bake.mjs",
+    "validate:content": "node --experimental-strip-types scripts/validate-content.ts",
     "cf:dev": "npm run build && wrangler dev",
-    "deploy": "npm run build && wrangler deploy"
+    "deploy": "npm run build && wrangler deploy",
+    "contact-sheet": "node scripts/contact-sheet.mjs",
+    "test:collision": "node --experimental-strip-types scripts/test-collision.ts",
+    "check": "tsc -b && oxlint && npm run validate:content && npm run test:collision && npm run test:kit && npm run test:navigation",
+    "test:kit": "node scripts/test-kit-placement.mjs",
+    "test:navigation": "node --experimental-strip-types scripts/test-navigation.ts"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
@@ -18,15 +26,22 @@
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
     "three": "^0.185.0",
+    "three-mesh-bvh": "^0.9.13",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@gltf-transform/core": "^4.4.2",
+    "@gltf-transform/extensions": "^4.4.2",
+    "@gltf-transform/functions": "^4.4.2",
     "@types/node": "^24.13.2",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
+    "meshoptimizer": "^1.2.0",
     "oxlint": "^1.71.0",
     "sharp": "^0.35.3",
+    "simplex-noise": "^4.0.3",
+    "three-bvh-csg": "^0.0.18",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
     "wrangler": "^4.106.0"

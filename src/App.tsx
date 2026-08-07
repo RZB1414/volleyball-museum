@@ -1,6 +1,8 @@
 import { GameCanvas } from './game/GameCanvas'
 import { GameMenu } from './game/GameMenu'
+import { DrawerPrompt } from './game/DrawerPrompt'
 import { MobileControls } from './game/MobileControls'
+import { PerfDiagnostics } from './game/PerfDiagnostics'
 import { SitPrompt } from './game/SitPrompt'
 import { useGameStore } from './store/gameStore'
 
@@ -29,6 +31,7 @@ async function enterLandscapeModeOnPhone() {
 function App() {
   const gameStarted = useGameStore((state) => state.gameStarted)
   const startGame = useGameStore((state) => state.startGame)
+  const showPerfDiagnostics = new URLSearchParams(window.location.search).has('perf')
 
   const handleStartTour = async () => {
     await enterLandscapeModeOnPhone()
@@ -51,10 +54,12 @@ function App() {
 
   return (
     <main className="app game-screen">
+      {showPerfDiagnostics && <PerfDiagnostics />}
       <GameCanvas />
       <MobileControls />
       <GameMenu />
       <SitPrompt />
+      <DrawerPrompt />
       <div className="controls-hint">
         WASD / Setas para mover - Mouse para olhar - T liga/desliga tocha - Q senta/levanta - ESC libera o mouse
       </div>

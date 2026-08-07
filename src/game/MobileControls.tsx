@@ -142,6 +142,7 @@ function DirectionalPad({
       aria-label={label}
       role="group"
       onContextMenu={(event) => event.preventDefault()}
+      onLostPointerCapture={reset}
       onPointerCancel={handlePointerEnd}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}

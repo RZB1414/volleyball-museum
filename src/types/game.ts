@@ -16,6 +16,10 @@ export type GameStoreState = {
   ambientLightEnabled: boolean
   mobileMove: DirectionalInput
   mobileLook: DirectionalInput
+  mobileMoveSensitivity: number
+  mobileLookSensitivity: number
   sitting: boolean
   canSit: boolean
+  deskDrawerFocused: boolean
+  deskDrawerOpen: boolean
 }

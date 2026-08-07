@@ -1,0 +1,131 @@
+/**
+ * Renders one baked room bundle.
+ *
+ * Generic on purpose: it knows nothing about Holyoke or volleyball. It loads a
+ * GLB the bake produced, swaps in the real textured materials by name, and
+ * registers the collision geometry. Adding a wing is authoring content — not
+ * writing another one of these.
+ */
+
+import { useGLTF } from '@react-three/drei'
+import { useEffect, useMemo } from 'react'
+import { Matrix4, Mesh, type Group, type Object3D } from 'three'
+
+import './bvhSetup'
+
+import type { BakedBundle } from '../content/bake.generated'
+import type { CollisionWorld } from './collision'
+import { USE_DRACO, USE_MESHOPT } from './bundleCache'
+import type { MaterialLibrary } from './materials'
+
+export type BakedRoomProps = {
+  bundle: BakedBundle
+  materials: MaterialLibrary
+  origin?: readonly [number, number, number]
+  visible?: boolean
+  /** When given, the room's meshes are added as static colliders. */
+  collision?: CollisionWorld | null
+  /** Parts whose names match are skipped by collision (exhibits, glass). */
+  noCollide?: (name: string) => boolean
+}
+
+export function BakedRoom({
+  bundle,
+  materials,
+  origin = [0, 0, 0],
+  visible = true,
+  collision = null,
+  noCollide,
+}: BakedRoomProps) {
+  const { scene } = useGLTF(bundle.url, USE_DRACO, USE_MESHOPT)
+
+  /**
+   * The loaded scene is shared across every component using the same URL, so it
+   * must be cloned before its materials are touched. Mutating the cached scene
+   * would leak into any other room that shares the bundle.
+   */
+  const instance = useMemo(() => {
+    const clone = scene.clone(true) as Group
+
+    clone.traverse((object: Object3D) => {
+      if (!(object instanceof Mesh)) return
+
+      // Build the BVH the accelerated raycast needs. Installing
+      // `acceleratedRaycast` on Mesh.prototype without this does nothing: the
+      // patched method looks for `geometry.boundsTree` and silently falls back
+      // to three's linear triangle scan when it is missing, so you pay for the
+      // library and get none of it.
+      if (!object.geometry.boundsTree) object.geometry.computeBoundsTree()
+
+      object.castShadow = true
+      object.receiveShadow = true
+
+      // The bake names each glTF material after its library key, so the swap is
+      // a lookup rather than a guess.
+      const key = Array.isArray(object.material)
+        ? object.material[0]?.name
+        : object.material?.name
+      const replacement = key ? materials.get(key) : undefined
+      if (replacement) object.material = replacement
+    })
+
+    return clone
+  }, [scene, materials])
+
+  // --- collision ------------------------------------------------------------
+  useEffect(() => {
+    if (!collision) return undefined
+
+    /**
+     * `object.matrixWorld` is essential and easy to skip.
+     *
+     * The bake quantizes positions to normalized int16, and gltf-transform puts
+     * the scale and offset that undo it on the NODE. So a wall's `geometry` is
+     * in roughly -1..1 space and only becomes an 18 m wall once the node
+     * transform is applied. Feeding the raw geometry to the collider produced a
+     * room that rendered perfectly and dropped the player straight through the
+     * floor — the failure is invisible in a screenshot and invisible in
+     * `renderer.info`.
+     */
+    instance.updateMatrixWorld(true)
+    const roomMatrix = new Matrix4().makeTranslation(origin[0], origin[1], origin[2])
+    const full = new Matrix4()
+    const disposers: (() => void)[] = []
+
+    instance.traverse((object: Object3D) => {
+      if (!(object instanceof Mesh)) return
+      if (noCollide?.(object.name)) return
+      full.multiplyMatrices(roomMatrix, object.matrixWorld)
+      disposers.push(collision.add(object.geometry, full))
+    })
+
+    // Without this, React StrictMode's double-invoked effects register every
+    // collider twice in development.
+    return () => {
+      for (const dispose of disposers) dispose()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collision, instance])
+
+  /**
+   * Manual disposal. R3F only frees resources it created through JSX props;
+   * geometry cloned imperatively here is invisible to it, and leaking it is the
+   * classic cause of "the game gets slower every time I change rooms".
+   */
+  useEffect(() => {
+    return () => {
+      instance.traverse((object: Object3D) => {
+        if (object instanceof Mesh) object.geometry.dispose()
+      })
+      // Materials are owned by the shared library, not by this room, so they
+      // are deliberately NOT disposed here.
+    }
+  }, [instance])
+
+  return (
+    <group position={origin as unknown as [number, number, number]} visible={visible}>
+      <primitive object={instance} />
+    </group>
+  )
+}
+
