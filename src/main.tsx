@@ -3,26 +3,25 @@ import { createRoot } from 'react-dom/client'
 import './styles/global.css'
 
 /**
- * The museum is now the default. `?v1` still reaches the previous build.
+ * The museum, and nothing else.
  *
- * The old tree is kept rather than deleted because it holds uncommitted work;
- * deleting it is the author's call, not this file's. Keeping it costs the
- * default path nothing, because BOTH trees are lazy and Rolldown gives
- * @react-three/rapier — whose base64-inlined WebAssembly is ~803 KB gzip — its
- * own chunk. Nobody who loads the museum downloads a byte of it.
+ * This used to branch on `?v1` to reach the previous build, which was kept
+ * around because it held uncommitted work. That work is in the history now and
+ * the old tree is gone, so the branch, the second lazy chunk and
+ * @react-three/rapier — 803 KB gzip of base64-inlined WebAssembly that only the
+ * old player controller ever touched — all go with it.
  *
- * Once the legacy files are gone, this collapses to a single import and
- * `@react-three/rapier` comes out of package.json.
+ * Still lazy. The title screen renders before three.js is fetched, which is the
+ * whole reason the first paint is under 80 KB.
  */
 const MuseumApp = lazy(() =>
   import('./MuseumApp.tsx').then((module) => ({ default: module.MuseumApp })),
 )
-const LegacyApp = lazy(() => import('./App.tsx'))
-
-const useLegacy = new URLSearchParams(window.location.search).has('v1')
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <Suspense fallback={null}>{useLegacy ? <LegacyApp /> : <MuseumApp />}</Suspense>
+    <Suspense fallback={null}>
+      <MuseumApp />
+    </Suspense>
   </StrictMode>,
 )
