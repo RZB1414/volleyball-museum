@@ -37,6 +37,7 @@ Portão verde em 2026-08-08:
 - colisão: 21/21;
 - kit e posicionamento: 111/111;
 - runtime do kit: 19/19;
+- runtime das salas: 15/15;
 - navegação: 20/20;
 - `npm run build`: verde.
 
@@ -169,6 +170,7 @@ npm run test:power
 npm run test:collision
 npm run test:kit
 npm run test:kit-runtime
+npm run test:room-runtime
 npm run test:navigation
 npm run build
 ```
@@ -190,6 +192,9 @@ O gate de kit soma a receita inteira (`root` + `root__*`) e limita cada prop a
 - A casca nasce de `MUSEUM`; não mantenha uma segunda lista de salas no bake.
 - A quantização guarda uma compensação no nó. Zerar a transformação do clone enterra
   toda peça de modo uniforme e visualmente enganoso.
+- Depois que o GLTF é anexado ao wrapper da sala, `matrixWorld` já inclui a origem
+  desse wrapper. Derive cada nó em relação à raiz carregada e aplique a origem uma
+  única vez; o teste procedural de navegação não reproduz sozinho esse ciclo React.
 - `crease: null` preserva normais de geometrias feitas só de caixas biseladas;
   lathe/sweep/cylinder precisam de um ângulo real.
 - Texturas tileáveis só permanecem tileáveis se qualquer deformação também for

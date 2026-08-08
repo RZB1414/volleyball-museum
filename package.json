@@ -16,8 +16,9 @@
     "contact-sheet": "node scripts/contact-sheet.mjs",
     "test:collision": "node --experimental-strip-types scripts/test-collision.ts",
     "test:kit-runtime": "node --experimental-strip-types scripts/test-kit-runtime.ts",
+    "test:room-runtime": "node --experimental-strip-types scripts/test-room-runtime.ts",
     "test:power": "node --experimental-strip-types scripts/test-power.ts",
-    "check": "tsc -b && oxlint && npm run validate:content && npm run test:power && npm run test:collision && npm run test:kit && npm run test:kit-runtime && npm run test:navigation",
+    "check": "tsc -b && oxlint && npm run validate:content && npm run test:power && npm run test:collision && npm run test:kit && npm run test:kit-runtime && npm run test:room-runtime && npm run test:navigation",
     "test:kit": "node scripts/test-kit-placement.mjs",
     "test:navigation": "node --experimental-strip-types scripts/test-navigation.ts"
   },

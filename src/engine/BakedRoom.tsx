@@ -9,7 +9,7 @@
 
 import { useGLTF } from '@react-three/drei'
 import { useEffect, useMemo } from 'react'
-import { Matrix4, Mesh, type Group, type Object3D } from 'three'
+import { Mesh, type Group, type Object3D } from 'three'
 
 import './bvhSetup'
 
@@ -17,6 +17,7 @@ import type { BakedBundle } from '../content/bake.generated'
 import type { CollisionWorld } from './collision'
 import { USE_DRACO, USE_MESHOPT } from './bundleCache'
 import type { MaterialLibrary } from './materials'
+import { registerRoomColliders } from './roomCollision'
 
 export type BakedRoomProps = {
   bundle: BakedBundle
@@ -77,7 +78,7 @@ export function BakedRoom({
     if (!collision) return undefined
 
     /**
-     * `object.matrixWorld` is essential and easy to skip.
+     * The complete node transform is essential and easy to skip.
      *
      * The bake quantizes positions to normalized int16, and gltf-transform puts
      * the scale and offset that undo it on the NODE. So a wall's `geometry` is
@@ -86,24 +87,18 @@ export function BakedRoom({
      * room that rendered perfectly and dropped the player straight through the
      * floor — the failure is invisible in a screenshot and invisible in
      * `renderer.info`.
+     *
+     * The helper first makes each node relative to the loaded scene root. The
+     * primitive is already attached to the positioned JSX wrapper when this
+     * effect runs, so its `matrixWorld` already contains `origin`; multiplying
+     * that world matrix by a second room translation put Holyoke and the office
+     * colliders at twice their authored coordinates while the atrium appeared
+     * healthy because its origin is zero.
      */
-    instance.updateMatrixWorld(true)
-    const roomMatrix = new Matrix4().makeTranslation(origin[0], origin[1], origin[2])
-    const full = new Matrix4()
-    const disposers: (() => void)[] = []
-
-    instance.traverse((object: Object3D) => {
-      if (!(object instanceof Mesh)) return
-      if (noCollide?.(object.name)) return
-      full.multiplyMatrices(roomMatrix, object.matrixWorld)
-      disposers.push(collision.add(object.geometry, full))
-    })
-
-    // Without this, React StrictMode's double-invoked effects register every
-    // collider twice in development.
-    return () => {
-      for (const dispose of disposers) dispose()
-    }
+    return registerRoomColliders(instance, origin, collision, noCollide)
+    // The manifest predicate is recreated by the parent on ordinary renders,
+    // but its answer only changes with `instance`; including it would rebuild
+    // every room collider whenever portal visibility changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [collision, instance])
 
@@ -128,4 +123,3 @@ export function BakedRoom({
     </group>
   )
 }
-
