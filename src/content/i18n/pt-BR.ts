@@ -38,6 +38,8 @@ export const ptBR = {
   'prompt.rotate': 'Arraste para girar',
   'prompt.locked': 'Trancado',
   'prompt.close': 'Fechar',
+  'prompt.power': 'Restaurar energia',
+  'power.restored': 'Energia restaurada',
 
   // Map
   'map.title': 'Planta do museu',
@@ -88,6 +90,9 @@ export const ptBR = {
   'room.holyoke.nickname': 'a sala da bola de cadarço',
   'room.office.title': 'Escritório do curador',
   'room.office.nickname': 'a sala da luminária verde',
+  'power.atrium.title': 'Quadro geral do átrio',
+  'power.holyoke.title': 'Quadro de força da Ala 1',
+  'power.office.title': 'Luminária do curador',
 
   // ---------------------------------------------------------------------
   // Wall lettering. Vinyl on plaster, so it has to survive being read at a

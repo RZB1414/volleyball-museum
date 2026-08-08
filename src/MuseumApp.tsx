@@ -1,10 +1,9 @@
 /**
- * The new museum entry point.
+ * The museum entry point.
  *
- * Runs alongside the previous build rather than replacing it: `?v2` selects
- * this tree, anything else still gets the old one. The swap happens once the
- * vertical slice is complete, and only then does @react-three/rapier come out
- * of package.json.
+ * The temporary `?v1`/`?v2` split ended in 5e51e24: the data-driven museum is
+ * now the only build, and the Rapier-based prototype remains available in git
+ * history rather than in the production bundle.
  */
 
 import { Suspense, lazy, useState } from 'react'

@@ -301,12 +301,11 @@ export function buildDoorLeaf({ width = 0.8, height = 2.34 } = {}) {
     return box
   }
 
-  // Stiles at two bevel segments: they are the members a player walks past at
-  // arm's length and the highlight running down a 4 mm fillet is the whole
-  // reason the leaf does not look extruded. Everything else is one segment,
-  // which is a flat chamfer and indistinguishable at this radius.
-  timber.push(member(0, 0, hingeStile, height, 2))
-  timber.push(member(frameRight, 0, width, height, 2))
+  // One chamfer segment keeps the highlight that separates frame members from
+  // panels. A second rounded segment cost 384 triangles across the two stiles
+  // but added less than a pixel of curvature at the normal viewing distance.
+  timber.push(member(0, 0, hingeStile, height, 1))
+  timber.push(member(frameRight, 0, width, height, 1))
 
   timber.push(member(frameLeft, 0, frameRight, bottomRail, 1))
   timber.push(member(frameLeft, lockRailBottom, frameRight, lockRailTop, 1))
@@ -328,7 +327,7 @@ export function buildDoorLeaf({ width = 0.8, height = 2.34 } = {}) {
   /**
    * The panels. 20 mm boards on the leaf's centre line, so each face of the
    * panel sits 12.5 mm behind its frame — a genuine sunk panel with a genuine
-   * contact shadow, from both sides, for 108 triangles.
+   * contact shadow, from both sides, for 12 triangles.
    *
    * `groove` runs the panel 14 mm under the surrounding members. A panel cut to
    * the exact opening would show a slot straight through the door wherever the
@@ -341,28 +340,23 @@ export function buildDoorLeaf({ width = 0.8, height = 2.34 } = {}) {
 
   for (const [x0, x1] of columns) {
     for (const [y0, y1] of rows) {
-      const panel = bevelledBox(
+      const panel = new BoxGeometry(
         x1 - x0 + groove * 2,
         y1 - y0 + groove * 2,
         panelThickness,
-        0.003,
-        1,
       )
       panel.translate((x0 + x1) / 2, (y0 + y1) / 2, 0)
       timber.push(panel)
 
       /**
-       * The fielded centre. A 10 mm bevel radius at one segment IS the fielding
-       * chamfer — the flat splay a joiner planes around a raised panel — so the
-       * detail costs nothing beyond the box it is already on. Under about 8 mm
-       * it would vanish into the mip chain; 10 mm survives.
+       * The fielded centre stands 6 mm proud of the panel behind it. That depth
+       * step survives the mip chain and supplies the shadow line; rounding the
+       * hidden perimeter spent far more triangles without changing the read.
        */
-      const field = bevelledBox(
+      const field = new BoxGeometry(
         x1 - x0 - fielding * 2,
         y1 - y0 - fielding * 2,
         panelThickness + 0.012,
-        0.01,
-        1,
       )
       field.translate((x0 + x1) / 2, (y0 + y1) / 2, 0)
       timber.push(field)

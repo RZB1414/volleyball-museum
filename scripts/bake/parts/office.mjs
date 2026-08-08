@@ -649,3 +649,141 @@ export function buildDeskLamp() {
     shade: finalize(shade, { crease: Math.PI / 4, metresPerTile: 0.3 }),
   }
 }
+
+// ---------------------------------------------------------------------------
+// 4. The working library
+// ---------------------------------------------------------------------------
+
+/**
+ * A compact open bookcase for the safe room.
+ *
+ * The office is deliberately the smallest room in the slice, so a full-height
+ * Victorian library would turn it into a corridor. This one is only 1.18 m
+ * wide and 0.34 m deep: enough vertical mass to make the north wall feel used,
+ * while leaving the archive cabinet and its interaction approach unobstructed.
+ *
+ * Returns carcass and books separately because timber and worn bindings need
+ * different materials. Both halves share one origin. Every member is a
+ * bevelled box, so preserving the generator normals with `crease: null` avoids
+ * the one-centimetre normal weld pillowing the broad shelf faces.
+ */
+export function buildBookshelf({ width = 1.18, depth = 0.34, height = 2.02 } = {}) {
+  const carcass = []
+  const books = []
+  const side = 0.055
+  const shelf = 0.038
+  const back = 0.022
+  const plinthHeight = 0.09
+
+  // A recessed plinth lets the case meet the floor through a shadow line
+  // instead of looking like a box extruded straight out of it.
+  const plinth = bevelledBox(width - 0.08, plinthHeight, depth - 0.045, 0.006, 1)
+  plinth.translate(0, plinthHeight / 2, -0.008)
+  carcass.push(plinth)
+
+  for (const x of [-width / 2 + side / 2, width / 2 - side / 2]) {
+    const upright = bevelledBox(side, height - plinthHeight, depth, 0.006, 1)
+    upright.translate(x, plinthHeight + (height - plinthHeight) / 2, 0)
+    carcass.push(upright)
+  }
+
+  const backPanel = bevelledBox(width - side * 2, height - plinthHeight, back, 0.004, 1)
+  backPanel.translate(0, plinthHeight + (height - plinthHeight) / 2, -depth / 2 + back / 2)
+  carcass.push(backPanel)
+
+  const shelfLevels = [plinthHeight, 0.51, 0.94, 1.37, 1.80]
+  for (const y of shelfLevels) {
+    const board = bevelledBox(width - side * 2, shelf, depth - back, 0.005, 1)
+    board.translate(0, y + shelf / 2, back / 2)
+    carcass.push(board)
+  }
+
+  // The oversailing cap is the only silhouette visible above eye level. A
+  // wider, thinner board earns more than another row of tiny carved detail.
+  const cap = bevelledBox(width + 0.08, 0.075, depth + 0.035, 0.008, 1)
+  cap.translate(0, height - 0.0375, 0.004)
+  carcass.push(cap)
+
+  // Three deliberately uneven ledgers per shelf. Twelve readable silhouettes
+  // stay beneath the whole-recipe prop budget; the gaps keep each binding more
+  // legible than a dense picket fence of tiny books at gallery distance.
+  const bindingWidths = [0.072, 0.094, 0.108]
+  for (let row = 0; row < 4; row += 1) {
+    const floor = shelfLevels[row] + shelf
+    let cursor = -width / 2 + side + 0.075 + row * 0.018
+    for (let index = 0; index < bindingWidths.length; index += 1) {
+      const bookWidth = bindingWidths[(index + row) % bindingWidths.length]
+      const bookHeight = 0.255 + ((row * 3 + index * 2) % 5) * 0.022
+      const bookDepth = depth - 0.095 - ((row + index) % 3) * 0.018
+      const book = bevelledBox(bookWidth, bookHeight, bookDepth, 0.004, 1)
+      book.rotateZ(index === 2 && row % 2 === 0 ? -0.055 : 0)
+      book.translate(cursor + bookWidth / 2, floor + bookHeight / 2, 0.035)
+      books.push(book)
+      cursor += bookWidth + 0.018
+    }
+  }
+
+  return {
+    carcass: finalize(merge(carcass), { crease: null, metresPerTile: 0.42 }),
+    books: finalize(merge(books), { crease: null, metresPerTile: 0.24 }),
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 5. The active ledgers
+// ---------------------------------------------------------------------------
+
+/**
+ * Four working ledgers stacked with their spines deliberately misregistered.
+ *
+ * Authored from y = 0 so the same recipe can sit on any desk or shelf by
+ * moving only its wrapper group. Covers and page blocks are separate material
+ * families, but share an origin and must always be cloned as one recipe.
+ */
+export function buildLedgerStack({ width = 0.34, depth = 0.245 } = {}) {
+  const covers = []
+  const pages = []
+  const layers = [
+    { x: 0.000, z: 0.000, rotation: -0.025, thickness: 0.046 },
+    { x: 0.018, z: -0.012, rotation: 0.038, thickness: 0.052 },
+    { x: -0.012, z: 0.016, rotation: -0.052, thickness: 0.043 },
+    { x: 0.010, z: 0.004, rotation: 0.018, thickness: 0.049 },
+  ]
+
+  let y = 0
+  for (const [index, layer] of layers.entries()) {
+    const localWidth = width - index * 0.014
+    const localDepth = depth - (index % 2) * 0.012
+    const coverThickness = 0.006
+    const pageHeight = layer.thickness - coverThickness * 2
+
+    const lower = bevelledBox(localWidth, coverThickness, localDepth, 0.003, 1)
+    lower.rotateY(layer.rotation)
+    lower.translate(layer.x, y + coverThickness / 2, layer.z)
+    covers.push(lower)
+
+    const block = bevelledBox(localWidth - 0.018, pageHeight, localDepth - 0.016, 0.003, 1)
+    block.rotateY(layer.rotation)
+    block.translate(layer.x + 0.006, y + coverThickness + pageHeight / 2, layer.z)
+    pages.push(block)
+
+    const upper = bevelledBox(localWidth, coverThickness, localDepth, 0.003, 1)
+    upper.rotateY(layer.rotation)
+    upper.translate(layer.x, y + layer.thickness - coverThickness / 2, layer.z)
+    covers.push(upper)
+
+    // A proud spine hides the mathematically perfect page/case seam and gives
+    // the stack a readable direction from across the office.
+    const spine = bevelledBox(0.018, layer.thickness, localDepth, 0.004, 1)
+    spine.rotateY(layer.rotation)
+    spine.translate(layer.x - localWidth / 2 + 0.009, y + layer.thickness / 2, layer.z)
+    covers.push(spine)
+
+    y += layer.thickness + 0.006
+  }
+
+  return {
+    covers: finalize(merge(covers), { crease: null, metresPerTile: 0.22 }),
+    pages: finalize(merge(pages), { crease: null, metresPerTile: 0.18 }),
+  }
+}

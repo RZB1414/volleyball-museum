@@ -28,6 +28,7 @@ import {
   sweepProfile,
   wallSegments,
 } from './lib/geometry.mjs'
+import { buildArchitrave, buildDoorReveal, buildThreshold } from './parts/openings.mjs'
 
 const WALL_THICKNESS = 0.25
 const FLOOR_THICKNESS = 0.18
@@ -39,6 +40,77 @@ const DADO_HEIGHT = 1.02
 const DADO_PROUD = 0.014
 /** Picture rail. Above the door head, below the cornice. */
 const PICTURE_RAIL_HEIGHT = 2.62
+
+/**
+ * Adds the reciprocal-door metadata consumed by `buildRoomShell`.
+ *
+ * This preparation is exported because the bake and the navigation proof must
+ * build precisely the same shell. Keeping a second copy in the test once let
+ * the suite exercise two shallow reveals while production emitted one shared
+ * 0.5 m reveal, leaving the ownership rule completely unprotected.
+ */
+export function prepareRoomShells(rooms) {
+  const roomsById = new Map(rooms.map((room) => [room.id, room]))
+  const worldPortalPosition = (room, portal) =>
+    portal.position.map((coordinate, axis) => coordinate + room.origin[axis])
+
+  const reciprocalPortal = (room, portal) => {
+    const destination = roomsById.get(portal.toRoom)
+    if (!destination) return null
+
+    const here = worldPortalPosition(room, portal)
+    const candidates = destination.portals
+      .filter(
+        (candidate) =>
+          candidate.toRoom === room.id &&
+          Math.abs(candidate.width - portal.width) < 1e-6 &&
+          Math.abs(candidate.height - portal.height) < 1e-6,
+      )
+      .map((candidate) => {
+        const there = worldPortalPosition(destination, candidate)
+        return {
+          portal: candidate,
+          distance: Math.hypot(
+            here[0] - there[0],
+            here[1] - there[1],
+            here[2] - there[2],
+          ),
+        }
+      })
+      .filter((candidate) => candidate.distance < 0.35)
+      .sort((a, b) => a.distance - b.distance)
+
+    return candidates[0]?.portal ?? null
+  }
+
+  return rooms.map((room) => ({
+    id: room.id,
+    shell: room.shell,
+    portals: room.portals.map((portal) => {
+      const destination = roomsById.get(portal.toRoom)
+      const reciprocal = reciprocalPortal(room, portal)
+      const hasReciprocal = Boolean(destination && reciprocal)
+
+      // Exactly one room owns the lining and threshold shared through the wall
+      // sandwich. Including portal ids keeps self-loops deterministic too.
+      const ownsSharedOpening =
+        !hasReciprocal ||
+        room.id < destination.id ||
+        (room.id === destination.id && portal.id < reciprocal.id)
+
+      return {
+        id: portal.id,
+        toRoom: portal.toRoom,
+        position: portal.position,
+        width: portal.width,
+        height: portal.height,
+        hasReciprocal,
+        reciprocalPortalId: reciprocal?.id ?? null,
+        ownsSharedOpening,
+      }
+    }),
+  }))
+}
 
 /**
  * Skirting profile, authored in the XY plane: X is depth out from the wall,
@@ -132,6 +204,7 @@ function buildWall(length, height, openings) {
   const solids = []
   const trim = []
   const panelling = []
+  const thresholds = []
 
   /**
    * `-PI/2`, not `+PI/2`.
@@ -142,7 +215,14 @@ function buildWall(length, height, openings) {
    * to -Z and every moulding was buried in the wall.
    */
   const layMoulding = (profile, runLength, centre, atHeight, flip = false) => {
-    const bar = sweepProfile(profile, runLength)
+    // Crease each swept member before it shares a mesh with the reveal. The
+    // reveal is made only of bevelled boxes and must keep its authored normals;
+    // re-creasing the merged trim would tilt those broad flat faces on the
+    // pipeline's 1 cm vertex hash.
+    const bar = finalize(sweepProfile(profile, runLength), {
+      crease: Math.PI / 4,
+      metresPerTile: 0.6,
+    })
     bar.rotateY(-Math.PI / 2)
     if (flip) bar.rotateZ(Math.PI)
     bar.translate(centre, atHeight, WALL_THICKNESS / 2)
@@ -204,11 +284,50 @@ function buildWall(length, height, openings) {
     }
   }
 
+  /**
+   * A portal cuts the wall, but the joinery belongs to the wall's local frame:
+   * +X runs along it and +Z points into this room. Keeping the assembly here
+   * means every side receives exactly the same transforms when the caller
+   * rotates the completed wall into place.
+   *
+   * Reciprocal rooms contribute one 0.25 m wall leaf each. Their combined
+   * reveal is therefore 0.50 m deep, centred half a leaf OUTSIDE this wall at
+   * local z = -0.125. Emitting the full lining from both room bundles would put
+   * identical faces on top of one another. The bake marks one side as the
+   * deterministic owner; the other side still gets its own architrave because
+   * that moulding belongs to the room-facing plaster plane.
+   */
+  for (const opening of openings) {
+    const architrave = buildArchitrave({ width: opening.width, height: opening.height })
+    architrave.translate(opening.centre, 0, WALL_THICKNESS / 2)
+    trim.push(architrave)
+
+    if (!opening.ownsSharedOpening) continue
+
+    const sharedDepth = opening.hasReciprocal ? WALL_THICKNESS * 2 : WALL_THICKNESS
+    const sharedCentreZ = opening.hasReciprocal ? -WALL_THICKNESS / 2 : 0
+
+    const { lining } = buildDoorReveal({
+      width: opening.width,
+      height: opening.height,
+      thickness: sharedDepth,
+    })
+    lining.translate(opening.centre, 0, sharedCentreZ)
+    trim.push(lining)
+
+    // The threshold covers the floor seam made by the same wall sandwich, so
+    // it follows the reveal's ownership and depth rather than being placed once
+    // from each room's content data.
+    const threshold = buildThreshold({ width: opening.width + 0.02, depth: sharedDepth })
+    threshold.translate(opening.centre, 0, sharedCentreZ)
+    thresholds.push(threshold)
+  }
+
   // The cornice runs the full length regardless of openings — it is above the
   // door head.
   trim.push(layMoulding(CORNICE_PROFILE, length, 0, height, true))
 
-  return { solids, trim, panelling }
+  return { solids, trim, panelling, thresholds }
 }
 
 /**
@@ -237,12 +356,15 @@ export function buildRoomShell(room) {
       centre: wall.centre,
       width: portal.width,
       height: portal.height,
+      hasReciprocal: portal.hasReciprocal ?? false,
+      ownsSharedOpening: portal.ownsSharedOpening ?? true,
     })
   }
 
   const structure = []
   const trim = []
   const panelling = []
+  const thresholds = []
 
   /**
    * Floor and ceiling overhang the shell by half a wall on every side.
@@ -311,6 +433,11 @@ export function buildRoomShell(room) {
       geometry.translate(wall.x, 0, wall.z)
       panelling.push(geometry)
     }
+    for (const geometry of built.thresholds) {
+      geometry.rotateY(wall.rotationY)
+      geometry.translate(wall.x, 0, wall.z)
+      thresholds.push(geometry)
+    }
   }
 
   /**
@@ -328,7 +455,7 @@ export function buildRoomShell(room) {
    * seam across the middle of every wall. The mouldings are swept profiles and
    * genuinely need the crease pass.
    */
-  return [
+  const parts = [
     {
       name: `${room.id}__floor`,
       geometry: finalize(floor, { crease: null, metresPerTile: 2.1 }),
@@ -348,10 +475,26 @@ export function buildRoomShell(room) {
     },
     {
       name: `${room.id}__trim`,
-      geometry: finalize(merge(trim), { crease: Math.PI / 4, metresPerTile: 0.6 }),
+      // Every swept member and architrave was creased before the merge, while
+      // each lining already carries exact bevelled-box normals. Preserve both.
+      geometry: finalize(merge(trim), { crease: null, metresPerTile: 0.6 }),
       material: 'oak-varnished',
     },
   ]
+
+  // Brass cannot be merged into the oak trim without lying about its material.
+  // It remains in the streamed room bundle and is still shared by all of that
+  // room's thresholds, so the cost is one draw call per owning room, not one per
+  // doorway.
+  if (thresholds.length > 0) {
+    parts.push({
+      name: `${room.id}__threshold`,
+      geometry: finalize(merge(thresholds), { crease: null, metresPerTile: 0.3 }),
+      material: 'brass',
+    })
+  }
+
+  return parts
 }
 
 // ---------------------------------------------------------------------------

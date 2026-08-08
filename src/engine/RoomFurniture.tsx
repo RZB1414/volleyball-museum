@@ -19,11 +19,17 @@ import { useGLTF } from '@react-three/drei'
 import { useEffect, useMemo } from 'react'
 import { DoubleSide, type Group } from 'three'
 
+import type { BakedBundle } from '../content/bake.generated'
 import { MUSEUM } from '../content/museum'
 import type { RoomData } from '../content/schema'
 import { lookup } from '../i18n'
 import { USE_DRACO, USE_MESHOPT } from './bundleCache'
-import { cloneKitPart, disposeKitPart } from './kitPart'
+import type { CollisionWorld } from './collision'
+import {
+  createKitInstanceGroup,
+  disposeKitInstanceGroup,
+  registerKitColliders,
+} from './kitPart'
 import type { MaterialLibrary } from './materials'
 
 const roomsById = new Map(MUSEUM.rooms.map((room) => [room.id, room]))
@@ -31,67 +37,46 @@ const roomsById = new Map(MUSEUM.rooms.map((room) => [room.id, room]))
 /** Places every `kit` entry a room declares. */
 export function KitLayer({
   room,
-  kitUrl,
+  kitBundle,
   materials,
+  collision,
 }: {
   room: RoomData
-  kitUrl: string
+  kitBundle: BakedBundle
   materials: MaterialLibrary
+  collision: CollisionWorld | null
 }) {
-  const { scene } = useGLTF(kitUrl, USE_DRACO, USE_MESHOPT)
-  const placements = room.kit ?? []
+  const { scene } = useGLTF(kitBundle.url, USE_DRACO, USE_MESHOPT)
+  const placements = room.kit
+  const kit = scene as Group
+  const instances = useMemo(
+    () => createKitInstanceGroup(kit, placements, materials),
+    [kit, materials, placements],
+  )
+
+  useEffect(() => () => disposeKitInstanceGroup(instances), [instances])
+  useEffect(() => {
+    const disposers = placements.map((placement) =>
+      registerKitColliders(kit, placement.part, kitBundle, collision, {
+        roomOrigin: room.origin,
+        position: placement.position,
+        rotationY: placement.rotationY,
+        scale: placement.scale,
+      }),
+    )
+
+    return () => {
+      for (const dispose of disposers) dispose()
+    }
+  }, [collision, kit, kitBundle, placements, room.origin])
 
   if (placements.length === 0) return null
 
   return (
-    <>
-      {placements.map((placement, index) => (
-        <KitPiece
-          key={`${placement.part}-${index}`}
-          part={placement.part}
-          position={placement.position}
-          rotationY={placement.rotationY}
-          scale={placement.scale}
-          kit={scene as Group}
-          materials={materials}
-        />
-      ))}
-    </>
-  )
-}
-
-function KitPiece({
-  part,
-  position,
-  rotationY = 0,
-  scale = 1,
-  kit,
-  materials,
-}: {
-  part: string
-  position: readonly [number, number, number]
-  rotationY?: number
-  scale?: number
-  kit: Group
-  materials: MaterialLibrary
-}) {
-  const instance = useMemo(
-    () => cloneKitPart(kit, part, materials),
-    [kit, part, materials],
-  )
-
-  useEffect(() => () => disposeKitPart(instance), [instance])
-
-  if (!instance) return null
-
-  return (
-    <group
-      position={position as unknown as [number, number, number]}
-      rotation={[0, rotationY, 0]}
-      scale={scale}
-    >
-      <primitive object={instance} />
-    </group>
+    // The GLB owns geometry and materials; this primitive owns only instance
+    // matrices, released explicitly above. `dispose={null}` prevents the R3F
+    // reconciler from recursively invalidating cache-owned buffers on unmount.
+    <primitive object={instances} dispose={null} />
   )
 }
 

@@ -290,26 +290,37 @@ export type EraId =
  * art and drift badly — this is a contemporary museum ABOUT each era.
  */
 export type KitPartId =
-  | 'wall-module'
-  | 'wall-module-door'
-  | 'floor-tile'
-  | 'ceiling-panel'
-  | 'cornice'
-  | 'baseboard'
-  | 'door-frame'
   | 'plinth-block'
   | 'plinth-tapered'
-  | 'vitrine-tower'
+  | 'medallion-socket'
   | 'vitrine-table'
+  | 'vitrine-glass'
   | 'vitrine-wall'
+  | 'vitrine-tower'
   | 'label-plaque'
   | 'label-angled'
+  | 'interp-panel'
+  | 'banner'
   | 'bench'
   | 'partition'
   | 'rope-stanchion'
   | 'rope-span'
-  | 'medallion-socket'
+  | 'frame-empty'
+  | 'reception-desk'
+  | 'donation-box'
+  | 'archive-cabinet'
+  | 'door-leaf'
+  | 'threshold'
   | 'ceiling-spot'
+  | 'pendant'
+  | 'wall-sconce'
+  | 'vent-grille'
+  | 'breaker-panel'
+  | 'curator-desk'
+  | 'office-chair'
+  | 'desk-lamp'
+  | 'bookshelf'
+  | 'ledger-stack'
 
 /**
  * Wall lettering.
@@ -340,6 +351,23 @@ export type KitPlacement = {
   readonly rotationY?: number
   /** Uniform scale only — non-uniform breaks the shared bevel profile. */
   readonly scale?: number
+}
+
+/**
+ * A physical control that restores one room's electricity.
+ *
+ * The control belongs to the room it powers, so adding a wing does not require
+ * a second graph of target ids. It is a kit recipe with the same placement
+ * convention as furniture, but lives separately because it also carries the
+ * interaction identity and copy the runtime needs.
+ */
+export type PowerControlData = {
+  readonly id: string
+  readonly part: KitPartId
+  readonly position: Vec3
+  readonly rotationY?: number
+  readonly scale?: number
+  readonly titleKey: string
 }
 
 /**
@@ -426,6 +454,8 @@ export type RoomData = {
   readonly audio: readonly AudioEmitter[]
   /** Unlit rooms are the progression language: unlit === unexplored. */
   readonly startsPowered: boolean
+  /** The physical switch rendered and targeted when this room is unpowered. */
+  readonly powerControl?: PowerControlData
   /** Restoring power is the reward beat — which lock does it. */
   readonly powerLockId?: string
 }

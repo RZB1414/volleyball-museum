@@ -10,7 +10,9 @@
  * The budget, from the performance plan:
  *   - 0 shadow-casting point lights, anywhere, ever. three renders SIX shadow
  *     passes per frame for each one, because a cube shadow map has six faces.
- *   - <= 2 shadow-casting spot lights per visible room.
+ *   - 0 shadow-casting local lights on the shared desktop/mobile path. The
+ *     authored slice already approaches the mobile triangle target before a
+ *     shadow pass, so even one broad spot would render most of a room twice.
  *   - <= 8 shadowless fill lights per visible room.
  *
  * Lights are only mounted for rooms the portal walk says are visible, so the
@@ -18,57 +20,55 @@
  * of the building.
  */
 
-import { useMemo } from 'react'
-
 import type { RoomData } from '../content/schema'
 import { useMuseum } from '../state/store'
+import { isRoomPowered } from './power'
 
 /** Warm gallery tungsten, cool daylight fill. */
-const PALETTES: Record<string, { key: string; fill: string; wash: string }> = {
-  'holyoke-gaslight': { key: '#ffdfae', fill: '#8fa4c4', wash: '#ffcf94' },
-  'atrium-neutral': { key: '#fff0d8', fill: '#9fb4d6', wash: '#ffe6c2' },
-  'office-tungsten': { key: '#ffd79a', fill: '#7f93b4', wash: '#ffc477' },
+const PALETTES: Record<string, { key: string; wash: string }> = {
+  'holyoke-gaslight': { key: '#ffdfae', wash: '#ffcf94' },
+  'atrium-neutral': { key: '#fff0d8', wash: '#ffe6c2' },
+  'office-tungsten': { key: '#ffd79a', wash: '#ffc477' },
 }
 
 const DEFAULT_PALETTE = PALETTES['atrium-neutral']
 
 export function RoomLighting({ room }: { room: RoomData }) {
   const brightness = useMuseum((state) => state.settings.brightness)
+  const powered = useMuseum((state) => isRoomPowered(room, state.progress.roomsPowered))
   const palette = PALETTES[room.palette] ?? DEFAULT_PALETTE
 
   const { width, depth, height } = room.shell
   const [ox, oy, oz] = room.origin
 
   /**
-   * A grid of ceiling fittings, spaced so a gallery gets an even wash rather
-   * than one hot spot in the middle. Count scales with floor area and is capped
-   * at six so the eight-light budget still leaves room for accents.
+   * Light and fitting share one content declaration. The head sits 14 cm below
+   * the track; deriving the source here prevents invisible lights drifting away
+   * from the geometry when a room is rearranged.
    */
-  const ceilingLights = useMemo(() => {
-    const columns = Math.min(3, Math.max(1, Math.round(width / 6)))
-    const rows = Math.min(3, Math.max(1, Math.round(depth / 6)))
-    const lights: { key: string; position: [number, number, number] }[] = []
+  const ceilingLights = room.kit
+    .map((placement, index) => ({ placement, index }))
+    .filter(({ placement }) => placement.part === 'ceiling-spot')
+    .map(({ placement, index }) => ({
+      key: `ceiling-spot-${index}`,
+      position: [
+        ox + placement.position[0],
+        oy + placement.position[1] - 0.14,
+        oz + placement.position[2],
+      ] as [number, number, number],
+    }))
 
-    for (let column = 0; column < columns; column += 1) {
-      for (let row = 0; row < rows; row += 1) {
-        const x = ox + (width * (column + 0.5)) / columns - width / 2
-        const z = oz + (depth * (row + 0.5)) / rows - depth / 2
-        lights.push({
-          key: `${column}-${row}`,
-          // Hung below the ceiling so the fitting itself is lit from above too.
-          position: [x, oy + height - 0.6, z],
-        })
-      }
-    }
-
-    return lights.slice(0, 6)
-  }, [width, depth, height, ox, oy, oz])
-
-  // Enough reach to cover the gap to the next fitting, with falloff that still
-  // leaves the corners darker than the centre.
-  const spacing = Math.max(width, depth) / 2
-  const reach = spacing * 1.9
-  const intensity = 14 * brightness * (spacing / 6)
+  // Inverse-square falloff needs more source intensity than the old synthetic
+  // grid, while a finite reach keeps adjacent streamed rooms from being lit.
+  const reach = Math.max(width, depth) * 0.95
+  // Four fixtures overlap in the atrium. At 64 cd their inverse-square pools
+  // merged into broad white reflections on the maple; 36 keeps the fittings
+  // readable without pushing the varnish through the tone-mapper's shoulder.
+  // Keep the lights mounted while they are off. Adding them only when the
+  // breaker changes state recompiles every lit material with a new light-count
+  // define at the exact moment the player interacts; zero intensity preserves
+  // darkness without that visible shader hitch.
+  const intensity = powered ? 36 * brightness : 0
 
   return (
     <group>
@@ -84,39 +84,31 @@ export function RoomLighting({ room }: { room: RoomData }) {
           color={palette.key}
           intensity={intensity}
           distance={reach}
-          decay={1.6}
+          decay={2}
+          castShadow={false}
         />
       ))}
 
       {/*
-        One shadow-casting spot aimed down the room. This is what gives the
-        exhibits contact shadows and stops everything looking like it is
-        floating a centimetre off the floor.
+        A broad directional wash aimed down the room. It stays shadowless: the
+        mobile path cannot afford a second traversal of almost every visible
+        room, and baked bevels plus ambient occlusion retain contact cues.
       */}
       <spotLight
-        castShadow
+        castShadow={false}
         position={[ox, oy + height - 0.4, oz - depth * 0.18]}
         target-position={[ox, oy, oz + depth * 0.1]}
         color={palette.wash}
-        intensity={38 * brightness}
+        intensity={powered ? 38 * brightness : 0}
         distance={Math.max(width, depth) * 1.6}
         angle={0.95}
         penumbra={0.9}
         decay={1.4}
-        shadow-mapSize={[1024, 1024]}
-        shadow-bias={-0.0008}
-        shadow-normalBias={0.02}
-        shadow-camera-near={0.5}
-        shadow-camera-far={height * 2.2}
       />
 
-      {/* Cool bounce from below, so shadowed faces are not dead black. */}
-      <hemisphereLight
-        position={[ox, oy + height * 0.5, oz]}
-        color={palette.fill}
-        groundColor="#3a3026"
-        intensity={0.55 * brightness}
-      />
+      {/* Environment and the single museum ambient provide navigation fill.
+          A HemisphereLight is global even when nested under a room group, so
+          one per visible room leaked palettes and changed exposure at doors. */}
     </group>
   )
 }

@@ -27,6 +27,34 @@ import { MATERIALS, writeGLB } from './bake/lib/glb.mjs'
 import { renderMaterial, vramBytes } from './bake/lib/texture.mjs'
 import { buildMaterialRecipes } from './bake/materials.mjs'
 import {
+  buildPartition,
+  buildPictureFrameEmpty,
+  buildVitrineTower,
+  buildWallVitrine,
+} from './bake/parts/cases.mjs'
+import {
+  buildBreakerPanel,
+  buildCeilingSpot,
+  buildPendant,
+  buildVentGrille,
+  buildWallSconce,
+} from './bake/parts/fixtures.mjs'
+import {
+  buildBanner,
+  buildDonationBox,
+  buildInterpPanel,
+  buildLabelAngled,
+  buildReceptionDesk,
+} from './bake/parts/interpretive.mjs'
+import { buildDoorLeaf, buildThreshold } from './bake/parts/openings.mjs'
+import {
+  buildBookshelf,
+  buildCuratorDesk,
+  buildDeskLamp,
+  buildLedgerStack,
+  buildOfficeChair,
+} from './bake/parts/office.mjs'
+import {
   buildArchiveCabinet,
   buildBench,
   buildBladder,
@@ -44,6 +72,7 @@ import {
   buildStanchion,
   buildVitrineGlass,
   buildVitrineTable,
+  prepareRoomShells,
 } from './bake/kit.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -69,12 +98,13 @@ const MATERIAL_TEXTURES = {
   'canvas': 'canvas',
   'cord-hemp': 'canvas',
   'rope-velvet': 'canvas',
-  // Brass, cast iron and vitrine glass stay as untextured solids: they are
-  // small, specular and read entirely off the environment, so a texture would
-  // cost VRAM for detail nobody perceives.
+  // Brass, cast iron and both kinds of glass stay untextured: they are small,
+  // specular and read primarily off the environment, so a texture would cost
+  // VRAM for detail nobody perceives.
   'brass': null,
   'iron-cast': null,
   'glass-vitrine': null,
+  'glass-green': null,
 }
 
 /** Mobile VRAM ceiling for all material textures, uncompressed with mips. */
@@ -94,16 +124,7 @@ const TEXTURE_VRAM_BUDGET = 45 * 1024 * 1024
  * Node strips the types on import, which is the same mechanism the content
  * validator already runs on.
  */
-const ROOM_SHELLS = MUSEUM.rooms.map((room) => ({
-  id: room.id,
-  shell: room.shell,
-  portals: room.portals.map((portal) => ({
-    id: portal.id,
-    position: portal.position,
-    width: portal.width,
-    height: portal.height,
-  })),
-}))
+const ROOM_SHELLS = prepareRoomShells(MUSEUM.rooms)
 
 /** Per-asset triangle budgets from the performance plan. Exceeding one fails the bake. */
 const TRIANGLE_BUDGET = {
@@ -113,13 +134,20 @@ const TRIANGLE_BUDGET = {
   filler: 300,
 }
 
-function checkBudget(manifest, name, budget) {
-  const entry = manifest.find((item) => item.name === name)
-  if (!entry) return null
-  if (entry.triangles > budget) {
-    return `${name}: ${entry.triangles} triangles exceeds the ${budget} budget`
+/** A compound asset spends one budget across its root and every material sibling. */
+function checkRecipeBudget(manifest, recipe, budget) {
+  const members = manifest.filter(
+    (item) => item.name === recipe || item.name.startsWith(`${recipe}__`),
+  )
+  const triangles = members.reduce((total, member) => total + member.triangles, 0)
+  if (triangles > budget) {
+    return `${recipe}: ${triangles} triangles across ${members.length} part(s) exceeds the ${budget} budget`
   }
   return null
+}
+
+function recipeNames(manifest) {
+  return new Set(manifest.map((part) => part.name.split('__', 1)[0]))
 }
 
 /**
@@ -134,6 +162,24 @@ function boxColliderFrom(bounds) {
     halfExtents: bounds.size.map((value) => Number((value / 2).toFixed(4))),
     centre: bounds.centre,
   }
+}
+
+/**
+ * Expands a multi-material generator into the node naming convention consumed
+ * by cloneRecipe: one optional primary node at the recipe id, plus `__suffix`
+ * nodes for the remaining materials. Recipes such as `banner` deliberately
+ * have no primary node; prefix matching still assembles the complete object.
+ */
+function compoundKitParts(name, geometries, materialByPart, primaryPart = null) {
+  return Object.entries(materialByPart).map(([part, material]) => {
+    const geometry = geometries[part]
+    if (!geometry) throw new Error(`Recipe "${name}" is missing geometry "${part}".`)
+    return {
+      name: part === primaryPart ? name : `${name}__${part}`,
+      geometry,
+      material,
+    }
+  })
 }
 
 async function bakeBundle(name, parts) {
@@ -292,7 +338,9 @@ async function main() {
     for (const part of bundle.manifest) {
       // Walls, floor and trim are what the player collides with.
       part.collider = boxColliderFrom(part.bounds)
-      const problem = checkBudget(bundle.manifest, part.name, TRIANGLE_BUDGET.shell)
+    }
+    for (const recipe of recipeNames(bundle.manifest)) {
+      const problem = checkRecipeBudget(bundle.manifest, recipe, TRIANGLE_BUDGET.shell)
       if (problem) problems.push(problem)
     }
 
@@ -304,6 +352,20 @@ async function main() {
   // -------------------------------------------------------------------------
   console.log('\nShared kit:')
   const vitrineTable = buildVitrineTable()
+  const wallVitrine = buildWallVitrine()
+  const vitrineTower = buildVitrineTower()
+  const partition = buildPartition()
+  const banner = buildBanner()
+  const donationBox = buildDonationBox()
+  const doorLeaf = buildDoorLeaf()
+  const ceilingSpot = buildCeilingSpot()
+  const breakerPanel = buildBreakerPanel()
+  const pendant = buildPendant()
+  const officeChair = buildOfficeChair()
+  const deskLamp = buildDeskLamp()
+  const bookshelf = buildBookshelf()
+  const ledgerStack = buildLedgerStack()
+
   const kitParts = [
     { name: 'plinth-block', geometry: buildPlinth({ height: 1.0 }), material: 'oak-varnished' },
     // The atrium hero plinth. It was 0.44 m square and 1.15 m tall, which in an
@@ -318,13 +380,135 @@ async function main() {
     { name: 'rope-stanchion', geometry: buildStanchion(), material: 'brass' },
     { name: 'rope-span', geometry: buildRopeSpan(), material: 'rope-velvet' },
     { name: 'bench', geometry: buildBench(), material: 'oak-varnished' },
+
+    // Display cases and spatial dividers.
+    ...compoundKitParts(
+      'vitrine-wall',
+      wallVitrine,
+      { carcass: 'oak-varnished', glass: 'glass-vitrine' },
+      'carcass',
+    ),
+    ...compoundKitParts(
+      'vitrine-tower',
+      vitrineTower,
+      { carcass: 'oak-varnished', glass: 'glass-vitrine' },
+      'carcass',
+    ),
+    ...compoundKitParts(
+      'partition',
+      partition,
+      { face: 'plaster', foot: 'oak-varnished' },
+      'face',
+    ),
+    {
+      name: 'frame-empty',
+      geometry: buildPictureFrameEmpty(),
+      material: 'oak-varnished',
+    },
+
+    // Interpretive furniture and signage.
+    { name: 'label-angled', geometry: buildLabelAngled(), material: 'brass' },
+    { name: 'interp-panel', geometry: buildInterpPanel(), material: 'plaster-dark' },
+    ...compoundKitParts('banner', banner, { cloth: 'canvas', battens: 'oak-varnished' }),
+    { name: 'reception-desk', geometry: buildReceptionDesk(), material: 'oak-varnished' },
+    ...compoundKitParts(
+      'donation-box',
+      donationBox,
+      { pedestal: 'brass', glass: 'glass-vitrine' },
+      'pedestal',
+    ),
+
+    // Door parts remain available as recipes for QA and future animated doors.
+    // The static threshold is also fused into the owning room shell above so a
+    // reciprocal portal cannot place two copies on the same floor seam.
+    ...compoundKitParts(
+      'door-leaf',
+      doorLeaf,
+      { leaf: 'oak-varnished', furniture: 'brass' },
+      'leaf',
+    ),
+    { name: 'threshold', geometry: buildThreshold(), material: 'brass' },
+
+    // Lighting and services.
+    ...compoundKitParts(
+      'ceiling-spot',
+      ceilingSpot,
+      { track: 'iron-cast', head: 'brass' },
+    ),
+    ...compoundKitParts('pendant', pendant, { fitting: 'brass', shade: 'plaster' }),
+    { name: 'wall-sconce', geometry: buildWallSconce(), material: 'brass' },
+    { name: 'vent-grille', geometry: buildVentGrille(), material: 'iron-cast' },
+    ...compoundKitParts(
+      'breaker-panel',
+      breakerPanel,
+      { case: 'iron-cast', handle: 'brass', indicator: 'glass-green' },
+      'case',
+    ),
+
+    // Curator's office.
+    { name: 'curator-desk', geometry: buildCuratorDesk(), material: 'oak-varnished' },
+    ...compoundKitParts(
+      'office-chair',
+      officeChair,
+      { frame: 'oak-varnished', base: 'iron-cast' },
+    ),
+    ...compoundKitParts(
+      'desk-lamp',
+      deskLamp,
+      { base: 'brass', shade: 'glass-green' },
+    ),
+    ...compoundKitParts(
+      'bookshelf',
+      bookshelf,
+      { carcass: 'oak-varnished', books: 'leather-worn' },
+      'carcass',
+    ),
+    ...compoundKitParts(
+      'ledger-stack',
+      ledgerStack,
+      { covers: 'leather-worn', pages: 'canvas' },
+      'covers',
+    ),
   ]
   const kitBundle = await bakeBundle('kit', kitParts)
+
+  const kitColliderParts = new Set([
+    'plinth-block',
+    'plinth-tapered',
+    'vitrine-table',
+    'archive-cabinet',
+    'bench',
+    'vitrine-wall',
+    'vitrine-tower',
+    'partition__foot',
+    'interp-panel',
+    'reception-desk',
+    'donation-box',
+    'door-leaf',
+    'curator-desk',
+    'office-chair__base',
+    'bookshelf',
+  ])
+
+  const partitionFace = kitBundle.manifest.find((part) => part.name === 'partition')
   for (const part of kitBundle.manifest) {
-    if (part.name.startsWith('plinth') || part.name === 'vitrine-table') {
+    if (kitColliderParts.has(part.name)) {
       part.collider = boxColliderFrom(part.bounds)
     }
-    const problem = checkBudget(kitBundle.manifest, part.name, TRIANGLE_BUDGET.prop)
+
+    if (part.name === 'partition__foot' && part.collider && partitionFace) {
+      // Keep the foot's wider L-shaped X/Z footprint, but make it a wall. The
+      // physical foot is only 0.16 m high and the player's 0.22 m autostep can
+      // otherwise climb it and walk straight through the 2.4 m plaster face.
+      const minY = Math.min(part.bounds.min[1], partitionFace.bounds.min[1])
+      const maxY = Math.max(part.bounds.max[1], partitionFace.bounds.max[1])
+      part.collider.halfExtents[1] = Number(((maxY - minY) / 2).toFixed(4))
+      part.collider.centre[1] = Number(((minY + maxY) / 2).toFixed(4))
+    }
+  }
+
+  for (const recipe of recipeNames(kitBundle.manifest)) {
+    const problem = checkRecipeBudget(kitBundle.manifest, recipe, TRIANGLE_BUDGET.prop)
     if (problem) problems.push(problem)
   }
   bundles.push(kitBundle)
@@ -348,9 +532,9 @@ async function main() {
     { name: 'frame/panorama-wide', geometry: buildFrame({ width: 1.4, aspect: 2.5751 }), material: 'oak-varnished' },
   ]
   const exhibitBundle = await bakeBundle('exhibits-holyoke', exhibitParts)
-  for (const part of exhibitBundle.manifest) {
-    const budget = part.name.startsWith('ball/') ? TRIANGLE_BUDGET.hero : TRIANGLE_BUDGET.prop
-    const problem = checkBudget(exhibitBundle.manifest, part.name, budget)
+  for (const recipe of recipeNames(exhibitBundle.manifest)) {
+    const budget = recipe.startsWith('ball/') ? TRIANGLE_BUDGET.hero : TRIANGLE_BUDGET.prop
+    const problem = checkRecipeBudget(exhibitBundle.manifest, recipe, budget)
     if (problem) problems.push(problem)
   }
   bundles.push(exhibitBundle)

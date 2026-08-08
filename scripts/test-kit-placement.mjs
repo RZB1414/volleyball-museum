@@ -162,13 +162,29 @@ for (const bundle of bundles) {
   }
 }
 
+const kit = bundles.find((bundle) => bundle.name === 'kit')
+
+/** A recipe may be one node or a set of `<recipe>__<material>` siblings. */
+function recipeParts(recipe) {
+  return kit?.parts.filter(
+    (candidate) => candidate.name === recipe || candidate.name.startsWith(`${recipe}__`),
+  ) ?? []
+}
+
+function recipeBounds(recipe) {
+  const parts = recipeParts(recipe)
+  if (parts.length === 0) return null
+  return {
+    min: [0, 1, 2].map((axis) => Math.min(...parts.map((part) => part.bounds.min[axis]))),
+    max: [0, 1, 2].map((axis) => Math.max(...parts.map((part) => part.bounds.max[axis]))),
+  }
+}
+
 /**
- * Standing parts stand.
+ * Floor-standing recipes stand.
  *
- * A part meant to rest on the floor is authored with min Y at zero. Placing it
- * at a room position then puts it on the floor with no per-part offset — which
- * is what makes `kit` a flat list of positions instead of a table of magic
- * numbers, and what broke when the node transform was dropped.
+ * The datum belongs to the complete recipe, not necessarily every material
+ * component: the donation box's glass begins above its pedestal, for example.
  */
 const FLOOR_STANDING = [
   'plinth-block',
@@ -178,15 +194,94 @@ const FLOOR_STANDING = [
   'rope-stanchion',
   'bench',
   'label-plaque',
+  'vitrine-tower',
+  'partition',
+  'label-angled',
+  'interp-panel',
+  'reception-desk',
+  'donation-box',
+  'curator-desk',
+  'office-chair',
+  'bookshelf',
 ]
 
-const kit = bundles.find((bundle) => bundle.name === 'kit')
-for (const name of FLOOR_STANDING) {
-  const part = kit?.parts.find((candidate) => candidate.name === name)
+for (const recipe of FLOOR_STANDING) {
+  const bounds = recipeBounds(recipe)
   check(
-    `${name} is authored standing on the floor`,
-    part != null && Math.abs(part.bounds.min[1]) < FLOOR_EPSILON,
-    part ? `min Y is ${part.bounds.min[1]}` : 'part not baked',
+    `${recipe} is authored standing on the floor`,
+    bounds != null && Math.abs(bounds.min[1]) < FLOOR_EPSILON,
+    bounds ? `min Y is ${bounds.min[1]}` : 'recipe not baked',
+  )
+}
+
+/** Small objects placed on a sill, desk or threshold also start at local y=0. */
+for (const recipe of [
+  'vitrine-wall',
+  'medallion-socket',
+  'desk-lamp',
+  'ledger-stack',
+  'door-leaf',
+  'threshold',
+]) {
+  const bounds = recipeBounds(recipe)
+  check(
+    `${recipe} is authored from its horizontal support datum`,
+    bounds != null && Math.abs(bounds.min[1]) < FLOOR_EPSILON,
+    bounds ? `min Y is ${bounds.min[1]}` : 'recipe not baked',
+  )
+}
+
+/** Hanging recipes meet the ceiling at local y=0 and grow downwards. */
+for (const recipe of ['banner', 'ceiling-spot', 'pendant']) {
+  const bounds = recipeBounds(recipe)
+  check(
+    `${recipe} is authored hanging from the ceiling datum`,
+    bounds != null && Math.abs(bounds.max[1]) < FLOOR_EPSILON,
+    bounds ? `max Y is ${bounds.max[1]}` : 'recipe not baked',
+  )
+}
+
+/** Wall recipes start on the wall plane and project into the room along +Z. */
+for (const recipe of [
+  'vitrine-wall',
+  'frame-empty',
+  'wall-sconce',
+  'vent-grille',
+  'breaker-panel',
+]) {
+  const bounds = recipeBounds(recipe)
+  check(
+    `${recipe} is authored from the wall datum`,
+    bounds != null && Math.abs(bounds.min[2]) < FLOOR_EPSILON,
+    bounds ? `min Z is ${bounds.min[2]}` : 'recipe not baked',
+  )
+}
+
+/**
+ * Assemblies must keep every material component under one recipe root. A
+ * missing glass pane or lamp shade is otherwise a valid GLB and an incomplete
+ * object, which the per-node round-trip checks above cannot distinguish.
+ */
+for (const recipe of [
+  'vitrine-wall',
+  'vitrine-tower',
+  'partition',
+  'banner',
+  'donation-box',
+  'door-leaf',
+  'ceiling-spot',
+  'pendant',
+  'office-chair',
+  'desk-lamp',
+  'bookshelf',
+  'ledger-stack',
+  'breaker-panel',
+]) {
+  const parts = recipeParts(recipe)
+  check(
+    `${recipe} assembly has all material components`,
+    parts.length >= 2,
+    `found ${parts.length} component(s)`,
   )
 }
 

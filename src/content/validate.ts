@@ -56,7 +56,7 @@ function lockCredentialKeys(lock: Lock): readonly string[] {
 
 function validateReferences(content: MuseumContent): ValidationIssue[] {
   const issues: ValidationIssue[] = []
-  const roomIds = new Set(content.rooms.map((room) => room.id))
+  const roomIds = new Set<string>(content.rooms.map((room) => room.id))
   const exhibitIds = new Set(content.exhibits.map((exhibit) => exhibit.id))
   const documentIds = new Set(content.documents.map((doc) => doc.id))
   const lockIds = new Set(content.locks.map((lock) => lock.id))
@@ -99,6 +99,26 @@ function validateReferences(content: MuseumContent): ValidationIssue[] {
         error('fact-missing', `Exhibit "${exhibit.id}" hotspot "${hotspot.id}" reveals unknown fact "${hotspot.revealsFactId}".`)
       }
     }
+    for (const effect of exhibit.unlocks ?? []) {
+      if (effect.kind === 'power-room' && !roomIds.has(effect.roomId)) {
+        error(
+          'power-effect-room-missing',
+          `Exhibit "${exhibit.id}" powers unknown room "${effect.roomId}".`,
+        )
+      }
+      if (effect.kind === 'open-lock' && !lockIds.has(effect.lockId)) {
+        error(
+          'open-effect-lock-missing',
+          `Exhibit "${exhibit.id}" opens unknown lock "${effect.lockId}".`,
+        )
+      }
+      if (effect.kind === 'reveal-document' && !documentIds.has(effect.documentId)) {
+        error(
+          'reveal-effect-document-missing',
+          `Exhibit "${exhibit.id}" reveals unknown document "${effect.documentId}".`,
+        )
+      }
+    }
     // The "you must turn it over" rule only bites if such a hotspot exists.
     if (!exhibit.hotspots.some((hotspot) => hotspot.requiredForCatalogue)) {
       issues.push({
@@ -129,6 +149,61 @@ function validateReferences(content: MuseumContent): ValidationIssue[] {
       if (!exhibitIds.has(lock.sourceExhibitId)) {
         error('lock-source-missing', `Knowledge lock "${lock.id}" names unknown source exhibit "${lock.sourceExhibitId}".`)
       }
+    }
+  }
+
+  return issues
+}
+
+// ---------------------------------------------------------------------------
+// Power progression
+// ---------------------------------------------------------------------------
+
+/**
+ * An unpowered room needs a physical, uniquely addressable way to recover.
+ *
+ * Keeping this in the content gate is important: a missing control still
+ * compiles and the lighting code correctly leaves the room dark, producing a
+ * perfectly functional soft-lock that no type checker can distinguish from
+ * intentional darkness.
+ */
+export function validatePower(content: MuseumContent): ValidationIssue[] {
+  const issues: ValidationIssue[] = []
+  const controlIds = new Set<string>()
+
+  for (const room of content.rooms) {
+    const control = room.powerControl
+    if (!room.startsPowered && !control) {
+      issues.push({
+        severity: 'error',
+        code: 'unpowered-room-no-control',
+        message: `Room "${room.id}" starts unpowered but declares no physical power control.`,
+      })
+      continue
+    }
+    if (!control) continue
+
+    if (controlIds.has(control.id)) {
+      issues.push({
+        severity: 'error',
+        code: 'power-control-duplicate',
+        message: `Power control id "${control.id}" is used by more than one room.`,
+      })
+    }
+    controlIds.add(control.id)
+
+    const [x, y, z] = control.position
+    const inside =
+      Math.abs(x) <= room.shell.width / 2 + 0.15 &&
+      Math.abs(z) <= room.shell.depth / 2 + 0.15 &&
+      y >= 0 &&
+      y <= room.shell.height
+    if (!inside) {
+      issues.push({
+        severity: 'error',
+        code: 'power-control-outside-room',
+        message: `Power control "${control.id}" is outside room "${room.id}" at [${control.position.join(', ')}].`,
+      })
     }
   }
 
@@ -536,21 +611,29 @@ export function validateBake(
      * exactly how the atrium ended up an empty box for as long as it did.
      */
     for (const placement of room.kit ?? []) {
-      if (!partNames.has(placement.part)) {
+      if (!resolves(placement.part)) {
         issues.push({
           severity: 'error',
           code: 'kit-part-not-baked',
-          message: `Room "${room.id}" places kit part "${placement.part}", which the bake does not produce.`,
+          message: `Room "${room.id}" places kit recipe "${placement.part}", which the bake does not produce.`,
         })
       }
     }
 
+    if (room.powerControl && !resolves(room.powerControl.part)) {
+      issues.push({
+        severity: 'error',
+        code: 'power-control-part-not-baked',
+        message: `Power control "${room.powerControl.id}" uses recipe "${room.powerControl.part}", which the bake does not produce.`,
+      })
+    }
+
     for (const container of room.containers ?? []) {
-      if (!partNames.has(container.part)) {
+      if (!resolves(container.part)) {
         issues.push({
           severity: 'error',
           code: 'container-part-not-baked',
-          message: `Container "${container.id}" uses part "${container.part}", which the bake does not produce.`,
+          message: `Container "${container.id}" uses recipe "${container.part}", which the bake does not produce.`,
         })
       }
     }
@@ -893,6 +976,7 @@ export function validateContent(
 ): ValidationIssue[] {
   return [
     ...validateReferences(content),
+    ...validatePower(content),
     ...validateFacts(content.facts),
     ...validateAttribution(content),
     ...validateSolvability(content),

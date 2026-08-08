@@ -1,8 +1,8 @@
 /**
  * Runtime state.
  *
- * Separate from the old `src/store/gameStore.ts`, which belongs to the previous
- * build and is left alone until the swap.
+ * The Rapier prototype used a separate store. It was removed in 5e51e24; this
+ * is now the only persisted runtime state.
  *
  * Three slices, deliberately kept apart:
  *   - settings   what the player chose. Persisted, and the accessibility
@@ -13,6 +13,8 @@
  */
 
 import { create } from 'zustand'
+
+import type { UnlockEffect } from '../content/schema'
 
 export type Locale = 'pt-BR' | 'en'
 export type QualityTier = 'low' | 'medium' | 'high'
@@ -142,6 +144,8 @@ export type MuseumStore = {
   focusedExhibit: string | null
   /** The archive cabinet currently under the crosshair, if any. */
   focusedContainer: string | null
+  /** The room power control currently under the crosshair, if any. */
+  focusedPowerControl: string | null
   /** The cabinet whose contents are being read, if any. */
   openedContainer: string | null
   /** The lock whose keypad is open, if any. */
@@ -158,6 +162,7 @@ export type MuseumStore = {
   resetTouch: () => void
   setFocusedExhibit: (id: string | null) => void
   setFocusedContainer: (id: string | null) => void
+  setFocusedPowerControl: (id: string | null) => void
   setOpenedContainer: (id: string | null) => void
   setActiveLock: (id: string | null) => void
   setExamining: (id: string | null) => void
@@ -171,6 +176,7 @@ export type MuseumStore = {
   grantCredential: (key: string) => void
   powerRoom: (roomId: string) => void
   openLock: (lockId: string) => void
+  applyUnlockEffect: (effect: UnlockEffect) => void
   resetProgress: () => void
 }
 
@@ -215,11 +221,19 @@ export const useMuseum = create<MuseumStore>((set, get) => {
     touchLook: { x: 0, y: 0 },
     focusedExhibit: null,
     focusedContainer: null,
+    focusedPowerControl: null,
     openedContainer: null,
     activeLock: null,
     examining: null,
 
-    start: () => set({ started: true }),
+    start: () => {
+      set({ started: true })
+      const room = get().currentRoom
+      mutateProgress((progress) => ({
+        ...progress,
+        roomsVisited: withValue(progress.roomsVisited, room),
+      }))
+    },
     setPointerLocked: (pointerLocked) => set({ pointerLocked }),
     setCurrentRoom: (room) => {
       if (get().currentRoom === room) return
@@ -242,6 +256,7 @@ export const useMuseum = create<MuseumStore>((set, get) => {
     resetTouch: () => set({ touchMove: { x: 0, y: 0 }, touchLook: { x: 0, y: 0 } }),
     setFocusedExhibit: (focusedExhibit) => set({ focusedExhibit }),
     setFocusedContainer: (focusedContainer) => set({ focusedContainer }),
+    setFocusedPowerControl: (focusedPowerControl) => set({ focusedPowerControl }),
     setOpenedContainer: (openedContainer) => set({ openedContainer }),
     setActiveLock: (activeLock) => set({ activeLock }),
     setExamining: (examining) => set({ examining }),
@@ -282,6 +297,23 @@ export const useMuseum = create<MuseumStore>((set, get) => {
         ...progress,
         locksOpened: withValue(progress.locksOpened, lockId),
       })),
+    applyUnlockEffect: (effect) => {
+      const state = get()
+      switch (effect.kind) {
+        case 'grant-credential':
+          state.grantCredential(`${effect.credential.kind}:${effect.credential.id}`)
+          break
+        case 'open-lock':
+          state.openLock(effect.lockId)
+          break
+        case 'power-room':
+          state.powerRoom(effect.roomId)
+          break
+        case 'reveal-document':
+          state.recordDocument(effect.documentId)
+          break
+      }
+    },
     resetProgress: () => {
       set({ progress: EMPTY_PROGRESS, currentRoom: 'atrium' })
       persist()

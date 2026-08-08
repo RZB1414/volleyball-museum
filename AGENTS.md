@@ -1,7 +1,7 @@
 # Instruções do projeto
 
-**Leia `docs/HANDOFF.md` antes de qualquer coisa.** Ele tem o estado atual, o que a
-tarefa imediata é, o backlog priorizado e nove bugs cujas lições ainda se aplicam.
+**Leia `docs/HANDOFF.md` antes de qualquer coisa.** Ele tem o estado atual, a
+próxima tarefa, o backlog priorizado e as armadilhas cujas lições ainda se aplicam.
 
 Museu do voleibol em primeira pessoa. React 19 · TypeScript 6 · Vite 8 (Rolldown) ·
 three r185 · @react-three/fiber · zustand · Cloudflare Workers.
@@ -9,7 +9,8 @@ three r185 · @react-three/fiber · zustand · Cloudflare Workers.
 ## Não negociável
 
 1. **`npm run check` antes de qualquer commit.** Roda typecheck, oxlint, validação de
-   conteúdo e três suítes headless (colisão, posicionamento de peças, navegação).
+   conteúdo e cinco suítes headless (energia, colisão, posicionamento, runtime do
+   kit e navegação).
    Se algo ficar vermelho, conserte — não contorne o teste.
 
 2. **Nunca edite arquivos gerados.** `src/content/bake.generated.ts` e
@@ -32,9 +33,10 @@ three r185 · @react-three/fiber · zustand · Cloudflare Workers.
    comentário no topo de `src/engine/kitPart.ts` — esse bug já enterrou todo objeto
    do museu uma vez, de forma invisível porque era uniforme.
 
-6. **Não apague a árvore antiga.** `src/game/`, `src/world/` e `src/player/` são a
-   versão anterior do jogo, com alterações não commitadas do dono. A v2 é o padrão;
-   `?v1` na URL serve a antiga. Remover a antiga é decisão do dono, não sua.
+6. **Não reintroduza a árvore antiga.** O protótipo em `src/game/`, `src/world/` e
+   `src/player/`, junto do seletor `?v1`, foi removido intencionalmente no commit
+   `5e51e24`. O museu data-driven é agora a única aplicação; consulte o histórico
+   apenas como referência.
 
 7. **Sem chunking manual no Vite/Rolldown.** Duas tentativas pioraram o payload;
    `vite.config.ts` explica por quê num comentário longo. Deixe o split cair nas

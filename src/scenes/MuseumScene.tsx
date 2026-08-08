@@ -21,11 +21,18 @@ import { CollisionWorld } from '../engine/collision'
 import { ContainerLayer, ContainerTargeting } from '../engine/Containers'
 import { FramedMedia } from '../engine/FramedMedia'
 import { ExamineView, InteractionTargeting } from '../engine/Interaction'
-import { cloneKitPart, cloneRecipe, disposeKitPart } from '../engine/kitPart'
+import {
+  bakedPartHasCollider,
+  cloneKitPart,
+  cloneRecipe,
+  disposeKitPart,
+  registerKitColliders,
+} from '../engine/kitPart'
 import { useMaterialLibrary, type MaterialLibrary } from '../engine/materials'
 import { PerfHud } from '../engine/PerfHud'
 import { PlayerController } from '../engine/PlayerController'
 import { playerPosition } from '../engine/playerPosition'
+import { PowerControlLayer, PowerControlTargeting } from '../engine/PowerControls'
 import { DoorwaySigns, KitLayer, WallSignage } from '../engine/RoomFurniture'
 import { RoomLighting } from '../engine/RoomLighting'
 import { buildCells, computeVisibleRooms, roomAt } from '../engine/portals'
@@ -42,12 +49,14 @@ const bundleByName = new Map<string, BakedBundle>(
 )
 
 /** The shared prop kit: plinths, vitrines, plaques. Loaded once, used everywhere. */
-const KIT_URL = bundleByName.get('kit')?.url ?? ''
-
-/** Exhibits and vitrine glass should not block the player. */
-function isNonColliding(name: string) {
-  return name.startsWith('ball/') || name.startsWith('frame/') || name.includes('glass')
+function requireBundle(name: string): BakedBundle {
+  const bundle = bundleByName.get(name)
+  if (!bundle) throw new Error(`The bake manifest is missing the ${name} bundle.`)
+  return bundle
 }
+
+const KIT_BUNDLE = requireBundle('kit')
+const KIT_URL = KIT_BUNDLE.url
 
 // ---------------------------------------------------------------------------
 // Exhibits
@@ -100,7 +109,8 @@ function Exhibit({
 const MOUNTS: Record<string, { part: string; extra?: string } | null> = {
   plinth: { part: 'plinth-block' },
   'vitrine-table': { part: 'vitrine-table', extra: 'vitrine-glass' },
-  'vitrine-tower': { part: 'plinth-tapered', extra: 'vitrine-glass' },
+  // The new tower is one authored assembly: carcass plus its namespaced glass.
+  'vitrine-tower': { part: 'vitrine-tower' },
   wall: null,
   floor: null,
 }
@@ -117,10 +127,14 @@ function ExhibitMount({
   exhibit,
   kit,
   materials,
+  collision,
+  roomOrigin,
 }: {
   exhibit: ExhibitData
   kit: Group | null
   materials: MaterialLibrary
+  collision: CollisionWorld | null
+  roomOrigin: readonly [number, number, number]
 }) {
   const spec = MOUNTS[exhibit.mount] ?? null
   const base = useKitPart(kit, spec?.part, materials)
@@ -131,6 +145,25 @@ function ExhibitMount({
       for (const node of [base, glass]) disposeKitPart(node)
     }
   }, [base, glass])
+
+  useEffect(
+    () =>
+      registerKitColliders(kit, spec?.part, KIT_BUNDLE, collision, {
+        roomOrigin,
+        position: [exhibit.position[0], 0, exhibit.position[2]],
+        rotationY: exhibit.rotationY,
+      }),
+    [collision, exhibit.position, exhibit.rotationY, kit, roomOrigin, spec?.part],
+  )
+  useEffect(
+    () =>
+      registerKitColliders(kit, spec?.extra, KIT_BUNDLE, collision, {
+        roomOrigin,
+        position: [exhibit.position[0], 0.94, exhibit.position[2]],
+        rotationY: exhibit.rotationY,
+      }),
+    [collision, exhibit.position, exhibit.rotationY, kit, roomOrigin, spec?.extra],
+  )
 
   if (!base) return null
 
@@ -153,7 +186,15 @@ function ExhibitMount({
   )
 }
 
-function ExhibitLayer({ room, materials }: { room: RoomData; materials: MaterialLibrary }) {
+function ExhibitLayer({
+  room,
+  materials,
+  collision,
+}: {
+  room: RoomData
+  materials: MaterialLibrary
+  collision: CollisionWorld | null
+}) {
   const bundle = bundleByName.get(`exhibits-${room.id}`)
   const exhibits = useMemo(
     () => MUSEUM.exhibits.filter((exhibit) => room.exhibitIds.includes(exhibit.id)),
@@ -164,7 +205,13 @@ function ExhibitLayer({ room, materials }: { room: RoomData; materials: Material
 
   return (
     <Suspense fallback={null}>
-      <ExhibitBundle bundle={bundle.url} exhibits={exhibits} materials={materials} />
+      <ExhibitBundle
+        bundle={bundle.url}
+        exhibits={exhibits}
+        materials={materials}
+        collision={collision}
+        roomOrigin={room.origin}
+      />
     </Suspense>
   )
 }
@@ -173,10 +220,14 @@ function ExhibitBundle({
   bundle,
   exhibits,
   materials,
+  collision,
+  roomOrigin,
 }: {
   bundle: string
   exhibits: readonly ExhibitData[]
   materials: MaterialLibrary
+  collision: CollisionWorld | null
+  roomOrigin: readonly [number, number, number]
 }) {
   // Draco off for the same reason as BakedRoom: drei's default would pull a
   // decoder from gstatic.com that this project never uses.
@@ -192,7 +243,13 @@ function ExhibitBundle({
 
         return (
           <group key={exhibit.id}>
-            <ExhibitMount exhibit={exhibit} kit={kit.scene as Group} materials={materials} />
+            <ExhibitMount
+              exhibit={exhibit}
+              kit={kit.scene as Group}
+              materials={materials}
+              collision={collision}
+              roomOrigin={roomOrigin}
+            />
             <Exhibit exhibit={exhibit} source={scene as Group} materials={materials} />
             {/* Wall-mounted exhibits carry a photograph; the frame geometry is
                 baked, the print and its credit are runtime so they can follow
@@ -261,16 +318,29 @@ function Room({
         materials={materials}
         origin={room.origin}
         collision={collision}
-        noCollide={isNonColliding}
+        // Collision is authored by the bake manifest. In particular, ceiling,
+        // decorative panelling and glass stay non-solid without name guesses.
+        noCollide={(name) => !bakedPartHasCollider(bundle, name)}
       />
       {/* Lights only exist for rooms the portal walk can see, so the per-frame
           light count follows what is on screen, not the size of the museum. */}
       {visible ? <RoomLighting room={room} /> : null}
       <group position={room.origin as unknown as [number, number, number]}>
-        <ExhibitLayer room={room} materials={materials} />
+        <ExhibitLayer room={room} materials={materials} collision={collision} />
         <Suspense fallback={null}>
-          <ContainerLayer room={room} kitUrl={KIT_URL} materials={materials} />
-          <KitLayer room={room} kitUrl={KIT_URL} materials={materials} />
+          <ContainerLayer
+            room={room}
+            kitBundle={KIT_BUNDLE}
+            materials={materials}
+            collision={collision}
+          />
+          <PowerControlLayer room={room} kitUrl={KIT_URL} materials={materials} />
+          <KitLayer
+            room={room}
+            kitBundle={KIT_BUNDLE}
+            materials={materials}
+            collision={collision}
+          />
         </Suspense>
         <DoorwaySigns room={room} locale={locale} />
         <WallSignage room={room} locale={locale} />
@@ -339,7 +409,7 @@ function MuseumLighting() {
         {/* Skylight over the atrium — the dominant source. */}
         <Lightformer
           form="rect"
-          intensity={2.2 * brightness}
+          intensity={2 * brightness}
           color="#fff0d6"
           position={[0, 12, 0]}
           rotation={[Math.PI / 2, 0, 0]}
@@ -348,7 +418,7 @@ function MuseumLighting() {
         {/* Cool fill from the opposite side so shadows are not dead black. */}
         <Lightformer
           form="rect"
-          intensity={0.5 * brightness}
+          intensity={0.4 * brightness}
           color="#9fb4d6"
           position={[-14, 6, 6]}
           rotation={[0, Math.PI / 2, 0]}
@@ -367,7 +437,7 @@ function MuseumLighting() {
         */}
         <Lightformer
           form="rect"
-          intensity={0.22 * brightness}
+          intensity={0.16 * brightness}
           color="#b09a80"
           position={[0, 0.2, 0]}
           rotation={[-Math.PI / 2, 0, 0]}
@@ -375,7 +445,7 @@ function MuseumLighting() {
         />
       </Environment>
 
-      <ambientLight intensity={0.16 * brightness} color="#c9d2e0" />
+      <ambientLight intensity={0.1 * brightness} color="#c9d2e0" />
 
     </>
   )
@@ -448,6 +518,7 @@ export function MuseumScene() {
       <VisibilityDriver />
       <InteractionTargeting />
       <ContainerTargeting />
+      <PowerControlTargeting />
       <ExamineView />
       <PerfHud />
     </>

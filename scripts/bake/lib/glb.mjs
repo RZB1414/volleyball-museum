@@ -34,7 +34,7 @@ import { boundsOf, triangleCount } from './geometry.mjs'
  */
 
 /**
- * The shared material library. Thirteen materials for the whole building —
+ * The shared material library. Fourteen materials for the whole building —
  * every extra one is another shader program, and the budget is 25 total.
  *
  * Clearcoat is the cheapest "expensive" look available and is used sparingly on
@@ -71,6 +71,10 @@ export const MATERIALS = {
   // which is exactly where the hub's landmark is.
   'rope-velvet': { baseColor: [0.34, 0.055, 0.075, 1], roughness: 0.86, metallic: 0, tint: [0.46, 0.075, 0.10] },
   'glass-vitrine': { baseColor: [0.86, 0.90, 0.90, 0.14], roughness: 0.03, metallic: 0, alphaMode: 'BLEND' },
+  // The banker's shade is coloured glass, not a green-painted metal shell.
+  // More opacity than vitrine glazing keeps its silhouette legible while still
+  // allowing the warm desk light to read through the curved inner surface.
+  'glass-green': { baseColor: [0.035, 0.19, 0.085, 0.68], roughness: 0.16, metallic: 0, alphaMode: 'BLEND' },
 }
 
 function createMaterials(doc) {

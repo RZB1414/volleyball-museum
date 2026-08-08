@@ -30,6 +30,8 @@ export const en = {
   'prompt.rotate': 'Drag to rotate',
   'prompt.locked': 'Locked',
   'prompt.close': 'Close',
+  'prompt.power': 'Restore power',
+  'power.restored': 'Power restored',
 
   'map.title': 'Museum plan',
   'map.state.unlit': 'No power',
@@ -76,6 +78,9 @@ export const en = {
   'room.holyoke.nickname': 'the room with the laced ball',
   'room.office.title': "Curator's office",
   'room.office.nickname': 'the room with the green lamp',
+  'power.atrium.title': 'Atrium main breaker',
+  'power.holyoke.title': 'Wing 1 breaker panel',
+  'power.office.title': "Curator's lamp",
 
   // ---------------------------------------------------------------------
   // Wall lettering

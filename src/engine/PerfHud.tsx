@@ -17,7 +17,7 @@
  */
 
 import { advance, useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Box3, Mesh, type Object3D } from 'three'
 
 import { useMuseum } from '../state/store'
@@ -55,14 +55,15 @@ declare global {
   }
 }
 
-export function PerfHud({ overlay = false }: { overlay?: boolean }) {
+export function PerfHud() {
   const gl = useThree((state) => state.gl)
   const scene = useThree((state) => state.scene)
   const camera = useThree((state) => state.camera)
 
   const frameTimesRef = useRef<number[]>([])
   const lastRef = useRef(performance.now())
-  const [snapshot, setSnapshot] = useState<PerfSnapshot | null>(null)
+  const overlayRef = useRef<HTMLDivElement | null>(null)
+  const overlayFrameRef = useRef(0)
 
   useEffect(() => {
     const countMeshes = () => {
@@ -204,11 +205,22 @@ export function PerfHud({ overlay = false }: { overlay?: boolean }) {
       return rows
     }
 
+    if (new URLSearchParams(window.location.search).has('perf')) {
+      const overlay = document.createElement('div')
+      overlay.id = 'museum-perf'
+      overlay.className = 'perf-hud'
+      overlay.setAttribute('role', 'status')
+      document.body.append(overlay)
+      overlayRef.current = overlay
+    }
+
     return () => {
       delete window.__museumPerf
       delete window.__museumRender
       delete window.__museumScene
       delete window.__museumStep
+      overlayRef.current?.remove()
+      overlayRef.current = null
     }
   }, [gl, scene, camera])
 
@@ -221,44 +233,35 @@ export function PerfHud({ overlay = false }: { overlay?: boolean }) {
     times.push(elapsed)
     if (times.length > 60) times.shift()
 
-    if (overlay && times.length % 30 === 0) {
-      setSnapshot(window.__museumPerf?.() ?? null)
+    overlayFrameRef.current += 1
+    if (overlayRef.current && overlayFrameRef.current % 30 === 0) {
+      const snapshot = window.__museumPerf?.()
+      if (!snapshot) return
+
+      const lines = [
+        `draw calls ${snapshot.drawCalls} / 120 desktop · 45 mobile`,
+        `triangles ${snapshot.triangles.toLocaleString('en-US')} / 350,000 desktop · 90,000 mobile`,
+        `programs ${snapshot.programs} / 25`,
+        `geometries ${snapshot.geometries} · textures ${snapshot.textures}`,
+        `meshes ${snapshot.meshesVisible} / ${snapshot.meshesTotal} visible`,
+        `room ${snapshot.currentRoom} · sees ${snapshot.visibleRooms.join(', ')}`,
+        `${snapshot.fps} fps`,
+      ]
+      overlayRef.current.replaceChildren(
+        ...lines.map((text, index) => {
+          const line = document.createElement('div')
+          line.textContent = text
+          if (
+            (index === 0 && snapshot.drawCalls > 120) ||
+            (index === 1 && snapshot.triangles > 350_000)
+          ) {
+            line.className = 'is-over'
+          }
+          return line
+        }),
+      )
     }
   })
 
-  if (!overlay || !snapshot) return null
-
-  return (
-    <Hud snapshot={snapshot} />
-  )
-}
-
-/**
- * Rendered outside the Canvas by MuseumApp; kept here so the shape of the
- * snapshot and its presentation stay together.
- */
-export function Hud({ snapshot }: { snapshot: PerfSnapshot }) {
-  // Budgets from the plan: <=120 draw calls and 350k triangles on desktop.
-  const callsOver = snapshot.drawCalls > 120
-  const trisOver = snapshot.triangles > 350_000
-
-  return (
-    <div className="perf-hud">
-      <div className={callsOver ? 'is-over' : ''}>draw calls {snapshot.drawCalls} / 120</div>
-      <div className={trisOver ? 'is-over' : ''}>
-        triangles {snapshot.triangles.toLocaleString('en-US')} / 350,000
-      </div>
-      <div>programs {snapshot.programs} / 25</div>
-      <div>
-        geometries {snapshot.geometries} · textures {snapshot.textures}
-      </div>
-      <div>
-        meshes {snapshot.meshesVisible} / {snapshot.meshesTotal} visible
-      </div>
-      <div>
-        room {snapshot.currentRoom} · sees {snapshot.visibleRooms.join(', ')}
-      </div>
-      <div>{snapshot.fps} fps</div>
-    </div>
-  )
+  return null
 }

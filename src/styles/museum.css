@@ -613,6 +613,11 @@
   border-color: #2a2c32;
 }
 
+.swatch.is-unpowered {
+  background: #1b1c20;
+  border-color: #6f5742;
+}
+
 .swatch.is-partial {
   background: #4a3a1e;
   border-color: #a98a52;

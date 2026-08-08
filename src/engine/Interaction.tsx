@@ -314,7 +314,14 @@ export function ExamineView() {
     if (newlySeen) {
       const required = exhibit.hotspots.filter((hotspot) => hotspot.requiredForCatalogue)
       const complete = required.every((hotspot) => seenRef.current.has(hotspot.id))
-      if (complete) useMuseum.getState().recordCatalogued(exhibit.id)
+      if (complete) {
+        const state = useMuseum.getState()
+        state.recordCatalogued(exhibit.id)
+        // Unlock effects are content, not exhibit-specific runtime branches.
+        // Applying them here makes every declared effect functional at the
+        // exact moment its exhibit becomes fully catalogued.
+        for (const effect of exhibit.unlocks ?? []) state.applyUnlockEffect(effect)
+      }
     }
   })
 

@@ -479,6 +479,14 @@ const ROOMS = [
     origin: [0, 0, 0],
     palette: 'atrium-neutral',
     startsPowered: false,
+    powerControl: {
+      id: 'atrium-breaker',
+      part: 'breaker-panel',
+      // Beside the first wing entrance, on the west wall and facing inward.
+      position: [-8.86, 1.05, -4.4],
+      rotationY: Math.PI / 2,
+      titleKey: 'power.atrium.title',
+    },
     portals: [
       {
         id: 'atrium-to-holyoke',
@@ -538,6 +546,28 @@ const ROOMS = [
       { part: 'rope-span', position: [1.3, 0, 0], rotationY: Math.PI / 2 },
       { part: 'medallion-socket', position: [0, 0.98, 0] },
       { part: 'bench', position: [0, 0, 6.2], rotationY: Math.PI },
+      { part: 'bench', position: [-4.8, 0, -5.8] },
+
+      // Visitor services occupy the south half without cutting across any of
+      // the three lines from the spawn to a portal.
+      { part: 'reception-desk', position: [-4.2, 0, 5.0], rotationY: 0.35 },
+      { part: 'donation-box', position: [3.6, 0, 5.4] },
+      { part: 'vitrine-tower', position: [6.2, 0, -5.7], rotationY: -0.3 },
+
+      // The atrium is double height. Fixtures and banners make that volume
+      // legible instead of leaving five metres of blank wall over the dado.
+      // The dedication occupies the centre of the north wall. Keeping its
+      // banner off-axis preserves that primary wayfinding landmark.
+      { part: 'banner', position: [-6.2, 5.6, -8.68] },
+      { part: 'banner', position: [0, 5.6, 8.68], rotationY: Math.PI },
+      { part: 'banner', position: [-8.68, 5.6, 0], rotationY: Math.PI / 2 },
+      { part: 'banner', position: [8.68, 5.6, 0], rotationY: -Math.PI / 2 },
+      { part: 'frame-empty', position: [8.84, 2.1, -4.5], rotationY: -Math.PI / 2 },
+      { part: 'pendant', position: [0, 8.4, 0] },
+      { part: 'ceiling-spot', position: [-4, 8.4, -4] },
+      { part: 'ceiling-spot', position: [4, 8.4, -4] },
+      { part: 'ceiling-spot', position: [-4, 8.4, 4] },
+      { part: 'ceiling-spot', position: [4, 8.4, 4] },
     ],
     /**
      * The dedication wall.
@@ -591,6 +621,14 @@ const ROOMS = [
     origin: [-15.25, 0, 0],
     palette: 'holyoke-gaslight',
     startsPowered: false,
+    powerControl: {
+      id: 'holyoke-breaker',
+      part: 'breaker-panel',
+      // Close to the entrance, but around the corner from the atrium control.
+      position: [5.86, 1.05, -4.2],
+      rotationY: -Math.PI / 2,
+      titleKey: 'power.holyoke.title',
+    },
     powerLockId: undefined,
     portals: [
       {
@@ -629,11 +667,6 @@ const ROOMS = [
       { part: 'label-plaque', position: [-2.75, 0, -5.2], rotationY: -Math.PI / 2 },
       { part: 'label-plaque', position: [-2.75, 0, 0.4], rotationY: -Math.PI / 2 },
       { part: 'label-plaque', position: [-2.75, 0, 2.6], rotationY: -Math.PI / 2 },
-      // The hero plinth, the net and the dress form.
-      { part: 'label-plaque', position: [0.85, 0, -5.6], rotationY: -Math.PI / 2 },
-      { part: 'label-plaque', position: [3.8, 0, -1.75], rotationY: Math.PI },
-      { part: 'label-plaque', position: [3.9, 0, 4.65], rotationY: Math.PI },
-
       // The 1897 net is the wing's centrepiece and the one thing a visitor
       // would instinctively touch, so it gets the same rope treatment as the
       // atrium plinth.
@@ -645,6 +678,28 @@ const ROOMS = [
       // a bench tells the visitor not to linger.
       { part: 'bench', position: [-0.4, 0, 0.4], rotationY: -Math.PI / 2 },
       { part: 'bench', position: [-0.4, 0, 2.8], rotationY: -Math.PI / 2 },
+
+      // Cases now articulate the west wall. Their geometry is authored from
+      // y=0, so 0.75 is the explicit sill datum rather than a hidden offset.
+      { part: 'vitrine-wall', position: [-5.86, 0.75, -4.0], rotationY: Math.PI / 2 },
+      { part: 'vitrine-wall', position: [-5.86, 0.75, 1.2], rotationY: Math.PI / 2 },
+      { part: 'vitrine-tower', position: [4.7, 0, -6.5], rotationY: -0.2 },
+
+      // The two freestanding partitions prevent the whole wing being read in
+      // one glance while leaving a generous route around both ends.
+      { part: 'partition', position: [1.8, 0, -0.6], rotationY: 0.52 },
+      { part: 'partition', position: [-2.2, 0, 1.8], rotationY: -0.44 },
+      { part: 'interp-panel', position: [1.4, 0, -6.2], rotationY: 0.2 },
+
+      // Angled labels belong to the floor-standing hero objects; the existing
+      // low plaques continue to serve the table cases.
+      { part: 'label-angled', position: [1.0, 0, -5.35], rotationY: -0.35 },
+      { part: 'label-angled', position: [2.75, 0, -4.55], rotationY: -0.8 },
+      { part: 'label-angled', position: [3.0, 0, 4.45], rotationY: Math.PI },
+
+      { part: 'ceiling-spot', position: [0, 4.2, -4] },
+      { part: 'ceiling-spot', position: [0, 4.2, 4] },
+      { part: 'vent-grille', position: [5.86, 3.4, -6], rotationY: -Math.PI / 2 },
     ],
     exhibitIds: HOLYOKE_EXHIBITS.map((exhibit) => exhibit.id),
     documentIds: ['doc-invention-date', 'doc-halstead', 'doc-rule-changes'],
@@ -671,6 +726,16 @@ const ROOMS = [
     origin: [12.25, 0, 3],
     palette: 'office-tungsten',
     startsPowered: false,
+    powerControl: {
+      id: 'office-lamp-switch',
+      // The banker's lamp already carries a modelled switch on its base. It is
+      // rendered here instead of in `kit` so geometry and interaction cannot
+      // drift into two copies of the same object.
+      part: 'desk-lamp',
+      position: [1.0, 0.74, -1.55],
+      rotationY: Math.PI,
+      titleKey: 'power.office.title',
+    },
     portals: [
       {
         id: 'office-to-atrium',
@@ -680,19 +745,14 @@ const ROOMS = [
         rotationY: Math.PI / 2,
       },
     ],
-    /**
-     * What the current kit can furnish an office with, which is not enough.
-     *
-     * `vitrine-table` without its glass hood is a plain oak table, so it serves
-     * as the curator's desk. The plan specifies this room down to the green
-     * desk lamp, and a desk, a chair, a lamp, shelving and a wastepaper basket
-     * are all parts that do not exist yet — see the kit gap noted in the docs.
-     * Two placements is not "cluttered and cosy"; it is the honest maximum
-     * until those generators are written.
-     */
+    /** Purpose-built furniture makes this the safe room, not another gallery. */
     kit: [
-      { part: 'vitrine-table', position: [0.6, 0, 0.9], rotationY: Math.PI / 2 },
-      { part: 'bench', position: [0.6, 0, 2.2], rotationY: Math.PI / 2 },
+      { part: 'curator-desk', position: [0.4, 0, -1.4], rotationY: Math.PI },
+      { part: 'office-chair', position: [0.4, 0, -0.5] },
+      { part: 'ledger-stack', position: [0.1, 0.74, -1.38], rotationY: -0.1 },
+      { part: 'bookshelf', position: [2.68, 0, 1.7], rotationY: -Math.PI / 2 },
+      { part: 'ceiling-spot', position: [0, 3.2, 0] },
+      { part: 'wall-sconce', position: [-1.5, 1.65, -3.34] },
     ],
     exhibitIds: [],
     documentIds: ['doc-predecessor'],

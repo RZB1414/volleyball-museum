@@ -15,10 +15,12 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { Mesh, Raycaster, Vector2, type Group, type Object3D } from 'three'
 
+import type { BakedBundle } from '../content/bake.generated'
 import { MUSEUM } from '../content/museum'
-import type { ContainerData, RoomData } from '../content/schema'
+import type { ContainerData, RoomData, Vec3 } from '../content/schema'
 import { USE_DRACO, USE_MESHOPT } from './bundleCache'
-import { cloneKitPart, disposeKitPart } from './kitPart'
+import type { CollisionWorld } from './collision'
+import { cloneKitPart, disposeKitPart, registerKitColliders } from './kitPart'
 import type { MaterialLibrary } from './materials'
 import { useMuseum } from '../state/store'
 import './bvhSetup'
@@ -37,14 +39,16 @@ const REACH = 2.4
 
 export function ContainerLayer({
   room,
-  kitUrl,
+  kitBundle,
   materials,
+  collision,
 }: {
   room: RoomData
-  kitUrl: string
+  kitBundle: BakedBundle
   materials: MaterialLibrary
+  collision: CollisionWorld | null
 }) {
-  const { scene } = useGLTF(kitUrl, USE_DRACO, USE_MESHOPT)
+  const { scene } = useGLTF(kitBundle.url, USE_DRACO, USE_MESHOPT)
   const containers = room.containers ?? []
 
   if (containers.length === 0) return null
@@ -56,7 +60,10 @@ export function ContainerLayer({
           key={container.id}
           container={container}
           kit={scene as Group}
+          kitBundle={kitBundle}
           materials={materials}
+          collision={collision}
+          roomOrigin={room.origin}
         />
       ))}
     </>
@@ -66,11 +73,17 @@ export function ContainerLayer({
 function Container({
   container,
   kit,
+  kitBundle,
   materials,
+  collision,
+  roomOrigin,
 }: {
   container: ContainerData
   kit: Group
+  kitBundle: BakedBundle
   materials: MaterialLibrary
+  collision: CollisionWorld | null
+  roomOrigin: Vec3
 }) {
   const instance = useMemo(() => {
     const clone = cloneKitPart(kit, container.part, materials)
@@ -83,6 +96,16 @@ function Container({
   }, [kit, container.part, materials])
 
   useEffect(() => () => disposeKitPart(instance), [instance])
+  useEffect(
+    () =>
+      registerKitColliders(kit, container.part, kitBundle, collision, {
+        roomOrigin,
+        position: container.position,
+        rotationY: container.rotationY,
+        scale: 1,
+      }),
+    [collision, container.part, container.position, container.rotationY, kit, kitBundle, roomOrigin],
+  )
 
   if (!instance) return null
 

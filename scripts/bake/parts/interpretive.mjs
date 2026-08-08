@@ -316,7 +316,10 @@ export function buildBanner({ width = 1.1, dropLength = 4.0 } = {}) {
    *  sheet cannot twist. Linear here looks like a corkscrew. */
   const twistAt = (t) => TWIST * t * t * (3 - 2 * t)
 
-  const sheet = new BoxGeometry(width, clothLength, 0.004, 10, 18, 1)
+  // The deformation stays smooth at this density from an eight-metre viewing
+  // distance. The old 10 x 18 grid spent more triangles on one banner than on
+  // a complete plinth, then repeated that cost on four walls.
+  const sheet = new BoxGeometry(width, clothLength, 0.004, 6, 12, 1)
   sheet.translate(0, clothTop - clothLength / 2, 0)
 
   const position = sheet.attributes.position
@@ -369,7 +372,7 @@ export function buildBanner({ width = 1.1, dropLength = 4.0 } = {}) {
 
   for (let end = 0; end < 2; end += 1) {
     const length = battenLengths[end]
-    const bar = new CylinderGeometry(battenRadius[end], battenRadius[end], length, 12)
+    const bar = new CylinderGeometry(battenRadius[end], battenRadius[end], length, 8)
     bar.rotateZ(Math.PI / 2)
     bar.translate(0, battenY[end], 0)
 
@@ -386,7 +389,7 @@ export function buildBanner({ width = 1.1, dropLength = 4.0 } = {}) {
           [0.017, 0.038],
           [0, 0.046],
         ],
-        12,
+        8,
       )
       finial.rotateZ(side * -Math.PI / 2)
       finial.translate(side * (length / 2 - 0.004), battenY[end], 0)

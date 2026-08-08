@@ -8,12 +8,13 @@
  * lives in 3D; text that belongs to the PLAYER lives here.
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { formatCreditLine } from '../content/credit'
 import { MUSEUM } from '../content/museum'
 import type { ExhibitData } from '../content/schema'
 import { museumAudio } from '../engine/audio'
+import { isRoomPowered } from '../engine/power'
 import { useTranslate } from '../i18n'
 import { LockPanel } from './LockPanel'
 import { useMuseum } from '../state/store'
@@ -77,6 +78,27 @@ function ContainerPrompt() {
       <span className="prompt-label">{isLocked ? t('prompt.locked') : t('prompt.read')}</span>
       <span className="prompt-title">{t(container.titleKey as never)}</span>
       {allRead ? <span className="prompt-done">✓</span> : null}
+    </div>
+  )
+}
+
+function PowerPrompt() {
+  const focused = useMuseum((state) => state.focusedPowerControl)
+  const focusedExhibit = useMuseum((state) => state.focusedExhibit)
+  const focusedContainer = useMuseum((state) => state.focusedContainer)
+  const examining = useMuseum((state) => state.examining)
+  const restored = useMuseum((state) => state.progress.roomsPowered)
+  const t = useTranslate()
+
+  if (!focused || focusedExhibit || focusedContainer || examining) return null
+  const room = MUSEUM.rooms.find((candidate) => candidate.powerControl?.id === focused)
+  if (!room?.powerControl || isRoomPowered(room, restored)) return null
+
+  return (
+    <div className="prompt" role="status">
+      <span className="prompt-key">E</span>
+      <span className="prompt-label">{t('prompt.power')}</span>
+      <span className="prompt-title">{t(room.powerControl.titleKey as never)}</span>
     </div>
   )
 }
@@ -225,6 +247,39 @@ function CatalogueToast() {
   )
 }
 
+function PowerToast() {
+  const powered = useMuseum((state) => state.progress.roomsPowered)
+  const seenLength = useRef(powered.length)
+  const [shown, setShown] = useState<string | null>(null)
+  const t = useTranslate()
+
+  useEffect(() => {
+    if (powered.length <= seenLength.current) {
+      seenLength.current = powered.length
+      return undefined
+    }
+    seenLength.current = powered.length
+    const latest = powered[powered.length - 1]
+    setShown(latest)
+    museumAudio.chime()
+    const timer = window.setTimeout(() => setShown(null), 3200)
+    return () => window.clearTimeout(timer)
+  }, [powered])
+
+  if (!shown) return null
+  const room = MUSEUM.rooms.find((candidate) => candidate.id === shown)
+  if (!room) return null
+
+  return (
+    <div className="toast" role="status">
+      <span className="toast-mark">✓</span>
+      <span>
+        {t('power.restored')} — {t(room.titleKey as never)}
+      </span>
+    </div>
+  )
+}
+
 export function Hud() {
   const examining = useMuseum((state) => state.examining)
   const openedContainer = useMuseum((state) => state.openedContainer)
@@ -235,10 +290,12 @@ export function Hud() {
       {examining || openedContainer ? null : <div className="crosshair" aria-hidden="true" />}
       <InteractionPrompt />
       <ContainerPrompt />
+      <PowerPrompt />
       <ExaminePanel />
       <DocumentPanel />
       <LockPanel />
       <CatalogueToast />
+      <PowerToast />
     </>
   )
 }

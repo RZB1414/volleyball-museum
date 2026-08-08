@@ -24,7 +24,7 @@
  * otherwise would put the shade on the ceiling.
  */
 
-import { CylinderGeometry } from 'three'
+import { BoxGeometry, CylinderGeometry } from 'three'
 
 import { bevelledBox, finalize, lathe, merge, sweepProfile } from '../lib/geometry.mjs'
 
@@ -161,38 +161,41 @@ export function buildCeilingSpot({ trackLength = 2.4 } = {}) {
   // ---- the head -----------------------------------------------------------
   const head = []
 
-  const canopy = bevelledBox(0.048, 0.01, 0.03, 0.004, 1)
+  // These three-millimetre arrises are below a pixel even in the low office.
+  // Plain boxes keep the silhouette while avoiding hundreds of triangles on
+  // a recipe repeated across every visible room.
+  const canopy = new BoxGeometry(0.048, 0.01, 0.03)
   canopy.translate(0, -0.005, 0)
   head.push(canopy)
 
   // Tapered, wider at the ceiling — a parallel rod reads as plumbing. 11 mm at
   // the top is exactly the track channel's half-width, so the stem fills the
   // slot it is nominally clipped into instead of rattling around in it.
-  const stem = new CylinderGeometry(0.011, 0.009, 0.12, 12)
+  const stem = new CylinderGeometry(0.011, 0.009, 0.12, 8)
   stem.translate(0, -0.068, 0)
   head.push(stem)
 
   // The yoke: a crown strap across the stem, two arms down past the pivot.
-  const crown = bevelledBox(0.104, 0.012, 0.032, 0.003, 1)
+  const crown = new BoxGeometry(0.104, 0.012, 0.032)
   crown.translate(0, -0.13, 0)
   head.push(crown)
 
   for (const side of [-1, 1]) {
     // Inner faces at +/-0.041, clearing the barrel's 39 mm snoot by 2 mm. Any
     // tighter and the tilt clips the arm; any wider and the yoke looks slack.
-    const arm = bevelledBox(0.01, 0.062, 0.032, 0.003, 1)
+    const arm = new BoxGeometry(0.01, 0.062, 0.032)
     arm.translate(side * 0.046, SPOT_PIVOT_Y, 0)
     head.push(arm)
   }
 
   // The knuckle bolt, proud of both arms by 5 mm so it reads as a fixing you
   // could actually slacken.
-  const pin = new CylinderGeometry(0.009, 0.009, 0.112, 12)
+  const pin = new CylinderGeometry(0.009, 0.009, 0.112, 8)
   pin.rotateZ(Math.PI / 2)
   pin.translate(0, SPOT_PIVOT_Y, 0)
   head.push(pin)
 
-  const barrel = lathe(SPOT_BARREL, 18)
+  const barrel = lathe(SPOT_BARREL, 12)
   // `rotateX(PI)` and not a negative Y scale: a rotation is a proper transform
   // and leaves the lathe's outward normals outward, where a mirror would turn
   // the barrel inside out and only show it under a raking light.
@@ -587,4 +590,79 @@ export function buildVentGrille({ width = 0.5, height = 0.3 } = {}) {
   seat(assembly, 'z', 'min', 0)
 
   return finalize(assembly, { crease: Math.PI / 4, metresPerTile: 0.3 })
+}
+
+// ---------------------------------------------------------------------------
+// 5. Breaker panel
+// ---------------------------------------------------------------------------
+
+/**
+ * A wall-mounted distribution panel with a deliberately oversized isolator.
+ *
+ * The handle is larger than a domestic breaker because this is a gameplay
+ * landmark seen in emergency light from several metres away. Case, handle and
+ * indicator remain separate material components but share one wall datum, so
+ * any room can declare the same recipe without runtime offsets or a special
+ * component. Like the other wall fixtures, local +Z projects into the room.
+ */
+export function buildBreakerPanel({ width = 0.46, height = 0.64, depth = 0.11 } = {}) {
+  const caseParts = []
+
+  // One bevel ring is enough at this scale. Two rings doubled the cost of a
+  // control that is visible in both rooms across a portal, without changing
+  // its outline or the shadow lines that make it readable in the dark.
+  const enclosure = bevelledBox(width, height, depth, 0.012, 1)
+  enclosure.translate(0, height / 2, depth / 2)
+  caseParts.push(enclosure)
+
+  // The inset door and header create two shadow lines. A single box with small
+  // details painted on it disappears against plaster once the room is dark.
+  const door = bevelledBox(width - 0.055, height - 0.095, 0.026, 0.008, 1)
+  door.translate(0, height / 2 - 0.012, depth + 0.013)
+  caseParts.push(door)
+
+  const header = bevelledBox(width - 0.09, 0.055, 0.018, 0.005, 1)
+  header.translate(0, height - 0.062, depth + 0.035)
+  caseParts.push(header)
+
+  for (const y of [0.15, height - 0.17]) {
+    const hinge = bevelledBox(0.035, 0.09, 0.024, 0.005, 1)
+    hinge.translate(-width / 2 + 0.035, y, depth + 0.045)
+    caseParts.push(hinge)
+  }
+
+  const caseGeometry = seat(merge(caseParts), 'z', 'min', 0)
+
+  const handleParts = []
+  const bezel = new CylinderGeometry(0.055, 0.055, 0.018, 12)
+  bezel.rotateX(Math.PI / 2)
+  bezel.translate(0, 0.305, depth + 0.047)
+  handleParts.push(bezel)
+
+  const spindle = new CylinderGeometry(0.016, 0.016, 0.052, 10)
+  spindle.rotateX(Math.PI / 2)
+  spindle.translate(0, 0.305, depth + 0.081)
+  handleParts.push(spindle)
+
+  // The lever leans away from vertical even in the off state. A perfectly
+  // centred bar reads as decoration; the asymmetry reads as something movable.
+  const lever = bevelledBox(0.048, 0.22, 0.042, 0.008, 1)
+  lever.rotateZ(-0.16)
+  lever.translate(0.016, 0.37, depth + 0.105)
+  handleParts.push(lever)
+
+  const grip = bevelledBox(0.085, 0.06, 0.055, 0.01, 1)
+  grip.rotateZ(-0.16)
+  grip.translate(0.03, 0.472, depth + 0.112)
+  handleParts.push(grip)
+
+  const indicator = new CylinderGeometry(0.029, 0.029, 0.018, 12)
+  indicator.rotateX(Math.PI / 2)
+  indicator.translate(0.125, 0.505, depth + 0.052)
+
+  return {
+    case: finalize(caseGeometry, { crease: null, metresPerTile: 0.32 }),
+    handle: finalize(merge(handleParts), { crease: Math.PI / 5, metresPerTile: 0.2 }),
+    indicator: finalize(indicator, { crease: Math.PI / 5, metresPerTile: 0.12 }),
+  }
 }

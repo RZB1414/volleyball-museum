@@ -24,22 +24,25 @@ import { useMemo } from 'react'
 import { MUSEUM } from '../content/museum'
 import { useTranslate } from '../i18n'
 import { playerPosition } from '../engine/playerPosition'
+import { isRoomPowered } from '../engine/power'
 import { useMuseum } from '../state/store'
 
 /** Metres to SVG units. The whole museum is ~40 m across. */
 const SCALE = 10
 const PADDING = 24
 
-type RoomState = 'unvisited' | 'partial' | 'complete'
+type RoomState = 'unvisited' | 'unpowered' | 'partial' | 'complete'
 
 const STATE_FILL: Record<RoomState, string> = {
   unvisited: '#1b1c20',
+  unpowered: '#1b1c20',
   partial: '#4a3a1e',
   complete: '#1e3040',
 }
 
 const STATE_STROKE: Record<RoomState, string> = {
   unvisited: '#2a2c32',
+  unpowered: '#6f5742',
   partial: '#a98a52',
   complete: '#5d87a8',
 }
@@ -81,6 +84,7 @@ export function MuseumMap() {
 
     const room = MUSEUM.rooms.find((candidate) => candidate.id === roomId)
     if (!room) return 'unvisited'
+    if (!isRoomPowered(room, progress.roomsPowered)) return 'unpowered'
 
     const exhibitsDone = room.exhibitIds.every((id) => progress.catalogued.includes(id))
     const documentsDone = room.documentIds.every((id) => progress.documentsRead.includes(id))
@@ -170,7 +174,7 @@ export function MuseumMap() {
 
       <ul className="map-legend">
         <li>
-          <span className="swatch is-unvisited" /> {t('map.state.unlit')}
+          <span className="swatch is-unpowered" /> {t('map.state.unlit')}
         </li>
         <li>
           <span className="swatch is-partial" /> {t('map.state.partial')}
