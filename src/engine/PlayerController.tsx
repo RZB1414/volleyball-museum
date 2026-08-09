@@ -246,6 +246,32 @@ export function PlayerController({
       playerPosition.copy(positionRef.current)
     }
 
+    /**
+     * The in-app visual-QA browser runs page inspection in an isolated world,
+     * so it can photograph the canvas but cannot call globals installed by the
+     * game. A dev-only URL bridge keeps the same deterministic camera harness
+     * usable there without exposing teleport or progression controls in a
+     * production build. Format: ?qaCamera=x,y,z,yaw,pitch&qaPower=room-id.
+     */
+    const qaParams = new URLSearchParams(window.location.search)
+    const qaCamera = qaParams.get('qaCamera')?.split(',').map(Number)
+    if (qaCamera?.length === 5 && qaCamera.every(Number.isFinite)) {
+      window.__museumTeleport(...(qaCamera as [number, number, number, number, number]))
+    }
+
+    const qaPower = qaParams.get('qaPower')
+    if (qaPower) {
+      const state = useMuseum.getState()
+      if (!state.progress.roomsPowered.includes(qaPower)) {
+        useMuseum.setState({
+          progress: {
+            ...state.progress,
+            roomsPowered: [...state.progress.roomsPowered, qaPower],
+          },
+        })
+      }
+    }
+
     return () => {
       delete window.__museumTeleport
     }

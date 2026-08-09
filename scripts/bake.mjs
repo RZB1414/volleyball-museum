@@ -55,6 +55,35 @@ import {
   buildOfficeChair,
 } from './bake/parts/office.mjs'
 import {
+  buildArchiveTrolley,
+  buildCoatStand,
+  buildOfficeCorkboard,
+  buildOfficeFlatfile,
+  buildOfficeRug,
+  buildOfficeSafe,
+  buildVisitorChair,
+} from './bake/parts/officeDecor.mjs'
+import {
+  buildGymCourtLines,
+  buildGymTrainingSet,
+  buildHistoryCaseRun,
+  buildHistoryHeroCase,
+  buildHistoryInfoKiosk,
+  buildHolyokeEntryScreen,
+} from './bake/parts/holyokeDecor.mjs'
+import {
+  buildAtriumAerialInstallation,
+  buildAtriumCeilingCoffer,
+  buildAtriumCentralPodium,
+  buildAtriumDisplayTower,
+  buildAtriumFloorInlay,
+  buildAtriumPinPendant,
+  buildAtriumReceptionDesk,
+  buildAtriumSofa,
+  buildAtriumLectern,
+  buildAtriumWallBay,
+} from './bake/parts/atriumDecor.mjs'
+import {
   buildArchiveCabinet,
   buildBench,
   buildBladder,
@@ -93,16 +122,26 @@ const MATERIAL_TEXTURES = {
   'plaster-dark': 'plaster',
   'oak-matte': 'oak-matte',
   'oak-varnished': 'oak-matte',
+  'walnut-polished': 'oak-matte',
+  'walnut-matte': 'oak-matte',
+  'holyoke-floor': 'maple-floor',
   'leather-tan': 'leather-tan',
   'leather-worn': 'leather-tan',
+  'leather-green': 'leather-tan',
   'canvas': 'canvas',
+  'paper-aged': 'canvas',
+  'cork': 'canvas',
+  'rug-burgundy': 'canvas',
   'cord-hemp': 'canvas',
   'rope-velvet': 'canvas',
   // Brass, cast iron and both kinds of glass stay untextured: they are small,
   // specular and read primarily off the environment, so a texture would cost
   // VRAM for detail nobody perceives.
   'brass': null,
+  'atrium-glow': null,
   'iron-cast': null,
+  'archive-green': null,
+  'holyoke-navy': 'canvas',
   'glass-vitrine': null,
   'glass-green': null,
 }
@@ -365,6 +404,31 @@ async function main() {
   const deskLamp = buildDeskLamp()
   const bookshelf = buildBookshelf()
   const ledgerStack = buildLedgerStack()
+  const officeRug = buildOfficeRug()
+  const officeCorkboard = buildOfficeCorkboard()
+  const officeFlatfile = buildOfficeFlatfile()
+  const archiveTrolley = buildArchiveTrolley()
+  const officeSafe = buildOfficeSafe()
+  const visitorChair = buildVisitorChair()
+  const coatStand = buildCoatStand()
+  const holyokeEntryScreen = buildHolyokeEntryScreen()
+  const historyCaseRun = buildHistoryCaseRun()
+  const historyHeroCase = buildHistoryHeroCase()
+  const historyInfoKiosk = buildHistoryInfoKiosk()
+  const gymCourtLines = buildGymCourtLines()
+  const gymTrainingSet = buildGymTrainingSet()
+  const atriumFloorInlay = buildAtriumFloorInlay()
+  const atriumReceptionDesk = buildAtriumReceptionDesk()
+  const atriumWallBay = buildAtriumWallBay()
+  const atriumWallBayPlain = buildAtriumWallBay({ plaqueWidth: 0 })
+  const atriumCentralPodium = buildAtriumCentralPodium()
+  const atriumDisplayTower = buildAtriumDisplayTower()
+  const atriumCeilingCoffer = buildAtriumCeilingCoffer()
+  const atriumPinPendant = buildAtriumPinPendant()
+  const atriumAerialInstallation = buildAtriumAerialInstallation()
+  const atriumSofa = buildAtriumSofa()
+  const atriumLectern = buildAtriumLectern()
+  const atriumBannerHardware = buildBanner()
 
   const kitParts = [
     { name: 'plinth-block', geometry: buildPlinth({ height: 1.0 }), material: 'oak-varnished' },
@@ -446,11 +510,23 @@ async function main() {
     ),
 
     // Curator's office.
-    { name: 'curator-desk', geometry: buildCuratorDesk(), material: 'oak-varnished' },
+    ...compoundKitParts(
+      'curator-desk',
+      buildCuratorDesk(),
+      {
+        timber: 'walnut-polished',
+        brass: 'brass',
+        leather: 'leather-green',
+        paper: 'paper-aged',
+        phone: 'iron-cast',
+        props: 'walnut-polished',
+      },
+      'timber',
+    ),
     ...compoundKitParts(
       'office-chair',
       officeChair,
-      { frame: 'oak-varnished', base: 'iron-cast' },
+      { frame: 'walnut-polished', base: 'walnut-polished', leather: 'leather-green', brass: 'brass' },
     ),
     ...compoundKitParts(
       'desk-lamp',
@@ -460,14 +536,231 @@ async function main() {
     ...compoundKitParts(
       'bookshelf',
       bookshelf,
-      { carcass: 'oak-varnished', books: 'leather-worn' },
+      { carcass: 'walnut-polished', books: 'leather-worn', boxes: 'archive-green', brass: 'brass' },
       'carcass',
     ),
     ...compoundKitParts(
       'ledger-stack',
       ledgerStack,
-      { covers: 'leather-worn', pages: 'canvas' },
+      { covers: 'leather-worn', pages: 'paper-aged', brass: 'brass' },
       'covers',
+    ),
+    ...compoundKitParts(
+      'office-rug',
+      officeRug,
+      { field: 'rug-burgundy', border: 'paper-aged', fringe: 'canvas' },
+      'field',
+    ),
+    ...compoundKitParts(
+      'office-corkboard',
+      officeCorkboard,
+      { frame: 'walnut-polished', cork: 'cork', papers: 'paper-aged', pins: 'brass' },
+      'frame',
+    ),
+    ...compoundKitParts(
+      'office-flatfile',
+      officeFlatfile,
+      { body: 'archive-green', hardware: 'brass', map: 'paper-aged' },
+      'body',
+    ),
+    ...compoundKitParts(
+      'archive-trolley',
+      archiveTrolley,
+      { frame: 'archive-green', boxes: 'canvas', labels: 'paper-aged' },
+      'frame',
+    ),
+    ...compoundKitParts(
+      'office-safe',
+      officeSafe,
+      { body: 'archive-green', hardware: 'brass' },
+      'body',
+    ),
+    ...compoundKitParts(
+      'visitor-chair',
+      visitorChair,
+      { frame: 'walnut-polished', upholstery: 'leather-green', studs: 'brass' },
+      'frame',
+    ),
+    ...compoundKitParts(
+      'coat-stand',
+      coatStand,
+      { wood: 'walnut-polished', hardware: 'brass' },
+      'wood',
+    ),
+
+    // Holyoke historical gallery. The wall case is one authored run so its five
+    // displays can carry different objects without five copied prop patterns.
+    ...compoundKitParts(
+      'holyoke-entry-screen',
+      holyokeEntryScreen,
+      {
+        body: 'holyoke-navy',
+        art: 'holyoke-navy',
+        trim: 'brass',
+        glass: 'glass-vitrine',
+      },
+      'body',
+    ),
+    ...compoundKitParts(
+      'history-case-run',
+      historyCaseRun,
+      {
+        carcass: 'walnut-polished',
+        accent: 'rope-velvet',
+        lining: 'holyoke-navy',
+        trim: 'brass',
+        glass: 'glass-vitrine',
+        paper: 'paper-aged',
+        artefacts: 'leather-worn',
+      },
+      'carcass',
+    ),
+    ...compoundKitParts(
+      'history-hero-case',
+      historyHeroCase,
+      {
+        body: 'walnut-polished',
+        trim: 'brass',
+        glass: 'glass-vitrine',
+        display: 'paper-aged',
+      },
+      'body',
+    ),
+    ...compoundKitParts(
+      'history-info-kiosk',
+      historyInfoKiosk,
+      {
+        body: 'walnut-polished',
+        lining: 'holyoke-navy',
+        graphics: 'paper-aged',
+        trim: 'brass',
+      },
+      'body',
+    ),
+    ...compoundKitParts(
+      'gym-court-lines',
+      gymCourtLines,
+      { lines: 'paper-aged' },
+      'lines',
+    ),
+    ...compoundKitParts(
+      'gym-training-set',
+      gymTrainingSet,
+      { wood: 'oak-varnished', rope: 'cord-hemp', leather: 'leather-worn' },
+      'wood',
+    ),
+
+    // Central atrium. Architectural gestures remain separate recipes so the
+    // floor and ceiling never acquire furniture colliders, while all material
+    // siblings still instance as one data-driven placement.
+    ...compoundKitParts(
+      'atrium-floor-inlay',
+      atriumFloorInlay,
+      { timber: 'maple-floor', dark: 'iron-cast', brass: 'brass' },
+      'timber',
+    ),
+    ...compoundKitParts(
+      'atrium-reception-desk',
+      atriumReceptionDesk,
+      {
+        carcass: 'walnut-matte',
+        slats: 'walnut-polished',
+        top: 'walnut-polished',
+        brass: 'brass',
+        light: 'atrium-glow',
+        props: 'iron-cast',
+      },
+      'carcass',
+    ),
+    ...compoundKitParts(
+      'atrium-wall-bay',
+      atriumWallBay,
+      {
+        backing: 'walnut-matte',
+        slats: 'walnut-polished',
+        trim: 'walnut-polished',
+        plaque: 'plaster-dark',
+        graphics: 'paper-aged',
+        light: 'atrium-glow',
+      },
+      'backing',
+    ),
+    ...compoundKitParts(
+      'atrium-wall-bay-plain',
+      atriumWallBayPlain,
+      { backing: 'walnut-matte', slats: 'walnut-polished', trim: 'walnut-polished' },
+      'backing',
+    ),
+    ...compoundKitParts(
+      'atrium-central-podium',
+      atriumCentralPodium,
+      {
+        body: 'walnut-polished',
+        top: 'plaster-dark',
+        brass: 'brass',
+        controls: 'paper-aged',
+        light: 'atrium-glow',
+      },
+      'body',
+    ),
+    ...compoundKitParts(
+      'atrium-display-tower',
+      atriumDisplayTower,
+      {
+        carcass: 'walnut-polished',
+        glass: 'glass-vitrine',
+        brass: 'brass',
+        shelves: 'walnut-matte',
+        light: 'atrium-glow',
+        artefacts: 'brass',
+      },
+      'carcass',
+    ),
+    ...compoundKitParts(
+      'atrium-ceiling-coffer',
+      atriumCeilingCoffer,
+      {
+        field: 'plaster-dark',
+        slats: 'walnut-matte',
+        trim: 'walnut-polished',
+        light: 'atrium-glow',
+      },
+      'field',
+    ),
+    ...compoundKitParts(
+      'atrium-pin-pendant',
+      atriumPinPendant,
+      { fitting: 'iron-cast', head: 'atrium-glow' },
+      'fitting',
+    ),
+    ...compoundKitParts(
+      'atrium-aerial-installation',
+      atriumAerialInstallation,
+      {
+        cables: 'iron-cast',
+        brassA: 'brass',
+        brassB: 'brass',
+        finials: 'brass',
+        net: 'iron-cast',
+      },
+      'brassA',
+    ),
+    {
+      name: 'atrium-banner-hardware',
+      geometry: atriumBannerHardware.battens,
+      material: 'walnut-polished',
+    },
+    ...compoundKitParts(
+      'atrium-sofa',
+      atriumSofa,
+      { frame: 'walnut-polished', upholstery: 'holyoke-navy', brass: 'brass' },
+      'frame',
+    ),
+    ...compoundKitParts(
+      'atrium-lectern',
+      atriumLectern,
+      { body: 'walnut-polished', top: 'plaster-dark', brass: 'brass', light: 'atrium-glow' },
+      'body',
     ),
   ]
   const kitBundle = await bakeBundle('kit', kitParts)
@@ -488,6 +781,20 @@ async function main() {
     'curator-desk',
     'office-chair__base',
     'bookshelf',
+    'office-flatfile',
+    'archive-trolley',
+    'office-safe',
+    'visitor-chair',
+    'holyoke-entry-screen',
+    'history-case-run',
+    'history-hero-case',
+    'history-info-kiosk',
+    'gym-training-set',
+    'atrium-reception-desk',
+    'atrium-central-podium',
+    'atrium-display-tower',
+    'atrium-sofa',
+    'atrium-lectern',
   ])
 
   const partitionFace = kitBundle.manifest.find((part) => part.name === 'partition')
@@ -507,8 +814,22 @@ async function main() {
     }
   }
 
+  const atriumArchitecturalRecipes = new Set([
+    'atrium-floor-inlay',
+    'atrium-ceiling-coffer',
+  ])
+  const atriumHeroRecipes = new Set([
+    'atrium-aerial-installation',
+    'atrium-display-tower',
+    'atrium-reception-desk',
+  ])
   for (const recipe of recipeNames(kitBundle.manifest)) {
-    const problem = checkRecipeBudget(kitBundle.manifest, recipe, TRIANGLE_BUDGET.prop)
+    const budget = atriumArchitecturalRecipes.has(recipe)
+      ? TRIANGLE_BUDGET.shell
+      : atriumHeroRecipes.has(recipe)
+        ? TRIANGLE_BUDGET.hero
+        : TRIANGLE_BUDGET.prop
+    const problem = checkRecipeBudget(kitBundle.manifest, recipe, budget)
     if (problem) problems.push(problem)
   }
   bundles.push(kitBundle)
@@ -610,6 +931,8 @@ export type BakedMaterial = {
   readonly metalness: number
   readonly clearcoat?: number
   readonly clearcoatRoughness?: number
+  readonly emissive?: readonly [number, number, number]
+  readonly emissiveIntensity?: number
   readonly alphaMode?: string
   readonly textures?: BakedTextureSet
 }
@@ -644,6 +967,8 @@ export const BAKED_MATERIALS = ${JSON.stringify(
             metalness: spec.metallic,
             ...(spec.clearcoat ? { clearcoat: spec.clearcoat } : {}),
             ...(spec.clearcoatRoughness ? { clearcoatRoughness: spec.clearcoatRoughness } : {}),
+            ...(spec.emissive ? { emissive: spec.emissive } : {}),
+            ...(spec.emissiveIntensity ? { emissiveIntensity: spec.emissiveIntensity } : {}),
             ...(spec.alphaMode ? { alphaMode: spec.alphaMode } : {}),
             ...(set
               ? {

@@ -431,32 +431,57 @@ check(
 )
 
 const holyoke = MUSEUM.rooms.find((room) => room.id === 'holyoke')
-const partition = holyoke?.kit.find((placement) => placement.part === 'partition')
-if (!holyoke || !partition) throw new Error('Holyoke needs a partition for its collision proof.')
+const entryScreen = holyoke?.kit.find((placement) => placement.part === 'holyoke-entry-screen')
+if (!holyoke || !entryScreen) {
+  throw new Error('Holyoke needs its entry screen for the collision proof.')
+}
 
-const partitionPoint = (x: number, z: number) => {
+const entryScreenPoint = (x: number, z: number) => {
   const point = new Vector3(x, 0, z).applyAxisAngle(
     new Vector3(0, 1, 0),
-    partition.rotationY ?? 0,
+    entryScreen.rotationY ?? 0,
   )
   point.add(
     roomPoint(
       holyoke.id,
-      partition.position[0],
-      partition.position[2],
+      entryScreen.position[0],
+      entryScreen.position[2],
     ),
   )
   return point
 }
 
-// Cross the broad face near its centre, well clear of the L return. A collider
-// matching only the 0.16 m timber foot lets the real 0.22 m autostep climb it;
-// the full-height collider must consume the move and leave the finish unreached.
-const partitionCrossing = walk([partitionPoint(0, -1.1), partitionPoint(0, 1.35)])
+// Cross the broad navy monolith near its centre. This replaced the old generic
+// partitions as the room's reveal, so the collision regression follows the
+// furniture the player now actually encounters.
+const entryScreenCrossing = walk([
+  entryScreenPoint(0, -1.0),
+  entryScreenPoint(0, 1.0),
+])
 check(
-  'a frontal walk cannot autostep through the 2.4 m partition',
-  !partitionCrossing.arrived,
-  `crossed to ${partitionCrossing.position.toArray().map((n) => n.toFixed(2)).join(',')}`,
+  'a frontal walk cannot pass through the Holyoke entry screen',
+  !entryScreenCrossing.arrived,
+  `crossed to ${entryScreenCrossing.position.toArray().map((n) => n.toFixed(2)).join(',')}`,
+)
+
+// The office is intentionally dense, but its two gameplay targets cannot be
+// decoration casualties. Walk the same 1.2 m lane a player uses from the door
+// past the lamp and then north to the locked archive cabinet.
+const officeWorkingRoute = walk([
+  roomPoint('office', -2.6, 0),
+  roomPoint('office', -1.6, -0.55),
+  roomPoint('office', -1.6, -2.08),
+  roomPoint('office', 0.35, -2.08),
+])
+check(
+  'office working route reaches the lamp and locked archive',
+  officeWorkingRoute.arrived,
+  `stopped at ${officeWorkingRoute.position.toArray().map((n) => n.toFixed(2)).join(',')}`,
+)
+check(
+  'office working route remains supported by the floor',
+  officeWorkingRoute.lowest > FALL_LIMIT,
+  `dropped to y=${officeWorkingRoute.lowest.toFixed(2)}`,
 )
 
 for (const crossing of CROSSINGS) {

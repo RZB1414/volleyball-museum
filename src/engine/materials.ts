@@ -110,6 +110,20 @@ export function useMaterialLibrary(): MaterialLibrary {
         LinearSRGBColorSpace,
       )
 
+      if ('emissive' in spec && Array.isArray(spec.emissive)) {
+        const emissive = spec.emissive as unknown as readonly [number, number, number]
+        material.emissive.setRGB(
+          emissive[0],
+          emissive[1],
+          emissive[2],
+          LinearSRGBColorSpace,
+        )
+        material.emissiveIntensity =
+          'emissiveIntensity' in spec && typeof spec.emissiveIntensity === 'number'
+            ? spec.emissiveIntensity
+            : 1
+      }
+
       if ('alphaMode' in spec && spec.alphaMode === 'BLEND') {
         material.transparent = true
         material.opacity = spec.baseColor[3]

@@ -341,6 +341,8 @@ function buildWall(length, height, openings) {
  */
 export function buildRoomShell(room) {
   const { shell, portals } = room
+  const isTungstenOffice = room.palette === 'office-tungsten'
+  const isHolyokeGaslight = room.palette === 'holyoke-gaslight'
   const halfWidth = shell.width / 2
   const halfDepth = shell.depth / 2
 
@@ -395,7 +397,6 @@ export function buildRoomShell(room) {
     EDGE,
   )
   ceiling.translate(0, shell.height + 0.07, 0)
-  structure.push(ceiling)
 
   /**
    * One convention for all four walls: local +X runs along the wall, local +Z
@@ -459,7 +460,19 @@ export function buildRoomShell(room) {
     {
       name: `${room.id}__floor`,
       geometry: finalize(floor, { crease: null, metresPerTile: 2.1 }),
-      material: 'maple-floor',
+      material: isTungstenOffice
+        ? 'walnut-matte'
+        : isHolyokeGaslight
+          ? 'holyoke-floor'
+          : 'maple-floor',
+    },
+    {
+      name: `${room.id}__ceiling`,
+      geometry: finalize(ceiling, { crease: null, metresPerTile: 1.7 }),
+      // A dark lid is what makes the perimeter tracks and amber pools read as
+      // exhibition lighting. Keeping it in `structure` forced the ceiling to
+      // share the cream wall material and flattened the whole Holyoke room.
+      material: isHolyokeGaslight ? 'plaster-dark' : 'plaster',
     },
     {
       name: `${room.id}__structure`,
@@ -471,14 +484,14 @@ export function buildRoomShell(room) {
       // 0.42 m, so one repeat is about one board. At 0.9 the grain was wider
       // than a plank and the dado read as swirled stone rather than as oak.
       geometry: finalize(merge(panelling), { crease: null, metresPerTile: 0.42 }),
-      material: 'oak-matte',
+      material: isTungstenOffice || isHolyokeGaslight ? 'walnut-matte' : 'oak-matte',
     },
     {
       name: `${room.id}__trim`,
       // Every swept member and architrave was creased before the merge, while
       // each lining already carries exact bevelled-box normals. Preserve both.
       geometry: finalize(merge(trim), { crease: null, metresPerTile: 0.6 }),
-      material: 'oak-varnished',
+      material: isTungstenOffice || isHolyokeGaslight ? 'walnut-polished' : 'oak-varnished',
     },
   ]
 

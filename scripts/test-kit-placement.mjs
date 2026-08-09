@@ -203,6 +203,18 @@ const FLOOR_STANDING = [
   'curator-desk',
   'office-chair',
   'bookshelf',
+  'office-rug',
+  'office-flatfile',
+  'archive-trolley',
+  'office-safe',
+  'visitor-chair',
+  'coat-stand',
+  'holyoke-entry-screen',
+  'history-case-run',
+  'history-hero-case',
+  'history-info-kiosk',
+  'gym-court-lines',
+  'gym-training-set',
 ]
 
 for (const recipe of FLOOR_STANDING) {
@@ -248,6 +260,8 @@ for (const recipe of [
   'wall-sconce',
   'vent-grille',
   'breaker-panel',
+  'office-corkboard',
+  'history-case-run',
 ]) {
   const bounds = recipeBounds(recipe)
   check(
@@ -276,6 +290,18 @@ for (const recipe of [
   'bookshelf',
   'ledger-stack',
   'breaker-panel',
+  'office-rug',
+  'office-corkboard',
+  'office-flatfile',
+  'archive-trolley',
+  'office-safe',
+  'visitor-chair',
+  'coat-stand',
+  'holyoke-entry-screen',
+  'history-case-run',
+  'history-hero-case',
+  'history-info-kiosk',
+  'gym-training-set',
 ]) {
   const parts = recipeParts(recipe)
   check(

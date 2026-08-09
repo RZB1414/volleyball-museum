@@ -59,12 +59,34 @@ export const MATERIALS = {
   'plaster-dark': { baseColor: [0.42, 0.40, 0.38, 1], roughness: 0.94, metallic: 0, tint: [0.50, 0.49, 0.48] },
   'oak-varnished': { baseColor: [0.478, 0.322, 0.176, 1], roughness: 0.42, metallic: 0, clearcoat: 0.55, clearcoatRoughness: 0.12 },
   'oak-matte': { baseColor: [0.376, 0.259, 0.153, 1], roughness: 0.78, metallic: 0, tint: [0.86, 0.84, 0.82] },
+  // The curator's office is intentionally a shade darker and richer than the
+  // public galleries. It reuses the oak maps rather than adding another 8 MB
+  // texture family: the colour difference comes from stain, not wood species.
+  'walnut-polished': { baseColor: [0.20, 0.09, 0.04, 1], roughness: 0.38, metallic: 0, tint: [0.38, 0.24, 0.15], clearcoat: 0.62, clearcoatRoughness: 0.10 },
+  'walnut-matte': { baseColor: [0.17, 0.075, 0.035, 1], roughness: 0.74, metallic: 0, tint: [0.27, 0.16, 0.10] },
+  // The Holyoke gallery keeps the same strip-floor maps as the atrium, but a
+  // century of darker stain and wear pulls it towards the reference's tobacco
+  // brown. A separate material factor is far cheaper than another texture set.
+  'holyoke-floor': { baseColor: [0.12, 0.045, 0.018, 1], roughness: 0.80, metallic: 0, tint: [0.17, 0.10, 0.055], clearcoat: 0.06, clearcoatRoughness: 0.48 },
   'maple-floor': { baseColor: [0.710, 0.475, 0.235, 1], roughness: 0.55, metallic: 0, clearcoat: 0.35, clearcoatRoughness: 0.2 },
   'brass': { baseColor: [0.788, 0.635, 0.153, 1], roughness: 0.28, metallic: 0.92, clearcoat: 0.4, clearcoatRoughness: 0.08 },
+  // Small practical lenses and concealed strips. Geometry marks the visible
+  // source; shadowless room lights still provide the illumination around it.
+  'atrium-glow': { baseColor: [1.0, 0.48, 0.14, 1], roughness: 0.34, metallic: 0, emissive: [1.0, 0.22, 0.035], emissiveIntensity: 2.2 },
   'iron-cast': { baseColor: [0.157, 0.149, 0.141, 1], roughness: 0.62, metallic: 0.75 },
+  // Aged green enamel over steel. The visible layer is paint, hence dielectric;
+  // making it metallic turns the safe into bare anodised metal under the HDRI.
+  'archive-green': { baseColor: [0.055, 0.105, 0.075, 1], roughness: 0.46, metallic: 0 },
+  // Prussian navy is the organising colour of the 1895 gallery: one entry
+  // screen and restrained case interiors, never a saturated theme-park blue.
+  'holyoke-navy': { baseColor: [0.025, 0.045, 0.085, 1], roughness: 0.78, metallic: 0, tint: [0.10, 0.16, 0.28] },
   'leather-tan': { baseColor: [0.788, 0.627, 0.416, 1], roughness: 0.58, metallic: 0 },
   'leather-worn': { baseColor: [0.545, 0.353, 0.173, 1], roughness: 0.68, metallic: 0, tint: [0.62, 0.55, 0.44] },
+  'leather-green': { baseColor: [0.065, 0.165, 0.105, 1], roughness: 0.52, metallic: 0, tint: [0.20, 0.40, 0.27] },
   'canvas': { baseColor: [0.851, 0.796, 0.678, 1], roughness: 0.88, metallic: 0 },
+  'paper-aged': { baseColor: [0.80, 0.70, 0.52, 1], roughness: 0.92, metallic: 0, tint: [0.94, 0.84, 0.68] },
+  'cork': { baseColor: [0.43, 0.25, 0.12, 1], roughness: 0.96, metallic: 0, tint: [0.56, 0.38, 0.23] },
+  'rug-burgundy': { baseColor: [0.25, 0.035, 0.045, 1], roughness: 0.96, metallic: 0, tint: [0.36, 0.09, 0.11] },
   'cord-hemp': { baseColor: [0.741, 0.678, 0.541, 1], roughness: 0.9, metallic: 0, tint: [0.84, 0.80, 0.70] },
   // Barrier rope. Deep crimson because it is the only saturated colour in a
   // building of plaster, oak and brass, and the eye goes straight to it —
@@ -87,6 +109,8 @@ function createMaterials(doc) {
       .setBaseColorFactor(spec.baseColor)
       .setRoughnessFactor(spec.roughness)
       .setMetallicFactor(spec.metallic)
+
+    if (spec.emissive) material.setEmissiveFactor(spec.emissive)
 
     if (spec.alphaMode) material.setAlphaMode(spec.alphaMode)
     if (spec.doubleSided) material.setDoubleSided(true)

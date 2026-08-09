@@ -106,6 +106,17 @@ function PowerControl({
     >
       <primitive object={instance} />
 
+      {powered && control.light ? (
+        <pointLight
+          position={control.light.position as unknown as [number, number, number]}
+          color={control.light.color}
+          intensity={control.light.intensity * brightness}
+          distance={control.light.distance}
+          decay={2}
+          castShadow={false}
+        />
+      ) : null}
+
       {/* A dim pilot makes the way out of darkness readable without lighting
           the room itself. It vanishes when the house lights take over. */}
       {powered ? null : (

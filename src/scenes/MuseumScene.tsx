@@ -35,6 +35,8 @@ import { playerPosition } from '../engine/playerPosition'
 import { PowerControlLayer, PowerControlTargeting } from '../engine/PowerControls'
 import { DoorwaySigns, KitLayer, WallSignage } from '../engine/RoomFurniture'
 import { RoomLighting } from '../engine/RoomLighting'
+import { roomRenderTier, type RoomRenderTier } from '../engine/roomLod'
+import { RoomWallArt } from '../engine/RoomWallArt'
 import { buildCells, computeVisibleRooms, roomAt } from '../engine/portals'
 import { useMuseum } from '../state/store'
 
@@ -91,6 +93,7 @@ function Exhibit({
       name={`exhibit:${exhibit.id}`}
       position={exhibit.position as unknown as [number, number, number]}
       rotation={[0, exhibit.rotationY ?? 0, 0]}
+      scale={exhibit.scale ?? 1}
     >
       <primitive object={instance} />
     </group>
@@ -112,6 +115,7 @@ const MOUNTS: Record<string, { part: string; extra?: string } | null> = {
   // The new tower is one authored assembly: carcass plus its namespaced glass.
   'vitrine-tower': { part: 'vitrine-tower' },
   wall: null,
+  'case-wall': null,
   floor: null,
 }
 
@@ -254,7 +258,7 @@ function ExhibitBundle({
             {/* Wall-mounted exhibits carry a photograph; the frame geometry is
                 baked, the print and its credit are runtime so they can follow
                 the chosen language. */}
-            {asset && exhibit.mount === 'wall' ? (
+            {asset && (exhibit.mount === 'wall' || exhibit.mount === 'case-wall') ? (
               <Suspense fallback={null}>
                 <FramedMedia
                   asset={asset}
@@ -299,17 +303,20 @@ function Room({
   room,
   materials,
   collision,
-  visible,
+  tier,
   locale,
 }: {
   room: RoomData
   materials: MaterialLibrary
   collision: CollisionWorld | null
-  visible: boolean
+  tier: RoomRenderTier
   locale: 'pt-BR' | 'en'
 }) {
   const bundle = bundleByName.get(`room-${room.id}`)
   if (!bundle) return null
+
+  const visible = tier !== 'hidden'
+  const detailed = tier === 'detail'
 
   return (
     <group visible={visible}>
@@ -326,24 +333,34 @@ function Room({
           light count follows what is on screen, not the size of the museum. */}
       {visible ? <RoomLighting room={room} /> : null}
       <group position={room.origin as unknown as [number, number, number]}>
-        <ExhibitLayer room={room} materials={materials} collision={collision} />
-        <Suspense fallback={null}>
-          <ContainerLayer
-            room={room}
-            kitBundle={KIT_BUNDLE}
-            materials={materials}
-            collision={collision}
-          />
-          <PowerControlLayer room={room} kitUrl={KIT_URL} materials={materials} />
-          <KitLayer
-            room={room}
-            kitBundle={KIT_BUNDLE}
-            materials={materials}
-            collision={collision}
-          />
-        </Suspense>
+        {/* A portal view needs the destination architecture, light and wayfinding,
+            not a second room's full prop budget. Detail is promoted on crossing;
+            BakedRoom stays mounted above so shell collision never follows LOD. */}
+        {detailed ? (
+          <>
+            <ExhibitLayer room={room} materials={materials} collision={collision} />
+            <Suspense fallback={null}>
+              <ContainerLayer
+                room={room}
+                kitBundle={KIT_BUNDLE}
+                materials={materials}
+                collision={collision}
+              />
+              <PowerControlLayer room={room} kitUrl={KIT_URL} materials={materials} />
+              <KitLayer
+                room={room}
+                kitBundle={KIT_BUNDLE}
+                materials={materials}
+                collision={collision}
+              />
+            </Suspense>
+          </>
+        ) : null}
         <DoorwaySigns room={room} locale={locale} />
         <WallSignage room={room} locale={locale} />
+        <Suspense fallback={null}>
+          {detailed ? <RoomWallArt room={room} /> : null}
+        </Suspense>
       </group>
     </group>
   )
@@ -455,6 +472,7 @@ function MuseumLighting() {
 
 export function MuseumScene() {
   const materials = useMaterialLibrary()
+  const currentRoom = useMuseum((state) => state.currentRoom)
   const visibleRooms = useMuseum((state) => state.visibleRooms)
   const locale = useMuseum((state) => state.settings.locale)
 
@@ -501,7 +519,7 @@ export function MuseumScene() {
             room={room}
             materials={materials}
             collision={collision}
-            visible={visibleRooms.includes(room.id)}
+            tier={roomRenderTier(room.id, currentRoom, visibleRooms.includes(room.id))}
             locale={locale}
           />
         ))}

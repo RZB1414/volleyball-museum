@@ -75,6 +75,11 @@ export type MediaAsset = {
   readonly credit: MediaCredit
 }
 
+/** Literal id union from fetched archives and project-authored imagery. */
+export type GeneratedMediaId =
+  | (typeof import('./media.generated.ts').GENERATED_MEDIA)[number]['id']
+  | (typeof import('./media.authored.ts').AUTHORED_MEDIA)[number]['id']
+
 // ---------------------------------------------------------------------------
 // Facts — the canonical store
 // ---------------------------------------------------------------------------
@@ -226,6 +231,7 @@ export type ExhibitMount =
   | 'vitrine-tower'
   | 'vitrine-table'
   | 'wall'
+  | 'case-wall'
   | 'floor'
 
 export type ExhibitData = {
@@ -235,7 +241,14 @@ export type ExhibitData = {
   readonly recipe: string
   readonly position: Vec3
   readonly rotationY?: number
+  /** Uniform presentation scale; hotspots remain in the recipe's local space. */
+  readonly scale?: number
   readonly mount: ExhibitMount
+  /**
+   * Height of a support surface supplied by surrounding kit rather than by the
+   * mount itself (for example a built-in case shelf or glazed wall niche).
+   */
+  readonly supportY?: number
   /** Wall label: headline. */
   readonly titleKey: string
   /** Wall label body — budget ~40 words, max 8 labels per gallery. */
@@ -321,6 +334,31 @@ export type KitPartId =
   | 'desk-lamp'
   | 'bookshelf'
   | 'ledger-stack'
+  | 'office-rug'
+  | 'office-corkboard'
+  | 'office-flatfile'
+  | 'archive-trolley'
+  | 'office-safe'
+  | 'visitor-chair'
+  | 'coat-stand'
+  | 'holyoke-entry-screen'
+  | 'history-case-run'
+  | 'history-hero-case'
+  | 'history-info-kiosk'
+  | 'gym-court-lines'
+  | 'gym-training-set'
+  | 'atrium-floor-inlay'
+  | 'atrium-reception-desk'
+  | 'atrium-wall-bay'
+  | 'atrium-wall-bay-plain'
+  | 'atrium-central-podium'
+  | 'atrium-display-tower'
+  | 'atrium-ceiling-coffer'
+  | 'atrium-pin-pendant'
+  | 'atrium-aerial-installation'
+  | 'atrium-banner-hardware'
+  | 'atrium-sofa'
+  | 'atrium-lectern'
 
 /**
  * Wall lettering.
@@ -345,12 +383,38 @@ export type WallSign = {
   readonly align?: 'left' | 'center'
 }
 
+/**
+ * A non-interactive photograph or document mounted directly on a room wall.
+ *
+ * `position` is the centre of the mount's BACK face. `rotationY` turns local
+ * +Z towards the room, following the same convention as FramedMedia and wall
+ * signage. Width and height describe the visible image, not its outer frame.
+ */
+export type WallArtData = {
+  readonly id: string
+  readonly mediaId: GeneratedMediaId
+  readonly position: Vec3
+  readonly rotationY: number
+  readonly width: number
+  readonly height: number
+  /** Large photographic murals and friezes are printed flush to the wall. */
+  readonly presentation?: 'framed' | 'thin-framed' | 'flush'
+  /** Multiplied into the print material for restrained room-specific grading. */
+  readonly tint?: string
+  /** Subtle self-illumination for internally lit or very dimly spotlit graphics. */
+  readonly selfIllumination?: number
+  /** Procedural/project-authored graphics need no legal credit beneath them. */
+  readonly showCredit?: boolean
+}
+
 export type KitPlacement = {
   readonly part: KitPartId
   readonly position: Vec3
   readonly rotationY?: number
   /** Uniform scale only — non-uniform breaks the shared bevel profile. */
   readonly scale?: number
+  /** Optional local-space aim point for a practical ceiling fixture. */
+  readonly lightTarget?: Vec3
 }
 
 /**
@@ -368,6 +432,13 @@ export type PowerControlData = {
   readonly rotationY?: number
   readonly scale?: number
   readonly titleKey: string
+  /** Optional practical light emitted by the control itself when powered. */
+  readonly light?: {
+    readonly position: Vec3
+    readonly color: string
+    readonly intensity: number
+    readonly distance: number
+  }
 }
 
 /**
@@ -448,6 +519,8 @@ export type RoomData = {
   readonly kit: readonly KitPlacement[]
   /** Vinyl lettering applied to a wall. Text, not geometry — see `WallSignage`. */
   readonly signage?: readonly WallSign[]
+  /** Licensed imagery mounted on walls, independent of interactive exhibits. */
+  readonly wallArt?: readonly WallArtData[]
   readonly exhibitIds: readonly string[]
   readonly documentIds: readonly string[]
   readonly containers?: readonly ContainerData[]

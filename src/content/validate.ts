@@ -67,6 +67,7 @@ function validateReferences(content: MuseumContent): ValidationIssue[] {
     issues.push({ severity: 'error', code, message })
 
   for (const room of content.rooms) {
+    const wallArtIds = new Set<string>()
     for (const portal of room.portals) {
       if (!roomIds.has(portal.toRoom)) {
         error('portal-dangling', `Room "${room.id}" portal "${portal.id}" targets unknown room "${portal.toRoom}".`)
@@ -85,12 +86,27 @@ function validateReferences(content: MuseumContent): ValidationIssue[] {
         error('document-missing', `Room "${room.id}" references unknown document "${id}".`)
       }
     }
+    for (const art of room.wallArt ?? []) {
+      if (wallArtIds.has(art.id)) {
+        error('wall-art-duplicate', `Room "${room.id}" repeats wall art id "${art.id}".`)
+      }
+      wallArtIds.add(art.id)
+      if (!mediaIds.has(art.mediaId)) {
+        error('media-missing', `Wall art "${art.id}" references unknown media "${art.mediaId}".`)
+      }
+      if (!(art.width > 0 && art.height > 0)) {
+        error('wall-art-size', `Wall art "${art.id}" must have positive dimensions.`)
+      }
+    }
     if (room.powerLockId && !lockIds.has(room.powerLockId)) {
       error('power-lock-missing', `Room "${room.id}" power lock "${room.powerLockId}" does not exist.`)
     }
   }
 
   for (const exhibit of content.exhibits) {
+    if (exhibit.scale !== undefined && (!Number.isFinite(exhibit.scale) || exhibit.scale <= 0)) {
+      error('exhibit-scale', `Exhibit "${exhibit.id}" must have a finite positive scale.`)
+    }
     if (exhibit.mediaId && !mediaIds.has(exhibit.mediaId)) {
       error('media-missing', `Exhibit "${exhibit.id}" references unknown media "${exhibit.mediaId}".`)
     }
@@ -559,7 +575,9 @@ type BakedBundleLike = { readonly name: string; readonly parts: readonly BakedPa
 const MOUNT_BASE_PART: Record<string, string | null> = {
   plinth: 'plinth-block',
   'vitrine-table': 'vitrine-table',
-  'vitrine-tower': 'plinth-tapered',
+  // Tower cases and built-in shelves expose an internal deck, not their top.
+  // Those exhibits declare supportY from the procedural recipe's datum.
+  'vitrine-tower': null,
   wall: null,
   floor: null,
 }
@@ -680,10 +698,10 @@ export function validateBake(
     partName ? (partBounds.get(partName)?.max[1] ?? null) : 0
 
   for (const exhibit of content.exhibits) {
-    if (exhibit.mount === 'wall') continue
+    if (exhibit.mount === 'wall' || exhibit.mount === 'case-wall') continue
 
     const basePart = MOUNT_BASE_PART[exhibit.mount] ?? null
-    const mountTop = topOf(basePart)
+    const mountTop = exhibit.supportY ?? topOf(basePart)
     if (mountTop === null) continue
 
     // Recipes can be multi-part; the object's base is the lowest of them.
@@ -692,7 +710,8 @@ export function validateBake(
       .map(([, bounds]) => bounds.min[1])
     if (recipeBottoms.length === 0) continue
 
-    const expected = mountTop - Math.min(...recipeBottoms)
+    const scale = exhibit.scale ?? 1
+    const expected = mountTop - Math.min(...recipeBottoms) * scale
     const actual = exhibit.position[1]
     const drift = actual - expected
 
@@ -725,7 +744,7 @@ export function validateBake(
         .filter(([name]) => name === exhibit.recipe || name.startsWith(`${exhibit.recipe}__`))
         .map(([, bounds]) => bounds.max[1]),
     )
-    const objectHeight = recipeTop - Math.min(...recipeBottoms)
+    const objectHeight = (recipeTop - Math.min(...recipeBottoms)) * scale
     const displayTop = mountTop + objectHeight
 
     if (basePart && displayTop > 2.1) {

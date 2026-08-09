@@ -18,6 +18,7 @@
 // stripper in `npm run validate:content`, and Node's ESM resolver will not
 // guess the extension. Type-only imports are erased, so they do not need it.
 import { GENERATED_MEDIA } from './media.generated.ts'
+import { AUTHORED_MEDIA } from './media.authored.ts'
 import type {
   ContainerData,
   DocumentData,
@@ -157,9 +158,11 @@ const HOLYOKE_EXHIBITS = [
     id: 'ball-improvised',
     era: 'holyoke',
     recipe: 'ball/basketball-bladder-1895',
-    // Sits on the vitrine deck (top 0.94) — its own base is at -0.103.
-    position: [-3.6, 1.043, -5.2],
-    mount: 'vitrine-table',
+    // Centred on the exact datum of the entry screen's glazed niche after its
+    // quarter-turn towards the east entrance.
+    position: [3.309, 0.335, 3.025],
+    mount: 'floor',
+    supportY: 0.227,
     titleKey: 'exhibit.ball-improvised.title',
     labelKey: 'exhibit.ball-improvised.label',
     catalogueKey: 'exhibit.ball-improvised.catalogue',
@@ -178,9 +181,12 @@ const HOLYOKE_EXHIBITS = [
     era: 'holyoke',
     // The hero object of the wing.
     recipe: 'ball/spalding-laced-1900',
-    // Rests on the plinth-block, whose top the bake puts at 1.08.
-    position: [0, 1.187, -5.6],
-    mount: 'plinth',
+    // The concept treats the founding ball as a deliberately enlarged hero.
+    // Scale is presentation-only; examine hotspots inherit the same wrapper.
+    position: [-1.0, 1.293, 1.8],
+    scale: 2.65,
+    mount: 'floor',
+    supportY: 1.02,
     titleKey: 'exhibit.ball-spalding.title',
     labelKey: 'exhibit.ball-spalding.label',
     catalogueKey: 'exhibit.ball-spalding.catalogue',
@@ -212,8 +218,8 @@ const HOLYOKE_EXHIBITS = [
     id: 'net-1897',
     era: 'holyoke',
     recipe: 'net/ymca-1897',
-    position: [3.8, 0, -3.0],
-    rotationY: Math.PI / 2,
+    position: [1.25, 0, -5.6],
+    rotationY: 0,
     mount: 'floor',
     titleKey: 'exhibit.net-1897.title',
     labelKey: 'exhibit.net-1897.label',
@@ -238,8 +244,10 @@ const HOLYOKE_EXHIBITS = [
     id: 'handbook-1897',
     era: 'holyoke',
     recipe: 'paper/handbook-1897',
-    position: [-3.6, 0.944, 0.4],
-    mount: 'vitrine-table',
+    position: [-2.95, 1.324, 7.5],
+    rotationY: Math.PI,
+    mount: 'floor',
+    supportY: 1.32,
     titleKey: 'exhibit.handbook-1897.title',
     labelKey: 'exhibit.handbook-1897.label',
     catalogueKey: 'exhibit.handbook-1897.catalogue',
@@ -264,8 +272,10 @@ const HOLYOKE_EXHIBITS = [
     id: 'guide-1916',
     era: 'holyoke',
     recipe: 'paper/spalding-guide-1916',
-    position: [-3.6, 0.94, 2.6],
-    mount: 'vitrine-table',
+    position: [-0.95, 1.32, 7.5],
+    rotationY: Math.PI,
+    mount: 'floor',
+    supportY: 1.32,
     titleKey: 'exhibit.guide-1916.title',
     labelKey: 'exhibit.guide-1916.label',
     catalogueKey: 'exhibit.guide-1916.catalogue',
@@ -290,8 +300,8 @@ const HOLYOKE_EXHIBITS = [
     id: 'gym-suit',
     era: 'holyoke',
     recipe: 'apparel/gym-suit-1900',
-    position: [3.9, 0, 3.4],
-    rotationY: -Math.PI / 2,
+    position: [4.25, 0, -5.25],
+    rotationY: 0,
     mount: 'floor',
     titleKey: 'exhibit.gym-suit.title',
     labelKey: 'exhibit.gym-suit.label',
@@ -310,17 +320,10 @@ const HOLYOKE_EXHIBITS = [
     id: 'portrait-morgan',
     era: 'holyoke',
     recipe: 'frame/portrait-small',
-    /**
-     * On the plaster, not 175 mm in front of it.
-     *
-     * The west wall's inner face is at local x = -5.875 (half the 12 m width,
-     * less half the 0.25 m wall). This was authored at -5.7, which assumes a
-     * 0.30 m inset the building does not have, so the frame hung in mid-air.
-     * -5.843 puts the back of the frame against the wall.
-     */
-    position: [-5.843, 1.75, -2.0],
-    rotationY: Math.PI / 2,
-    mount: 'wall',
+    // Inside the fourth bay of the south-wall run, behind its front glazing.
+    position: [1.15, 1.92, 7.5],
+    rotationY: Math.PI,
+    mount: 'case-wall',
     titleKey: 'exhibit.portrait-morgan.title',
     labelKey: 'exhibit.portrait-morgan.label',
     catalogueKey: 'exhibit.portrait-morgan.catalogue',
@@ -342,11 +345,11 @@ const HOLYOKE_EXHIBITS = [
     id: 'photo-gym',
     era: 'holyoke',
     recipe: 'frame/panorama-wide',
-    // North wall inner face is at local z = -7.875; same 175 mm float as the
-    // Morgan portrait, same cause.
-    position: [0, 1.85, -7.843],
-    rotationY: 0,
-    mount: 'wall',
+    // The catalogue-scale print remains interactive inside the last case; the
+    // wall mural uses the same licensed source without duplicating interaction.
+    position: [3.65, 1.95, 7.5],
+    rotationY: Math.PI,
+    mount: 'case-wall',
     titleKey: 'exhibit.photo-gym.title',
     labelKey: 'exhibit.photo-gym.label',
     catalogueKey: 'exhibit.photo-gym.catalogue',
@@ -413,23 +416,22 @@ const DOCUMENTS = [
 /**
  * Where the reading layer physically lives.
  *
- * Placed on the south wall, behind the player's back as they enter, so the
- * documents are somewhere the curious walk TO. Putting them on the route
- * through the gallery would make the optional layer feel compulsory.
+ * Placed on the east wall between the entrance and the navy reveal. The cases
+ * remain discoverable without occupying either doorway or the central route.
  */
 const HOLYOKE_CONTAINERS = [
   {
     id: 'holyoke-cabinet-a',
     part: 'archive-cabinet',
-    position: [-2.2, 0, 7.4],
-    rotationY: Math.PI,
+    position: [5.55, 0, 0.2],
+    rotationY: -Math.PI / 2,
     titleKey: 'container.holyoke-a.title',
   },
   {
     id: 'holyoke-cabinet-b',
     part: 'archive-cabinet',
-    position: [-1.1, 0, 7.4],
-    rotationY: Math.PI,
+    position: [5.55, 0, 1.0],
+    rotationY: -Math.PI / 2,
     titleKey: 'container.holyoke-b.title',
   },
 ] as const satisfies readonly ContainerData[]
@@ -454,7 +456,7 @@ const OFFICE_CONTAINERS = [
      * 0.1 m inside the plaster with its drawer fronts pointing into the wall —
      * the one interactive object in the room, aimed away from the player.
      */
-    position: [2.0, 0, -3.06],
+    position: [0.35, 0, -3.08],
     rotationY: 0,
     titleKey: 'container.office.title',
     lockId: 'office-drawer',
@@ -483,7 +485,7 @@ const ROOMS = [
       id: 'atrium-breaker',
       part: 'breaker-panel',
       // Beside the first wing entrance, on the west wall and facing inward.
-      position: [-8.86, 1.05, -4.4],
+      position: [-8.62, 1.05, -4.4],
       rotationY: Math.PI / 2,
       titleKey: 'power.atrium.title',
     },
@@ -533,41 +535,58 @@ const ROOMS = [
      * somewhere to live.
      */
     kit: [
-      { part: 'plinth-tapered', position: [0, 0, 0] },
+      { part: 'atrium-floor-inlay', position: [0, 0, 0] },
+      { part: 'atrium-central-podium', position: [0, 0, 0], rotationY: Math.PI / 2 },
       { part: 'rope-stanchion', position: [-1.3, 0, -1.3] },
       { part: 'rope-stanchion', position: [1.3, 0, -1.3] },
       { part: 'rope-stanchion', position: [-1.3, 0, 1.3] },
       { part: 'rope-stanchion', position: [1.3, 0, 1.3] },
-      // The 2.6 m spans between them. Four posts with nothing strung between
-      // read as scaffolding; the rope is what says "do not touch".
       { part: 'rope-span', position: [0, 0, -1.3] },
       { part: 'rope-span', position: [0, 0, 1.3] },
       { part: 'rope-span', position: [-1.3, 0, 0], rotationY: Math.PI / 2 },
       { part: 'rope-span', position: [1.3, 0, 0], rotationY: Math.PI / 2 },
-      { part: 'medallion-socket', position: [0, 0.98, 0] },
-      { part: 'bench', position: [0, 0, 6.2], rotationY: Math.PI },
-      { part: 'bench', position: [-4.8, 0, -5.8] },
 
-      // Visitor services occupy the south half without cutting across any of
-      // the three lines from the spawn to a portal.
-      { part: 'reception-desk', position: [-4.2, 0, 5.0], rotationY: 0.35 },
-      { part: 'donation-box', position: [3.6, 0, 5.4] },
-      { part: 'vitrine-tower', position: [6.2, 0, -5.7], rotationY: -0.3 },
+      { part: 'atrium-reception-desk', position: [-4.05, 0, 7.7], rotationY: Math.PI },
+      { part: 'donation-box', position: [0.15, 0, 7.55], rotationY: Math.PI },
+      { part: 'atrium-display-tower', position: [-7.9, 0, -5.55], rotationY: Math.PI / 2 },
+      { part: 'atrium-lectern', position: [-7.2, 0, -4.05], rotationY: Math.PI / 2 },
+      { part: 'atrium-sofa', position: [-4.7, 0, -8.34] },
 
-      // The atrium is double height. Fixtures and banners make that volume
-      // legible instead of leaving five metres of blank wall over the dado.
-      // The dedication occupies the centre of the north wall. Keeping its
-      // banner off-axis preserves that primary wayfinding landmark.
-      { part: 'banner', position: [-6.2, 5.6, -8.68] },
-      { part: 'banner', position: [0, 5.6, 8.68], rotationY: Math.PI },
-      { part: 'banner', position: [-8.68, 5.6, 0], rotationY: Math.PI / 2 },
-      { part: 'banner', position: [8.68, 5.6, 0], rotationY: -Math.PI / 2 },
-      { part: 'frame-empty', position: [8.84, 2.1, -4.5], rotationY: -Math.PI / 2 },
-      { part: 'pendant', position: [0, 8.4, 0] },
-      { part: 'ceiling-spot', position: [-4, 8.4, -4] },
-      { part: 'ceiling-spot', position: [4, 8.4, -4] },
-      { part: 'ceiling-spot', position: [-4, 8.4, 4] },
-      { part: 'ceiling-spot', position: [4, 8.4, 4] },
+      { part: 'atrium-wall-bay-plain', position: [-8.875, 0, -7.35], rotationY: Math.PI / 2 },
+      { part: 'atrium-wall-bay-plain', position: [-8.875, 0, -4.45], rotationY: Math.PI / 2 },
+      { part: 'atrium-wall-bay', position: [-8.875, 0, 0.45], rotationY: Math.PI / 2 },
+      { part: 'atrium-wall-bay', position: [-8.875, 0, 3.95], rotationY: Math.PI / 2 },
+      { part: 'atrium-wall-bay-plain', position: [-6.4, 0, -8.875] },
+      { part: 'atrium-wall-bay-plain', position: [-3.2, 0, -8.875] },
+      { part: 'atrium-wall-bay-plain', position: [0, 0, -8.875] },
+      { part: 'atrium-wall-bay-plain', position: [3.2, 0, -8.875] },
+      { part: 'atrium-wall-bay-plain', position: [6.4, 0, -8.875] },
+      { part: 'atrium-wall-bay-plain', position: [-6.4, 0, 8.875], rotationY: Math.PI },
+      { part: 'atrium-wall-bay-plain', position: [-3.2, 0, 8.875], rotationY: Math.PI },
+      { part: 'atrium-wall-bay-plain', position: [0, 0, 8.875], rotationY: Math.PI },
+      { part: 'atrium-wall-bay-plain', position: [3.2, 0, 8.875], rotationY: Math.PI },
+      { part: 'atrium-wall-bay-plain', position: [6.4, 0, 8.875], rotationY: Math.PI },
+      { part: 'atrium-wall-bay-plain', position: [8.875, 0, -7.2], rotationY: -Math.PI / 2 },
+      { part: 'atrium-wall-bay-plain', position: [8.875, 0, -3.9], rotationY: -Math.PI / 2 },
+      { part: 'atrium-wall-bay-plain', position: [8.875, 0, -0.6], rotationY: -Math.PI / 2 },
+      { part: 'atrium-wall-bay-plain', position: [8.875, 0, 5.6], rotationY: -Math.PI / 2 },
+
+      { part: 'atrium-banner-hardware', position: [-8.73, 7.08, 8.05], rotationY: Math.PI / 2 },
+      { part: 'atrium-banner-hardware', position: [-8.73, 7.08, 3.75], rotationY: Math.PI / 2 },
+      { part: 'atrium-banner-hardware', position: [-8.73, 7.08, -4.25], rotationY: Math.PI / 2 },
+      { part: 'atrium-banner-hardware', position: [-8.73, 7.08, -7.15], rotationY: Math.PI / 2 },
+
+      { part: 'atrium-ceiling-coffer', position: [0, 8.39, 0], rotationY: Math.PI / 2 },
+      { part: 'atrium-aerial-installation', position: [-1.8, 8.12, 0], rotationY: Math.PI / 2, scale: 1.32 },
+      { part: 'atrium-pin-pendant', position: [-4.8, 8.22, 4.8], lightTarget: [-4.05, 0.8, 7.4] },
+      { part: 'atrium-pin-pendant', position: [-4.5, 8.22, -4.8], lightTarget: [-7.8, 1.25, -5.55] },
+      { part: 'atrium-pin-pendant', position: [-1.9, 8.22, 3.1], lightTarget: [-8.6, 4.6, 3.75] },
+      { part: 'atrium-pin-pendant', position: [1.8, 8.22, 4.4], lightTarget: [0, 0.9, 0] },
+      { part: 'atrium-pin-pendant', position: [-0.9, 8.22, -3.4], lightTarget: [-8.6, 4.6, -4.25] },
+      { part: 'atrium-pin-pendant', position: [3.8, 8.22, -4.7], lightTarget: [-4.6, 4.3, -8.7] },
+      { part: 'atrium-pin-pendant', position: [4.5, 8.22, 0.9], lightTarget: [-4.6, 4.3, 8.7] },
+      { part: 'atrium-pin-pendant', position: [0.6, 8.22, 5.6], scale: 0.82 },
+      { part: 'atrium-pin-pendant', position: [2.7, 8.22, -1.7], scale: 1.12 },
     ],
     /**
      * The dedication wall.
@@ -583,11 +602,79 @@ const ROOMS = [
         id: 'atrium-dedication',
         headingKey: 'sign.atrium.heading',
         bodyKey: 'sign.atrium.body',
-        position: [0, 3.5, -8.85],
+        position: [8.84, 2.75, -2.4],
+        rotationY: -Math.PI / 2,
+        size: 0.44,
+        maxWidth: 5.2,
+        align: 'left',
+      },
+    ],
+    wallArt: [
+      {
+        id: 'atrium-mural-attack',
+        mediaId: 'graphic-atrium-mural-attack',
+        position: [-4.6, 4.5, 8.84],
+        rotationY: Math.PI,
+        width: 3.45,
+        height: 5.05,
+        presentation: 'thin-framed',
+        selfIllumination: 0.14,
+        showCredit: false,
+      },
+      {
+        id: 'atrium-mural-dive',
+        mediaId: 'graphic-atrium-mural-dive',
+        position: [-4.6, 4.5, -8.84],
         rotationY: 0,
-        size: 0.62,
-        maxWidth: 11,
-        align: 'center',
+        width: 3.45,
+        height: 5.05,
+        presentation: 'thin-framed',
+        selfIllumination: 0.14,
+        showCredit: false,
+      },
+      {
+        id: 'atrium-banner-burgundy-block',
+        mediaId: 'graphic-atrium-banner-burgundy-block',
+        position: [-8.68, 4.98, 8.05],
+        rotationY: Math.PI / 2,
+        width: 1.04,
+        height: 4.04,
+        presentation: 'flush',
+        selfIllumination: 0.85,
+        showCredit: false,
+      },
+      {
+        id: 'atrium-banner-navy-flight',
+        mediaId: 'graphic-atrium-banner-navy-flight',
+        position: [-8.68, 4.98, 3.75],
+        rotationY: Math.PI / 2,
+        width: 1.04,
+        height: 4.04,
+        presentation: 'flush',
+        selfIllumination: 0.85,
+        showCredit: false,
+      },
+      {
+        id: 'atrium-banner-navy-serve',
+        mediaId: 'graphic-atrium-banner-navy-serve',
+        position: [-8.68, 4.98, -4.25],
+        rotationY: Math.PI / 2,
+        width: 1.04,
+        height: 4.04,
+        presentation: 'flush',
+        selfIllumination: 0.85,
+        showCredit: false,
+      },
+      {
+        id: 'atrium-banner-burgundy-ribbon',
+        mediaId: 'graphic-atrium-banner-burgundy-ribbon',
+        position: [-8.68, 4.98, -7.15],
+        rotationY: Math.PI / 2,
+        width: 1.04,
+        height: 4.04,
+        presentation: 'flush',
+        selfIllumination: 0.85,
+        showCredit: false,
       },
     ],
     exhibitIds: [],
@@ -651,55 +738,92 @@ const ROOMS = [
       },
     ],
     /**
-     * Furniture for the wing.
-     *
-     * This array was empty, which is why a room holding eight objects still
-     * read as a corridor with things against the walls: there was nothing
-     * between them, nowhere to stand and nothing telling you where to look.
-     *
-     * A reading plaque goes beside every exhibit — the bake has produced
-     * `label-plaque` since the first commit and no room had ever placed one, so
-     * the museum had eight artefacts and zero labels. Each sits on the approach
-     * side, angled towards the visitor.
+     * One continuous historical exhibition, composed like the approved image:
+     * a navy reveal, built-in archive cases, a central interpretation sequence
+     * and a reconstructed gymnasium vignette. The east edge deliberately stays
+     * open so both portals remain legible as one route through the room.
      */
     kit: [
-      // Vitrine run down the west wall: a plaque at the corner of each case.
-      { part: 'label-plaque', position: [-2.75, 0, -5.2], rotationY: -Math.PI / 2 },
-      { part: 'label-plaque', position: [-2.75, 0, 0.4], rotationY: -Math.PI / 2 },
-      { part: 'label-plaque', position: [-2.75, 0, 2.6], rotationY: -Math.PI / 2 },
-      // The 1897 net is the wing's centrepiece and the one thing a visitor
-      // would instinctively touch, so it gets the same rope treatment as the
-      // atrium plinth.
-      { part: 'rope-stanchion', position: [2.2, 0, -4.4] },
-      { part: 'rope-stanchion', position: [2.2, 0, -1.8] },
-      { part: 'rope-span', position: [2.2, 0, -3.1], rotationY: Math.PI / 2 },
+      // The reference's depth order starts at the door: navy reveal first,
+      // interpretation second, then the hero case. This keeps the first frame
+      // layered instead of exposing the whole floor at once.
+      { part: 'holyoke-entry-screen', position: [3.1, 0, 3.4], rotationY: 2.2 },
+      { part: 'history-info-kiosk', position: [0.6, 0, -0.2], rotationY: 2.14 },
+      { part: 'history-hero-case', position: [-1.0, 0, 1.8] },
+      { part: 'label-angled', position: [0.0, 0, 1.5], rotationY: Math.PI / 2 },
 
-      // Somewhere to sit and look, facing the vitrine wall. A gallery without
-      // a bench tells the visitor not to linger.
-      { part: 'bench', position: [-0.4, 0, 0.4], rotationY: -Math.PI / 2 },
-      { part: 'bench', position: [-0.4, 0, 2.8], rotationY: -Math.PI / 2 },
+      // One ten-metre authored run replaces five visibly cloned cabinets. It
+      // faces north from the south wall, leaving the shortcut corner clear.
+      { part: 'history-case-run', position: [0, 0, 7.86], rotationY: Math.PI },
 
-      // Cases now articulate the west wall. Their geometry is authored from
-      // y=0, so 0.75 is the explicit sill datum rather than a hidden offset.
-      { part: 'vitrine-wall', position: [-5.86, 0.75, -4.0], rotationY: Math.PI / 2 },
-      { part: 'vitrine-wall', position: [-5.86, 0.75, 1.2], rotationY: Math.PI / 2 },
-      { part: 'vitrine-tower', position: [4.7, 0, -6.5], rotationY: -0.2 },
+      // The right side of the entrance view is a partial YMCA gymnasium:
+      // court, net, bench, dress form and training equipment.
+      { part: 'gym-court-lines', position: [1.25, 0.002, -3.45] },
+      { part: 'bench', position: [1.15, 0, -4.1] },
+      { part: 'gym-training-set', position: [3.0, 0, -1.0] },
+      { part: 'label-angled', position: [4.15, 0, -4.15], rotationY: 0 },
+      { part: 'label-angled', position: [3.8, 0, -0.7], rotationY: -Math.PI / 2 },
 
-      // The two freestanding partitions prevent the whole wing being read in
-      // one glance while leaving a generous route around both ends.
-      { part: 'partition', position: [1.8, 0, -0.6], rotationY: 0.52 },
-      { part: 'partition', position: [-2.2, 0, 1.8], rotationY: -0.44 },
-      { part: 'interp-panel', position: [1.4, 0, -6.2], rotationY: 0.2 },
-
-      // Angled labels belong to the floor-standing hero objects; the existing
-      // low plaques continue to serve the table cases.
-      { part: 'label-angled', position: [1.0, 0, -5.35], rotationY: -0.35 },
-      { part: 'label-angled', position: [2.75, 0, -4.55], rotationY: -0.8 },
-      { part: 'label-angled', position: [3.0, 0, 4.45], rotationY: Math.PI },
-
-      { part: 'ceiling-spot', position: [0, 4.2, -4] },
-      { part: 'ceiling-spot', position: [0, 4.2, 4] },
+      // Three heads wash the archival run; three model the gym and mural. Each
+      // target is authored with the fixture so layout changes cannot leave an
+      // invisible light shining at empty floor.
+      { part: 'ceiling-spot', position: [-4.0, 4.2, 6.3], lightTarget: [-4.0, 1.4, 7.25] },
+      { part: 'ceiling-spot', position: [0, 4.2, 6.3], lightTarget: [0, 1.4, 7.25] },
+      { part: 'ceiling-spot', position: [4.0, 4.2, 6.3], lightTarget: [4.0, 1.4, 7.25] },
+      { part: 'ceiling-spot', position: [-4.0, 4.2, -6.3], lightTarget: [-5.55, 2.1, -2.0] },
+      { part: 'ceiling-spot', position: [0, 4.2, -6.3], lightTarget: [0, 1.15, -5.25] },
+      { part: 'ceiling-spot', position: [4.0, 4.2, -6.3], lightTarget: [4.1, 1.15, -4.8] },
+      { part: 'ceiling-spot', position: [4.6, 4.2, 2.1], lightTarget: [3.65, 2.0, 3.15] },
       { part: 'vent-grille', position: [5.86, 3.4, -6], rotationY: -Math.PI / 2 },
+    ],
+    wallArt: [
+      {
+        id: 'holyoke-entry-hands',
+        mediaId: 'graphic-holyoke-entry-hands',
+        // Exact face datum of the rotated entry screen. The baked brass frame
+        // remains in front while this flat print replaces the old vector icon.
+        position: [3.274, 2.08, 3.206],
+        rotationY: 2.2,
+        width: 2.32,
+        height: 2.55,
+        presentation: 'flush',
+        showCredit: false,
+      },
+      {
+        id: 'holyoke-gym-mural',
+        mediaId: 'graphic-holyoke-volleyball-demonstration',
+        // The west wall is the visual terminus behind the reconstructed net.
+        position: [-5.872, 2.25, -2.0],
+        rotationY: Math.PI / 2,
+        width: 6.8,
+        height: 2.8,
+        presentation: 'flush',
+        showCredit: false,
+      },
+      {
+        id: 'holyoke-building-east',
+        mediaId: 'photo-holyoke-building-1902',
+        position: [5.872, 2.35, 3.6],
+        rotationY: -Math.PI / 2,
+        width: 2.25,
+        height: 2.65,
+        tint: '#d8bb8c',
+      },
+      ...([
+        ['holyoke-frieze-01', 'photo-holyoke-building-c1910', -3.82],
+        ['holyoke-frieze-02', 'photo-holyoke-building-1902', -1.28],
+        ['holyoke-frieze-03', 'photo-morgan-1897', 1.28],
+        ['holyoke-frieze-04', 'photo-holyoke-gym-1897', 3.82],
+      ] as const).map(([id, mediaId, x]) => ({
+        id,
+        mediaId,
+        position: [x, 3.08, 7.872] as [number, number, number],
+        rotationY: Math.PI,
+        width: 2.35,
+        height: 0.76,
+        presentation: 'flush' as const,
+        tint: '#c9a675',
+      })),
     ],
     exhibitIds: HOLYOKE_EXHIBITS.map((exhibit) => exhibit.id),
     documentIds: ['doc-invention-date', 'doc-halstead', 'doc-rule-changes'],
@@ -732,9 +856,15 @@ const ROOMS = [
       // rendered here instead of in `kit` so geometry and interaction cannot
       // drift into two copies of the same object.
       part: 'desk-lamp',
-      position: [1.0, 0.74, -1.55],
-      rotationY: Math.PI,
+      position: [0.46, 0.74, -0.62],
+      rotationY: -Math.PI / 2,
       titleKey: 'power.office.title',
+      light: {
+        position: [0, 0.31, 0],
+        color: '#ffb45f',
+        intensity: 5,
+        distance: 2.8,
+      },
     },
     portals: [
       {
@@ -745,14 +875,29 @@ const ROOMS = [
         rotationY: Math.PI / 2,
       },
     ],
-    /** Purpose-built furniture makes this the safe room, not another gallery. */
+    /**
+     * A dense working office seen from the west doorway: desk and visitors in
+     * the middle, research wall to the north, library and safe to the east.
+     * The western lane remains open from the portal to the interactive lamp
+     * and then turns north to the locked archive cabinet.
+     */
     kit: [
-      { part: 'curator-desk', position: [0.4, 0, -1.4], rotationY: Math.PI },
-      { part: 'office-chair', position: [0.4, 0, -0.5] },
-      { part: 'ledger-stack', position: [0.1, 0.74, -1.38], rotationY: -0.1 },
-      { part: 'bookshelf', position: [2.68, 0, 1.7], rotationY: -Math.PI / 2 },
-      { part: 'ceiling-spot', position: [0, 3.2, 0] },
-      { part: 'wall-sconce', position: [-1.5, 1.65, -3.34] },
+      { part: 'office-rug', position: [0.65, 0, -0.15] },
+      { part: 'curator-desk', position: [0.65, 0, -0.15], rotationY: -Math.PI / 2 },
+      { part: 'office-chair', position: [1.55, 0, -0.15], rotationY: -Math.PI / 2 },
+      { part: 'visitor-chair', position: [-0.35, 0, -0.55], rotationY: Math.PI / 2 },
+      { part: 'visitor-chair', position: [-0.35, 0, 0.45], rotationY: Math.PI / 2 },
+      { part: 'ledger-stack', position: [0.48, 0.74, 0.18], rotationY: -1.67 },
+      { part: 'office-corkboard', position: [-0.9, 1.35, -3.34] },
+      { part: 'archive-trolley', position: [-0.55, 0, -2.96] },
+      { part: 'office-flatfile', position: [-2.55, 0, -2.05], rotationY: Math.PI / 2 },
+      { part: 'bookshelf', position: [1.55, 0, -3.18] },
+      { part: 'bookshelf', position: [2.68, 0, -2.28], rotationY: -Math.PI / 2 },
+      { part: 'bookshelf', position: [2.68, 0, -0.96], rotationY: -Math.PI / 2 },
+      { part: 'bookshelf', position: [2.68, 0, 0.36], rotationY: -Math.PI / 2 },
+      { part: 'office-safe', position: [2.55, 0, 2.45], rotationY: -Math.PI / 2 },
+      { part: 'coat-stand', position: [-2.55, 0, -1.2] },
+      { part: 'wall-sconce', position: [-2.84, 1.58, -1.12], rotationY: Math.PI / 2 },
     ],
     exhibitIds: [],
     documentIds: ['doc-predecessor'],
@@ -769,5 +914,5 @@ export const MUSEUM: MuseumContent = {
   documents: DOCUMENTS,
   locks: LOCKS,
   facts: FACTS,
-  media: GENERATED_MEDIA,
+  media: [...GENERATED_MEDIA, ...AUTHORED_MEDIA],
 }
