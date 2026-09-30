@@ -14,7 +14,7 @@
  * plan without losing the bevel normals that `crease: null` exists to protect.
  */
 
-import { BoxGeometry, CylinderGeometry } from 'three'
+import { BoxGeometry, CylinderGeometry, TorusGeometry } from 'three'
 
 import { bevelledBox, finalize, lathe, merge, sweepProfile } from '../lib/geometry.mjs'
 
@@ -711,4 +711,130 @@ export function buildDonationBox({ hopperHeight = 0.27 } = {}) {
     pedestal: finalize(merge(pedestal), { crease: Math.PI / 5, metresPerTile: 0.4 }),
     glass: finalize(merge(glass), { crease: null, metresPerTile: 0.4 }),
   }
+}
+
+// ---------------------------------------------------------------------------
+// 6. Architectural signage
+// ---------------------------------------------------------------------------
+
+/**
+ * The room nameplate that sits above a portal.
+ *
+ * The old runtime drew pale glyphs straight on the plaster. From the middle of
+ * the atrium that looked like a HUD label which happened to overlap the wall,
+ * not something installed in a museum. This single-material substrate gives
+ * the lettering a physical home while keeping the peak portal view inside the
+ * mobile draw-call ceiling: one instanced draw per colourway, not separate
+ * frame, field, trim and fixing draws.
+ *
+ * The back is z = 0, +Z faces the visitor and the origin is the panel centre.
+ * Runtime text uses the 2.34 x 0.50 m field on the front face.
+ */
+export function buildWayfindingPlaque({
+  width = 2.64,
+  height = 0.66,
+  depth = 0.055,
+} = {}) {
+  const parts = []
+  const front = depth
+
+  const field = bevelledBox(width, height, depth, 0.025, 2)
+  field.translate(0, 0, depth / 2)
+  parts.push(field)
+
+  // A shallow routed frame catches the room light without needing a second
+  // material. In profile it is enough to stop a broad, dark rectangle reading
+  // as a texture pasted over the wall.
+  const railDepth = 0.014
+  const railFace = front + railDepth / 2
+  const horizontal = bevelledBox(width - 0.12, 0.026, railDepth, 0.006, 1)
+  for (const side of [-1, 1]) {
+    const rail = horizontal.clone()
+    rail.translate(0, side * (height / 2 - 0.055), railFace)
+    parts.push(rail)
+  }
+  const vertical = bevelledBox(0.026, height - 0.12, railDepth, 0.006, 1)
+  for (const side of [-1, 1]) {
+    const rail = vertical.clone()
+    rail.translate(side * (width / 2 - 0.055), 0, railFace)
+    parts.push(rail)
+  }
+
+  // Four proper fixings make the panel feel attached to masonry. They share
+  // the field material deliberately; brass studs would cost a draw for detail
+  // that is only a few pixels across on a phone.
+  for (const x of [-width / 2 + 0.105, width / 2 - 0.105]) {
+    for (const y of [-height / 2 + 0.105, height / 2 - 0.105]) {
+      const stud = new CylinderGeometry(0.017, 0.017, 0.009, 12)
+      stud.rotateX(Math.PI / 2)
+      stud.translate(x, y, front + railDepth + 0.0045)
+      parts.push(stud)
+    }
+  }
+
+  return finalize(merge(parts), { crease: null, metresPerTile: 0.72 })
+}
+
+/**
+ * The atrium's dedication panel.
+ *
+ * The panel uses the same routed edge and fixing language as the doorway
+ * plaques, scaled to the five-metre wall. A low relief at the right borrows the
+ * seam grammar of a volleyball; it is geometry in the SAME material, so raking
+ * light reveals it without another texture, shader or draw call.
+ */
+export function buildDedicationPlaque({
+  width = 5.2,
+  height = 1.5,
+  depth = 0.065,
+} = {}) {
+  const parts = []
+  const front = depth
+  const field = bevelledBox(width, height, depth, 0.032, 2)
+  field.translate(0, 0, depth / 2)
+  parts.push(field)
+
+  const railDepth = 0.016
+  const railFace = front + railDepth / 2
+  const horizontal = bevelledBox(width - 0.16, 0.032, railDepth, 0.007, 1)
+  for (const side of [-1, 1]) {
+    const rail = horizontal.clone()
+    rail.translate(0, side * (height / 2 - 0.07), railFace)
+    parts.push(rail)
+  }
+  const vertical = bevelledBox(0.032, height - 0.16, railDepth, 0.007, 1)
+  for (const side of [-1, 1]) {
+    const rail = vertical.clone()
+    rail.translate(side * (width / 2 - 0.07), 0, railFace)
+    parts.push(rail)
+  }
+
+  // Separate copy from emblem without painting a rule into a texture.
+  const divider = bevelledBox(0.018, height - 0.34, railDepth, 0.005, 1)
+  divider.translate(1.34, 0, railFace)
+  parts.push(divider)
+
+  const emblemX = 1.94
+  const ring = new TorusGeometry(0.39, 0.011, 6, 40)
+  ring.translate(emblemX, 0, front + railDepth + 0.006)
+  parts.push(ring)
+
+  for (const rotation of [-0.72, 0.72]) {
+    const seam = new TorusGeometry(0.31, 0.008, 6, 32, Math.PI * 1.45)
+    seam.scale(1, 0.56, 1)
+    seam.rotateZ(rotation)
+    seam.translate(emblemX, 0, front + railDepth + 0.007)
+    parts.push(seam)
+  }
+
+  for (const x of [-width / 2 + 0.13, width / 2 - 0.13]) {
+    for (const y of [-height / 2 + 0.13, height / 2 - 0.13]) {
+      const stud = new CylinderGeometry(0.019, 0.019, 0.01, 12)
+      stud.rotateX(Math.PI / 2)
+      stud.translate(x, y, front + railDepth + 0.005)
+      parts.push(stud)
+    }
+  }
+
+  return finalize(merge(parts), { crease: null, metresPerTile: 0.8 })
 }

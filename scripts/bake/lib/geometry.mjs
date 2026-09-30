@@ -329,6 +329,23 @@ export function sphereProjectUVs(geometry) {
     uv[index * 2 + 1] = 0.5 - Math.asin(vertex.y / length) / Math.PI
   }
 
+  // A non-indexed triangle can straddle the 0/1 meridian. Interpolating 0.99
+  // to 0.01 walks through the entire map and previously stretched every panel
+  // colour and pore into a long wedge across historical balls. Move the high-U
+  // corners into the adjacent repeat; RepeatWrapping makes the sampled image
+  // identical while interpolation now follows the short path across the seam.
+  for (let index = 0; index < count; index += 3) {
+    const u0 = uv[index * 2]
+    const u1 = uv[(index + 1) * 2]
+    const u2 = uv[(index + 2) * 2]
+    if (Math.max(u0, u1, u2) - Math.min(u0, u1, u2) <= 0.5) continue
+
+    for (let corner = 0; corner < 3; corner += 1) {
+      const offset = (index + corner) * 2
+      if (uv[offset] > 0.5) uv[offset] -= 1
+    }
+  }
+
   source.setAttribute('uv', new BufferAttribute(uv, 2))
   return source
 }

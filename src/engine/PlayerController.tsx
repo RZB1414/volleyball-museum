@@ -21,11 +21,16 @@ import { useEffect, useMemo, useRef } from 'react'
 import { MathUtils, PerspectiveCamera, Vector3 } from 'three'
 
 import { useMuseum } from '../state/store'
-import type { CollisionWorld } from './collision'
+import type { CollisionWorld, MoveResultBuffer } from './collision'
 import { movePlayer } from './collision'
-import { playerPosition } from './playerPosition'
+import {
+  CAMERA_FOV_PUSH_DEGREES,
+  cameraVerticalFovDegrees,
+} from './cameraProjection'
+import { PLAYER_CAPSULE, playerPosition } from './playerPosition'
+import { dampTouchLookAxis } from './mobileControls'
 
-const CAPSULE = { radius: 0.3, height: 1.75 }
+const CAPSULE = PLAYER_CAPSULE
 const EYE_HEIGHT = 1.62
 const BASE_SPEED = 3.4
 const ACCELERATION = 14
@@ -34,8 +39,13 @@ const MOUSE_LOOK_SPEED = 0.0016
 const TOUCH_LOOK_SPEED = 1.9
 const TOUCH_LOOK_SMOOTHING = 8
 const TOUCH_DEAD_ZONE = 0.02
-/** Never let one long frame teleport the player through a wall. */
-const MAX_FRAME_DELTA = 1 / 30
+/**
+ * Preserve wall-clock movement through ordinary frame spikes, but discard the
+ * remainder of genuinely long pauses (tab restore, debugger, device sleep).
+ */
+const MAX_SIMULATION_DELTA = 0.1
+/** Never let one physics step travel far enough to tunnel through a wall. */
+const MAX_PHYSICS_DELTA = 1 / 30
 /** Below this the player has left the building; respawn rather than fall forever. */
 const FALL_LIMIT = -8
 
@@ -46,9 +56,6 @@ const PITCH_MAX = Math.PI * 0.48
 const BOB_FREQUENCY = 2.0
 const BOB_VERTICAL = 0.03
 const BOB_ROLL = MathUtils.degToRad(0.8)
-const FOV_BASE = 68
-const FOV_PUSH = 4
-
 export type PlayerControllerProps = {
   world: CollisionWorld | null
   spawn?: [number, number, number]
@@ -73,7 +80,6 @@ export function PlayerController({
   onFootstep,
 }: PlayerControllerProps) {
   const camera = useThree((state) => state.camera) as PerspectiveCamera
-  const regress = useThree((state) => state.performance.regress)
 
   const positionRef = useRef(new Vector3(...spawn))
   const velocityRef = useRef(new Vector3())
@@ -82,13 +88,21 @@ export function PlayerController({
   const smoothedTouchLookRef = useRef({ x: 0, y: 0 })
   const bobPhaseRef = useRef(0)
   const lastFootstepPhaseRef = useRef(0)
+  const physicsResultRef = useRef<MoveResultBuffer>({
+    position: new Vector3(),
+    verticalVelocity: 0,
+    grounded: false,
+    stepped: false,
+  })
+  const awaitingInitialSupportRef = useRef(true)
+  const lastCameraAspectRef = useRef(camera.aspect)
 
   const setPointerLocked = useMuseum((state) => state.setPointerLocked)
 
   useEffect(() => {
     camera.rotation.order = 'YXZ'
     camera.rotation.y = spawnYaw
-    camera.fov = FOV_BASE
+    camera.fov = cameraVerticalFovDegrees(camera.aspect)
     camera.updateProjectionMatrix()
     // Only on mount: re-running this on every spawnYaw change would snap the
     // camera out of the player's hands mid-look.
@@ -221,6 +235,7 @@ export function PlayerController({
     positionRef.current.set(...spawn)
     velocityRef.current.set(0, 0, 0)
     verticalVelocityRef.current = 0
+    awaitingInitialSupportRef.current = true
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spawnKey])
 
@@ -244,6 +259,7 @@ export function PlayerController({
       camera.rotation.x = typeof pitch === 'number' ? pitch : 0
       camera.position.set(x, y + EYE_HEIGHT, z)
       playerPosition.copy(positionRef.current)
+      awaitingInitialSupportRef.current = false
     }
 
     /**
@@ -255,8 +271,25 @@ export function PlayerController({
      */
     const qaParams = new URLSearchParams(window.location.search)
     const qaCamera = qaParams.get('qaCamera')?.split(',').map(Number)
+    let qaCameraHandle: number | null = null
     if (qaCamera?.length === 5 && qaCamera.every(Number.isFinite)) {
-      window.__museumTeleport(...(qaCamera as [number, number, number, number, number]))
+      const values = qaCamera as [number, number, number, number, number]
+      const probe = new Vector3(values[0], values[1], values[2])
+      let attempts = 0
+      const applyWhenSupported = () => {
+        attempts += 1
+        const supported = world?.hasWalkableSupport(probe, CAPSULE)
+        if (!supported && attempts < 60) {
+          qaCameraHandle = window.setTimeout(applyWhenSupported, 50)
+          return
+        }
+        window.__museumTeleport?.(...values)
+      }
+
+      // Defer past StrictMode's mount-effect rehearsal and until the target
+      // room floor has registered. Teleporting while only the synchronous door
+      // gates exist lets gravity carry the QA camera below a still-loading GLB.
+      qaCameraHandle = window.setTimeout(applyWhenSupported, 0)
     }
 
     const qaPower = qaParams.get('qaPower')
@@ -273,12 +306,13 @@ export function PlayerController({
     }
 
     return () => {
+      if (qaCameraHandle !== null) window.clearTimeout(qaCameraHandle)
       delete window.__museumTeleport
     }
-  }, [camera])
+  }, [camera, world])
 
   useFrame((_state, rawDelta) => {
-    const delta = Math.min(rawDelta, MAX_FRAME_DELTA)
+    const delta = Math.min(Math.max(rawDelta, 0), MAX_SIMULATION_DELTA)
     const {
       settings,
       touchMove,
@@ -293,7 +327,6 @@ export function PlayerController({
     // --- look ---------------------------------------------------------------
     const pending = pendingLookRef.current
     if (!frozen && (pending.x !== 0 || pending.y !== 0)) {
-      regress()
       camera.rotation.y -= pending.x * MOUSE_LOOK_SPEED * settings.lookSensitivity
       camera.rotation.x = MathUtils.clamp(
         camera.rotation.x - pending.y * MOUSE_LOOK_SPEED * settings.lookSensitivity,
@@ -305,9 +338,18 @@ export function PlayerController({
     pending.y = 0
 
     const smoothedTouch = smoothedTouchLookRef.current
-    const touchLerp = 1 - Math.exp(-TOUCH_LOOK_SMOOTHING * delta)
-    smoothedTouch.x += (touchLook.x - smoothedTouch.x) * touchLerp
-    smoothedTouch.y += (touchLook.y - smoothedTouch.y) * touchLerp
+    smoothedTouch.x = dampTouchLookAxis(
+      smoothedTouch.x,
+      touchLook.x,
+      delta,
+      TOUCH_LOOK_SMOOTHING,
+    )
+    smoothedTouch.y = dampTouchLookAxis(
+      smoothedTouch.y,
+      touchLook.y,
+      delta,
+      TOUCH_LOOK_SMOOTHING,
+    )
 
     if (
       !frozen &&
@@ -370,18 +412,34 @@ export function PlayerController({
      * camera is under the building looking at nothing. It is also invisible to
      * every teleport-based test, because by then loading has finished.
      */
-    if (world && world.size > 0) {
-      displacement.set(velocity.x * delta, 0, velocity.z * delta)
-      const result = movePlayer(
-        world,
-        positionRef.current,
-        displacement,
-        verticalVelocityRef.current,
-        delta,
-        CAPSULE,
-      )
-      positionRef.current.copy(result.position)
-      verticalVelocityRef.current = result.verticalVelocity
+    const hasInitialSupport =
+      !awaitingInitialSupportRef.current ||
+      Boolean(world?.hasWalkableSupport(positionRef.current, CAPSULE))
+    if (hasInitialSupport) awaitingInitialSupportRef.current = false
+
+    if (world && hasInitialSupport) {
+      // A 45-90 ms render hitch used to be truncated to 33 ms, which made the
+      // player visibly slow down at exactly the moment the frame stuttered. Keep
+      // the elapsed time, but consume it in collision-safe pieces instead.
+      let remaining = delta
+      while (remaining > 1e-6) {
+        const step = Math.min(remaining, MAX_PHYSICS_DELTA)
+        displacement.set(velocity.x * step, 0, velocity.z * step)
+        const result = movePlayer(
+          world,
+          positionRef.current,
+          displacement,
+          verticalVelocityRef.current,
+          step,
+          CAPSULE,
+          physicsResultRef.current,
+        )
+        positionRef.current.copy(result.position)
+        verticalVelocityRef.current = result.verticalVelocity
+        remaining -= step
+
+        if (positionRef.current.y < FALL_LIMIT) break
+      }
 
       // Last-resort guard. Any hole in the collision mesh, any content edit
       // that leaves a gap, and the player is gone with no way back — a fall
@@ -392,7 +450,10 @@ export function PlayerController({
         verticalVelocityRef.current = 0
       }
     } else {
-      // Hold still, and keep the fall from accumulating while we wait.
+      // A synchronous transition-door gate can be the first collider in the
+      // world. Do not mistake that vertical box for a loaded floor and start
+      // gravity while the spawn shell is still suspended.
+      velocity.set(0, 0, 0)
       verticalVelocityRef.current = 0
     }
 
@@ -421,11 +482,22 @@ export function PlayerController({
       bobRoll = Math.cos(bobPhaseRef.current * 0.5) * BOB_ROLL * speedRatio
     }
 
-    const targetFov = settings.fovPush ? FOV_BASE + FOV_PUSH * speedRatio : FOV_BASE
-    if (Math.abs(camera.fov - targetFov) > 0.01) {
-      camera.fov = MathUtils.damp(camera.fov, targetFov, 6, delta)
+    const targetFov = cameraVerticalFovDegrees(
+      camera.aspect,
+      settings.fovPush ? CAMERA_FOV_PUSH_DEGREES * speedRatio : 0,
+    )
+    const aspectChanged = Math.abs(camera.aspect - lastCameraAspectRef.current) > 0.001
+    if (aspectChanged || Math.abs(camera.fov - targetFov) > 0.01) {
+      // Orientation/fullscreen changes should not animate the projection over
+      // several frames. The mobile gate already masks the resize, and snapping
+      // avoids a visible zoom after it disappears. Optional running push still
+      // damps normally because the aspect is unchanged.
+      camera.fov = aspectChanged
+        ? targetFov
+        : MathUtils.damp(camera.fov, targetFov, 6, delta)
       camera.updateProjectionMatrix()
     }
+    lastCameraAspectRef.current = camera.aspect
 
     camera.position.set(
       positionRef.current.x,

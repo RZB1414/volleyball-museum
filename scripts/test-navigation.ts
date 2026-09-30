@@ -43,6 +43,8 @@ const SPEED = 2.6
 const TIME_LIMIT = 30
 /** The player's feet must never drop this far below the floor plane. */
 const FALL_LIMIT = -0.35
+/** Furniture may frame a doorway, but never occupy its first usable approach. */
+const PORTAL_CLEARANCE_DEPTH = 1.5
 
 let failures = 0
 let checks = 0
@@ -292,6 +294,34 @@ function portalWorld(roomId: string, portalId: string) {
   )
 }
 
+/** The full doorway width and first 1.5 m inside its owning room. */
+function portalClearanceFootprint(
+  room: RoomData,
+  portal: RoomData['portals'][number],
+): Footprint {
+  const rotation = portal.rotationY ?? 0
+  const axisX: [number, number] = [Math.cos(rotation), -Math.sin(rotation)]
+  const axisZ: [number, number] = [Math.sin(rotation), Math.cos(rotation)]
+  const portalX = room.origin[0] + portal.position[0]
+  const portalZ = room.origin[2] + portal.position[2]
+  const floorY = room.origin[1] + portal.position[1]
+
+  return {
+    owner: `${room.id}/portal:${portal.id}`,
+    recipe: 'portal-clearance',
+    centre: [
+      portalX + axisZ[0] * PORTAL_CLEARANCE_DEPTH / 2,
+      portalZ + axisZ[1] * PORTAL_CLEARANCE_DEPTH / 2,
+    ],
+    axisX,
+    axisZ,
+    halfX: portal.width / 2,
+    halfZ: PORTAL_CLEARANCE_DEPTH / 2,
+    minY: floorY,
+    maxY: floorY + Math.min(portal.height, CAPSULE.height),
+  }
+}
+
 /**
  * Walks from `from` to `to` by steering straight at a sequence of waypoints.
  *
@@ -414,6 +444,20 @@ check(
   `collider parts: ${partitionColliders.map((part) => part.name).join(', ') || 'none'}`,
 )
 
+const dividerColliders = kitBundle?.parts.filter(
+  (part) =>
+    (part.name === 'atrium-divider-screen' ||
+      part.name.startsWith('atrium-divider-screen__')) &&
+    part.collider,
+) ?? []
+check(
+  'atrium divider collision covers its wide base and full height',
+  dividerColliders.length === 1 &&
+    dividerColliders[0]?.name === 'atrium-divider-screen' &&
+    (dividerColliders[0]?.collider?.halfExtents[1] ?? 0) >= 1.19,
+  `collider parts: ${dividerColliders.map((part) => part.name).join(', ') || 'none'}`,
+)
+
 const solidFootprints = collectSolidFootprints()
 const forbiddenOverlaps: string[] = []
 for (let left = 0; left < solidFootprints.length; left += 1) {
@@ -421,6 +465,13 @@ for (let left = 0; left < solidFootprints.length; left += 1) {
     const a = solidFootprints[left]
     const b = solidFootprints[right]
     if (a.owner === b.owner || INTENTIONAL_SOLID_OVERLAPS.has(overlapKey(a, b))) continue
+    // Adjacent chords in the authored eight-piece circular barrier meet at
+    // their posts by design. Its count and angular uniqueness are checked
+    // separately below, so this exemption cannot hide a duplicated segment.
+    if (
+      a.recipe === 'atrium-barrier-segment' &&
+      b.recipe === 'atrium-barrier-segment'
+    ) continue
     if (footprintsOverlap(a, b)) forbiddenOverlaps.push(`${a.owner} × ${b.owner}`)
   }
 }
@@ -429,6 +480,38 @@ check(
   forbiddenOverlaps.length === 0,
   forbiddenOverlaps.join('; '),
 )
+
+const atriumRoom = MUSEUM.rooms.find((room) => room.id === 'atrium')
+if (!atriumRoom) throw new Error('The atrium is required for its navigation proof.')
+const barrierSegments = atriumRoom.kit.filter(
+  (placement) => placement.part === 'atrium-barrier-segment',
+)
+const barrierAngles = new Set(
+  barrierSegments.map((placement) => {
+    const turn = ((placement.rotationY ?? 0) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2)
+    return Math.round(turn / (Math.PI / 4)) % 8
+  }),
+)
+check(
+  'atrium barrier forms eight unique 45-degree segments',
+  barrierSegments.length === 8 && barrierAngles.size === 8,
+  `${barrierSegments.length} segment(s), ${barrierAngles.size} unique angle(s)`,
+)
+
+for (const portal of atriumRoom.portals) {
+  const clearance = portalClearanceFootprint(atriumRoom, portal)
+  const intrusions = solidFootprints.filter(
+    (footprint) =>
+      footprint.owner.startsWith(`${atriumRoom.id}/`) &&
+      footprintsOverlap(clearance, footprint),
+  )
+
+  check(
+    `${atriumRoom.id}/${portal.id} keeps a 1.5 m furniture-free approach`,
+    intrusions.length === 0,
+    intrusions.map((footprint) => footprint.owner).join(', '),
+  )
+}
 
 const holyoke = MUSEUM.rooms.find((room) => room.id === 'holyoke')
 const entryScreen = holyoke?.kit.find((placement) => placement.part === 'holyoke-entry-screen')
@@ -464,6 +547,41 @@ check(
   `crossed to ${entryScreenCrossing.position.toArray().map((n) => n.toFixed(2)).join(',')}`,
 )
 
+const atriumScreens = atriumRoom.kit.filter(
+  (placement) => placement.part === 'atrium-divider-screen',
+)
+for (const [index, screen] of atriumScreens.entries()) {
+  const screenPoint = (x: number, z: number) => {
+    const point = new Vector3(x, 0, z).applyAxisAngle(
+      new Vector3(0, 1, 0),
+      screen.rotationY ?? 0,
+    )
+    point.add(roomPoint('atrium', screen.position[0], screen.position[2]))
+    return point
+  }
+
+  const frontal = walk([screenPoint(0, -0.85), screenPoint(0, 0.85)])
+  check(
+    `atrium divider ${index + 1} blocks a frontal walk`,
+    !frontal.arrived,
+    `crossed to ${frontal.position.toArray().map((value) => value.toFixed(2)).join(',')}`,
+  )
+
+  for (const [sideName, side] of [['left', -1], ['right', 1]] as const) {
+    const bypass = walk([
+      screenPoint(0, -0.85),
+      screenPoint(side * 1.25, -0.85),
+      screenPoint(side * 1.25, 0.85),
+      screenPoint(0, 0.85),
+    ])
+    check(
+      `atrium divider ${index + 1} keeps its ${sideName} bypass usable`,
+      bypass.arrived,
+      `stopped at ${bypass.position.toArray().map((value) => value.toFixed(2)).join(',')}`,
+    )
+  }
+}
+
 // The office is intentionally dense, but its two gameplay targets cannot be
 // decoration casualties. Walk the same 1.2 m lane a player uses from the door
 // past the lamp and then north to the locked archive cabinet.
@@ -483,6 +601,129 @@ check(
   officeWorkingRoute.lowest > FALL_LIMIT,
   `dropped to y=${officeWorkingRoute.lowest.toFixed(2)}`,
 )
+
+const receptionDesk = atriumRoom.kit.find(
+  (placement) => placement.part === 'atrium-reception-desk',
+)
+if (!receptionDesk) {
+  throw new Error('The atrium needs its reception desk for the staff-route proof.')
+}
+
+const receptionColliderParts = colliderPartsFor(receptionDesk)
+const receptionCounterCollider = receptionColliderParts.find(
+  (part) => part.name === 'atrium-reception-desk',
+)?.collider
+const receptionStorageCollider = receptionColliderParts.find(
+  (part) => part.name === 'atrium-reception-desk__storage',
+)?.collider
+check(
+  'atrium reception counter and wall storage have independent colliders',
+  receptionColliderParts.length === 2 &&
+    Boolean(receptionCounterCollider) &&
+    Boolean(receptionStorageCollider),
+  `collider parts: ${receptionColliderParts.map((part) => part.name).join(', ') || 'none'}`,
+)
+if (!receptionCounterCollider || !receptionStorageCollider) {
+  throw new Error('The reception staff-route proof requires both physical boundaries.')
+}
+
+const counterStaffEdge =
+  receptionCounterCollider.centre[2] - receptionCounterCollider.halfExtents[2]
+const storageFrontEdge =
+  receptionStorageCollider.centre[2] + receptionStorageCollider.halfExtents[2]
+const receptionAisleWidth = counterStaffEdge - storageFrontEdge
+check(
+  'atrium reception staff aisle is at least 1.3 metres wide',
+  receptionAisleWidth >= 1.3,
+  `width ${receptionAisleWidth.toFixed(2)} m`,
+)
+
+const receptionDeskPoint = (x: number, z: number) => {
+  const point = new Vector3(x, 0, z).applyAxisAngle(
+    new Vector3(0, 1, 0),
+    receptionDesk.rotationY ?? 0,
+  )
+  point.add(
+    roomPoint('atrium', receptionDesk.position[0], receptionDesk.position[2]),
+  )
+  return point
+}
+
+const receptionEntryX = Math.max(
+  receptionCounterCollider.centre[0] + receptionCounterCollider.halfExtents[0],
+  receptionStorageCollider.centre[0] + receptionStorageCollider.halfExtents[0],
+) + CAPSULE.radius + 0.25
+const receptionPublicZ =
+  receptionCounterCollider.centre[2] + receptionCounterCollider.halfExtents[2] +
+  CAPSULE.radius + 0.30
+const receptionAisleZ = (counterStaffEdge + storageFrontEdge) / 2
+
+// Enter around the public-right end, turn into the staff aisle, then visit the
+// standing interaction position behind both screens. The waypoints derive from
+// the two real colliders, so a merely visible but physically sealed slit cannot
+// satisfy the future computer-access requirement.
+const receptionStaffRoute = walk([
+  roomPoint('atrium', 2.5, 1),
+  roomPoint('atrium', 2.65, 4.5),
+  receptionDeskPoint(receptionEntryX, receptionPublicZ),
+  receptionDeskPoint(receptionEntryX, receptionAisleZ),
+  receptionDeskPoint(0.72, receptionAisleZ),
+  receptionDeskPoint(-0.72, receptionAisleZ),
+])
+check(
+  'atrium reception staff route reaches both future computer positions',
+  receptionStaffRoute.arrived,
+  `stopped at ${receptionStaffRoute.position.toArray().map((value) => value.toFixed(2)).join(',')}`,
+)
+check(
+  'atrium reception staff route remains supported by the floor',
+  receptionStaffRoute.lowest > FALL_LIMIT,
+  `dropped to y=${receptionStaffRoute.lowest.toFixed(2)}`,
+)
+
+const ATRIUM_WALK_ROUTES = [
+  {
+    name: 'atrium breaker route',
+    points: [[2.5, 1], [2.65, -2.8], [-4.8, -3.55], [-7.55, -4.4]],
+  },
+  {
+    name: 'atrium east plinth circulation',
+    points: [[0, 2.55], [2.6, 2.55], [2.6, -2.55], [0, -2.55]],
+  },
+  {
+    name: 'atrium west plinth circulation',
+    points: [[0, -2.55], [-2.6, -2.55], [-2.6, 2.55], [0, 2.55]],
+  },
+  {
+    name: 'atrium reception access',
+    points: [[2.5, 1], [2.65, 4.5], [0.6, 5.05], [-2, 5.05]],
+  },
+  {
+    name: 'atrium orientation wall access',
+    points: [[2.5, 1], [2.6, 2.55], [-5.8, 2.55], [-6.25, 2.2]],
+  },
+  {
+    name: 'atrium lounge access',
+    points: [[2.5, 1], [3.2, -2.6], [4.1, -4.25]],
+  },
+] as const
+
+for (const route of ATRIUM_WALK_ROUTES) {
+  const result = walk(
+    route.points.map(([x, z]) => roomPoint('atrium', x, z)),
+  )
+
+  check(
+    `${route.name} — the player gets there`,
+    result.arrived,
+    `stopped at ${result.position.toArray().map((value) => value.toFixed(2)).join(',')}`,
+  )
+  check(
+    `${route.name} — the floor remains supported`,
+    result.lowest > FALL_LIMIT,
+    `dropped to y=${result.lowest.toFixed(2)}`,
+  )
+}
 
 for (const crossing of CROSSINGS) {
   const doorway = portalWorld(crossing.via[0], crossing.via[1])

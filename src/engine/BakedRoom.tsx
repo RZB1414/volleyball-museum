@@ -103,19 +103,12 @@ export function BakedRoom({
   }, [collision, instance])
 
   /**
-   * Manual disposal. R3F only frees resources it created through JSX props;
-   * geometry cloned imperatively here is invisible to it, and leaking it is the
-   * classic cause of "the game gets slower every time I change rooms".
+   * `Object3D.clone(true)` owns the cloned node hierarchy but deliberately
+   * shares BufferGeometry with drei's useGLTF cache. The hierarchy is ordinary
+   * garbage-collected JavaScript; disposing a descendant geometry here would
+   * invalidate the cache and force every warm room using it to upload again.
+   * The replacement materials are likewise owned by the shared library.
    */
-  useEffect(() => {
-    return () => {
-      instance.traverse((object: Object3D) => {
-        if (object instanceof Mesh) object.geometry.dispose()
-      })
-      // Materials are owned by the shared library, not by this room, so they
-      // are deliberately NOT disposed here.
-    }
-  }, [instance])
 
   return (
     <group position={origin as unknown as [number, number, number]} visible={visible}>

@@ -191,13 +191,18 @@ export function buildAtriumReceptionDesk({
   const brass = []
   const light = []
   const props = []
+  const storage = []
 
   const sagitta = 0.36
   const radius = (width * width) / (8 * sagitta) + sagitta / 2
   const frontZ = depth / 2
   const halfAngle = width / 2 / radius
   const kickHeight = 0.11
-  const fasciaTop = height - 0.085
+  const worktopThickness = 0.065
+  // A tiny overlap survives independent mesh quantisation without reopening a
+  // light leak between the counter supports and the worktop.
+  const joinOverlap = 0.002
+  const fasciaTop = height - worktopThickness + joinOverlap
 
   const kick = new BoxGeometry(width - 0.22, kickHeight, 0.72, 24, 1, 1)
   kick.translate(0, kickHeight / 2, frontZ - 0.08 - 0.36)
@@ -209,13 +214,13 @@ export function buildAtriumReceptionDesk({
   bow(fascia, radius, frontZ)
   carcass.push(fascia)
 
-  const back = new BoxGeometry(width - 0.18, 0.72, 0.04, 20, 1, 1)
-  back.translate(0, 0.36, frontZ - depth + 0.02)
-  bow(back, radius, frontZ)
-  carcass.push(back)
+  // Keep both staff knee bays open. The former full-width rear panel crossed
+  // the chair seats and made the workstations physically impossible to use.
 
   // Straight cheek panels close the curved carcass exactly at its tangents.
-  // Their 80 mm overlap hides any millimetric chord error from the bend.
+  // Their 80 mm overlap hides any millimetric chord error from the bend. They
+  // meet the worktop underside exactly; a recessed shadow line here read as a
+  // floating top from the staff side.
   const endX = radius * Math.sin(halfAngle)
   const endZ = frontZ - radius + radius * Math.cos(halfAngle)
   for (const side of [-1, 1]) {
@@ -245,8 +250,12 @@ export function buildAtriumReceptionDesk({
     slats.push(rib)
   }
 
-  const worktop = new BoxGeometry(width + 0.16, 0.065, depth + 0.08, 36, 1, 1)
-  worktop.translate(0, height - 0.0325, frontZ - (depth + 0.08) / 2 + 0.04)
+  const worktop = new BoxGeometry(width + 0.16, worktopThickness, depth + 0.08, 36, 1, 1)
+  worktop.translate(
+    0,
+    height - worktopThickness / 2,
+    frontZ - (depth + 0.08) / 2 + 0.04,
+  )
   bow(worktop, radius, frontZ + 0.04)
   top.push(worktop)
 
@@ -265,32 +274,58 @@ export function buildAtriumReceptionDesk({
   bow(luminousReveal, radius, frontZ + 0.034)
   light.push(luminousReveal)
 
-  // A low monitor, task lamp and leaflet stack occupy the staff side of the
-  // worktop. They remain well inside the counter's existing X/Z footprint, so
-  // the placement collider and circulation clearance do not grow with detail.
-  const monitor = bevelledBox(0.46, 0.275, 0.036, 0.012, 1)
-  monitor.rotateX(-0.055)
-  monitor.translate(0.64, height + 0.205, -0.28)
-  props.push(monitor)
+  // Two compact workstations make the counter read as an actual staffed
+  // reception instead of a decorative kiosk. They remain behind the public
+  // edge, with the screens deliberately low enough not to mask wayfinding.
+  for (const x of [-0.72, 0.72]) {
+    const monitor = bevelledBox(0.46, 0.275, 0.036, 0.012, 1)
+    monitor.rotateX(-0.055)
+    monitor.translate(x, height + 0.205, -0.28)
+    props.push(monitor)
 
-  const monitorStem = bevelledBox(0.055, 0.155, 0.045, 0.006, 1)
-  monitorStem.translate(0.64, height + 0.075, -0.265)
-  props.push(monitorStem)
+    const monitorStem = bevelledBox(0.055, 0.155, 0.045, 0.006, 1)
+    monitorStem.translate(x, height + 0.075, -0.265)
+    props.push(monitorStem)
 
-  const monitorFoot = bevelledBox(0.26, 0.022, 0.20, 0.008, 1)
-  monitorFoot.translate(0.64, height + 0.011, -0.245)
-  props.push(monitorFoot)
+    const monitorFoot = bevelledBox(0.26, 0.022, 0.20, 0.008, 1)
+    monitorFoot.translate(x, height + 0.011, -0.245)
+    props.push(monitorFoot)
+
+    // The chairs are intentionally economical silhouettes. At gameplay
+    // distance the lumbar opening, five-star base and upholstered back carry
+    // the reading; tiny casters would only shimmer on mobile.
+    const seat = bevelledBox(0.48, 0.095, 0.46, 0.025, 1)
+    seat.translate(x, 0.49, -0.61)
+    props.push(seat)
+
+    const chairBack = bevelledBox(0.50, 0.48, 0.085, 0.025, 1)
+    chairBack.rotateX(-0.09)
+    chairBack.translate(x, 0.79, -0.82)
+    props.push(chairBack)
+
+    const chairStem = new CylinderGeometry(0.026, 0.032, 0.39, 8)
+    chairStem.translate(x, 0.245, -0.61)
+    props.push(chairStem)
+
+    for (let spoke = 0; spoke < 5; spoke += 1) {
+      const foot = new BoxGeometry(0.34, 0.025, 0.035)
+      foot.translate(0.17, 0.055, 0)
+      foot.rotateY((spoke / 5) * Math.PI * 2)
+      foot.translate(x, 0, -0.61)
+      props.push(foot)
+    }
+  }
 
   const lampBase = new CylinderGeometry(0.095, 0.105, 0.025, 14)
-  lampBase.translate(-0.78, height + 0.0125, -0.20)
+  lampBase.translate(-1.48, height + 0.0125, -0.20)
   props.push(lampBase)
 
   const lampStem = new CylinderGeometry(0.010, 0.010, 0.265, 8)
-  lampStem.translate(-0.78, height + 0.150, -0.20)
+  lampStem.translate(-1.48, height + 0.150, -0.20)
   props.push(lampStem)
 
   const lampShade = new CylinderGeometry(0.075, 0.045, 0.072, 14, 1, true)
-  lampShade.translate(-0.78, height + 0.292, -0.20)
+  lampShade.translate(-1.48, height + 0.292, -0.20)
   props.push(lampShade)
 
   for (let index = 0; index < 3; index += 1) {
@@ -300,13 +335,122 @@ export function buildAtriumReceptionDesk({
     props.push(leaflet)
   }
 
+  // A genuinely usable low return is attached to the public-right end. Its
+  // 820 mm top admits a seated visitor without cutting an artificial notch
+  // through the expensive bowed fascia, and turns the counter into the L-shape
+  // shown in the approved concept.
+  const accessibleX = width / 2 + 0.34
+  const accessibleHeight = 0.82
+  const accessibleTopThickness = 0.055
+  const accessibleTopUnderside = accessibleHeight - accessibleTopThickness / 2
+  const accessibleTop = new BoxGeometry(0.86, accessibleTopThickness, 1.12)
+  accessibleTop.translate(accessibleX, accessibleHeight, 0.19)
+  top.push(accessibleTop)
+
+  const accessibleCheekHeight = accessibleTopUnderside + joinOverlap
+  const accessibleCheek = new BoxGeometry(0.075, accessibleCheekHeight, 1.02)
+  accessibleCheek.translate(accessibleX + 0.39, accessibleCheekHeight / 2, 0.16)
+  carcass.push(accessibleCheek)
+
+  const accessibleApronHeight = 0.12
+  const accessibleApron = new BoxGeometry(0.76, accessibleApronHeight, 0.055)
+  accessibleApron.translate(
+    accessibleX,
+    accessibleTopUnderside - accessibleApronHeight / 2 + joinOverlap,
+    0.69,
+  )
+  carcass.push(accessibleApron)
+
+  const accessibleTrim = new BoxGeometry(0.82, 0.022, 0.020)
+  accessibleTrim.translate(accessibleX, accessibleHeight - 0.055, 0.724)
+  brass.push(accessibleTrim)
+
+  const accessibleReveal = new BoxGeometry(0.72, 0.022, 0.018)
+  accessibleReveal.translate(accessibleX, accessibleHeight - 0.115, 0.727)
+  light.push(accessibleReveal)
+
+  // Lockers make the strip behind the counter function as a real cloak and bag
+  // store. Keep their case separate from the counter carcass: one combined AABB
+  // would turn the staff aisle into an invisible wall even though the geometry
+  // clearly leaves it open. Their fronts face +Z, towards staff, while the bank
+  // itself remains against the south-wall service zone when the counter moves.
+  const lockerWidth = 2.28
+  const lockerHeight = 1.50
+  const lockerDepth = 0.28
+  const lockerCentreX = -1.05
+  const lockerCentreZ = -2.22
+  const lockerCase = bevelledBox(lockerWidth, lockerHeight, lockerDepth, 0.018, 1)
+  lockerCase.translate(lockerCentreX, lockerHeight / 2, lockerCentreZ)
+  storage.push(lockerCase)
+
+  const cellWidth = 0.50
+  const cellHeight = 0.39
+  for (let row = 0; row < 3; row += 1) {
+    for (let column = 0; column < 4; column += 1) {
+      const x = lockerCentreX + (column - 1.5) * 0.54
+      const y = 0.25 + row * 0.45
+      // Twelve touching door fronts read from their reveals and brass pulls;
+      // individual bevel loops disappear at this scale and cost over a
+      // thousand triangles in the shared download.
+      const door = new BoxGeometry(cellWidth, cellHeight, 0.028)
+      door.translate(x, y + cellHeight / 2, lockerCentreZ + lockerDepth / 2 + 0.016)
+      slats.push(door)
+
+      const pull = new BoxGeometry(0.055, 0.018, 0.018)
+      pull.translate(x + 0.16, y + cellHeight / 2, lockerCentreZ + lockerDepth / 2 + 0.041)
+      brass.push(pull)
+    }
+  }
+
+  for (const x of [-1.86, -1.32, -0.78, -0.24]) {
+    const downlight = new CylinderGeometry(0.035, 0.045, 0.055, 10)
+    downlight.rotateX(Math.PI / 2)
+    downlight.translate(x, 1.43, lockerCentreZ + lockerDepth / 2 + 0.045)
+    light.push(downlight)
+  }
+
+  // The brochure rack belongs to the reception assembly, so it cannot become
+  // another orphaned prop. Angled pockets are abstract on purpose: actual
+  // covers and language remain runtime data rather than baked pseudo-text.
+  const rackX = -width / 2 - 0.43
+  const rackBack = new BoxGeometry(0.72, 1.12, 0.075)
+  rackBack.rotateX(-0.16)
+  rackBack.translate(rackX, 0.78, 0.20)
+  carcass.push(rackBack)
+
+  for (const x of [-0.18, 0.18]) {
+    for (let row = 0; row < 3; row += 1) {
+      const pocket = new BoxGeometry(0.30, 0.22, 0.045)
+      pocket.rotateX(-0.16)
+      pocket.translate(rackX + x, 0.49 + row * 0.30, 0.28 + row * 0.048)
+      top.push(pocket)
+
+      const lip = new BoxGeometry(0.30, 0.025, 0.030)
+      lip.translate(rackX + x, 0.39 + row * 0.30, 0.327 + row * 0.048)
+      brass.push(lip)
+    }
+  }
+
+  for (const x of [-0.25, 0.25]) {
+    const foot = bevelledBox(0.055, 0.48, 0.055, 0.009, 1)
+    foot.rotateX(0.10)
+    foot.translate(rackX + x, 0.245, 0.06)
+    carcass.push(foot)
+  }
+
   return {
     carcass: finishBoxes(carcass, 0.82),
-    slats: finishBoxes(slats, 0.34),
-    top: finishBoxes(top, 0.95),
+    // Slats and tops already share one material. Finalise them independently
+    // to preserve their different texel densities, then merge the finished
+    // attributes so the honest storage collider does not cost another draw.
+    timber: merge([
+      finishBoxes(slats, 0.34),
+      finishBoxes(top, 0.95),
+    ]),
     brass: finishBoxes(brass, 0.28),
     light: finishBoxes(light, 0.25),
     props: finishMixed(props, 0.26),
+    storage: finishBoxes(storage, 0.82),
   }
 }
 
@@ -337,12 +481,20 @@ export function buildAtriumWallBay({
   const light = []
 
   const backingDepth = 0.07
-  const field = bevelledBox(width, height, backingDepth, 0.008, 1)
+  const isPlainRun = plaqueWidth <= 0
+  // Eighteen copies form the atrium's continuous wainscot. On that repeated
+  // plain run, bevels land edge-to-edge and cannot affect the silhouette, so a
+  // low-poly backing and wider slat rhythm preserve the image while saving
+  // thousands of instantiated triangles. Feature bays retain the close-up
+  // joinery used around interpretive plaques.
+  const field = isPlainRun
+    ? new BoxGeometry(width, height, backingDepth)
+    : bevelledBox(width, height, backingDepth, 0.008, 1)
   field.translate(0, height / 2, backingDepth / 2)
   backing.push(field)
 
-  const pitch = 0.105
-  const slatWidth = 0.054
+  const pitch = isPlainRun ? 0.16 : 0.105
+  const slatWidth = isPlainRun ? 0.065 : 0.054
   const slatDepth = 0.045
   const slatCount = Math.floor((width - 0.10) / pitch)
   for (let index = 0; index <= slatCount; index += 1) {
@@ -354,11 +506,15 @@ export function buildAtriumWallBay({
     slats.push(rib)
   }
 
-  const bottom = bevelledBox(width + 0.02, 0.095, 0.125, 0.008, 1)
+  const bottom = isPlainRun
+    ? new BoxGeometry(width + 0.02, 0.095, 0.125)
+    : bevelledBox(width + 0.02, 0.095, 0.125, 0.008, 1)
   bottom.translate(0, 0.0475, 0.0625)
   trim.push(bottom)
 
-  const cap = bevelledBox(width + 0.04, 0.055, 0.15, 0.008, 1)
+  const cap = isPlainRun
+    ? new BoxGeometry(width + 0.04, 0.055, 0.15)
+    : bevelledBox(width + 0.04, 0.055, 0.15, 0.008, 1)
   cap.translate(0, height - 0.0275, 0.075)
   trim.push(cap)
 

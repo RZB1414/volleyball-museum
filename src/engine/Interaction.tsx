@@ -25,6 +25,7 @@ import { MUSEUM } from '../content/museum'
 import './bvhSetup'
 import type { ExhibitData } from '../content/schema'
 import { useMuseum } from '../state/store'
+import { subscribePrimaryAction } from './primaryAction'
 
 const CENTRE = new Vector2(0, 0)
 /** How far the player can reach to examine something. */
@@ -42,6 +43,16 @@ function exhibitIdFor(object: Object3D | null): string | null {
     node = node.parent
   }
   return null
+}
+
+/** Raycaster does not inherit the renderer's ancestor visibility check. */
+function isEffectivelyVisible(object: Object3D | null): boolean {
+  let node = object
+  while (node) {
+    if (!node.visible) return false
+    node = node.parent
+  }
+  return true
 }
 
 /**
@@ -62,7 +73,8 @@ export function InteractionTargeting() {
 
   const lastRef = useRef<string | null>(null)
   const targetsRef = useRef<Object3D[]>([])
-  const rescanRef = useRef(0)
+  const hitsRef = useRef<ReturnType<Raycaster['intersectObjects']>>([])
+  const scanRef = useRef({ initialised: false, remaining: 0 })
 
   useFrame((_, delta) => {
     const state = useMuseum.getState()
@@ -81,21 +93,42 @@ export function InteractionTargeting() {
      * The list is rebuilt periodically rather than once, because rooms stream
      * in and out and the set changes.
      */
-    rescanRef.current -= delta
-    if (rescanRef.current <= 0 || targetsRef.current.length === 0) {
-      rescanRef.current = 0.5
-      const targets: Object3D[] = []
-      scene.traverse((object) => {
-        if (object.name.startsWith('exhibit:') && object.visible) targets.push(object)
+    const scan = scanRef.current
+    scan.remaining -= delta
+    if (!scan.initialised || scan.remaining <= 0) {
+      scan.initialised = true
+      scan.remaining = 0.5
+
+      // Reuse the same array so an exhibit-free room has no per-frame garbage.
+      // `traverseVisible` is important now that warmed adjacent rooms remain in
+      // the graph below an invisible ancestor: those objects must not be
+      // targetable through a portal or a hidden room shell.
+      const targets = targetsRef.current
+      targets.length = 0
+      scene.traverseVisible((object) => {
+        if (object.name.startsWith('exhibit:')) targets.push(object)
       })
-      targetsRef.current = targets
+    }
+
+    const targets = targetsRef.current
+    if (targets.length === 0) {
+      if (lastRef.current !== null) {
+        lastRef.current = null
+        state.setFocusedExhibit(null)
+      }
+      return
     }
 
     raycaster.setFromCamera(CENTRE, camera)
-    const hits = raycaster.intersectObjects(targetsRef.current, true)
+    const hits = hitsRef.current
+    hits.length = 0
+    raycaster.intersectObjects(targets, true, hits)
 
     let found: string | null = null
     for (const hit of hits) {
+      // A room may have become hidden since the most recent half-second scan.
+      if (!isEffectivelyVisible(hit.object)) continue
+
       // Glass is see-through for the purposes of pointing at things.
       const material = (hit.object as Mesh).material
       const name = Array.isArray(material) ? material[0]?.name : material?.name
@@ -104,6 +137,9 @@ export function InteractionTargeting() {
       found = exhibitIdFor(hit.object)
       break
     }
+    // Do not keep the hit objects alive until the next frame. The array itself
+    // is retained, but its references are not.
+    hits.length = 0
 
     if (found !== lastRef.current) {
       lastRef.current = found
@@ -150,54 +186,79 @@ export function ExamineView() {
   const holderRef = useRef<Object3D | null>(null)
   const originalParentRef = useRef<Object3D | null>(null)
   const originalTransformRef = useRef<{ position: Vector3; quaternion: Quaternion } | null>(null)
-  const draggingRef = useRef(false)
+  const dragPointerRef = useRef<number | null>(null)
+  const lastDragPointRef = useRef({ x: 0, y: 0 })
   const dragDeltaRef = useRef({ x: 0, y: 0 })
   const seenRef = useRef<Set<string>>(new Set())
 
   // --- input ----------------------------------------------------------------
   useEffect(() => {
+    const interact = () => {
+      const state = useMuseum.getState()
+      if (state.examining) {
+        state.setExamining(null)
+        return true
+      }
+      if (!state.focusedExhibit || state.focusedTransitionDoor) return false
+
+      // Examining takes the mouse back so the player can turn the object.
+      if (document.pointerLockElement) document.exitPointerLock()
+      state.setExamining(state.focusedExhibit)
+      return true
+    }
+
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.repeat) return
       const state = useMuseum.getState()
 
-      if (event.code === 'KeyE') {
-        if (state.examining) {
-          state.setExamining(null)
-        } else if (state.focusedExhibit) {
-          event.preventDefault()
-          // Examining takes the mouse back so the player can turn the object.
-          if (document.pointerLockElement) document.exitPointerLock()
-          state.setExamining(state.focusedExhibit)
-        }
-      }
+      if (event.code === 'KeyE' && interact()) event.preventDefault()
 
       if (event.code === 'Escape' && state.examining) {
         state.setExamining(null)
       }
     }
 
-    const onPointerDown = () => {
-      if (useMuseum.getState().examining) draggingRef.current = true
+    const resetDrag = () => {
+      dragPointerRef.current = null
     }
-    const onPointerUp = () => {
-      draggingRef.current = false
+    const onPointerDown = (event: PointerEvent) => {
+      if (!useMuseum.getState().examining || dragPointerRef.current !== null) return
+      dragPointerRef.current = event.pointerId
+      lastDragPointRef.current.x = event.clientX
+      lastDragPointRef.current.y = event.clientY
+    }
+    const onPointerEnd = (event: PointerEvent) => {
+      if (dragPointerRef.current === event.pointerId) resetDrag()
     }
     const onPointerMove = (event: PointerEvent) => {
-      if (!draggingRef.current) return
-      dragDeltaRef.current.x += event.movementX
-      dragDeltaRef.current.y += event.movementY
+      if (dragPointerRef.current !== event.pointerId) return
+      // Safari historically reported zero or inconsistent movementX/Y for
+      // touch pointers. Client-coordinate deltas work for mouse, Android and
+      // iOS alike and keep a second finger from hijacking the held object.
+      dragDeltaRef.current.x += event.clientX - lastDragPointRef.current.x
+      dragDeltaRef.current.y += event.clientY - lastDragPointRef.current.y
+      lastDragPointRef.current.x = event.clientX
+      lastDragPointRef.current.y = event.clientY
     }
 
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('pointerdown', onPointerDown)
-    window.addEventListener('pointerup', onPointerUp)
+    window.addEventListener('pointerup', onPointerEnd)
+    window.addEventListener('pointercancel', onPointerEnd)
     window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('blur', resetDrag)
+    window.addEventListener('pagehide', resetDrag)
+    const unsubscribePrimaryAction = subscribePrimaryAction(interact, 300)
 
     return () => {
+      unsubscribePrimaryAction()
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('pointerdown', onPointerDown)
-      window.removeEventListener('pointerup', onPointerUp)
+      window.removeEventListener('pointerup', onPointerEnd)
+      window.removeEventListener('pointercancel', onPointerEnd)
       window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('blur', resetDrag)
+      window.removeEventListener('pagehide', resetDrag)
     }
   }, [])
 

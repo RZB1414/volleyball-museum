@@ -50,6 +50,16 @@ export const AUTHORED_MEDIA = [
     },
   },
   {
+    id: 'graphic-atrium-orientation-wall',
+    kind: 'diagram',
+    src: '/textures/media/atrium-orientation-wall.svg',
+    aspect: 5,
+    credit: {
+      license: 'procedural',
+      generator: 'svg/atrium-orientation-wall-v1',
+    },
+  },
+  {
     id: 'graphic-atrium-banner-navy-flight',
     kind: 'diagram',
     src: '/textures/media/atrium-banner-navy.bd4bc748.webp',

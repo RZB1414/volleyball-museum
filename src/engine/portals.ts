@@ -127,6 +127,11 @@ export function computeVisibleRooms(
   origin: Vector3,
   currentRoom: string | null,
   maxDepth = 2,
+  canTraversePortal: (
+    roomId: string,
+    portalId: string,
+    targetRoomId: string,
+  ) => boolean = () => true,
 ): string[] {
   projectionView.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)
   frustum.setFromProjectionMatrix(projectionView)
@@ -151,6 +156,10 @@ export function computeVisibleRooms(
 
     for (const portal of cell.portals) {
       if (visible.has(portal.toRoom)) continue
+      // A physical leaf is also an occluder. Walking the graph through a
+      // closed door rendered and lit a cached gallery no pixel could see,
+      // defeating both the loading disguise and the portal performance win.
+      if (!canTraversePortal(id, portal.id, portal.toRoom)) continue
 
       // A portal is a potential doorway into the next cell only if any part of
       // it is on screen. Testing the corners plus the centre is cheap and

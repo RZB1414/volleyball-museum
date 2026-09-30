@@ -30,6 +30,18 @@ export const ptBR = {
   'ui.quality': 'Qualidade gráfica',
   'ui.readingMode': 'Modo leitura',
   'ui.credits': 'Créditos e acervo',
+  'mobile.controls': 'Controles de toque',
+  'mobile.move': 'Direcional de movimento',
+  'mobile.look': 'Direcional de câmera',
+  'mobile.action': 'Ação',
+  'mobile.landscape.title': 'Gire o dispositivo',
+  'mobile.landscape.body':
+    'O museu funciona na horizontal. Se necessário, saia da visualização dividida.',
+  'mobile.landscape.activate': 'Ativar modo horizontal',
+  'mobile.fullscreen.resume': 'Retomar em tela cheia',
+  'mobile.fullscreen.install':
+    'Neste navegador, use “Adicionar à Tela de Início” para ter tela cheia completa.',
+  'mobile.fullscreen.dismiss': 'Entendi',
 
   // Prompts
   'prompt.examine': 'Examinar',
@@ -39,6 +51,10 @@ export const ptBR = {
   'prompt.locked': 'Trancado',
   'prompt.close': 'Fechar',
   'prompt.power': 'Restaurar energia',
+  'prompt.door.open': 'Abrir porta',
+  'prompt.door.loading': 'Preparando a próxima sala…',
+  'prompt.door.opening': 'Abrindo…',
+  'prompt.door.otherSide': 'Abre pelo outro lado',
   'power.restored': 'Energia restaurada',
 
   // Map
@@ -85,11 +101,17 @@ export const ptBR = {
   // ---------------------------------------------------------------------
   'room.atrium.title': 'Átrio',
   'room.atrium.nickname': 'o saguão do plinto',
+  'room.atrium.sign.eyebrow': 'ORIENTAÇÃO',
+  'room.atrium.sign.title': 'ÁTRIO CENTRAL',
   'room.holyoke.title': 'Ala 1 · Holyoke',
   'room.holyoke.subtitle': '1895 – 1929',
   'room.holyoke.nickname': 'a sala da bola de cadarço',
+  'room.holyoke.sign.eyebrow': 'ALA 01 · ORIGENS',
+  'room.holyoke.sign.title': 'HOLYOKE',
   'room.office.title': 'Escritório do curador',
   'room.office.nickname': 'a sala da luminária verde',
+  'room.office.sign.eyebrow': 'ACERVO · PESQUISA',
+  'room.office.sign.title': 'ESCRITÓRIO DO CURADOR',
   'power.atrium.title': 'Quadro geral do átrio',
   'power.holyoke.title': 'Quadro de força da Ala 1',
   'power.office.title': 'Luminária do curador',
@@ -98,14 +120,56 @@ export const ptBR = {
   // Wall lettering. Vinyl on plaster, so it has to survive being read at a
   // glance from twelve metres away — short lines, no subordinate clauses.
   // ---------------------------------------------------------------------
+  'sign.atrium.eyebrow': 'DESDE 1895 · MEMÓRIA EM MOVIMENTO',
   'sign.atrium.heading': 'MUSEU DO VOLEIBOL',
   'sign.atrium.body':
-    'Um jogo inventado em 1895 para quem achava o basquete pesado demais. ' +
+    'Um jogo inventado em 1895 para quem achava o basquete pesado demais.\n' +
     'Reabertura amanhã. Você é quem termina a montagem.',
 
   // ---------------------------------------------------------------------
   // Wing 1 — Holyoke. Eight wall labels, no more.
   // ---------------------------------------------------------------------
+  // Átrio — a bola através do tempo.
+  'exhibit.atrium-ball-laced.title': 'Couro, costura e cadarço',
+  'exhibit.atrium-ball-laced.label':
+    'Antes da válvula embutida, era preciso abrir a cobertura para alcançar a câmara. Esta reconstrução reúne a forma vista em catálogos de 1918–1920 e em uma bola preservada de cerca de 1925: couro, costuras salientes e cadarço cruzado.',
+  'exhibit.atrium-ball-laced.catalogue':
+    'Bola de voleibol com cadarço, c. 1900–1925. Reconstrução tipológica, não uma réplica da bola original de 1895. Doze gomos largos formam uma esfera ligeiramente mole; o couro castanho-oliva escurece nas costuras, e a abertura alongada recebe um fechamento de couro cru.',
+  'hotspot.atrium-ball-laced.lacing.label':
+    'Abertura oval fechada por cadarço cruzado, antes da válvula moderna',
+  'hotspot.atrium-ball-laced.seam.label':
+    'Costura externa levemente saliente, sujeita a desgaste e deformação',
+
+  'exhibit.atrium-ball-tokyo-1964.title': 'A bola entra nos Jogos',
+  'exhibit.atrium-ball-tokyo-1964.label':
+    'Tóquio 1964 recebeu o primeiro torneio olímpico de voleibol. As bolas oficiais preservadas mostram dezoito painéis em seis trios, couro branco-marfim e canais estreitos de costura. A ficha do acervo não identifica o fabricante desta reconstrução.',
+  'exhibit.atrium-ball-tokyo-1964.catalogue':
+    'Bola oficial de Tóquio 1964, reconstrução sem marcas. O exemplar não usado preservado pelo Japan Sport Council é marfim, com grão fino, costuras amareladas e pequenas manchas ocres. O exemplar usado está escurecido, vincado e deformado — sinais que inspiram o desgaste discreto deste modelo.',
+  'hotspot.atrium-ball-tokyo-1964.panels.label':
+    'Dezoito painéis quase retangulares, organizados em seis grupos de três',
+  'hotspot.atrium-ball-tokyo-1964.seam.label':
+    'Canal de costura estreito e rebaixado, sem fio exposto',
+
+  'exhibit.atrium-ball-colour-1998.title': 'O jogo ganha cor',
+  'exhibit.atrium-ball-colour-1998.label':
+    'No Mundial de 1998, a bola oficial passou a usar branco, amarelo e azul para ganhar leitura em quadra e na transmissão. A MVL200 manteve a construção clássica: dezoito painéis costurados à mão, agora organizados em grandes faixas contrastantes.',
+  'exhibit.atrium-ball-colour-1998.catalogue':
+    'Mikasa MVL200, desenho adotado no Campeonato Mundial de 1998. Reconstrução sem logotipos. Os seis trios alternam branco–amarelo–branco e azul–amarelo–azul; a cobertura tem grão fino, brilho acetinado e costuras rebaixadas, sem os dimples da geração seguinte.',
+  'hotspot.atrium-ball-colour-1998.sequence.label':
+    'Sequências branco–amarelo–branco e azul–amarelo–azul',
+  'hotspot.atrium-ball-colour-1998.seam.label':
+    'Painéis costurados à mão; o fio permanece escondido no canal',
+
+  'exhibit.atrium-ball-eight-panel-2008.title': 'Oito gomos, milhares de dimples',
+  'exhibit.atrium-ball-eight-panel-2008.label':
+    'Apresentada em 2008, a MVA200 trocou os dezoito painéis por oito pétalas curvas. Azul-violeta e amarelo formam uma espiral; dimples rasos e microtextura cobrem toda a superfície. A mudança alterou tanto a leitura visual quanto o contato com o ar.',
+  'exhibit.atrium-ball-eight-panel-2008.catalogue':
+    'Mikasa MVA200, 2008. Reconstrução sem marcas olímpicas, FIVB ou do fabricante. Oito painéis curvos unidos sem pesponto aparente formam pequenas rosetas nos encontros. A cobertura de microfibra e poliuretano combina cavidades regulares com textura mais fina entre elas.',
+  'hotspot.atrium-ball-eight-panel-2008.panels.label':
+    'Oito painéis em forma de pétala, reunidos num desenho helicoidal',
+  'hotspot.atrium-ball-eight-panel-2008.dimples.label':
+    'Dimples rasos sobre uma segunda camada de microtextura',
+
   'exhibit.ball-improvised.title': 'A bola que não existia',
   'exhibit.ball-improvised.label':
     'Morgan testou primeiro uma bola de basquete: pesada demais. Depois a câmara nua, sem o couro: leve demais, boiava. Sem uma bola adequada, o jogo que ele tinha acabado de inventar não funcionava. A solução veio de uma encomenda.',

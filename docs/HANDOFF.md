@@ -1,6 +1,6 @@
 # Handoff — Museu do Voleibol
 
-Atualizado em 2026-08-09. Este documento é o ponto de entrada para retomar o projeto
+Atualizado em 2026-08-12. Este documento é o ponto de entrada para retomar o projeto
 sem depender da conversa anterior.
 
 Leia também, nesta ordem: `docs/PLANO-DO-ZERO.md` (o desenho do jogo),
@@ -30,25 +30,32 @@ intencionalmente no commit `5e51e24`. O museu data-driven é a única aplicaçã
 
 O corte vertical está integrado, assado, caminhável e com progressão de energia.
 
-Portão verde em 2026-08-08:
+Portão verde em 2026-08-12:
 
 - conteúdo: 3 salas válidas;
-- energia: 13/13;
-- colisão: 21/21;
-- kit e posicionamento: 241/241;
+- energia: 16/16;
+- colisão: 24/24;
+- kit e posicionamento: 253/253;
 - runtime do kit: 19/19;
 - runtime das salas: 15/15;
-- LOD de salas: 5/5;
+- LOD de salas: 20/20;
+- aquecimento de GPU: verde;
+- performance de render e projeção: 16/16;
+- sinalização arquitetônica: 26/26;
+- portas de transição: 29/29;
+- controles móveis e modo imersivo: 13/13;
 - navegação: 22/22;
 - `npm run build`: verde.
 
 O único aviso é o preexistente `react(only-export-components)` em `src/main.tsx:17`.
+Deploy de produção: `https://volleyball-museum.renanbuiatti14.workers.dev`, versão
+Cloudflare `a2cd24b2-f045-4644-b798-e7c74575aae7`.
 
 Bake atual:
 
-- **2.427 KB** de GLBs;
-- **125.656 triângulos assados**;
-- kit `public/models/kit.5071b90c.glb`: 1.774 KB, 84.768 triângulos, 146 nós;
+- **2.516 KB** de GLBs;
+- **132.944 triângulos assados**;
+- kit `public/models/kit.ed8bca0f.glb`: 1.864 KB, 92.056 triângulos, 152 nós;
 - salas: `room-atrium.b214394f.glb`, `room-holyoke.aa0b5458.glb` e
   `room-office.a2144060.glb`.
 
@@ -177,6 +184,16 @@ valida interpenetrações e tenta cruzar a divisória de frente.
 As placas baixas antigas permanecem apenas junto às vitrines de mesa; as peças-herói
 de chão usam `label-angled`, sem duplicação.
 
+A sinalização do átrio agora é arquitetura, não texto flutuante. As entradas
+públicas da Holyoke e do Escritório do Curador usam placas procedurais biseladas,
+com fixações e filetes no mesmo vocabulário de nogueira, navy, verde de arquivo e
+latão do museu. O atalho de serviço não repete a placa da ala. O texto de dedicação
+virou um painel físico de 5,2 × 1,5 m, com margem, hierarquia e relevo discreto de
+bola. Todo o conteúdo vem do manifesto/i18n e adapta o tamanho do título ao idioma.
+`RoomText` usa IBM Plex Sans Condensed Regular/SemiBold em WOFF local, cobre os
+glifos pt-BR e inclui fonte e caracteres na assinatura de prontidão. As placas e
+atlas entram na barreira de GPU da sala inteira antes de qualquer porta abrir.
+
 Arte de parede não interativa agora também é dado: `RoomData.wallArt` referencia
 ids da mídia histórica gerada e da mídia autoral tipada; `RoomWallArt` fornece
 enquadramento `cover`, impressão flush ou moldurada, crédito localizado quando
@@ -204,6 +221,148 @@ ao acionar o quadro. Points e spots são sem sombra no caminho compartilhado
 desktop/mobile; isso removeu cerca de 44 mil triângulos de passes de sombra no frame
 aceso e manteve a cena abaixo de 90k.
 
+### 4.5 Fluidez e transições
+
+O runtime mantém um pool global e permanente de oito spots e dois points. Seis
+spots preservam a assinatura completa da sala principal; assim que uma porta vai
+revelar o destino, essa sala assume os seis slots e a origem fica retida nos dois
+restantes. Cruzar o limiar não troca mais o rig nem produz um segundo pop de luz.
+Os dois points alternam entre piloto, luz prática e intensidade zero sem mudar a
+topologia do shader. A energia continua persistida em `roomsPowered`; mudar de sala
+ou acionar um quadro altera parâmetros, não desmonta luzes nem troca a contagem de
+fontes. O DPR respeita o tier de qualidade e reduz em degraus quando há pressão
+sustentada; a recuperação exige cinco segundos estáveis e usa histerese para não
+redimensionar o canvas repetidamente.
+
+Salas visíveis por um portal sem porta são pré-carregadas em fatias ociosas. Uma
+porta fechada não transforma o portal em um `load-all`: a proximidade inicia o
+download e monta a ala protegida em cache, invisível, para que retornos não recriem
+instâncias, colliders ou BVHs.
+Antes da primeira travessia, `compileAsync`, `initTexture` e draws 1 × 1 enviam
+shaders, texturas e buffers à GPU gradualmente. A barreira agora cobre o root da
+sala inteira: shell assado, sinalização, detail, kit, exhibits, arquivos, controles
+de energia e arte de parede. Ela espera os três boundaries e o `onSync` real de
+todos os textos Troika antes de fazer um scan novo. Texturas são deduplicadas por
+identidade e versão, de modo que o atlas SDF atualizado também é enviado; o proxy
+de warmup compartilha a geometria viva dos textos. A porta só recebe prontidão
+quando shaders, texturas e geometrias ficam settled. Falha no draw privado mantém a
+barreira fechada e entra em retry, em vez de publicar prontidão prematura. Recursos
+compartilhados do GLTF não são descartados no cleanup e a fila/target privado são
+liberados ao desmontar o Canvas.
+
+Os dois acessos às salas frias usam portas duplas data-driven. Aproximar aquece a
+sala; `E` ou o botão touch pode ser armado durante o loading; a abertura eased dura
+0,8 s e começa somente após a prontidão real da GPU. Um gate procedural síncrono
+bloqueia a cápsula antes mesmo do kit GLTF carregar e permanece até o último frame
+da abertura. A sala inteira é revelada atrás das folhas ainda fechadas e precisa
+renderizar um frame completo no ângulo zero antes que a dobradiça possa avançar.
+Invalidar a prontidão nesse intervalo volta ao preload sem mover a porta.
+
+Estacionar uma sala deixa sua geometria visual intacta e desliga apenas o raycast e
+a layer de interação. Nunca volte a usar `visible = false` nos roots `exhibit:`,
+`container:` ou `power-control:`: isso escondia exatamente esses assets durante a
+abertura e os restaurava apenas quando `currentRoom` mudava após a entrada.
+
+O boundary externo de exhibits é o dono único do `Suspense` de GLB e fotografias.
+Não capture esses loaders dentro de `ExhibitLayer` ou `FramedMedia`: isso permite ao
+marcador externo declarar a sala pronta antes de o acervo chegar à fila de GPU e
+reintroduz exatamente o pop de Holyoke que a porta existe para esconder.
+
+Depois que a cápsula cruza completamente e libera uma margem de 1,25 m, a porta
+fecha automaticamente em 0,55 s. Durante o fechamento o gate continua ausente; se
+o jogador voltar para o vão, as folhas revertem da pose corrente sem atravessar a
+câmera. O gate só retorna no trinco. A porta então exige `E` novamente, inclusive
+no caminho de volta. Se a porta for aberta e abandonada sem travessia, sair da sua
+área de proximidade inicia o mesmo fechamento seguro; assim nunca ficam duas alas
+detalhadas retidas por portas esquecidas. Uma porta fechada também interrompe o portal walk: a sala
+anterior deixa de desenhar, mas seu detail continua montado em cache, invisível e
+não interativo, sem recriar instâncias, colliders ou BVHs na próxima visita. O
+atalho da Holyoke segue a mesma máquina, mostra “Abre pelo outro lado” no átrio e
+só pode ser acionado de dentro em cada ciclo.
+
+Na validação local a porta principal foi percorrida e fechada nos dois sentidos.
+Com o vão já trancado, a Holyoke estabilizou em 32 draws / 32.636 triângulos e o
+átrio, após o retorno usando o cache aquecido, em 41 draws / 48.802 triângulos. Os
+dois ficaram em 60 fps; no retorno, p95 foi 17,3 ms e p99 17,6 ms. Durante a porta
+aberta, o pico observado foi 93 draws / 84.674 triângulos, ainda dentro dos tetos
+duros móveis de 100 / 90k.
+
+Os hot paths de interação reutilizam arrays e examinam salas vazias no máximo a
+2 Hz. A física faz broadphase AABB antes do BVH, reutiliza buffers/callbacks e usa
+três resolves no autostep típico em vez de dez. Picos normais de frame são
+consumidos em substeps de 1/30 s, preservando velocidade sem atravessar paredes.
+`?perf` e `__museumPerf()` expõem média, p95, p99, máximo, frames acima de 33,3 ms,
+DPR e escala adaptativa; média de FPS sozinha não é critério de aceite.
+
+### 4.6 Controles móveis
+
+O runtime atual monta dois direcionais touch: esquerda para movimento e direita
+para câmera. `any-pointer: coarse` cobre Android, iPhone e iPad mesmo quando o
+tablet também tem mouse/trackpad; o fallback de viewport cobre telefones em
+paisagem no navegador de QA. Cada direcional captura seu próprio `pointerId`, então
+andar e olhar simultaneamente não disputam o mesmo toque. `pointerup`, cancelamento,
+perda de captura, blur, troca de aba, rotação da tela e desmontagem zeram os eixos.
+
+O primeiro toque de cada direcional agora é a origem neutra do gesto; só o arraste
+gera entrada. Isso evita arrancadas quando o polegar cai fora do centro pintado. O
+reset de rotação/fullscreen libera também o `pointerId`, a captura e a posição visual
+privados de cada pad — zerar apenas o Zustand deixava o controle morto no Safari
+quando a plataforma não entregava `pointercancel`. Há listeners de janela como
+fallback quando `setPointerCapture` não funciona. Soltar o direcional de câmera zera
+a suavização no frame seguinte, sem a cauda anterior de quase 0,5 s / 13,6 graus.
+
+No gesto de entrada em um dispositivo touch, o shell solicita fullscreen e depois
+`screen.orientation.lock('landscape')`. Em portrait, um gate bloqueia o jogo e pede
+que o aparelho seja girado; sair de fullscreen em uma plataforma compatível mostra
+um botão explícito para retomá-lo. O manifesto declara `display: fullscreen` e
+`orientation: landscape`, com os metadados de web app da Apple. Não mova a chamada
+para um effect: a Fullscreen API exige o mesmo gesto do botão. Android/Chromium pode
+cumprir as duas solicitações; iPhone Safari não oferece fullscreen de elemento, por
+isso tela cheia completa ali exige abrir pela Tela de Início. iPad/Split View pode
+exigir rotação manual e o gate permanece como fallback.
+
+Um botão contextual **Ação** passa pela mesma intenção compartilhada de `E`, com
+prioridade porta → peça → arquivo → energia. Assim abrir e armar portas durante o
+loading, examinar, ler e restaurar energia não duplicam regras entre desktop e
+mobile. O prompt esconde o glifo `E` em dispositivos coarse. A rotação de peças usa
+deltas de `clientX/clientY`, porque `movementX/Y` é inconsistente para touch no
+Safari. O gate `test:mobile-controls` cobre dead zone, clamp, inversão de Y,
+normalização, origem relativa, lifecycle de pointer, parada do look, gate portrait,
+ordem fullscreen → landscape e prioridade da ação. Em produção, o drag esquerdo
+alterou a posição, o direito alterou a rotação e duas leituras posteriores à soltura
+ficaram idênticas. Ainda falta o teste físico citado no backlog.
+
+### 4.7 Câmera e resolução mobile
+
+A câmera não usa mais 68° verticais fixos. Em telefone landscape esse valor
+ultrapassava 111° horizontais e esticava as bordas como uma lente olho-de-peixe.
+O contrato agora parte de 62° verticais e limita a abertura horizontal a 100°,
+recalculando o FOV vertical pelo aspect ratio real depois de fullscreen, rotação e
+resize. Em 16:9 isso resulta em 62° / 93,78°; em 844 × 390, 57,68° / 100°. O push
+opcional ao correr caiu para 2° e continua desligado por padrão.
+
+O tier `medium` deixou de herdar o teto desktop de 1,2 DPR no mobile. Telefones e
+tablets agora usam perfis próprios, limitados simultaneamente pelo DPR físico, pelo
+tier e por um orçamento total de pixels: `medium` chega a 1,6 DPR, tem piso de 1,0
+quando o orçamento permite e não passa de 1,5 milhão de pixels de framebuffer.
+Assim a nitidez aumenta sem tentar renderizar os nove pixels físicos por pixel CSS
+de um painel 3×. O mesmo fallback de viewport que mostra os controles também ativa
+o perfil mobile em WebViews que não anunciam `any-pointer: coarse`.
+
+Existe um único controlador adaptativo. O antigo `performance.regress()` binário
+brigava com a histerese própria e fazia o backbuffer oscilar entre resoluções após
+um único frame lento. Agora um outlier não muda o DPR; pressão sustentada reduz um
+degrau, há dois segundos de cooldown, e a recuperação exige oito segundos estáveis
+com aumentos espaçados. O PerfHud expõe FOV vertical/horizontal, aspect, dimensão
+CSS, drawing buffer, DPR e escala adaptativa real.
+
+Na validação local em viewport 844 × 390, DPR físico 1,5, o frame estabilizou em
+1266 × 585 (1,5 DPR). Durante movimento contínuo registrou 74 fps, p95 17,3 ms,
+p99 18,3 ms e nenhum frame acima de 33,3 ms na janela de 600 amostras. O warmup
+completo da Holyoke reduziu temporariamente para 1,38 DPR, permaneceu acima de 1× e
+recuperou 1,5 DPR depois da estabilização. Esses números validam o algoritmo, mas
+não substituem o teste térmico em Android e iPhone reais.
+
 ---
 
 ## 5. Comandos e portões
@@ -218,6 +377,11 @@ npm run test:collision
 npm run test:kit
 npm run test:kit-runtime
 npm run test:room-runtime
+npm run test:room-lod
+npm run test:gpu-warmup
+npm run test:render-performance
+npm run test:transition-door
+npm run test:mobile-controls
 npm run test:navigation
 npm run build
 ```
@@ -228,7 +392,8 @@ diminuindo sua cobertura.
 
 O gate de kit soma a receita inteira (`root` + `root__*`) e limita cada prop a
 2.500 triângulos. Os casos mais próximos do teto são `coat-stand` (2.344),
-`office-flatfile` (2.336), `curator-desk` (2.300) e `door-leaf` (2.236).
+`office-flatfile` (2.336), `curator-desk` (2.300), `door-leaf` e
+`door-leaf-right` (2.236 cada).
 
 ---
 
@@ -256,6 +421,9 @@ O gate de kit soma a receita inteira (`root` + `root__*`) e limita cada prop a
   reload limpo quando alterar luzes.
 - Um point light com sombra custa seis passes. Continua proibido.
 - `__museumStep(n)` deve ser chamado uma vez com `n` frames, não `n` vezes com um.
+- Portas síncronas podem ser os primeiros colliders. O controller espera contato
+  com uma superfície caminhável, não apenas `world.size > 0`, antes de ligar a
+  gravidade no spawn.
 - `PropertyBinding.sanitizeNodeName` remove `[ ] . : /`; normalize os dois lados
   quando comparar nomes de nós.
 
@@ -263,18 +431,15 @@ O gate de kit soma a receita inteira (`root` + `root__*`) e limita cada prop a
 
 ## 7. Próximas prioridades
 
-1. **Teste num Android médio real.** O frame está sob os tetos móveis, mas 71 draws
-   ainda supera o alvo de 45. Se isso for problema no aparelho, implemente portal
-   LOD por tier: sala atual completa; adjacente com shell/sinalização, adiando kit,
-   exposições, mídia e containers até a travessia.
+1. **Teste em dispositivos móveis reais.** Num Android médio, valide fullscreen,
+   lock landscape, multitouch, fluidez, temperatura e pressão de memória. Num
+   iPhone/iPad, teste Safari e o web app pela Tela de Início, inclusive rotação e
+   interrupção dos gestos. O átrio ainda supera o alvo móvel ideal de 45 draws.
 2. **Playtest com uma pessoa nova.** Meta: concluir a ala em oito minutos e repetir
    ao menos um fato histórico verdadeiro.
-3. **Conteúdo de parede.** Criar um canal data-driven de `WallArt`, sem transformar
-   toda decoração em `ExhibitData`; duas fotos licenciadas já baixadas ainda não
-   são usadas.
-4. **Paleta por ala.** Material de piso, temperatura e acabamento ainda têm pouca
+3. **Paleta por ala.** Material de piso, temperatura e acabamento ainda têm pouca
    variação real apesar de `PaletteId`.
-5. **Áudio e acabamento.** `RoomData.audio` continua sem leitor; pós-processamento,
+4. **Áudio e acabamento.** `RoomData.audio` continua sem leitor; pós-processamento,
    desgaste e assimetria seguem ausentes.
 
 ---
@@ -308,3 +473,10 @@ A inspeção visual final desta etapa confirmou no build servido:
   branco que existia antes.
 - o escritório reproduz a composição diagonal da referência, mantém o trajeto até
   a luminária e o armário trancado, e renderiza sem interpenetrações.
+- as três portas aparecem fechadas no datum do reveal, apresentam prompts corretos,
+  abrem sem atravessar a câmera, revelam a sala já mobiliada, fecham depois da
+  travessia e exigem nova interação no retorno;
+- fechar a porta estaciona a sala anterior sem descartá-la; ida e volta não
+  recriam seu detail e as luzes retomam o estado de energia anterior;
+- teleports de QA aguardam o piso da coordenada alvo registrar antes de mover a
+  câmera; átrio, Holyoke e escritório estabilizaram em `y = 1,62`.

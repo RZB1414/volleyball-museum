@@ -41,10 +41,12 @@ import {
 } from './bake/parts/fixtures.mjs'
 import {
   buildBanner,
+  buildDedicationPlaque,
   buildDonationBox,
   buildInterpPanel,
   buildLabelAngled,
   buildReceptionDesk,
+  buildWayfindingPlaque,
 } from './bake/parts/interpretive.mjs'
 import { buildDoorLeaf, buildThreshold } from './bake/parts/openings.mjs'
 import {
@@ -83,6 +85,18 @@ import {
   buildAtriumLectern,
   buildAtriumWallBay,
 } from './bake/parts/atriumDecor.mjs'
+import {
+  buildAtriumBarrierSegment,
+  buildAtriumDisplayConsole,
+  buildAtriumDividerScreen,
+  buildAtriumLoungeSet,
+} from './bake/parts/atriumFurnishings.mjs'
+import {
+  buildClassicWhiteVolleyball,
+  buildEightPanelVolleyball2008,
+  buildLacedLeatherVolleyball,
+  buildTricolourVolleyball1998,
+} from './bake/parts/historicalVolleyballs.mjs'
 import {
   buildArchiveCabinet,
   buildBench,
@@ -128,6 +142,14 @@ const MATERIAL_TEXTURES = {
   'leather-tan': 'leather-tan',
   'leather-worn': 'leather-tan',
   'leather-green': 'leather-tan',
+  'rawhide-lace': null,
+  'ball-leather-aged': 'ball-1964',
+  'ball-1964': 'ball-1964',
+  'ball-1998-white': 'ball-1998',
+  'ball-1998-yellow': 'ball-1998',
+  'ball-1998-blue': 'ball-1998',
+  'ball-2008-yellow': 'ball-2008',
+  'ball-2008-blue': 'ball-2008',
   'canvas': 'canvas',
   'paper-aged': 'canvas',
   'cork': 'canvas',
@@ -219,6 +241,158 @@ function compoundKitParts(name, geometries, materialByPart, primaryPart = null) 
       material,
     }
   })
+}
+
+/**
+ * Exhibit geometry is registered once, then rooms select recipes through
+ * museum.ts. This is deliberately separate from the shared kit registry: a
+ * room downloads only its own collection bundle, while furniture stays shared.
+ */
+const EXHIBIT_RECIPES = new Map([
+  [
+    'ball/spalding-laced-1900',
+    {
+      budget: 'hero',
+      build: () => [
+        { geometry: buildSpaldingBall(), material: 'leather-tan' },
+      ],
+    },
+  ],
+  [
+    'ball/basketball-bladder-1895',
+    {
+      budget: 'hero',
+      build: () => [
+        { geometry: buildBladder(), material: 'leather-worn' },
+      ],
+    },
+  ],
+  [
+    'net/ymca-1897',
+    {
+      budget: 'prop',
+      build: () => {
+        const net = buildNet1897()
+        return [
+          { suffix: 'structure', geometry: net.structure, material: 'oak-matte' },
+          { suffix: 'cords', geometry: net.cords, material: 'cord-hemp' },
+        ]
+      },
+    },
+  ],
+  [
+    'paper/handbook-1897',
+    {
+      budget: 'prop',
+      build: () => [{ geometry: buildOpenBook(), material: 'canvas' }],
+    },
+  ],
+  [
+    'paper/spalding-guide-1916',
+    {
+      budget: 'prop',
+      build: () => [{ geometry: buildBooklet(), material: 'canvas' }],
+    },
+  ],
+  [
+    'apparel/gym-suit-1900',
+    {
+      budget: 'prop',
+      build: () => {
+        const dressForm = buildDressForm()
+        return [
+          { suffix: 'form', geometry: dressForm.structure, material: 'plaster-dark' },
+          { suffix: 'garment', geometry: dressForm.garment, material: 'leather-worn' },
+        ]
+      },
+    },
+  ],
+  [
+    'frame/portrait-small',
+    {
+      budget: 'prop',
+      build: () => [
+        { geometry: buildFrame({ width: 0.34, aspect: 0.6611 }), material: 'oak-varnished' },
+      ],
+    },
+  ],
+  [
+    'frame/panorama-wide',
+    {
+      budget: 'prop',
+      build: () => [
+        { geometry: buildFrame({ width: 1.4, aspect: 2.5751 }), material: 'oak-varnished' },
+      ],
+    },
+  ],
+  [
+    'ball/leather-laced-1900',
+    {
+      budget: 'hero',
+      build: () => {
+        const ball = buildLacedLeatherVolleyball()
+        return [
+          { suffix: 'leather', geometry: ball.leather, material: 'ball-leather-aged' },
+          { suffix: 'fastenings', geometry: ball.fastenings, material: 'rawhide-lace' },
+        ]
+      },
+    },
+  ],
+  [
+    'ball/classic-white-18-panel',
+    {
+      budget: 'hero',
+      build: () => {
+        const ball = buildClassicWhiteVolleyball()
+        return [{ geometry: ball.cover, material: 'ball-1964' }]
+      },
+    },
+  ],
+  [
+    'ball/tricolour-1998',
+    {
+      budget: 'hero',
+      build: () => {
+        const ball = buildTricolourVolleyball1998()
+        return [
+          { geometry: ball.white, material: 'ball-1998-white' },
+          { suffix: 'blue', geometry: ball.blue, material: 'ball-1998-blue' },
+          { suffix: 'yellow', geometry: ball.yellow, material: 'ball-1998-yellow' },
+        ]
+      },
+    },
+  ],
+  [
+    'ball/eight-panel-2008',
+    {
+      budget: 'hero',
+      build: () => {
+        const ball = buildEightPanelVolleyball2008()
+        return [
+          { geometry: ball.blue, material: 'ball-2008-blue' },
+          { suffix: 'yellow', geometry: ball.yellow, material: 'ball-2008-yellow' },
+        ]
+      },
+    },
+  ],
+])
+
+function buildExhibitRecipe(recipe) {
+  const registration = EXHIBIT_RECIPES.get(recipe)
+  if (!registration) {
+    throw new Error(
+      `Content references exhibit recipe "${recipe}", but EXHIBIT_RECIPES has no generator.`,
+    )
+  }
+
+  return {
+    budget: TRIANGLE_BUDGET[registration.budget],
+    parts: registration.build().map((part) => ({
+      name: part.suffix ? `${recipe}__${part.suffix}` : recipe,
+      geometry: part.geometry,
+      material: part.material,
+    })),
+  }
 }
 
 async function bakeBundle(name, parts) {
@@ -397,6 +571,7 @@ async function main() {
   const banner = buildBanner()
   const donationBox = buildDonationBox()
   const doorLeaf = buildDoorLeaf()
+  const doorLeafRight = buildDoorLeaf({ handed: 'right' })
   const ceilingSpot = buildCeilingSpot()
   const breakerPanel = buildBreakerPanel()
   const pendant = buildPendant()
@@ -428,7 +603,13 @@ async function main() {
   const atriumAerialInstallation = buildAtriumAerialInstallation()
   const atriumSofa = buildAtriumSofa()
   const atriumLectern = buildAtriumLectern()
+  const atriumDividerScreen = buildAtriumDividerScreen()
+  const atriumBarrierSegment = buildAtriumBarrierSegment()
+  const atriumLoungeSet = buildAtriumLoungeSet()
+  const atriumDisplayConsole = buildAtriumDisplayConsole()
   const atriumBannerHardware = buildBanner()
+  const wayfindingPlaque = buildWayfindingPlaque()
+  const dedicationPlaque = buildDedicationPlaque()
 
   const kitParts = [
     { name: 'plinth-block', geometry: buildPlinth({ height: 1.0 }), material: 'oak-varnished' },
@@ -440,9 +621,19 @@ async function main() {
     { name: 'vitrine-table', geometry: vitrineTable, material: 'oak-varnished' },
     { name: 'vitrine-glass', geometry: buildVitrineGlass(), material: 'glass-vitrine' },
     { name: 'label-plaque', geometry: buildLabelPlaque(), material: 'brass' },
+    // Architectural wayfinding is one material per colourway. The routed
+    // border and fixings are part of the same mesh, preserving the seven-draw
+    // margin in the heaviest mobile portal view.
+    { name: 'wayfinding-plaque-navy', geometry: wayfindingPlaque.clone(), material: 'holyoke-navy' },
+    { name: 'wayfinding-plaque-green', geometry: wayfindingPlaque.clone(), material: 'archive-green' },
+    { name: 'wayfinding-plaque-walnut', geometry: wayfindingPlaque, material: 'walnut-polished' },
+    { name: 'dedication-plaque', geometry: dedicationPlaque, material: 'walnut-polished' },
     { name: 'archive-cabinet', geometry: buildArchiveCabinet(), material: 'oak-varnished' },
     { name: 'rope-stanchion', geometry: buildStanchion(), material: 'brass' },
-    { name: 'rope-span', geometry: buildRopeSpan(), material: 'rope-velvet' },
+    // This recipe now belongs to the compact reception queue. Authoring it to
+    // the actual 1.65 m post spacing preserves rope height and thickness; a
+    // uniform placement scale would shrink those along with its length.
+    { name: 'rope-span', geometry: buildRopeSpan({ span: 1.65 }), material: 'rope-velvet' },
     { name: 'bench', geometry: buildBench(), material: 'oak-varnished' },
 
     // Display cases and spatial dividers.
@@ -488,6 +679,12 @@ async function main() {
     ...compoundKitParts(
       'door-leaf',
       doorLeaf,
+      { leaf: 'oak-varnished', furniture: 'brass' },
+      'leaf',
+    ),
+    ...compoundKitParts(
+      'door-leaf-right',
+      doorLeafRight,
       { leaf: 'oak-varnished', furniture: 'brass' },
       'leaf',
     ),
@@ -664,11 +861,11 @@ async function main() {
       atriumReceptionDesk,
       {
         carcass: 'walnut-matte',
-        slats: 'walnut-polished',
-        top: 'walnut-polished',
+        timber: 'walnut-polished',
         brass: 'brass',
         light: 'atrium-glow',
         props: 'iron-cast',
+        storage: 'walnut-matte',
       },
       'carcass',
     ),
@@ -762,6 +959,29 @@ async function main() {
       { body: 'walnut-polished', top: 'plaster-dark', brass: 'brass', light: 'atrium-glow' },
       'body',
     ),
+    ...compoundKitParts(
+      'atrium-divider-screen',
+      atriumDividerScreen,
+      { base: 'holyoke-navy', frame: 'walnut-polished', mesh: 'brass' },
+      'base',
+    ),
+    {
+      name: 'atrium-barrier-segment',
+      geometry: atriumBarrierSegment.brass,
+      material: 'brass',
+    },
+    ...compoundKitParts(
+      'atrium-lounge-set',
+      atriumLoungeSet,
+      { timber: 'walnut-polished', upholstery: 'holyoke-navy', brass: 'brass' },
+      'timber',
+    ),
+    ...compoundKitParts(
+      'atrium-display-console',
+      atriumDisplayConsole,
+      { carcass: 'walnut-polished', glass: 'glass-vitrine', brass: 'brass' },
+      'carcass',
+    ),
   ]
   const kitBundle = await bakeBundle('kit', kitParts)
 
@@ -778,6 +998,7 @@ async function main() {
     'reception-desk',
     'donation-box',
     'door-leaf',
+    'door-leaf-right',
     'curator-desk',
     'office-chair__base',
     'bookshelf',
@@ -791,13 +1012,21 @@ async function main() {
     'history-info-kiosk',
     'gym-training-set',
     'atrium-reception-desk',
+    'atrium-reception-desk__storage',
     'atrium-central-podium',
     'atrium-display-tower',
     'atrium-sofa',
     'atrium-lectern',
+    'atrium-divider-screen',
+    'atrium-barrier-segment',
+    'atrium-lounge-set',
+    'atrium-display-console',
   ])
 
   const partitionFace = kitBundle.manifest.find((part) => part.name === 'partition')
+  const dividerFrame = kitBundle.manifest.find(
+    (part) => part.name === 'atrium-divider-screen__frame',
+  )
   for (const part of kitBundle.manifest) {
     if (kitColliderParts.has(part.name)) {
       part.collider = boxColliderFrom(part.bounds)
@@ -809,6 +1038,16 @@ async function main() {
       // otherwise climb it and walk straight through the 2.4 m plaster face.
       const minY = Math.min(part.bounds.min[1], partitionFace.bounds.min[1])
       const maxY = Math.max(part.bounds.max[1], partitionFace.bounds.max[1])
+      part.collider.halfExtents[1] = Number(((maxY - minY) / 2).toFixed(4))
+      part.collider.centre[1] = Number(((minY + maxY) / 2).toFixed(4))
+    }
+
+    if (part.name === 'atrium-divider-screen' && part.collider && dividerFrame) {
+      // The navy cabinet supplies the honest wide footprint; stretching that
+      // collider to the timber crown makes the open lattice a wall rather than
+      // a 480 mm step the capsule can climb through.
+      const minY = Math.min(part.bounds.min[1], dividerFrame.bounds.min[1])
+      const maxY = Math.max(part.bounds.max[1], dividerFrame.bounds.max[1])
       part.collider.halfExtents[1] = Number(((maxY - minY) / 2).toFixed(4))
       part.collider.centre[1] = Number(((minY + maxY) / 2).toFixed(4))
     }
@@ -835,35 +1074,54 @@ async function main() {
   bundles.push(kitBundle)
 
   // -------------------------------------------------------------------------
-  // Wing 1 exhibits.
+  // Exhibit bundles — selected by each room's data, generated from one shared
+  // recipe registry. Empty rooms emit no download at all.
   // -------------------------------------------------------------------------
-  console.log('\nHolyoke exhibits:')
-  const net = buildNet1897()
-  const dressForm = buildDressForm()
-  const exhibitParts = [
-    { name: 'ball/spalding-laced-1900', geometry: buildSpaldingBall(), material: 'leather-tan' },
-    { name: 'ball/basketball-bladder-1895', geometry: buildBladder(), material: 'leather-worn' },
-    { name: 'net/ymca-1897__structure', geometry: net.structure, material: 'oak-matte' },
-    { name: 'net/ymca-1897__cords', geometry: net.cords, material: 'cord-hemp' },
-    { name: 'paper/handbook-1897', geometry: buildOpenBook(), material: 'canvas' },
-    { name: 'paper/spalding-guide-1916', geometry: buildBooklet(), material: 'canvas' },
-    { name: 'apparel/gym-suit-1900__form', geometry: dressForm.structure, material: 'plaster-dark' },
-    { name: 'apparel/gym-suit-1900__garment', geometry: dressForm.garment, material: 'leather-worn' },
-    { name: 'frame/portrait-small', geometry: buildFrame({ width: 0.34, aspect: 0.6611 }), material: 'oak-varnished' },
-    { name: 'frame/panorama-wide', geometry: buildFrame({ width: 1.4, aspect: 2.5751 }), material: 'oak-varnished' },
-  ]
-  const exhibitBundle = await bakeBundle('exhibits-holyoke', exhibitParts)
-  for (const recipe of recipeNames(exhibitBundle.manifest)) {
-    const budget = recipe.startsWith('ball/') ? TRIANGLE_BUDGET.hero : TRIANGLE_BUDGET.prop
-    const problem = checkRecipeBudget(exhibitBundle.manifest, recipe, budget)
-    if (problem) problems.push(problem)
+  const exhibitById = new Map(MUSEUM.exhibits.map((exhibit) => [exhibit.id, exhibit]))
+  for (const room of MUSEUM.rooms) {
+    const recipes = [
+      ...new Set(
+        room.exhibitIds.map((exhibitId) => {
+          const exhibit = exhibitById.get(exhibitId)
+          if (!exhibit) {
+            throw new Error(`Room "${room.id}" references unknown exhibit "${exhibitId}".`)
+          }
+          return exhibit.recipe
+        }),
+      ),
+    ]
+    if (recipes.length === 0) continue
+
+    console.log(`\n${room.id} exhibits:`)
+    const exhibitParts = []
+    const budgetByRecipe = new Map()
+    for (const recipe of recipes) {
+      const built = buildExhibitRecipe(recipe)
+      exhibitParts.push(...built.parts)
+      budgetByRecipe.set(recipe, built.budget)
+    }
+
+    const exhibitBundle = await bakeBundle(`exhibits-${room.id}`, exhibitParts)
+    for (const recipe of recipeNames(exhibitBundle.manifest)) {
+      const problem = checkRecipeBudget(
+        exhibitBundle.manifest,
+        recipe,
+        budgetByRecipe.get(recipe),
+      )
+      if (problem) problems.push(problem)
+    }
+    bundles.push(exhibitBundle)
   }
-  bundles.push(exhibitBundle)
 
   // -------------------------------------------------------------------------
 
   await pruneStale(
-    bundles.map((bundle) => bundle.name),
+    [
+      ...new Set([
+        ...bundles.map((bundle) => bundle.name),
+        ...MUSEUM.rooms.map((room) => `exhibits-${room.id}`),
+      ]),
+    ],
     new Set(bundles.map((bundle) => bundle.url.split('/').pop())),
   )
 

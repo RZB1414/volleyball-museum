@@ -211,20 +211,50 @@ disposeCollider()
 check('collider cleanup is idempotent with the room lifecycle', collision.size === 0)
 
 const kitBundle = BAKED_BUNDLES.find((bundle) => bundle.name === 'kit')
+if (!kitBundle) throw new Error('The baked kit bundle is required for runtime budgets.')
+
 let naiveMuseumDraws = 0
 let batchedMuseumDraws = 0
+const roomMetrics = new Map<string, {
+  uniqueBatches: number
+  instantiatedTriangles: number
+}>()
 
 for (const room of MUSEUM.rooms) {
-  const naiveParts = room.kit.flatMap((placement) =>
-    kitBundle?.parts.filter(
-      (part) => part.name === placement.part || part.name.startsWith(`${placement.part}__`),
-    ) ?? [],
-  )
+  const placedRecipes = room.kit.map((placement) => ({
+    part: placement.part,
+    nodes: kitBundle.parts.filter(
+      (part) =>
+        part.name === placement.part ||
+        part.name.startsWith(`${placement.part}__`),
+    ),
+  }))
+  const unresolved = placedRecipes.filter((recipe) => recipe.nodes.length === 0)
+  const naiveParts = placedRecipes.flatMap((recipe) => recipe.nodes)
   const batchedParts = new Set(naiveParts.map((part) => part.name))
+  const instantiatedTriangles = naiveParts.reduce(
+    (total, part) => total + part.triangles,
+    0,
+  )
+
+  check(
+    `${room.id} kit placements resolve against the baked bundle`,
+    unresolved.length === 0,
+    unresolved.map((recipe) => recipe.part).join(', '),
+  )
+
   naiveMuseumDraws += naiveParts.length
   batchedMuseumDraws += batchedParts.size
+  roomMetrics.set(room.id, {
+    uniqueBatches: batchedParts.size,
+    instantiatedTriangles,
+  })
+
   console.log(
-    `  PERF  ${room.id.padEnd(8)} kit draws ${String(naiveParts.length).padStart(2)} → ${String(batchedParts.size).padStart(2)}`,
+    `  PERF  ${room.id.padEnd(8)} kit draws ` +
+      `${String(naiveParts.length).padStart(3)} → ` +
+      `${String(batchedParts.size).padStart(2)}, ` +
+      `${String(instantiatedTriangles).padStart(6)} instantiated triangles`,
   )
 }
 
@@ -232,6 +262,22 @@ check(
   'museum placements reduce kit draw batches',
   batchedMuseumDraws < naiveMuseumDraws,
   `${naiveMuseumDraws} → ${batchedMuseumDraws}`,
+)
+
+const atriumMetrics = roomMetrics.get('atrium')
+check(
+  'atrium kit uses at most 56 unique draw batches',
+  Boolean(atriumMetrics && atriumMetrics.uniqueBatches <= 56),
+  atriumMetrics
+    ? `${atriumMetrics.uniqueBatches} unique batches`
+    : 'atrium metrics missing',
+)
+check(
+  'atrium kit stays within 50,000 instantiated triangles',
+  Boolean(atriumMetrics && atriumMetrics.instantiatedTriangles <= 50_000),
+  atriumMetrics
+    ? `${atriumMetrics.instantiatedTriangles} instantiated triangles`
+    : 'atrium metrics missing',
 )
 
 console.log(`\n${passed} passed, ${failed} failed`)

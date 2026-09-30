@@ -126,6 +126,12 @@ function loadPersisted(): Persisted {
 const initial = loadPersisted()
 
 export type DirectionalInput = { x: number; y: number }
+export type TransitionDoorPrompt = {
+  readonly id: string
+  readonly targetRoom: string
+  readonly status: 'blocked' | 'loading' | 'ready' | 'opening'
+  readonly armed: boolean
+}
 
 export type MuseumStore = {
   // --- settings -----------------------------------------------------------
@@ -136,6 +142,8 @@ export type MuseumStore = {
   started: boolean
   pointerLocked: boolean
   currentRoom: string
+  /** The room most recently left, used to preserve its visible lighting rig. */
+  previousRoom: string | null
   /** Ids of the rooms the portal walk says are visible this frame. */
   visibleRooms: string[]
   touchMove: DirectionalInput
@@ -146,6 +154,8 @@ export type MuseumStore = {
   focusedContainer: string | null
   /** The room power control currently under the crosshair, if any. */
   focusedPowerControl: string | null
+  /** A closed transition door under the crosshair and its streaming state. */
+  focusedTransitionDoor: TransitionDoorPrompt | null
   /** The cabinet whose contents are being read, if any. */
   openedContainer: string | null
   /** The lock whose keypad is open, if any. */
@@ -163,6 +173,7 @@ export type MuseumStore = {
   setFocusedExhibit: (id: string | null) => void
   setFocusedContainer: (id: string | null) => void
   setFocusedPowerControl: (id: string | null) => void
+  setFocusedTransitionDoor: (door: TransitionDoorPrompt | null) => void
   setOpenedContainer: (id: string | null) => void
   setActiveLock: (id: string | null) => void
   setExamining: (id: string | null) => void
@@ -190,7 +201,10 @@ export const useMuseum = create<MuseumStore>((set, get) => {
   // for a web museum, silent autosave plus an explicit "Continue" on the title
   // screen is the right shape, and the in-world visitor logbook can be a VIEW
   // of this state rather than the mechanism that drives it.
-  const persist = () => {
+  let persistHandle: number | null = null
+  let persistUsesIdleCallback = false
+
+  const writePersisted = () => {
     if (typeof localStorage === 'undefined') return
     try {
       const { settings, progress } = get()
@@ -199,6 +213,51 @@ export const useMuseum = create<MuseumStore>((set, get) => {
       // Private browsing, quota, or a locked-down profile. Losing the save is
       // acceptable; throwing during gameplay is not.
     }
+  }
+
+  const cancelScheduledPersist = () => {
+    if (persistHandle === null || typeof window === 'undefined') return
+    if (persistUsesIdleCallback) window.cancelIdleCallback(persistHandle)
+    else window.clearTimeout(persistHandle)
+    persistHandle = null
+  }
+
+  const flushPersisted = () => {
+    cancelScheduledPersist()
+    writePersisted()
+  }
+
+  const persist = () => {
+    if (typeof window === 'undefined' || persistHandle !== null) return
+    if (typeof window.requestIdleCallback === 'function') {
+      persistUsesIdleCallback = true
+      persistHandle = window.requestIdleCallback(
+        () => {
+          persistHandle = null
+          writePersisted()
+        },
+        { timeout: 750 },
+      )
+      return
+    }
+
+    persistUsesIdleCallback = false
+    persistHandle = window.setTimeout(() => {
+      persistHandle = null
+      writePersisted()
+    }, 50)
+  }
+
+  // An idle callback may not run before a tab is discarded. Pagehide is the
+  // last reliable opportunity to flush the latest coalesced snapshot.
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', flushPersisted)
+    // Vite replaces this module in place during local tuning. Leaving the old
+    // listener alive lets a stale store overwrite the new snapshot on exit.
+    import.meta.hot?.dispose(() => {
+      window.removeEventListener('pagehide', flushPersisted)
+      flushPersisted()
+    })
   }
 
   const mutateProgress = (update: (progress: Progress) => Progress) => {
@@ -215,13 +274,19 @@ export const useMuseum = create<MuseumStore>((set, get) => {
 
     started: false,
     pointerLocked: false,
-    currentRoom: initial.progress.lastRoom,
-    visibleRooms: [initial.progress.lastRoom],
+    // PlayerController currently has one authored, navigation-tested spawn in
+    // the atrium. Starting the render tier at a persisted lastRoom mounted that
+    // room's detail only to tear it down on the first frame when the spawn was
+    // detected in the atrium.
+    currentRoom: 'atrium',
+    previousRoom: null,
+    visibleRooms: ['atrium'],
     touchMove: { x: 0, y: 0 },
     touchLook: { x: 0, y: 0 },
     focusedExhibit: null,
     focusedContainer: null,
     focusedPowerControl: null,
+    focusedTransitionDoor: null,
     openedContainer: null,
     activeLock: null,
     examining: null,
@@ -231,18 +296,25 @@ export const useMuseum = create<MuseumStore>((set, get) => {
       const room = get().currentRoom
       mutateProgress((progress) => ({
         ...progress,
+        lastRoom: room,
         roomsVisited: withValue(progress.roomsVisited, room),
       }))
     },
     setPointerLocked: (pointerLocked) => set({ pointerLocked }),
     setCurrentRoom: (room) => {
       if (get().currentRoom === room) return
-      set({ currentRoom: room })
-      mutateProgress((progress) => ({
-        ...progress,
-        lastRoom: room,
-        roomsVisited: withValue(progress.roomsVisited, room),
+      // One external-store notification avoids reconciling the room tree once
+      // for session state and again for progress in the same doorway frame.
+      set((state) => ({
+        previousRoom: state.currentRoom,
+        currentRoom: room,
+        progress: {
+          ...state.progress,
+          lastRoom: room,
+          roomsVisited: withValue(state.progress.roomsVisited, room),
+        },
       }))
+      persist()
     },
     setVisibleRooms: (rooms) => {
       // Called every frame by the portal walk; skip the store write unless the
@@ -257,6 +329,18 @@ export const useMuseum = create<MuseumStore>((set, get) => {
     setFocusedExhibit: (focusedExhibit) => set({ focusedExhibit }),
     setFocusedContainer: (focusedContainer) => set({ focusedContainer }),
     setFocusedPowerControl: (focusedPowerControl) => set({ focusedPowerControl }),
+    setFocusedTransitionDoor: (focusedTransitionDoor) => {
+      const current = get().focusedTransitionDoor
+      if (
+        current?.id === focusedTransitionDoor?.id &&
+        current?.targetRoom === focusedTransitionDoor?.targetRoom &&
+        current?.status === focusedTransitionDoor?.status &&
+        current?.armed === focusedTransitionDoor?.armed
+      ) {
+        return
+      }
+      set({ focusedTransitionDoor })
+    },
     setOpenedContainer: (openedContainer) => set({ openedContainer }),
     setActiveLock: (activeLock) => set({ activeLock }),
     setExamining: (examining) => set({ examining }),
@@ -315,7 +399,7 @@ export const useMuseum = create<MuseumStore>((set, get) => {
       }
     },
     resetProgress: () => {
-      set({ progress: EMPTY_PROGRESS, currentRoom: 'atrium' })
+      set({ progress: EMPTY_PROGRESS, currentRoom: 'atrium', previousRoom: null })
       persist()
     },
   }

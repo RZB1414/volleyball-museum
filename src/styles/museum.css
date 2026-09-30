@@ -207,6 +207,15 @@
   color: #8fb98a;
 }
 
+@media (any-pointer: coarse),
+  (max-width: 900px) and (orientation: landscape) {
+  /* The contextual touch button replaces the keyboard glyph on phones and
+     tablets, including iPads that also have a trackpad connected. */
+  .prompt-key {
+    display: none;
+  }
+}
+
 /* --- examine view --------------------------------------------------------- */
 
 .examine {

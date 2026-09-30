@@ -83,6 +83,18 @@ export const MATERIALS = {
   'leather-tan': { baseColor: [0.788, 0.627, 0.416, 1], roughness: 0.58, metallic: 0 },
   'leather-worn': { baseColor: [0.545, 0.353, 0.173, 1], roughness: 0.68, metallic: 0, tint: [0.62, 0.55, 0.44] },
   'leather-green': { baseColor: [0.065, 0.165, 0.105, 1], roughness: 0.52, metallic: 0, tint: [0.20, 0.40, 0.27] },
+  'rawhide-lace': { baseColor: [0.43, 0.20, 0.075, 1], roughness: 0.82, metallic: 0 },
+  // The laced cover shares the fine 1964 leather maps instead of inheriting the
+  // furniture leather's centimetre-scale grain. The tint is linear RGB.
+  'ball-leather-aged': { baseColor: [0.258, 0.102, 0.024, 1], roughness: 0.72, metallic: 0, tint: [0.34, 0.15, 0.05] },
+  'ball-1964': { baseColor: [0.89, 0.86, 0.77, 1], roughness: 0.66, metallic: 0 },
+  // Colour follows the real panel groups. Each family shares neutral maps, so
+  // these factors differ both for the baked GLB fallback and for runtime tint.
+  'ball-1998-white': { baseColor: [0.815, 0.807, 0.738, 1], roughness: 0.52, metallic: 0, tint: [0.88, 0.88, 0.86], clearcoat: 0.10, clearcoatRoughness: 0.30 },
+  'ball-1998-yellow': { baseColor: [0.888, 0.509, 0.002, 1], roughness: 0.52, metallic: 0, tint: [0.96, 0.56, 0.003], clearcoat: 0.10, clearcoatRoughness: 0.30 },
+  'ball-1998-blue': { baseColor: [0.009, 0.024, 0.246, 1], roughness: 0.52, metallic: 0, tint: [0.010, 0.027, 0.29], clearcoat: 0.10, clearcoatRoughness: 0.30 },
+  'ball-2008-yellow': { baseColor: [0.905, 0.509, 0.001, 1], roughness: 0.58, metallic: 0, tint: [0.98, 0.56, 0.002], clearcoat: 0.06, clearcoatRoughness: 0.38 },
+  'ball-2008-blue': { baseColor: [0.010, 0.024, 0.223, 1], roughness: 0.58, metallic: 0, tint: [0.011, 0.027, 0.265], clearcoat: 0.06, clearcoatRoughness: 0.38 },
   'canvas': { baseColor: [0.851, 0.796, 0.678, 1], roughness: 0.88, metallic: 0 },
   'paper-aged': { baseColor: [0.80, 0.70, 0.52, 1], roughness: 0.92, metallic: 0, tint: [0.94, 0.84, 0.68] },
   'cork': { baseColor: [0.43, 0.25, 0.12, 1], roughness: 0.96, metallic: 0, tint: [0.56, 0.38, 0.23] },

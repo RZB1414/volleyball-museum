@@ -726,8 +726,8 @@ export const BAKED_BUNDLES = [
   },
   {
     "name": "kit",
-    "url": "/models/kit.5071b90c.glb",
-    "bytes": 1816812,
+    "url": "/models/kit.0906420e.glb",
+    "bytes": 2007028,
     "parts": [
       {
         "name": "plinth-block",
@@ -931,6 +931,114 @@ export const BAKED_BUNDLES = [
         "triangles": 588
       },
       {
+        "name": "wayfinding-plaque-navy",
+        "material": "holyoke-navy",
+        "bounds": {
+          "min": [
+            -1.32,
+            -0.33,
+            0
+          ],
+          "max": [
+            1.32,
+            0.33,
+            0.078
+          ],
+          "size": [
+            2.64,
+            0.66,
+            0.078
+          ],
+          "centre": [
+            0,
+            0,
+            0.039
+          ]
+        },
+        "triangles": 924
+      },
+      {
+        "name": "wayfinding-plaque-green",
+        "material": "archive-green",
+        "bounds": {
+          "min": [
+            -1.32,
+            -0.33,
+            0
+          ],
+          "max": [
+            1.32,
+            0.33,
+            0.078
+          ],
+          "size": [
+            2.64,
+            0.66,
+            0.078
+          ],
+          "centre": [
+            0,
+            0,
+            0.039
+          ]
+        },
+        "triangles": 924
+      },
+      {
+        "name": "wayfinding-plaque-walnut",
+        "material": "walnut-polished",
+        "bounds": {
+          "min": [
+            -1.32,
+            -0.33,
+            0
+          ],
+          "max": [
+            1.32,
+            0.33,
+            0.078
+          ],
+          "size": [
+            2.64,
+            0.66,
+            0.078
+          ],
+          "centre": [
+            0,
+            0,
+            0.039
+          ]
+        },
+        "triangles": 924
+      },
+      {
+        "name": "dedication-plaque",
+        "material": "walnut-polished",
+        "bounds": {
+          "min": [
+            -2.6,
+            -0.75,
+            0
+          ],
+          "max": [
+            2.6,
+            0.75,
+            0.0965
+          ],
+          "size": [
+            5.2,
+            1.5,
+            0.0965
+          ],
+          "centre": [
+            0,
+            0,
+            0.0483
+          ]
+        },
+        "triangles": 2280
+      },
+      {
         "name": "archive-cabinet",
         "material": "oak-varnished",
         "bounds": {
@@ -1002,17 +1110,17 @@ export const BAKED_BUNDLES = [
         "material": "rope-velvet",
         "bounds": {
           "min": [
-            -1.3124,
+            -0.8374,
             0.6734,
             -0.028
           ],
           "max": [
-            1.3124,
+            0.8374,
             0.8763,
             0.028
           ],
           "size": [
-            2.6247,
+            1.6747,
             0.2029,
             0.056
           ],
@@ -1581,6 +1689,73 @@ export const BAKED_BUNDLES = [
           ],
           "centre": [
             0.3745,
+            1.17,
+            0
+          ]
+        },
+        "triangles": 1384
+      },
+      {
+        "name": "door-leaf-right",
+        "material": "oak-varnished",
+        "bounds": {
+          "min": [
+            -0.8,
+            0,
+            -0.0225
+          ],
+          "max": [
+            0,
+            2.34,
+            0.0225
+          ],
+          "size": [
+            0.8,
+            2.34,
+            0.045
+          ],
+          "centre": [
+            -0.4,
+            1.17,
+            0
+          ]
+        },
+        "triangles": 852,
+        "collider": {
+          "kind": "box",
+          "halfExtents": [
+            0.4,
+            1.17,
+            0.0225
+          ],
+          "centre": [
+            -0.4,
+            1.17,
+            0
+          ]
+        }
+      },
+      {
+        "name": "door-leaf-right__furniture",
+        "material": "brass",
+        "bounds": {
+          "min": [
+            -0.756,
+            0.251,
+            -0.063
+          ],
+          "max": [
+            0.007,
+            2.089,
+            0.063
+          ],
+          "size": [
+            0.763,
+            1.838,
+            0.126
+          ],
+          "centre": [
+            -0.3745,
             1.17,
             0
           ]
@@ -3773,121 +3948,94 @@ export const BAKED_BUNDLES = [
         "material": "walnut-matte",
         "bounds": {
           "min": [
-            -2.5437,
+            -3.19,
             0,
-            -0.8673
+            -0.7432
           ],
           "max": [
-            2.5437,
-            0.995,
-            0.59
+            3.1675,
+            1.3388,
+            0.7175
           ],
           "size": [
-            5.0873,
-            0.995,
-            1.4573
+            6.3575,
+            1.3388,
+            1.4607
           ],
           "centre": [
-            0,
-            0.4975,
-            -0.1386
+            -0.0113,
+            0.6694,
+            -0.0128
           ]
         },
-        "triangles": 836,
+        "triangles": 924,
         "collider": {
           "kind": "box",
           "halfExtents": [
-            2.5436,
-            0.4975,
-            0.7287
+            3.1787,
+            0.6694,
+            0.7304
           ],
           "centre": [
-            0,
-            0.4975,
-            -0.1386
+            -0.0113,
+            0.6694,
+            -0.0128
           ]
         }
       },
       {
-        "name": "atrium-reception-desk__slats",
+        "name": "atrium-reception-desk__timber",
         "material": "walnut-polished",
         "bounds": {
           "min": [
-            -2.299,
+            -3.16,
             0.125,
-            0.2583
+            -2.078
           ],
           "max": [
-            2.299,
-            0.715,
-            0.6119
+            3.17,
+            1.54,
+            0.75
           ],
           "size": [
-            4.598,
-            0.59,
-            0.3536
+            6.33,
+            1.415,
+            2.828
           ],
           "centre": [
-            0,
-            0.42,
-            0.4351
+            0.005,
+            0.8325,
+            -0.664
           ]
         },
-        "triangles": 408
-      },
-      {
-        "name": "atrium-reception-desk__top",
-        "material": "walnut-polished",
-        "bounds": {
-          "min": [
-            -2.4422,
-            1.015,
-            -0.9456
-          ],
-          "max": [
-            2.4422,
-            1.08,
-            0.63
-          ],
-          "size": [
-            4.8844,
-            0.065,
-            1.5756
-          ],
-          "centre": [
-            0,
-            1.0475,
-            -0.1578
-          ]
-        },
-        "triangles": 292
+        "triangles": 928
       },
       {
         "name": "atrium-reception-desk__brass",
         "material": "brass",
         "bounds": {
           "min": [
-            -2.3178,
-            0.644,
-            0.2545
+            -3.16,
+            0.3775,
+            -2.048
           ],
           "max": [
-            2.3178,
-            0.991,
-            0.612
+            3.15,
+            1.354,
+            0.734
           ],
           "size": [
-            4.6356,
-            0.347,
-            0.3575
+            6.31,
+            0.9765,
+            2.782
           ],
           "centre": [
-            0,
-            0.8175,
-            0.4332
+            -0.005,
+            0.8657,
+            -0.657
           ]
         },
-        "triangles": 488
+        "triangles": 716
       },
       {
         "name": "atrium-reception-desk__light",
@@ -3896,52 +4044,92 @@ export const BAKED_BUNDLES = [
           "min": [
             -2.2794,
             0.68,
-            0.2808
+            -2.0625
           ],
           "max": [
-            2.2794,
-            0.71,
-            0.624
+            3.1,
+            1.475,
+            0.736
           ],
           "size": [
-            4.5588,
-            0.03,
-            0.3432
+            5.3794,
+            0.795,
+            2.7985
           ],
           "centre": [
-            0,
-            0.695,
-            0.4524
+            0.4103,
+            1.0775,
+            -0.6632
           ]
         },
-        "triangles": 244
+        "triangles": 416
       },
       {
         "name": "atrium-reception-desk__props",
         "material": "iron-cast",
         "bounds": {
           "min": [
-            -0.8824,
-            1.0775,
-            -0.345
+            -1.5824,
+            0.0425,
+            -0.9388
           ],
           "max": [
-            0.87,
+            1.06,
             1.4226,
             0.1366
           ],
           "size": [
-            1.7524,
-            0.3451,
-            0.4816
+            2.6424,
+            1.3801,
+            1.0754
           ],
           "centre": [
-            -0.0062,
-            1.2501,
-            -0.1042
+            -0.2612,
+            0.7326,
+            -0.4011
           ]
         },
-        "triangles": 476
+        "triangles": 1416
+      },
+      {
+        "name": "atrium-reception-desk__storage",
+        "material": "walnut-matte",
+        "bounds": {
+          "min": [
+            -2.19,
+            0,
+            -2.36
+          ],
+          "max": [
+            0.09,
+            1.5,
+            -2.08
+          ],
+          "size": [
+            2.28,
+            1.5,
+            0.28
+          ],
+          "centre": [
+            -1.05,
+            0.75,
+            -2.22
+          ]
+        },
+        "triangles": 108,
+        "collider": {
+          "kind": "box",
+          "halfExtents": [
+            1.14,
+            0.75,
+            0.14
+          ],
+          "centre": [
+            -1.05,
+            0.75,
+            -2.22
+          ]
+        }
       },
       {
         "name": "atrium-wall-bay",
@@ -4130,24 +4318,24 @@ export const BAKED_BUNDLES = [
             0.035
           ]
         },
-        "triangles": 108
+        "triangles": 12
       },
       {
         "name": "atrium-wall-bay-plain__slats",
         "material": "walnut-polished",
         "bounds": {
           "min": [
-            -1.577,
+            -1.5825,
             0.085,
             0.07
           ],
           "max": [
-            1.577,
+            1.5825,
             1.395,
             0.115
           ],
           "size": [
-            3.154,
+            3.165,
             1.31,
             0.045
           ],
@@ -4157,7 +4345,7 @@ export const BAKED_BUNDLES = [
             0.0925
           ]
         },
-        "triangles": 360
+        "triangles": 240
       },
       {
         "name": "atrium-wall-bay-plain__trim",
@@ -4184,7 +4372,7 @@ export const BAKED_BUNDLES = [
             0.075
           ]
         },
-        "triangles": 216
+        "triangles": 24
       },
       {
         "name": "atrium-central-podium",
@@ -5047,41 +5235,559 @@ export const BAKED_BUNDLES = [
           ]
         },
         "triangles": 12
+      },
+      {
+        "name": "atrium-divider-screen",
+        "material": "holyoke-navy",
+        "bounds": {
+          "min": [
+            -0.805,
+            0,
+            -0.17
+          ],
+          "max": [
+            0.805,
+            0.48,
+            0.17
+          ],
+          "size": [
+            1.61,
+            0.48,
+            0.34
+          ],
+          "centre": [
+            0,
+            1.2,
+            0
+          ]
+        },
+        "triangles": 228,
+        "collider": {
+          "kind": "box",
+          "halfExtents": [
+            0.805,
+            1.2,
+            0.17
+          ],
+          "centre": [
+            0,
+            1.2,
+            0
+          ]
+        }
+      },
+      {
+        "name": "atrium-divider-screen__frame",
+        "material": "walnut-polished",
+        "bounds": {
+          "min": [
+            -0.775,
+            0,
+            -0.036
+          ],
+          "max": [
+            0.775,
+            2.4,
+            0.036
+          ],
+          "size": [
+            1.55,
+            2.4,
+            0.072
+          ],
+          "centre": [
+            0,
+            1.2,
+            0
+          ]
+        },
+        "triangles": 48
+      },
+      {
+        "name": "atrium-divider-screen__mesh",
+        "material": "brass",
+        "bounds": {
+          "min": [
+            -0.692,
+            0.565,
+            0.009
+          ],
+          "max": [
+            0.692,
+            2.305,
+            0.027
+          ],
+          "size": [
+            1.384,
+            1.74,
+            0.018
+          ],
+          "centre": [
+            0,
+            1.435,
+            0.018
+          ]
+        },
+        "triangles": 192
+      },
+      {
+        "name": "atrium-barrier-segment",
+        "material": "brass",
+        "bounds": {
+          "min": [
+            1.466,
+            0,
+            -0.7606
+          ],
+          "max": [
+            1.725,
+            0.834,
+            0.6601
+          ],
+          "size": [
+            0.259,
+            0.834,
+            1.4207
+          ],
+          "centre": [
+            1.5955,
+            0.417,
+            -0.0502
+          ]
+        },
+        "triangles": 220,
+        "collider": {
+          "kind": "box",
+          "halfExtents": [
+            0.1295,
+            0.417,
+            0.7104
+          ],
+          "centre": [
+            1.5955,
+            0.417,
+            -0.0502
+          ]
+        }
+      },
+      {
+        "name": "atrium-lounge-set",
+        "material": "walnut-polished",
+        "bounds": {
+          "min": [
+            -1.4656,
+            0,
+            -0.794
+          ],
+          "max": [
+            1.97,
+            0.97,
+            1
+          ],
+          "size": [
+            3.4356,
+            0.97,
+            1.794
+          ],
+          "centre": [
+            0.2522,
+            0.485,
+            0.103
+          ]
+        },
+        "triangles": 592,
+        "collider": {
+          "kind": "box",
+          "halfExtents": [
+            1.7178,
+            0.485,
+            0.897
+          ],
+          "centre": [
+            0.2522,
+            0.485,
+            0.103
+          ]
+        }
+      },
+      {
+        "name": "atrium-lounge-set__upholstery",
+        "material": "holyoke-navy",
+        "bounds": {
+          "min": [
+            -2.05,
+            0,
+            -1.3
+          ],
+          "max": [
+            2.05,
+            0.9917,
+            1.3
+          ],
+          "size": [
+            4.1,
+            0.9917,
+            2.6
+          ],
+          "centre": [
+            0,
+            0.4959,
+            0
+          ]
+        },
+        "triangles": 444
+      },
+      {
+        "name": "atrium-lounge-set__brass",
+        "material": "brass",
+        "bounds": {
+          "min": [
+            -0.818,
+            0,
+            -0.4
+          ],
+          "max": [
+            1.88,
+            0.6825,
+            0.938
+          ],
+          "size": [
+            2.698,
+            0.6825,
+            1.338
+          ],
+          "centre": [
+            0.531,
+            0.3412,
+            0.269
+          ]
+        },
+        "triangles": 400
+      },
+      {
+        "name": "atrium-display-console",
+        "material": "walnut-polished",
+        "bounds": {
+          "min": [
+            -1.62,
+            0,
+            -0.375
+          ],
+          "max": [
+            1.62,
+            1.05,
+            0.375
+          ],
+          "size": [
+            3.24,
+            1.05,
+            0.75
+          ],
+          "centre": [
+            0,
+            0.525,
+            0
+          ]
+        },
+        "triangles": 444,
+        "collider": {
+          "kind": "box",
+          "halfExtents": [
+            1.62,
+            0.525,
+            0.375
+          ],
+          "centre": [
+            0,
+            0.525,
+            0
+          ]
+        }
+      },
+      {
+        "name": "atrium-display-console__glass",
+        "material": "glass-vitrine",
+        "bounds": {
+          "min": [
+            -1.553,
+            0.715,
+            -0.328
+          ],
+          "max": [
+            1.553,
+            1.002,
+            0.328
+          ],
+          "size": [
+            3.106,
+            0.287,
+            0.656
+          ],
+          "centre": [
+            0,
+            0.8585,
+            0
+          ]
+        },
+        "triangles": 60
+      },
+      {
+        "name": "atrium-display-console__brass",
+        "material": "brass",
+        "bounds": {
+          "min": [
+            -1.55,
+            0.3175,
+            -0.19
+          ],
+          "max": [
+            1.55,
+            0.716,
+            0.392
+          ],
+          "size": [
+            3.1,
+            0.3985,
+            0.582
+          ],
+          "centre": [
+            0,
+            0.5168,
+            0.101
+          ]
+        },
+        "triangles": 132
+      }
+    ]
+  },
+  {
+    "name": "exhibits-atrium",
+    "url": "/models/exhibits-atrium.6002cd90.glb",
+    "bytes": 80712,
+    "parts": [
+      {
+        "name": "ball/leather-laced-1900__leather",
+        "material": "ball-leather-aged",
+        "bounds": {
+          "min": [
+            -0.1068,
+            -0.102,
+            -0.1052
+          ],
+          "max": [
+            0.1068,
+            0.102,
+            0.1052
+          ],
+          "size": [
+            0.2136,
+            0.2041,
+            0.2104
+          ],
+          "centre": [
+            0,
+            0,
+            0
+          ]
+        },
+        "triangles": 1584
+      },
+      {
+        "name": "ball/leather-laced-1900__fastenings",
+        "material": "rawhide-lace",
+        "bounds": {
+          "min": [
+            -0.0159,
+            -0.0312,
+            0.0987
+          ],
+          "max": [
+            0.0159,
+            0.0312,
+            0.1078
+          ],
+          "size": [
+            0.0319,
+            0.0625,
+            0.0091
+          ],
+          "centre": [
+            0,
+            0,
+            0.1032
+          ]
+        },
+        "triangles": 640
+      },
+      {
+        "name": "ball/classic-white-18-panel",
+        "material": "ball-1964",
+        "bounds": {
+          "min": [
+            -0.105,
+            -0.105,
+            -0.105
+          ],
+          "max": [
+            0.105,
+            0.105,
+            0.105
+          ],
+          "size": [
+            0.21,
+            0.21,
+            0.21
+          ],
+          "centre": [
+            0,
+            0,
+            0
+          ]
+        },
+        "triangles": 1152
+      },
+      {
+        "name": "ball/tricolour-1998",
+        "material": "ball-1998-white",
+        "bounds": {
+          "min": [
+            -0.1038,
+            -0.1038,
+            -0.1038
+          ],
+          "max": [
+            0.1038,
+            0.1038,
+            0.1038
+          ],
+          "size": [
+            0.2076,
+            0.2076,
+            0.2076
+          ],
+          "centre": [
+            0,
+            0,
+            0
+          ]
+        },
+        "triangles": 864
+      },
+      {
+        "name": "ball/tricolour-1998__blue",
+        "material": "ball-1998-blue",
+        "bounds": {
+          "min": [
+            -0.0991,
+            -0.0991,
+            -0.0991
+          ],
+          "max": [
+            0.0736,
+            0.0705,
+            0.0736
+          ],
+          "size": [
+            0.1726,
+            0.1695,
+            0.1726
+          ],
+          "centre": [
+            -0.0127,
+            -0.0143,
+            -0.0127
+          ]
+        },
+        "triangles": 144
+      },
+      {
+        "name": "ball/tricolour-1998__yellow",
+        "material": "ball-1998-yellow",
+        "bounds": {
+          "min": [
+            -0.105,
+            -0.105,
+            -0.105
+          ],
+          "max": [
+            0.105,
+            0.105,
+            0.105
+          ],
+          "size": [
+            0.21,
+            0.21,
+            0.21
+          ],
+          "centre": [
+            0,
+            0,
+            0
+          ]
+        },
+        "triangles": 144
+      },
+      {
+        "name": "ball/eight-panel-2008",
+        "material": "ball-2008-blue",
+        "bounds": {
+          "min": [
+            -0.1038,
+            -0.105,
+            -0.1038
+          ],
+          "max": [
+            0.1038,
+            0.105,
+            0.1038
+          ],
+          "size": [
+            0.2076,
+            0.21,
+            0.2076
+          ],
+          "centre": [
+            0,
+            0,
+            0
+          ]
+        },
+        "triangles": 1008
+      },
+      {
+        "name": "ball/eight-panel-2008__yellow",
+        "material": "ball-2008-yellow",
+        "bounds": {
+          "min": [
+            -0.1041,
+            -0.105,
+            -0.1041
+          ],
+          "max": [
+            0.1041,
+            0.105,
+            0.1041
+          ],
+          "size": [
+            0.2083,
+            0.21,
+            0.2083
+          ],
+          "centre": [
+            0,
+            0,
+            0
+          ]
+        },
+        "triangles": 288
       }
     ]
   },
   {
     "name": "exhibits-holyoke",
-    "url": "/models/exhibits-holyoke.73ea28b9.glb",
-    "bytes": 336856,
+    "url": "/models/exhibits-holyoke.61443e51.glb",
+    "bytes": 362412,
     "parts": [
-      {
-        "name": "ball/spalding-laced-1900",
-        "material": "leather-tan",
-        "bounds": {
-          "min": [
-            -0.1068,
-            -0.1068,
-            -0.108
-          ],
-          "max": [
-            0.1068,
-            0.1068,
-            0.1068
-          ],
-          "size": [
-            0.2136,
-            0.2136,
-            0.2148
-          ],
-          "centre": [
-            0,
-            0,
-            -0.0006
-          ]
-        },
-        "triangles": 10136
-      },
       {
         "name": "ball/basketball-bladder-1895",
         "material": "leather-worn",
@@ -5108,6 +5814,33 @@ export const BAKED_BUNDLES = [
           ]
         },
         "triangles": 1512
+      },
+      {
+        "name": "ball/spalding-laced-1900",
+        "material": "leather-tan",
+        "bounds": {
+          "min": [
+            -0.1068,
+            -0.1068,
+            -0.108
+          ],
+          "max": [
+            0.1068,
+            0.1068,
+            0.1068
+          ],
+          "size": [
+            0.2136,
+            0.2136,
+            0.2148
+          ],
+          "centre": [
+            0,
+            0,
+            -0.0006
+          ]
+        },
+        "triangles": 10136
       },
       {
         "name": "net/ymca-1897__structure",
@@ -5566,6 +6299,131 @@ export const BAKED_MATERIALS = {
       "orm": "/textures/materials/leather-tan-orm.2b2c18fc.webp"
     }
   },
+  "rawhide-lace": {
+    "baseColor": [
+      0.43,
+      0.2,
+      0.075,
+      1
+    ],
+    "roughness": 0.82,
+    "metalness": 0
+  },
+  "ball-leather-aged": {
+    "baseColor": [
+      0.34,
+      0.15,
+      0.05,
+      1
+    ],
+    "roughness": 0.72,
+    "metalness": 0,
+    "textures": {
+      "albedo": "/textures/materials/ball-1964-albedo.1b37d218.webp",
+      "normal": "/textures/materials/ball-1964-normal.d866d017.webp",
+      "orm": "/textures/materials/ball-1964-orm.454ad913.webp"
+    }
+  },
+  "ball-1964": {
+    "baseColor": [
+      1,
+      1,
+      1,
+      1
+    ],
+    "roughness": 0.66,
+    "metalness": 0,
+    "textures": {
+      "albedo": "/textures/materials/ball-1964-albedo.1b37d218.webp",
+      "normal": "/textures/materials/ball-1964-normal.d866d017.webp",
+      "orm": "/textures/materials/ball-1964-orm.454ad913.webp"
+    }
+  },
+  "ball-1998-white": {
+    "baseColor": [
+      0.88,
+      0.88,
+      0.86,
+      1
+    ],
+    "roughness": 0.52,
+    "metalness": 0,
+    "clearcoat": 0.1,
+    "clearcoatRoughness": 0.3,
+    "textures": {
+      "albedo": "/textures/materials/ball-1998-albedo.af618a3e.webp",
+      "normal": "/textures/materials/ball-1998-normal.e79ca535.webp",
+      "orm": "/textures/materials/ball-1998-orm.a2d01d02.webp"
+    }
+  },
+  "ball-1998-yellow": {
+    "baseColor": [
+      0.96,
+      0.56,
+      0.003,
+      1
+    ],
+    "roughness": 0.52,
+    "metalness": 0,
+    "clearcoat": 0.1,
+    "clearcoatRoughness": 0.3,
+    "textures": {
+      "albedo": "/textures/materials/ball-1998-albedo.af618a3e.webp",
+      "normal": "/textures/materials/ball-1998-normal.e79ca535.webp",
+      "orm": "/textures/materials/ball-1998-orm.a2d01d02.webp"
+    }
+  },
+  "ball-1998-blue": {
+    "baseColor": [
+      0.01,
+      0.027,
+      0.29,
+      1
+    ],
+    "roughness": 0.52,
+    "metalness": 0,
+    "clearcoat": 0.1,
+    "clearcoatRoughness": 0.3,
+    "textures": {
+      "albedo": "/textures/materials/ball-1998-albedo.af618a3e.webp",
+      "normal": "/textures/materials/ball-1998-normal.e79ca535.webp",
+      "orm": "/textures/materials/ball-1998-orm.a2d01d02.webp"
+    }
+  },
+  "ball-2008-yellow": {
+    "baseColor": [
+      0.98,
+      0.56,
+      0.002,
+      1
+    ],
+    "roughness": 0.58,
+    "metalness": 0,
+    "clearcoat": 0.06,
+    "clearcoatRoughness": 0.38,
+    "textures": {
+      "albedo": "/textures/materials/ball-2008-albedo.887aaa40.webp",
+      "normal": "/textures/materials/ball-2008-normal.58bf2f0a.webp",
+      "orm": "/textures/materials/ball-2008-orm.1a2d8d1e.webp"
+    }
+  },
+  "ball-2008-blue": {
+    "baseColor": [
+      0.011,
+      0.027,
+      0.265,
+      1
+    ],
+    "roughness": 0.58,
+    "metalness": 0,
+    "clearcoat": 0.06,
+    "clearcoatRoughness": 0.38,
+    "textures": {
+      "albedo": "/textures/materials/ball-2008-albedo.887aaa40.webp",
+      "normal": "/textures/materials/ball-2008-normal.58bf2f0a.webp",
+      "orm": "/textures/materials/ball-2008-orm.1a2d8d1e.webp"
+    }
+  },
   "canvas": {
     "baseColor": [
       1,
@@ -5681,9 +6539,9 @@ export const BAKED_MATERIALS = {
 } as const satisfies Record<string, BakedMaterial>
 
 export const BAKE_TOTALS = {
-  bytes: 2484920,
-  triangles: 125656,
-  textureBytes: 855744,
+  bytes: 2781404,
+  triangles: 142884,
+  textureBytes: 1075092,
   /** Uncompressed VRAM with mips. The wire size says nothing about this. */
-  textureVramBytes: 37748736,
+  textureVramBytes: 47185920,
 } as const

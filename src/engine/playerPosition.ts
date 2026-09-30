@@ -12,3 +12,6 @@ import { Vector3 } from 'three'
  * fast refresh working.
  */
 export const playerPosition = new Vector3()
+
+/** Shared physical dimensions for movement and transition-door clearance. */
+export const PLAYER_CAPSULE = Object.freeze({ radius: 0.3, height: 1.75 })

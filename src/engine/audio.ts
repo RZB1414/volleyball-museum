@@ -180,6 +180,47 @@ export class MuseumAudio {
     }
   }
 
+  /** Short mortice-latch click followed by a restrained timber hinge creak. */
+  doorOpen(duration = 0.8) {
+    const context = this.context
+    if (!context || !this.master || !this.noise || context.state === 'suspended') return
+
+    const now = context.currentTime
+
+    const latch = context.createOscillator()
+    latch.type = 'triangle'
+    latch.frequency.setValueAtTime(980, now)
+    latch.frequency.exponentialRampToValueAtTime(420, now + 0.055)
+    const latchGain = context.createGain()
+    latchGain.gain.setValueAtTime(0.0001, now)
+    latchGain.gain.exponentialRampToValueAtTime(0.12, now + 0.004)
+    latchGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.07)
+    latch.connect(latchGain)
+    latchGain.connect(this.master)
+    if (this.reverb) latchGain.connect(this.reverb)
+    latch.start(now)
+    latch.stop(now + 0.08)
+
+    const hinge = context.createBufferSource()
+    hinge.buffer = this.noise
+    hinge.loop = true
+    const filter = context.createBiquadFilter()
+    filter.type = 'bandpass'
+    filter.frequency.setValueAtTime(260, now + 0.05)
+    filter.frequency.exponentialRampToValueAtTime(115, now + duration)
+    filter.Q.value = 7
+    const hingeGain = context.createGain()
+    hingeGain.gain.setValueAtTime(0.0001, now + 0.04)
+    hingeGain.gain.exponentialRampToValueAtTime(0.045, now + 0.12)
+    hingeGain.gain.exponentialRampToValueAtTime(0.0001, now + duration)
+    hinge.connect(filter)
+    filter.connect(hingeGain)
+    hingeGain.connect(this.master)
+    if (this.reverb) hingeGain.connect(this.reverb)
+    hinge.start(now + 0.04)
+    hinge.stop(now + duration + 0.02)
+  }
+
   setVolume(value: number) {
     if (this.master) this.master.gain.value = Math.max(0, Math.min(1, value))
   }

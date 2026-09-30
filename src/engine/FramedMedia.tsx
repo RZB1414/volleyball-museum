@@ -11,14 +11,14 @@
  * the museum ships in pt-BR and en, and a baked caption can only be one of them.
  */
 
-import { Text } from '@react-three/drei'
-import { useEffect, useMemo } from 'react'
+import { useLayoutEffect, useMemo } from 'react'
 import { DoubleSide, SRGBColorSpace, TextureLoader, type Texture } from 'three'
 import { useLoader } from '@react-three/fiber'
 
 import { formatCreditLine } from '../content/credit'
 import type { MediaAsset } from '../content/schema'
 import { useMuseum } from '../state/store'
+import { RoomText } from './RoomText'
 
 export type FramedMediaProps = {
   asset: MediaAsset
@@ -26,22 +26,40 @@ export type FramedMediaProps = {
   width: number
   position: [number, number, number]
   rotationY?: number
+  readinessId: string
 }
 
 const MOUNT_BORDER = 0.06
 const CREDIT_SIZE = 0.032
 const CREDIT_GAP = 0.055
 
-export function FramedMedia({ asset, width, position, rotationY = 0 }: FramedMediaProps) {
+function configureMediaTexture(texture: Texture) {
+  let changed = false
+  if (texture.colorSpace !== SRGBColorSpace) {
+    texture.colorSpace = SRGBColorSpace
+    changed = true
+  }
+  if (texture.anisotropy !== 8) {
+    texture.anisotropy = 8
+    changed = true
+  }
+  if (changed) texture.needsUpdate = true
+}
+
+export function FramedMedia({
+  asset,
+  width,
+  position,
+  rotationY = 0,
+  readinessId,
+}: FramedMediaProps) {
   const locale = useMuseum((state) => state.settings.locale)
   const texture = useLoader(TextureLoader, asset.src) as Texture
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     // Photographs are colour, so they decode as sRGB. Getting this wrong washes
     // a sepia print out to grey.
-    texture.colorSpace = SRGBColorSpace
-    texture.anisotropy = 8
-    texture.needsUpdate = true
+    configureMediaTexture(texture)
   }, [texture])
 
   const height = width / asset.aspect
@@ -65,7 +83,8 @@ export function FramedMedia({ asset, width, position, rotationY = 0 }: FramedMed
         with the artwork. troika renders it as an SDF so it stays crisp when the
         player walks right up to read it.
       */}
-      <Text
+      <RoomText
+        readinessId={readinessId}
         position={[
           -(width / 2 + MOUNT_BORDER),
           -(height / 2 + MOUNT_BORDER + CREDIT_GAP),
@@ -84,7 +103,7 @@ export function FramedMedia({ asset, width, position, rotationY = 0 }: FramedMed
         material-toneMapped={false}
       >
         {credit}
-      </Text>
+      </RoomText>
     </group>
   )
 }

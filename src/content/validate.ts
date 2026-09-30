@@ -68,6 +68,7 @@ function validateReferences(content: MuseumContent): ValidationIssue[] {
 
   for (const room of content.rooms) {
     const wallArtIds = new Set<string>()
+    const signIds = new Set<string>()
     for (const portal of room.portals) {
       if (!roomIds.has(portal.toRoom)) {
         error('portal-dangling', `Room "${room.id}" portal "${portal.id}" targets unknown room "${portal.toRoom}".`)
@@ -96,6 +97,21 @@ function validateReferences(content: MuseumContent): ValidationIssue[] {
       }
       if (!(art.width > 0 && art.height > 0)) {
         error('wall-art-size', `Wall art "${art.id}" must have positive dimensions.`)
+      }
+    }
+    for (const sign of room.signage ?? []) {
+      if (signIds.has(sign.id)) {
+        error('sign-duplicate', `Room "${room.id}" repeats sign id "${sign.id}".`)
+      }
+      signIds.add(sign.id)
+      if (
+        sign.presentation === 'dedication-plaque' &&
+        !((sign.width ?? 0) > 0 && (sign.height ?? 0) > 0)
+      ) {
+        error(
+          'sign-size',
+          `Physical sign "${sign.id}" must declare positive width and height.`,
+        )
       }
     }
     if (room.powerLockId && !lockIds.has(room.powerLockId)) {
@@ -599,19 +615,12 @@ export function validateBake(
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = []
   const partNames = new Set(bundles.flatMap((bundle) => bundle.parts.map((part) => part.name)))
+  const exhibitById = new Map(content.exhibits.map((exhibit) => [exhibit.id, exhibit]))
+  const bundleByName = new Map(bundles.map((bundle) => [bundle.name, bundle]))
 
-  const resolves = (recipe: string) =>
-    partNames.has(recipe) || [...partNames].some((name) => name.startsWith(`${recipe}__`))
-
-  for (const exhibit of content.exhibits) {
-    if (!resolves(exhibit.recipe)) {
-      issues.push({
-        severity: 'error',
-        code: 'recipe-not-baked',
-        message: `Exhibit "${exhibit.id}" needs recipe "${exhibit.recipe}", which the bake does not produce. Add it to scripts/bake.mjs or the plinth ships empty.`,
-      })
-    }
-  }
+  const resolvesIn = (recipe: string, names: ReadonlySet<string>) =>
+    names.has(recipe) || [...names].some((name) => name.startsWith(`${recipe}__`))
+  const resolves = (recipe: string) => resolvesIn(recipe, partNames)
 
   for (const room of content.rooms) {
     if (!bundles.some((bundle) => bundle.name === `room-${room.id}`)) {
@@ -620,6 +629,34 @@ export function validateBake(
         code: 'room-shell-not-baked',
         message: `Room "${room.id}" has no baked shell bundle ("room-${room.id}").`,
       })
+    }
+
+    const exhibitBundleName = `exhibits-${room.id}`
+    const exhibitBundle = bundleByName.get(exhibitBundleName)
+    if (room.exhibitIds.length > 0 && !exhibitBundle) {
+      issues.push({
+        severity: 'error',
+        code: 'exhibit-bundle-not-baked',
+        message: `Room "${room.id}" has exhibits but no baked exhibit bundle ("${exhibitBundleName}").`,
+      })
+    }
+
+    if (exhibitBundle) {
+      const exhibitPartNames = new Set(exhibitBundle.parts.map((part) => part.name))
+      for (const exhibitId of room.exhibitIds) {
+        const exhibit = exhibitById.get(exhibitId)
+        if (!exhibit) continue // validateReferences already reports this
+        if (!resolvesIn(exhibit.recipe, exhibitPartNames)) {
+          issues.push({
+            severity: 'error',
+            code: 'recipe-not-baked',
+            message:
+              `Exhibit "${exhibit.id}" in room "${room.id}" needs recipe ` +
+              `"${exhibit.recipe}", which bundle "${exhibitBundleName}" does not produce. ` +
+              `Add it to that room's exhibit bake or the plinth ships empty.`,
+          })
+        }
+      }
     }
 
     /**
@@ -634,6 +671,26 @@ export function validateBake(
           severity: 'error',
           code: 'kit-part-not-baked',
           message: `Room "${room.id}" places kit recipe "${placement.part}", which the bake does not produce.`,
+        })
+      }
+    }
+
+    if ((room.signage ?? []).some((sign) => sign.presentation === 'dedication-plaque') &&
+        !resolves('dedication-plaque')) {
+      issues.push({
+        severity: 'error',
+        code: 'sign-part-not-baked',
+        message: `Room "${room.id}" needs the architectural dedication plaque, which the bake does not produce.`,
+      })
+    }
+
+    if (room.wayfinding) {
+      const part = `wayfinding-plaque-${room.wayfinding.plaqueStyle}`
+      if (!resolves(part)) {
+        issues.push({
+          severity: 'error',
+          code: 'sign-part-not-baked',
+          message: `Room "${room.id}" needs wayfinding recipe "${part}", which the bake does not produce.`,
         })
       }
     }
@@ -759,17 +816,25 @@ export function validateBake(
     }
   }
 
-  // Unused geometry is dead weight in a bundle the player downloads.
-  const usedRecipes = new Set(content.exhibits.map((exhibit) => exhibit.recipe))
+  // Unused geometry is dead weight in a bundle the player downloads. A recipe
+  // used in another room does not make this room's duplicate geometry useful.
   for (const bundle of bundles) {
     if (!bundle.name.startsWith('exhibits-')) continue
+    const room = content.rooms.find((candidate) => bundle.name === `exhibits-${candidate.id}`)
+    const usedRecipes = new Set(
+      (room?.exhibitIds ?? [])
+        .map((id) => exhibitById.get(id)?.recipe)
+        .filter((recipe): recipe is string => recipe !== undefined),
+    )
     for (const part of bundle.parts) {
       const base = part.name.split('__')[0]
       if (!usedRecipes.has(base)) {
         issues.push({
           severity: 'warning',
           code: 'baked-part-unused',
-          message: `Baked part "${part.name}" (${part.triangles} tris) is not referenced by any exhibit.`,
+          message:
+            `Baked part "${part.name}" (${part.triangles} tris) in bundle ` +
+            `"${bundle.name}" is not referenced by an exhibit in that room.`,
         })
       }
     }

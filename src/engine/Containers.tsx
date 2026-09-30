@@ -22,6 +22,7 @@ import { USE_DRACO, USE_MESHOPT } from './bundleCache'
 import type { CollisionWorld } from './collision'
 import { cloneKitPart, disposeKitPart, registerKitColliders } from './kitPart'
 import type { MaterialLibrary } from './materials'
+import { subscribePrimaryAction } from './primaryAction'
 import { useMuseum } from '../state/store'
 import './bvhSetup'
 
@@ -147,6 +148,16 @@ function containerIdFor(object: Object3D | null): string | null {
   return null
 }
 
+/** Raycaster does not inherit the renderer's ancestor visibility check. */
+function isEffectivelyVisible(object: Object3D | null): boolean {
+  let node = object
+  while (node) {
+    if (!node.visible) return false
+    node = node.parent
+  }
+  return true
+}
+
 /**
  * Targets containers from the crosshair and opens them on E.
  *
@@ -166,38 +177,34 @@ export function ContainerTargeting() {
   }, [])
 
   const targetsRef = useRef<Object3D[]>([])
-  const rescanRef = useRef(0)
+  const hitsRef = useRef<ReturnType<Raycaster['intersectObjects']>>([])
+  const scanRef = useRef({ initialised: false, remaining: 0 })
   const lastRef = useRef<string | null>(null)
 
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat) return
-
-      if (event.code === 'Escape') {
-        const state = useMuseum.getState()
-        if (state.activeLock) state.setActiveLock(null)
-        else if (state.openedContainer) state.setOpenedContainer(null)
-        return
-      }
-
-      if (event.code !== 'KeyE') return
+    const interact = () => {
       const state = useMuseum.getState()
 
       // Pressing E again while reading closes the panel, matching the exhibit
       // examine view — one key in, the same key out.
       if (state.openedContainer) {
         state.setOpenedContainer(null)
-        return
+        return true
       }
       if (state.activeLock) {
         state.setActiveLock(null)
-        return
+        return true
       }
       // Exhibits win the key when both are under the crosshair — you are
       // reaching for the object, not the furniture behind it.
-      if (state.examining || state.focusedExhibit || !state.focusedContainer) return
-
-      event.preventDefault()
+      if (
+        state.examining ||
+        state.focusedTransitionDoor ||
+        state.focusedExhibit ||
+        !state.focusedContainer
+      ) {
+        return false
+      }
 
       /**
        * A locked cabinet opens its keypad instead of its contents.
@@ -212,7 +219,7 @@ export function ContainerTargeting() {
       if (container?.lockId && !state.progress.locksOpened.includes(container.lockId)) {
         if (document.pointerLockElement) document.exitPointerLock()
         state.setActiveLock(container.lockId)
-        return
+        return true
       }
 
       const documents = MUSEUM.documents.filter(
@@ -223,24 +230,49 @@ export function ContainerTargeting() {
         if (doc.revealsFactId) state.recordFact(doc.revealsFactId)
       }
       state.setOpenedContainer(state.focusedContainer)
+      return true
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat) return
+
+      if (event.code === 'Escape') {
+        const state = useMuseum.getState()
+        if (state.activeLock) state.setActiveLock(null)
+        else if (state.openedContainer) state.setOpenedContainer(null)
+        return
+      }
+
+      if (event.code !== 'KeyE') return
+      if (interact()) event.preventDefault()
     }
 
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    const unsubscribePrimaryAction = subscribePrimaryAction(interact, 200)
+    return () => {
+      unsubscribePrimaryAction()
+      window.removeEventListener('keydown', onKeyDown)
+    }
   }, [])
 
   useFrame((_, delta) => {
     const state = useMuseum.getState()
     if (state.examining || state.activeLock) return
 
-    rescanRef.current -= delta
-    if (rescanRef.current <= 0 || targetsRef.current.length === 0) {
-      rescanRef.current = 0.5
-      const targets: Object3D[] = []
-      scene.traverse((object) => {
-        if (object.name.startsWith('container:') && object.visible) targets.push(object)
+    const scan = scanRef.current
+    scan.remaining -= delta
+    if (!scan.initialised || scan.remaining <= 0) {
+      scan.initialised = true
+      scan.remaining = 0.5
+
+      // Reuse the list and visit only effectively visible branches. Warmed
+      // rooms remain mounted below `visible = false`, so checking only the
+      // container group's own flag would make hidden cabinets targetable.
+      const targets = targetsRef.current
+      targets.length = 0
+      scene.traverseVisible((object) => {
+        if (object.name.startsWith('container:')) targets.push(object)
       })
-      targetsRef.current = targets
 
       // three's Raycaster skips objects with `visible: false`, which would
       // also skip the interaction proxy. Force it back on for the ray while
@@ -255,9 +287,26 @@ export function ContainerTargeting() {
       }
     }
 
+    const targets = targetsRef.current
+    if (targets.length === 0) {
+      if (lastRef.current !== null) {
+        lastRef.current = null
+        state.setFocusedContainer(null)
+      }
+      return
+    }
+
     raycaster.setFromCamera(CENTRE, camera)
-    const hit = raycaster.intersectObjects(targetsRef.current, true)[0]
+    const hits = hitsRef.current
+    hits.length = 0
+    raycaster.intersectObjects(targets, true, hits)
+    let hitIndex = 0
+    while (hitIndex < hits.length && !isEffectivelyVisible(hits[hitIndex].object)) {
+      hitIndex += 1
+    }
+    const hit = hits[hitIndex]
     const found = hit ? containerIdFor(hit.object) : null
+    hits.length = 0
 
     if (found !== lastRef.current) {
       lastRef.current = found

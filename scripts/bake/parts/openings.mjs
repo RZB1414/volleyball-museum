@@ -252,8 +252,11 @@ export function buildArchitrave({ width = 1.6, height = 2.4 } = {}) {
 // ---------------------------------------------------------------------------
 
 /**
- * A four-panel stile-and-rail door, hinge edge on x = 0 and the leaf running to
- * +X, so a caller stands it open with nothing but `rotation-y` on the node.
+ * A four-panel stile-and-rail door with its hinge edge on x = 0. A left-handed
+ * leaf runs to +X; a right-handed leaf runs to -X. Both variants are authored
+ * directly from positive-size primitives. Mirroring a finished BufferGeometry
+ * would reverse triangle winding, while a negative runtime scale would also
+ * invert tangent space and the collider transform.
  *
  * Built as real members rather than as a slab with decoration stuck to it: two
  * stiles, three rails, two muntins, and four panels set in grooves behind them.
@@ -269,8 +272,14 @@ export function buildArchitrave({ width = 1.6, height = 2.4 } = {}) {
  *
  * Returns { leaf, furniture } — the leaf in oak, the ironmongery in brass.
  */
-export function buildDoorLeaf({ width = 0.8, height = 2.34 } = {}) {
+export function buildDoorLeaf({ width = 0.8, height = 2.34, handed = 'left' } = {}) {
+  if (handed !== 'left' && handed !== 'right') {
+    throw new RangeError(`Door handedness must be "left" or "right", got "${handed}".`)
+  }
+
   const half = LEAF_THICKNESS / 2
+  const direction = handed === 'right' ? -1 : 1
+  const handedX = (x) => direction * x
 
   /**
    * Real proportions, and deliberately not symmetric.
@@ -297,7 +306,7 @@ export function buildDoorLeaf({ width = 0.8, height = 2.34 } = {}) {
   /** A frame member from its own bounding rectangle in the plane of the leaf. */
   const member = (x0, y0, x1, y1, segments) => {
     const box = bevelledBox(x1 - x0, y1 - y0, LEAF_THICKNESS, 0.004, segments)
-    box.translate((x0 + x1) / 2, (y0 + y1) / 2, 0)
+    box.translate(handedX((x0 + x1) / 2), (y0 + y1) / 2, 0)
     return box
   }
 
@@ -345,7 +354,7 @@ export function buildDoorLeaf({ width = 0.8, height = 2.34 } = {}) {
         y1 - y0 + groove * 2,
         panelThickness,
       )
-      panel.translate((x0 + x1) / 2, (y0 + y1) / 2, 0)
+      panel.translate(handedX((x0 + x1) / 2), (y0 + y1) / 2, 0)
       timber.push(panel)
 
       /**
@@ -358,7 +367,7 @@ export function buildDoorLeaf({ width = 0.8, height = 2.34 } = {}) {
         y1 - y0 - fielding * 2,
         panelThickness + 0.012,
       )
-      field.translate((x0 + x1) / 2, (y0 + y1) / 2, 0)
+      field.translate(handedX((x0 + x1) / 2), (y0 + y1) / 2, 0)
       timber.push(field)
     }
   }
@@ -379,10 +388,9 @@ export function buildDoorLeaf({ width = 0.8, height = 2.34 } = {}) {
    * -Z, specifically, so the leaf agrees with the reveal it hangs in without
    * anybody having to think. `buildDoorReveal` plants its stop one leaf
    * thickness in from -Z, which means the door closes into that end and opens
-   * away from it; and rotateY takes +X towards -Z, so hanging the leaf on the
-   * jamb at -width/2 and winding rotation-y positive swings it open. Any other
-   * combination needs the part mirrored, and a mirrored part needs its winding
-   * order flipped, which nothing downstream does.
+   * away from it. The left leaf is authored towards +X and the right leaf
+   * towards -X, so callers can animate the two hinges with opposite Y rotations
+   * while both geometries retain their original winding and positive scale.
    */
   const knuckleZ = -0.02
   for (const y of [0.3, height - 0.3]) {
@@ -397,7 +405,7 @@ export function buildDoorLeaf({ width = 0.8, height = 2.34 } = {}) {
       ],
       12,
     )
-    barrel.translate(0.002, y - 0.049, knuckleZ)
+    barrel.translate(handedX(0.002), y - 0.049, knuckleZ)
     brass.push(barrel)
 
     /**
@@ -412,7 +420,7 @@ export function buildDoorLeaf({ width = 0.8, height = 2.34 } = {}) {
      * edge that thin except triangles.
      */
     const flap = new BoxGeometry(0.004, 0.098, 0.028)
-    flap.translate(-0.0005, y, -half + 0.014)
+    flap.translate(handedX(-0.0005), y, -half + 0.014)
     brass.push(flap)
   }
 
@@ -425,7 +433,8 @@ export function buildDoorLeaf({ width = 0.8, height = 2.34 } = {}) {
    * so every lever ever made has one.
    */
   const backset = 0.072
-  const leverX = width - backset
+  const leverFromHinge = width - backset
+  const leverX = handedX(leverFromHinge)
   const leverY = (lockRailBottom + lockRailTop) / 2
 
   for (const face of [1, -1]) {
@@ -456,7 +465,9 @@ export function buildDoorLeaf({ width = 0.8, height = 2.34 } = {}) {
         [-0.072, -0.004, 0.028],
         [-0.098, -0.013, 0.021],
         [-0.108, -0.026, 0.012],
-      ].map(([x, y, z]) => new Vector3(leverX + x, leverY + y, face * (half + z))),
+      ].map(([x, y, z]) =>
+        new Vector3(handedX(leverFromHinge + x), leverY + y, face * (half + z)),
+      ),
       false,
       'catmullrom',
       0.5,
@@ -466,7 +477,7 @@ export function buildDoorLeaf({ width = 0.8, height = 2.34 } = {}) {
     // A tube is open at both ends; the tail is buried in the neck, the tip is
     // not, and an open tip reads as a hole punched in the handle.
     const tip = new SphereGeometry(0.0105, 8, 6)
-    tip.translate(leverX - 0.108, leverY - 0.026, face * (half + 0.012))
+    tip.translate(handedX(leverFromHinge - 0.108), leverY - 0.026, face * (half + 0.012))
     brass.push(tip)
 
     // Keyhole escutcheon. A mortice lock needs a key, and the little disc under

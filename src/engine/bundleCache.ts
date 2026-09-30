@@ -7,6 +7,8 @@
  */
 
 import { useGLTF } from '@react-three/drei'
+import { useLoader } from '@react-three/fiber'
+import { TextureLoader } from 'three'
 
 /**
  * Draco is deliberately off everywhere in this project.
@@ -27,4 +29,9 @@ export function unloadBundle(url: string) {
 
 export function preloadBundle(url: string) {
   useGLTF.preload(url, USE_DRACO, USE_MESHOPT)
+}
+
+/** Starts network fetch and image decode without creating a second cache. */
+export function preloadTexture(url: string) {
+  useLoader.preload(TextureLoader, url)
 }

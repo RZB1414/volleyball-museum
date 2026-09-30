@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="320" viewBox="0 0 1600 320" role="img" aria-label="Mapa-múndi abstrato e seis medalhões de voleibol">
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111820"/>
+      <stop offset="0.5" stop-color="#18232d"/>
+      <stop offset="1" stop-color="#0b1016"/>
+    </linearGradient>
+    <linearGradient id="brass" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#6f4e20"/>
+      <stop offset="0.27" stop-color="#d9b66b"/>
+      <stop offset="0.56" stop-color="#8c672e"/>
+      <stop offset="0.82" stop-color="#f0d18c"/>
+      <stop offset="1" stop-color="#684718"/>
+    </linearGradient>
+    <radialGradient id="medal" cx="36%" cy="28%" r="74%">
+      <stop offset="0" stop-color="#ecd18f"/>
+      <stop offset="0.35" stop-color="#b8873d"/>
+      <stop offset="0.74" stop-color="#64451f"/>
+      <stop offset="1" stop-color="#2a2117"/>
+    </radialGradient>
+    <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.14"/>
+      <stop offset="0.46" stop-color="#8ca6b7" stop-opacity="0.025"/>
+      <stop offset="1" stop-color="#020609" stop-opacity="0.24"/>
+    </linearGradient>
+    <pattern id="grain" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M0 8L48 2M0 25L48 20M0 42L48 36" fill="none" stroke="#d9b66b" stroke-opacity="0.025" stroke-width="1"/>
+      <circle cx="9" cy="17" r="0.8" fill="#ffffff" opacity="0.035"/>
+      <circle cx="34" cy="31" r="0.7" fill="#ffffff" opacity="0.025"/>
+    </pattern>
+    <pattern id="map-grid" width="42" height="42" patternUnits="userSpaceOnUse">
+      <path d="M42 0H0V42" fill="none" stroke="#c29a50" stroke-opacity="0.11" stroke-width="1"/>
+    </pattern>
+    <clipPath id="medal-1"><circle cx="1030" cy="95" r="46"/></clipPath>
+    <clipPath id="medal-2"><circle cx="1240" cy="95" r="46"/></clipPath>
+    <clipPath id="medal-3"><circle cx="1450" cy="95" r="46"/></clipPath>
+    <clipPath id="medal-4"><circle cx="1030" cy="225" r="46"/></clipPath>
+    <clipPath id="medal-5"><circle cx="1240" cy="225" r="46"/></clipPath>
+    <clipPath id="medal-6"><circle cx="1450" cy="225" r="46"/></clipPath>
+  </defs>
+
+  <rect width="1600" height="320" fill="#080c10"/>
+  <rect x="9" y="9" width="1582" height="302" rx="5" fill="url(#panel)" stroke="#85632f" stroke-width="3"/>
+  <rect x="17" y="17" width="1566" height="286" rx="2" fill="url(#grain)" stroke="#d1ac62" stroke-opacity="0.42"/>
+  <path d="M910 31V289" stroke="#d3ae63" stroke-opacity="0.62" stroke-width="2"/>
+  <path d="M922 44V276" stroke="#d3ae63" stroke-opacity="0.18"/>
+
+  <!-- Abstract orientation map: deliberately simplified rather than geographic tracing. -->
+  <rect x="43" y="38" width="832" height="244" rx="3" fill="url(#map-grid)" stroke="#ba8e43" stroke-opacity="0.33"/>
+  <ellipse cx="459" cy="160" rx="360" ry="108" fill="none" stroke="#c8a25e" stroke-opacity="0.22"/>
+  <ellipse cx="459" cy="160" rx="232" ry="108" fill="none" stroke="#c8a25e" stroke-opacity="0.14"/>
+  <path d="M99 160H819M459 52V268" fill="none" stroke="#c8a25e" stroke-opacity="0.16"/>
+
+  <g fill="url(#brass)" stroke="#f0d18c" stroke-opacity="0.43" stroke-width="1.2">
+    <path d="M136 101l28-18 44-7 33 10 18 20 29 5 18 18-10 18-27 2-14 23-19 4-7 31-20 27-17-8-5-39-18-19-28-3-16-23 9-20z"/>
+    <path d="M278 196l28 11 20 24-9 26-21 6-16-23-11-29z"/>
+    <path d="M366 94l37-21 41 4 18 17 47-7 30 11 33-3 49 13 23 22-12 17-33 4-20-10-22 12-30-2-18 19-26-6-18 9-23-15-29 1-24-18-37-6-6-20z"/>
+    <path d="M444 171l31 7 25 23 5 30-20 31-23-3-11-38-20-25z"/>
+    <path d="M611 189l29 5 18 17-10 19-25 3-18-15z"/>
+    <path d="M687 172l46 3 30 21 29 4 10 20-18 18-38-5-27 10-35-19-10-31z"/>
+    <path d="M793 121l20-10 23 12-7 18-25 4z"/>
+  </g>
+
+  <g fill="none" stroke="#f0cd7c" stroke-linecap="round">
+    <path d="M190 119C321 36 617 42 769 188" stroke-opacity="0.47" stroke-width="2"/>
+    <path d="M244 211C392 286 650 236 779 136" stroke-opacity="0.31"/>
+    <path d="M403 95C506 111 617 164 715 221" stroke-opacity="0.38" stroke-dasharray="4 8"/>
+    <path d="M199 119l5-9 8 6M769 188l-11-1 4-9" stroke-opacity="0.62" stroke-width="2"/>
+  </g>
+  <g fill="#efd085">
+    <circle cx="190" cy="119" r="4"/><circle cx="403" cy="95" r="3.5"/><circle cx="715" cy="221" r="4"/><circle cx="779" cy="136" r="3.5"/>
+  </g>
+
+  <!-- Six object studies, arranged as a museum collection rather than labelled UI. -->
+  <g fill="url(#medal)" stroke="#d7b56e" stroke-width="2">
+    <circle cx="1030" cy="95" r="46"/><circle cx="1240" cy="95" r="46"/><circle cx="1450" cy="95" r="46"/>
+    <circle cx="1030" cy="225" r="46"/><circle cx="1240" cy="225" r="46"/><circle cx="1450" cy="225" r="46"/>
+  </g>
+  <g fill="none" stroke="#f1d58f" stroke-opacity="0.78" stroke-linecap="round">
+    <g clip-path="url(#medal-1)" stroke-width="3">
+      <path d="M978 76c35 1 52 18 57 65M1007 44c-1 33 16 51 64 54M990 121c31-19 49-46 51-78"/>
+    </g>
+    <g clip-path="url(#medal-2)" stroke-width="2.5">
+      <circle cx="1240" cy="95" r="27"/><path d="M1218 79l22 16 22-16M1218 111l22-16 22 16"/>
+    </g>
+    <g clip-path="url(#medal-3)" stroke-width="3">
+      <path d="M1405 67c29 10 46 35 48 74M1425 48c11 31 34 44 75 40M1408 119c34-9 58-27 75-60"/>
+    </g>
+    <g clip-path="url(#medal-4)" stroke-width="2.5">
+      <path d="M997 192l66 66M991 224h78M1030 179v92"/><circle cx="1030" cy="225" r="19"/>
+    </g>
+    <g clip-path="url(#medal-5)" stroke-width="3">
+      <path d="M1194 216c34-2 54 14 63 58M1219 177c1 33 21 53 68 55M1203 251c28-18 45-41 48-73"/>
+    </g>
+    <g clip-path="url(#medal-6)" stroke-width="2.5">
+      <path d="M1414 204l36-21 36 21v42l-36 21-36-21zM1414 204l36 21 36-21M1450 225v42"/>
+    </g>
+  </g>
+
+  <g fill="none" stroke="#cba35c" stroke-opacity="0.36">
+    <path d="M963 37h134M1173 37h134M1383 37h134M963 153h134M1173 153h134M1383 153h134"/>
+    <path d="M963 167h134M1173 167h134M1383 167h134M963 283h134M1173 283h134M1383 283h134"/>
+  </g>
+  <rect x="18" y="18" width="1564" height="284" fill="url(#glass)" pointer-events="none"/>
+</svg>

@@ -23,6 +23,18 @@ export const en = {
   'ui.quality': 'Graphics quality',
   'ui.readingMode': 'Reading mode',
   'ui.credits': 'Credits and collection',
+  'mobile.controls': 'Touch controls',
+  'mobile.move': 'Movement stick',
+  'mobile.look': 'Camera stick',
+  'mobile.action': 'Action',
+  'mobile.landscape.title': 'Rotate your device',
+  'mobile.landscape.body':
+    'The museum plays in landscape. Leave split-screen mode if necessary.',
+  'mobile.landscape.activate': 'Enable landscape mode',
+  'mobile.fullscreen.resume': 'Resume fullscreen',
+  'mobile.fullscreen.install':
+    'In this browser, use “Add to Home Screen” for a complete fullscreen experience.',
+  'mobile.fullscreen.dismiss': 'Got it',
 
   'prompt.examine': 'Examine',
   'prompt.read': 'Read',
@@ -31,6 +43,10 @@ export const en = {
   'prompt.locked': 'Locked',
   'prompt.close': 'Close',
   'prompt.power': 'Restore power',
+  'prompt.door.open': 'Open door',
+  'prompt.door.loading': 'Preparing the next gallery…',
+  'prompt.door.opening': 'Opening…',
+  'prompt.door.otherSide': 'Opens from the other side',
   'power.restored': 'Power restored',
 
   'map.title': 'Museum plan',
@@ -73,11 +89,17 @@ export const en = {
   // ---------------------------------------------------------------------
   'room.atrium.title': 'Atrium',
   'room.atrium.nickname': 'the hall with the plinth',
+  'room.atrium.sign.eyebrow': 'WAYFINDING',
+  'room.atrium.sign.title': 'CENTRAL ATRIUM',
   'room.holyoke.title': 'Wing 1 · Holyoke',
   'room.holyoke.subtitle': '1895 – 1929',
   'room.holyoke.nickname': 'the room with the laced ball',
+  'room.holyoke.sign.eyebrow': 'WING 01 · ORIGINS',
+  'room.holyoke.sign.title': 'HOLYOKE',
   'room.office.title': "Curator's office",
   'room.office.nickname': 'the room with the green lamp',
+  'room.office.sign.eyebrow': 'COLLECTIONS · RESEARCH',
+  'room.office.sign.title': "CURATOR'S OFFICE",
   'power.atrium.title': 'Atrium main breaker',
   'power.holyoke.title': 'Wing 1 breaker panel',
   'power.office.title': "Curator's lamp",
@@ -85,14 +107,56 @@ export const en = {
   // ---------------------------------------------------------------------
   // Wall lettering
   // ---------------------------------------------------------------------
+  'sign.atrium.eyebrow': 'SINCE 1895 · MEMORY IN MOTION',
   'sign.atrium.heading': 'MUSEUM OF VOLLEYBALL',
   'sign.atrium.body':
-    'A game invented in 1895 for people who found basketball too rough. ' +
+    'A game invented in 1895 for people who found basketball too rough.\n' +
     'Reopening tomorrow. You are the one who finishes the install.',
 
   // ---------------------------------------------------------------------
   // Wing 1 — Holyoke
   // ---------------------------------------------------------------------
+  // Atrium — the ball through time.
+  'exhibit.atrium-ball-laced.title': 'Leather, seams and lacing',
+  'exhibit.atrium-ball-laced.label':
+    'Before the recessed valve, the cover had to open to reach the bladder. This reconstruction combines the form shown in 1918–1920 catalogues with a surviving ball from about 1925: leather, raised seams and crossed lacing.',
+  'exhibit.atrium-ball-laced.catalogue':
+    'Laced volleyball, c. 1900–1925. A typological reconstruction, not a replica of the original 1895 ball. Twelve broad sections form a slightly soft sphere; olive-brown leather darkens along the seams, while an elongated opening is closed with rawhide lace.',
+  'hotspot.atrium-ball-laced.lacing.label':
+    'Oval opening with crossed lacing, before the modern recessed valve',
+  'hotspot.atrium-ball-laced.seam.label':
+    'Slightly raised outseam, vulnerable to wear and deformation',
+
+  'exhibit.atrium-ball-tokyo-1964.title': 'The ball enters the Games',
+  'exhibit.atrium-ball-tokyo-1964.label':
+    'Tokyo 1964 hosted the first Olympic volleyball tournament. Surviving official balls show eighteen panels in six groups of three, ivory-white leather and narrow seam channels. The collection record does not identify a maker for this reconstruction.',
+  'exhibit.atrium-ball-tokyo-1964.catalogue':
+    'Official Tokyo 1964 ball, reconstructed without markings. The unused example held by the Japan Sport Council is ivory, with fine grain, yellowed seams and small ochre stains. The used ball is darkened, creased and deformed — evidence behind this model’s restrained wear.',
+  'hotspot.atrium-ball-tokyo-1964.panels.label':
+    'Eighteen near-rectangular panels arranged in six groups of three',
+  'hotspot.atrium-ball-tokyo-1964.seam.label':
+    'Narrow recessed seam channel with no exposed thread',
+
+  'exhibit.atrium-ball-colour-1998.title': 'The game gains colour',
+  'exhibit.atrium-ball-colour-1998.label':
+    'At the 1998 World Championship, the official ball adopted white, yellow and blue for clearer reading on court and on television. The MVL200 retained the classic construction: eighteen hand-stitched panels, now arranged as broad contrasting bands.',
+  'exhibit.atrium-ball-colour-1998.catalogue':
+    'Mikasa MVL200, the design adopted for the 1998 World Championship. Reconstructed without logos. Its six trios alternate white–yellow–white and blue–yellow–blue; the cover has fine grain, a satin sheen and recessed seams, without the dimples of the next generation.',
+  'hotspot.atrium-ball-colour-1998.sequence.label':
+    'White–yellow–white and blue–yellow–blue panel sequences',
+  'hotspot.atrium-ball-colour-1998.seam.label':
+    'Hand-stitched panels; the thread remains hidden within the channel',
+
+  'exhibit.atrium-ball-eight-panel-2008.title': 'Eight panels, thousands of dimples',
+  'exhibit.atrium-ball-eight-panel-2008.label':
+    'Introduced in 2008, the MVA200 replaced eighteen panels with eight curved petals. Violet-blue and yellow form a spiral; shallow dimples and microtexture cover the entire surface. The change affected both its visual read and its contact with the air.',
+  'exhibit.atrium-ball-eight-panel-2008.catalogue':
+    'Mikasa MVA200, 2008. Reconstructed without Olympic, FIVB or manufacturer marks. Eight curved panels joined without visible topstitching form small rosettes where they meet. The microfibre and polyurethane cover combines regular depressions with a finer texture between them.',
+  'hotspot.atrium-ball-eight-panel-2008.panels.label':
+    'Eight petal-shaped panels assembled into a helical pattern',
+  'hotspot.atrium-ball-eight-panel-2008.dimples.label':
+    'Shallow dimples over a second layer of fine microtexture',
+
   'exhibit.ball-improvised.title': 'The ball that did not exist',
   'exhibit.ball-improvised.label':
     'Morgan tried a basketball first: too heavy. Then the bare bladder with the leather stripped off: too light, it floated. Without a proper ball, the game he had just invented did not work. The answer came from a commission.',

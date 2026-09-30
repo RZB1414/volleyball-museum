@@ -146,6 +146,125 @@ const LOCKS = [
 // ---------------------------------------------------------------------------
 
 /**
+ * The atrium's low console is a four-object timeline of the volleyball itself.
+ * These are deliberately unbranded reconstructions: the preserved references
+ * teach panel construction, materials and wear without turning protected
+ * wordmarks into reusable game assets.
+ */
+const ATRIUM_EXHIBITS = [
+  {
+    id: 'atrium-ball-laced',
+    era: 'holyoke',
+    recipe: 'ball/leather-laced-1900',
+    position: [-2.4, 0.821, -8.28],
+    // Keep the closure on the visitor-facing quarter, but off the reticle so
+    // the crossed rawhide remains visible before examination begins.
+    rotationY: -0.34,
+    mount: 'floor',
+    supportY: 0.716,
+    titleKey: 'exhibit.atrium-ball-laced.title',
+    labelKey: 'exhibit.atrium-ball-laced.label',
+    catalogueKey: 'exhibit.atrium-ball-laced.catalogue',
+    threads: ['ball'],
+    hotspots: [
+      {
+        id: 'lacing',
+        localPosition: [0, 0, 0.106],
+        labelKey: 'hotspot.atrium-ball-laced.lacing.label',
+        requiredForCatalogue: true,
+      },
+      {
+        id: 'raised-seam',
+        localPosition: [0.092, 0.035, 0.035],
+        labelKey: 'hotspot.atrium-ball-laced.seam.label',
+        requiredForCatalogue: false,
+      },
+    ],
+  },
+  {
+    id: 'atrium-ball-tokyo-1964',
+    era: 'tokyo',
+    recipe: 'ball/classic-white-18-panel',
+    position: [-1.6, 0.821, -8.28],
+    rotationY: 0.24,
+    mount: 'floor',
+    supportY: 0.716,
+    titleKey: 'exhibit.atrium-ball-tokyo-1964.title',
+    labelKey: 'exhibit.atrium-ball-tokyo-1964.label',
+    catalogueKey: 'exhibit.atrium-ball-tokyo-1964.catalogue',
+    threads: ['ball'],
+    hotspots: [
+      {
+        id: 'panel-trio',
+        localPosition: [0.098, 0.025, 0.020],
+        labelKey: 'hotspot.atrium-ball-tokyo-1964.panels.label',
+        requiredForCatalogue: false,
+      },
+      {
+        id: 'recessed-seam',
+        localPosition: [0.030, -0.025, -0.098],
+        labelKey: 'hotspot.atrium-ball-tokyo-1964.seam.label',
+        requiredForCatalogue: true,
+      },
+    ],
+  },
+  {
+    id: 'atrium-ball-colour-1998',
+    era: 'rewrite',
+    recipe: 'ball/tricolour-1998',
+    position: [-0.8, 0.821, -8.28],
+    rotationY: -0.32,
+    mount: 'floor',
+    supportY: 0.716,
+    titleKey: 'exhibit.atrium-ball-colour-1998.title',
+    labelKey: 'exhibit.atrium-ball-colour-1998.label',
+    catalogueKey: 'exhibit.atrium-ball-colour-1998.catalogue',
+    threads: ['ball'],
+    hotspots: [
+      {
+        id: 'colour-sequence',
+        localPosition: [0.088, 0.040, 0.045],
+        labelKey: 'hotspot.atrium-ball-colour-1998.sequence.label',
+        requiredForCatalogue: false,
+      },
+      {
+        id: 'hand-stitched-channel',
+        localPosition: [-0.045, -0.020, -0.093],
+        labelKey: 'hotspot.atrium-ball-colour-1998.seam.label',
+        requiredForCatalogue: true,
+      },
+    ],
+  },
+  {
+    id: 'atrium-ball-eight-panel-2008',
+    era: 'global',
+    recipe: 'ball/eight-panel-2008',
+    position: [0, 0.821, -8.28],
+    rotationY: 0.38,
+    mount: 'floor',
+    supportY: 0.716,
+    titleKey: 'exhibit.atrium-ball-eight-panel-2008.title',
+    labelKey: 'exhibit.atrium-ball-eight-panel-2008.label',
+    catalogueKey: 'exhibit.atrium-ball-eight-panel-2008.catalogue',
+    threads: ['ball'],
+    hotspots: [
+      {
+        id: 'spiral-panels',
+        localPosition: [0.010, 0.010, 0.105],
+        labelKey: 'hotspot.atrium-ball-eight-panel-2008.panels.label',
+        requiredForCatalogue: false,
+      },
+      {
+        id: 'dimpled-surface',
+        localPosition: [0.060, -0.010, -0.086],
+        labelKey: 'hotspot.atrium-ball-eight-panel-2008.dimples.label',
+        requiredForCatalogue: true,
+      },
+    ],
+  },
+] as const satisfies readonly ExhibitData[]
+
+/**
  * Eight wall labels, the hard budget. Everything beyond this lives in the
  * archive layer behind drawers, where it costs the casual visitor nothing.
  *
@@ -474,6 +593,11 @@ const ROOMS = [
     id: 'atrium',
     titleKey: 'room.atrium.title',
     nicknameKey: 'room.atrium.nickname',
+    wayfinding: {
+      eyebrowKey: 'room.atrium.sign.eyebrow',
+      titleKey: 'room.atrium.sign.title',
+      plaqueStyle: 'walnut',
+    },
     // Double height, and the torch cannot reach the ceiling on first entry.
     // The scale is deliberately unreadable in the dark; the moment the house
     // lights come up is the biggest payoff in the build.
@@ -488,6 +612,7 @@ const ROOMS = [
       position: [-8.62, 1.05, -4.4],
       rotationY: Math.PI / 2,
       titleKey: 'power.atrium.title',
+      pilotPosition: [0, 0.32, 0.3],
     },
     portals: [
       {
@@ -496,6 +621,13 @@ const ROOMS = [
         position: [-9, 0, -2],
         ...DOOR,
         rotationY: Math.PI / 2,
+        transitionDoor: {
+          style: 'double-panel',
+          openDuration: 0.8,
+          closeDuration: 0.55,
+          closeDistance: 1.25,
+          warmDistance: 5,
+        },
       },
       {
         id: 'atrium-to-office',
@@ -503,6 +635,13 @@ const ROOMS = [
         position: [9, 0, 3],
         ...DOOR,
         rotationY: -Math.PI / 2,
+        transitionDoor: {
+          style: 'double-panel',
+          openDuration: 0.8,
+          closeDuration: 0.55,
+          closeDistance: 1.25,
+          warmDistance: 5,
+        },
       },
       {
         /**
@@ -520,6 +659,17 @@ const ROOMS = [
         ...DOOR,
         rotationY: Math.PI / 2,
         oneWay: true,
+        // This is a service shortcut, not a second public entrance to the wing.
+        // Repeating the Holyoke plaque here made both openings look equivalent.
+        sign: false,
+        transitionDoor: {
+          style: 'double-panel',
+          openDuration: 0.8,
+          closeDuration: 0.55,
+          closeDistance: 1.25,
+          warmDistance: 3.5,
+          opensFrom: 'holyoke',
+        },
       },
     ],
     /**
@@ -537,25 +687,61 @@ const ROOMS = [
     kit: [
       { part: 'atrium-floor-inlay', position: [0, 0, 0] },
       { part: 'atrium-central-podium', position: [0, 0, 0], rotationY: Math.PI / 2 },
-      { part: 'rope-stanchion', position: [-1.3, 0, -1.3] },
-      { part: 'rope-stanchion', position: [1.3, 0, -1.3] },
-      { part: 'rope-stanchion', position: [-1.3, 0, 1.3] },
-      { part: 'rope-stanchion', position: [1.3, 0, 1.3] },
-      { part: 'rope-span', position: [0, 0, -1.3] },
-      { part: 'rope-span', position: [0, 0, 1.3] },
-      { part: 'rope-span', position: [-1.3, 0, 0], rotationY: Math.PI / 2 },
-      { part: 'rope-span', position: [1.3, 0, 0], rotationY: Math.PI / 2 },
 
-      { part: 'atrium-reception-desk', position: [-4.05, 0, 7.7], rotationY: Math.PI },
-      { part: 'donation-box', position: [0.15, 0, 7.55], rotationY: Math.PI },
-      { part: 'atrium-display-tower', position: [-7.9, 0, -5.55], rotationY: Math.PI / 2 },
-      { part: 'atrium-lectern', position: [-7.2, 0, -4.05], rotationY: Math.PI / 2 },
-      { part: 'atrium-sofa', position: [-4.7, 0, -8.34] },
+      // The low, repeated segments describe one circular object without closing
+      // the floor into a square pen. The open visual rhythm keeps every route
+      // around the landmark equally legible from the initial spawn.
+      { part: 'atrium-barrier-segment', position: [0, 0, 0] },
+      { part: 'atrium-barrier-segment', position: [0, 0, 0], rotationY: Math.PI / 4 },
+      { part: 'atrium-barrier-segment', position: [0, 0, 0], rotationY: Math.PI / 2 },
+      { part: 'atrium-barrier-segment', position: [0, 0, 0], rotationY: (3 * Math.PI) / 4 },
+      { part: 'atrium-barrier-segment', position: [0, 0, 0], rotationY: Math.PI },
+      { part: 'atrium-barrier-segment', position: [0, 0, 0], rotationY: (5 * Math.PI) / 4 },
+      { part: 'atrium-barrier-segment', position: [0, 0, 0], rotationY: (3 * Math.PI) / 2 },
+      { part: 'atrium-barrier-segment', position: [0, 0, 0], rotationY: (7 * Math.PI) / 4 },
+
+      // Pull the counter 1.2 m into the room while its separately colliding
+      // storage bank remains against the rear wall. This creates a genuine
+      // staff aisle in front of both computers; the donation box moves east so
+      // the second entrance is also wider than the player's capsule.
+      { part: 'atrium-reception-desk', position: [-4.05, 0, 6.5], rotationY: Math.PI },
+      { part: 'donation-box', position: [0.65, 0, 7.55], rotationY: Math.PI },
+
+      // A compact switchback gives the desk a believable arrival sequence but
+      // stops well short of both the shortcut fan and the central circulation.
+      { part: 'rope-stanchion', position: [-6.2, 0, 4.9] },
+      { part: 'rope-stanchion', position: [-4.55, 0, 4.9] },
+      { part: 'rope-stanchion', position: [-2.9, 0, 4.9] },
+      { part: 'rope-stanchion', position: [-2.9, 0, 3.25] },
+      { part: 'rope-stanchion', position: [-4.55, 0, 3.25] },
+      { part: 'rope-span', position: [-5.375, 0, 4.9] },
+      { part: 'rope-span', position: [-3.725, 0, 4.9] },
+      { part: 'rope-span', position: [-2.9, 0, 4.075], rotationY: Math.PI / 2 },
+      { part: 'rope-span', position: [-3.725, 0, 3.25] },
+
+      // Orientation and reading station between the two west doors. Moving the
+      // former tower away also leaves the first-room breaker unobstructed.
+      { part: 'atrium-lectern', position: [-7.15, 0, 2.2], rotationY: Math.PI / 2 },
+
+      // The north-east quarter now works as one furnished pause-and-display
+      // zone. Its southern edge remains more than two metres from the podium,
+      // while the office route on the east stays completely clear.
+      { part: 'atrium-display-console', position: [-1.2, 0, -8.28] },
+      { part: 'atrium-lounge-set', position: [4.1, 0, -6.15] },
+      { part: 'atrium-sofa', position: [4.8, 0, -8.34] },
+      { part: 'atrium-display-tower', position: [7.55, 0, -5.75], rotationY: -Math.PI / 2 },
+      { part: 'atrium-divider-screen', position: [-1.95, 0, -6.25], rotationY: Math.PI / 12 },
+      { part: 'atrium-divider-screen', position: [0.45, 0, -4.85], rotationY: -Math.PI / 14 },
+      {
+        part: 'atrium-divider-screen',
+        position: [6.8, 0, -3.8],
+        rotationY: -Math.PI / 2 + Math.PI / 12,
+      },
 
       { part: 'atrium-wall-bay-plain', position: [-8.875, 0, -7.35], rotationY: Math.PI / 2 },
       { part: 'atrium-wall-bay-plain', position: [-8.875, 0, -4.45], rotationY: Math.PI / 2 },
-      { part: 'atrium-wall-bay', position: [-8.875, 0, 0.45], rotationY: Math.PI / 2 },
-      { part: 'atrium-wall-bay', position: [-8.875, 0, 3.95], rotationY: Math.PI / 2 },
+      { part: 'atrium-wall-bay-plain', position: [-8.875, 0, 0.45], rotationY: Math.PI / 2 },
+      { part: 'atrium-wall-bay-plain', position: [-8.875, 0, 3.95], rotationY: Math.PI / 2 },
       { part: 'atrium-wall-bay-plain', position: [-6.4, 0, -8.875] },
       { part: 'atrium-wall-bay-plain', position: [-3.2, 0, -8.875] },
       { part: 'atrium-wall-bay-plain', position: [0, 0, -8.875] },
@@ -578,13 +764,16 @@ const ROOMS = [
 
       { part: 'atrium-ceiling-coffer', position: [0, 8.39, 0], rotationY: Math.PI / 2 },
       { part: 'atrium-aerial-installation', position: [-1.8, 8.12, 0], rotationY: Math.PI / 2, scale: 1.32 },
-      { part: 'atrium-pin-pendant', position: [-4.8, 8.22, 4.8], lightTarget: [-4.05, 0.8, 7.4] },
-      { part: 'atrium-pin-pendant', position: [-4.5, 8.22, -4.8], lightTarget: [-7.8, 1.25, -5.55] },
-      { part: 'atrium-pin-pendant', position: [-1.9, 8.22, 3.1], lightTarget: [-8.6, 4.6, 3.75] },
-      { part: 'atrium-pin-pendant', position: [1.8, 8.22, 4.4], lightTarget: [0, 0.9, 0] },
-      { part: 'atrium-pin-pendant', position: [-0.9, 8.22, -3.4], lightTarget: [-8.6, 4.6, -4.25] },
-      { part: 'atrium-pin-pendant', position: [3.8, 8.22, -4.7], lightTarget: [-4.6, 4.3, -8.7] },
-      { part: 'atrium-pin-pendant', position: [4.5, 8.22, 0.9], lightTarget: [-4.6, 4.3, 8.7] },
+      { part: 'atrium-pin-pendant', position: [-4.8, 8.22, 4.8], lightTarget: [-4.05, 0.8, 6.2] },
+      { part: 'atrium-pin-pendant', position: [-5.2, 8.22, 1.8], lightTarget: [-8.55, 1.55, 2.2] },
+      { part: 'atrium-pin-pendant', position: [1.8, 8.22, 3.6], lightTarget: [0, 0.9, 0] },
+      { part: 'atrium-pin-pendant', position: [6.1, 8.22, -4.4], lightTarget: [7.55, 1.25, -5.75] },
+      // The ball timeline is the only examineable collection in the hub, so it
+      // takes the fifth focused key; the adjacent lounge remains legible in the
+      // broad atrium wash.
+      { part: 'atrium-pin-pendant', position: [-1.2, 8.22, -5.55], lightTarget: [-1.2, 0.82, -8.28] },
+      { part: 'atrium-pin-pendant', position: [-0.9, 8.22, -3.4] },
+      { part: 'atrium-pin-pendant', position: [4.5, 8.22, 0.9] },
       { part: 'atrium-pin-pendant', position: [0.6, 8.22, 5.6], scale: 0.82 },
       { part: 'atrium-pin-pendant', position: [2.7, 8.22, -1.7], scale: 1.12 },
     ],
@@ -600,16 +789,31 @@ const ROOMS = [
     signage: [
       {
         id: 'atrium-dedication',
+        eyebrowKey: 'sign.atrium.eyebrow',
         headingKey: 'sign.atrium.heading',
         bodyKey: 'sign.atrium.body',
         position: [8.84, 2.75, -2.4],
         rotationY: -Math.PI / 2,
-        size: 0.44,
-        maxWidth: 5.2,
+        presentation: 'dedication-plaque',
+        width: 5.2,
+        height: 1.5,
+        size: 0.33,
+        maxWidth: 3.55,
         align: 'left',
       },
     ],
     wallArt: [
+      {
+        id: 'atrium-orientation-wall',
+        mediaId: 'graphic-atrium-orientation-wall',
+        position: [-8.68, 1.55, 2.2],
+        rotationY: Math.PI / 2,
+        width: 5.8,
+        height: 1.16,
+        presentation: 'thin-framed',
+        selfIllumination: 0.12,
+        showCredit: false,
+      },
       {
         id: 'atrium-mural-attack',
         mediaId: 'graphic-atrium-mural-attack',
@@ -677,7 +881,12 @@ const ROOMS = [
         showCredit: false,
       },
     ],
-    exhibitIds: [],
+    exhibitIds: [
+      'atrium-ball-laced',
+      'atrium-ball-tokyo-1964',
+      'atrium-ball-colour-1998',
+      'atrium-ball-eight-panel-2008',
+    ],
     documentIds: [],
     audio: [
       {
@@ -693,6 +902,12 @@ const ROOMS = [
     id: 'holyoke',
     titleKey: 'room.holyoke.title',
     nicknameKey: 'room.holyoke.nickname',
+    wayfinding: {
+      eyebrowKey: 'room.holyoke.sign.eyebrow',
+      titleKey: 'room.holyoke.sign.title',
+      subtitleKey: 'room.holyoke.subtitle',
+      plaqueStyle: 'navy',
+    },
     shell: { width: 12, depth: 16, height: 4.2 },
     /**
      * West of the atrium, back to back.
@@ -715,6 +930,7 @@ const ROOMS = [
       position: [5.86, 1.05, -4.2],
       rotationY: -Math.PI / 2,
       titleKey: 'power.holyoke.title',
+      pilotPosition: [0, 0.32, 0.3],
     },
     powerLockId: undefined,
     portals: [
@@ -735,6 +951,7 @@ const ROOMS = [
         ...DOOR,
         rotationY: -Math.PI / 2,
         oneWay: true,
+        sign: false,
       },
     ],
     /**
@@ -842,6 +1059,11 @@ const ROOMS = [
     id: 'office',
     titleKey: 'room.office.title',
     nicknameKey: 'room.office.nickname',
+    wayfinding: {
+      eyebrowKey: 'room.office.sign.eyebrow',
+      titleKey: 'room.office.sign.title',
+      plaqueStyle: 'green',
+    },
     // Small, cluttered, cosy. The one safe room, at the mouth of the hub
     // rather than at the dead end of a spoke.
     shell: { width: 6, depth: 7, height: 3.2 },
@@ -859,6 +1081,7 @@ const ROOMS = [
       position: [0.46, 0.74, -0.62],
       rotationY: -Math.PI / 2,
       titleKey: 'power.office.title',
+      pilotPosition: [0, 0.18, 0.18],
       light: {
         position: [0, 0.31, 0],
         color: '#ffb45f',
@@ -910,7 +1133,7 @@ const ROOMS = [
 
 export const MUSEUM: MuseumContent = {
   rooms: ROOMS,
-  exhibits: HOLYOKE_EXHIBITS,
+  exhibits: [...ATRIUM_EXHIBITS, ...HOLYOKE_EXHIBITS],
   documents: DOCUMENTS,
   locks: LOCKS,
   facts: FACTS,

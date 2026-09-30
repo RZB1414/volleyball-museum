@@ -9,8 +9,10 @@
 import { Suspense, lazy, useState } from 'react'
 
 import { museumAudio } from './engine/audio'
+import { requestMobileImmersiveMode } from './engine/mobileImmersive'
 import { useMuseum, type Locale } from './state/store'
 import { useTranslate } from './i18n'
+import { MobileImmersiveGuard } from './ui/MobileImmersiveGuard'
 import './styles/museum.css'
 
 /**
@@ -95,6 +97,9 @@ export function MuseumApp() {
     // the experience. Doing it later is the classic "works on desktop, silent
     // on iOS" bug.
     museumAudio.unlock()
+    // Fullscreen must be requested in this exact user gesture. Orientation is
+    // locked after fullscreen resolves where the platform supports it.
+    void requestMobileImmersiveMode()
     setEntered(true)
     start()
   }
@@ -105,6 +110,7 @@ export function MuseumApp() {
 
   return (
     <main className="museum">
+      <MobileImmersiveGuard />
       <Suspense fallback={<LoadingOverlay />}>
         <MuseumCanvas />
       </Suspense>

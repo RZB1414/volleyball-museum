@@ -21,6 +21,7 @@
 import { Box3, BufferAttribute, Line3, MathUtils, Matrix4, Mesh, Vector3 } from 'three'
 import type { BufferGeometry } from 'three'
 import { MeshBVH } from 'three-mesh-bvh'
+import type { ExtendedTriangle, ShapecastCallbacks } from 'three-mesh-bvh'
 
 export type CapsuleSpec = {
   /** Distance from the capsule axis to the surface. */
@@ -37,6 +38,20 @@ export type MoveResult = {
   readonly grounded: boolean
   /** True when the horizontal move was blocked and the step-up retry saved it. */
   readonly stepped: boolean
+}
+
+/** Reusable output for callers that run several physics substeps per frame. */
+export type MoveResultBuffer = {
+  position: Vector3
+  verticalVelocity: number
+  grounded: boolean
+  stepped: boolean
+}
+
+type ResolveResult = {
+  push: Vector3
+  groundNormalY: number
+  contacts: number
 }
 
 const GRAVITY = -22
@@ -103,7 +118,7 @@ function dequantizePositions(geometry: BufferGeometry): BufferGeometry {
  * part and is entirely reusable across frames.
  */
 export class CollisionWorld {
-  private readonly bvhs: { bvh: MeshBVH; geometry: BufferGeometry }[] = []
+  private readonly bvhs: { bvh: MeshBVH; geometry: BufferGeometry; bounds: Box3 }[] = []
 
   /**
    * @param geometry Collision geometry in its own local space.
@@ -131,7 +146,13 @@ export class CollisionWorld {
     const world = dequantizePositions(geometry.clone()).applyMatrix4(matrix)
     world.computeBoundingBox()
 
-    const entry = { bvh: new MeshBVH(world), geometry: world }
+    const entry = {
+      bvh: new MeshBVH(world),
+      geometry: world,
+      // `computeBoundingBox` above guarantees this. Keeping the reference on
+      // the entry makes it the cheap broadphase before entering a BVH at all.
+      bounds: world.boundingBox as Box3,
+    }
     this.bvhs.push(entry)
 
     return () => {
@@ -155,13 +176,13 @@ export class CollisionWorld {
       const single = new CollisionWorld()
       single.bvhs.push(entry)
       const result = single.resolve(position, capsule, new Vector3())
-      const box = entry.geometry.boundingBox
+      const box = entry.bounds
       return {
         index,
         contacts: result.contacts,
         push: result.push.toArray().map((n) => Number(n.toFixed(3))),
         groundNormalY: Number(result.groundNormalY.toFixed(3)),
-        bounds: box ? `[${box.min.toArray().map((n) => n.toFixed(1))}]..[${box.max.toArray().map((n) => n.toFixed(1))}]` : '',
+        bounds: `[${box.min.toArray().map((n) => n.toFixed(1))}]..[${box.max.toArray().map((n) => n.toFixed(1))}]`,
       }
     })
   }
@@ -169,7 +190,7 @@ export class CollisionWorld {
   /** World-space bounds of every collider. Diagnostic only. */
   describe() {
     return this.bvhs.map((entry) => {
-      const box = entry.geometry.boundingBox ?? new Box3()
+      const box = entry.bounds
       const round = (value: number) => Number(value.toFixed(2))
       return {
         min: [round(box.min.x), round(box.min.y), round(box.min.z)],
@@ -185,6 +206,56 @@ export class CollisionWorld {
   private readonly triPoint = new Vector3()
   private readonly capsulePoint = new Vector3()
   private readonly pushTotal = new Vector3()
+  private readonly overlapPush = new Vector3()
+  private readonly overlapResult: ResolveResult = {
+    push: this.overlapPush,
+    groundNormalY: 0,
+    contacts: 0,
+  }
+  private activeRadius = 0
+  private activeGroundNormalY = 0
+  private activeContacts = 0
+
+  /**
+   * One callback object for the lifetime of the world. `resolve` used to
+   * allocate this object and both closures once per collider, per resolve â€” a
+   * particularly expensive pattern when autostep probes several positions in
+   * one visual frame.
+   */
+  private readonly shapecastCallbacks: ShapecastCallbacks = {
+    intersectsBounds: (box) => box.intersectsBox(this.tempBox),
+    intersectsTriangle: (tri: ExtendedTriangle) => {
+      const distance = tri.closestPointToSegment(
+        this.tempSegment,
+        this.triPoint,
+        this.capsulePoint,
+      )
+
+      if (distance >= this.activeRadius) return false
+
+      const depth = this.activeRadius - distance
+      const direction = this.tempVector.copy(this.capsulePoint).sub(this.triPoint)
+
+      // A capsule centre exactly on the triangle plane gives a zero-length
+      // direction. Fall back to the face normal rather than producing NaN.
+      if (direction.lengthSq() < 1e-12) {
+        tri.getNormal(direction)
+      } else {
+        direction.normalize()
+      }
+
+      // Move the working segment so subsequent triangles see the correction.
+      this.tempSegment.start.addScaledVector(direction, depth)
+      this.tempSegment.end.addScaledVector(direction, depth)
+      this.pushTotal.addScaledVector(direction, depth)
+
+      if (direction.y > this.activeGroundNormalY) {
+        this.activeGroundNormalY = direction.y
+      }
+      this.activeContacts += 1
+      return false
+    },
+  }
 
   /**
    * Resolves a capsule at `position` (foot) out of the world.
@@ -193,15 +264,17 @@ export class CollisionWorld {
    * encountered, which is what tells the caller whether it is standing on a
    * floor, a ramp, or nothing.
    */
-  resolve(position: Vector3, capsule: CapsuleSpec, out = new Vector3()): {
-    push: Vector3
-    groundNormalY: number
-    contacts: number
-  } {
+  resolve(
+    position: Vector3,
+    capsule: CapsuleSpec,
+    out = new Vector3(),
+    result?: ResolveResult,
+  ): ResolveResult {
     const { radius, height } = capsule
     this.pushTotal.set(0, 0, 0)
-    let groundNormalY = 0
-    let contacts = 0
+    this.activeRadius = radius
+    this.activeGroundNormalY = 0
+    this.activeContacts = 0
 
     // The capsule's inner segment: from the centre of the bottom sphere to the
     // centre of the top sphere.
@@ -217,59 +290,57 @@ export class CollisionWorld {
     this.tempBox.max.addScalar(radius)
 
     for (const entry of this.bvhs) {
-      entry.bvh.shapecast({
-        intersectsBounds: (box) => box.intersectsBox(this.tempBox),
-        intersectsTriangle: (tri) => {
-          const distance = tri.closestPointToSegment(
-            this.tempSegment,
-            this.triPoint,
-            this.capsulePoint,
-          )
-
-          if (distance >= radius) return false
-
-          const depth = radius - distance
-          const direction = this.tempVector
-            .copy(this.capsulePoint)
-            .sub(this.triPoint)
-
-          // A capsule centre exactly on the triangle plane gives a zero-length
-          // direction. Fall back to the face normal rather than producing NaN,
-          // which would teleport the player out of the world.
-          if (direction.lengthSq() < 1e-12) {
-            tri.getNormal(direction)
-          } else {
-            direction.normalize()
-          }
-
-          // Move the working segment so subsequent triangles — in this collider
-          // AND in every later one — see the already-corrected position.
-          // Without this, a capsule wedged into a corner is pushed out once per
-          // surface and ends up several times further than it should.
-          this.tempSegment.start.addScaledVector(direction, depth)
-          this.tempSegment.end.addScaledVector(direction, depth)
-          this.pushTotal.addScaledVector(direction, depth)
-
-          if (direction.y > groundNormalY) groundNormalY = direction.y
-          contacts += 1
-          return false
-        },
-      })
+      // Most museum colliders are furniture or architecture in another part
+      // of the room. Reject their world AABB before entering the BVH.
+      if (!entry.bounds.intersectsBox(this.tempBox)) continue
+      entry.bvh.shapecast(this.shapecastCallbacks)
     }
 
     out.copy(this.pushTotal)
-    return { push: out, groundNormalY, contacts }
+    const resolved = result ?? { push: out, groundNormalY: 0, contacts: 0 }
+    resolved.push = out
+    resolved.groundNormalY = this.activeGroundNormalY
+    resolved.contacts = this.activeContacts
+    return resolved
   }
 
   /** True when a capsule at this position overlaps anything. */
   intersects(position: Vector3, capsule: CapsuleSpec): boolean {
-    return this.resolve(position, capsule, new Vector3()).contacts > 0
+    return this.resolve(position, capsule, this.overlapPush, this.overlapResult).contacts > 0
+  }
+
+  /** True only when the capsule touches a walkable upward-facing surface. */
+  hasWalkableSupport(position: Vector3, capsule: CapsuleSpec): boolean {
+    return (
+      this.resolve(position, capsule, this.overlapPush, this.overlapResult).groundNormalY >=
+      MIN_GROUND_NORMAL_Y
+    )
   }
 }
 
 const scratchPush = new Vector3()
 const scratchTarget = new Vector3()
 const scratchStepped = new Vector3()
+const scratchSettle = new Vector3()
+const scratchRaisedPush = new Vector3()
+const scratchSettlePush = new Vector3()
+const scratchResolved: ResolveResult = { push: scratchPush, groundNormalY: 0, contacts: 0 }
+const scratchRaisedResolved: ResolveResult = {
+  push: scratchRaisedPush,
+  groundNormalY: 0,
+  contacts: 0,
+}
+const scratchSettleResolved: ResolveResult = {
+  push: scratchSettlePush,
+  groundNormalY: 0,
+  contacts: 0,
+}
+
+// These buffers make `movePlayer` intentionally non-reentrant, as it already
+// was before the optimisation. The runtime has one player and calls substeps
+// sequentially. The default return still owns its cloned position; a hot-loop
+// caller may supply a MoveResultBuffer and must consume/copy it before reusing
+// that same buffer.
 
 /**
  * Advances the player one frame.
@@ -289,6 +360,7 @@ export function movePlayer(
   verticalVelocity: number,
   rawDelta: number,
   capsule: CapsuleSpec,
+  out?: MoveResultBuffer,
 ): MoveResult {
   // Clamped HERE rather than only in the caller. A collision routine that
   // depends on its caller passing a sane timestep is a trap: one long frame
@@ -316,14 +388,14 @@ export function movePlayer(
     position.z + displacement.z * horizontalScale,
   )
 
-  const resolved = world.resolve(scratchTarget, capsule, scratchPush)
+  const resolved = world.resolve(scratchTarget, capsule, scratchPush, scratchResolved)
   scratchTarget.add(resolved.push)
 
   const grounded = resolved.groundNormalY >= MIN_GROUND_NORMAL_Y
   let stepped = false
 
   // How much of the intended horizontal move actually happened.
-  const intendedHorizontal = Math.hypot(displacement.x, displacement.z)
+  const intendedHorizontal = horizontal * horizontalScale
   const achievedHorizontal = Math.hypot(
     scratchTarget.x - position.x,
     scratchTarget.z - position.z,
@@ -336,12 +408,18 @@ export function movePlayer(
   ) {
     // Step-up retry: lift, move, then settle straight down onto whatever is
     // there. If the raised attempt also fails, keep the original result.
-    scratchStepped
-      .copy(position)
-      .add(displacement)
-      .setY(position.y + MAX_STEP_HEIGHT)
+    scratchStepped.set(
+      position.x + displacement.x * horizontalScale,
+      position.y + MAX_STEP_HEIGHT,
+      position.z + displacement.z * horizontalScale,
+    )
 
-    const raised = world.resolve(scratchStepped, capsule, new Vector3())
+    const raised = world.resolve(
+      scratchStepped,
+      capsule,
+      scratchRaisedPush,
+      scratchRaisedResolved,
+    )
     scratchStepped.add(raised.push)
 
     const raisedHorizontal = Math.hypot(
@@ -350,30 +428,72 @@ export function movePlayer(
     )
 
     if (raisedHorizontal > achievedHorizontal + 1e-4) {
-      // Settle: walk the capsule down until it contacts, in small increments so
-      // it lands on the step rather than snapping to the floor below it.
-      const settleSteps = 8
-      const settleStep = MAX_STEP_HEIGHT / settleSteps
-      for (let index = 0; index < settleSteps; index += 1) {
-        scratchStepped.y -= settleStep
-        const probe = world.resolve(scratchStepped, capsule, new Vector3())
-        if (probe.groundNormalY >= MIN_GROUND_NORMAL_Y) {
-          scratchStepped.add(probe.push)
-          break
+      /**
+       * Settle in one direct probe first. Most successful steps are thresholds
+       * whose top or the floor immediately catches this drop, turning the old
+       * ten-resolve path into three resolves. A coarse incremental fallback is
+       * retained for edges where a deep overlap chooses a side face instead.
+       */
+      scratchSettle.copy(scratchStepped)
+      scratchSettle.y -= MAX_STEP_HEIGHT
+      const direct = world.resolve(
+        scratchSettle,
+        capsule,
+        scratchSettlePush,
+        scratchSettleResolved,
+      )
+      scratchSettle.add(direct.push)
+
+      const directHorizontal = Math.hypot(
+        scratchSettle.x - position.x,
+        scratchSettle.z - position.z,
+      )
+      const directLanded =
+        direct.groundNormalY >= MIN_GROUND_NORMAL_Y &&
+        directHorizontal > achievedHorizontal + 1e-4
+
+      if (!directLanded) {
+        scratchSettle.copy(scratchStepped)
+        const settleSteps = 4
+        const settleStep = MAX_STEP_HEIGHT / settleSteps
+        for (let index = 0; index < settleSteps; index += 1) {
+          scratchSettle.y -= settleStep
+          const probe = world.resolve(
+            scratchSettle,
+            capsule,
+            scratchSettlePush,
+            scratchSettleResolved,
+          )
+          if (probe.groundNormalY >= MIN_GROUND_NORMAL_Y) {
+            scratchSettle.add(probe.push)
+            break
+          }
         }
       }
 
-      scratchTarget.copy(scratchStepped)
+      scratchTarget.copy(scratchSettle)
       stepped = true
     }
   }
 
+  // Standing on something cancels the fall and replaces it with a constant,
+  // frame-rate-independent press into the floor.
+  const nextResultVelocity =
+    grounded || stepped ? -GROUND_STICK_SPEED : nextVerticalVelocity
+  const nextGrounded = grounded || stepped
+
+  if (out) {
+    out.position.copy(scratchTarget)
+    out.verticalVelocity = nextResultVelocity
+    out.grounded = nextGrounded
+    out.stepped = stepped
+    return out
+  }
+
   return {
     position: scratchTarget.clone(),
-    // Standing on something cancels the fall and replaces it with a constant,
-    // frame-rate-independent press into the floor.
-    verticalVelocity: grounded || stepped ? -GROUND_STICK_SPEED : nextVerticalVelocity,
-    grounded: grounded || stepped,
+    verticalVelocity: nextResultVelocity,
+    grounded: nextGrounded,
     stepped,
   }
 }

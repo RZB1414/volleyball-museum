@@ -113,6 +113,17 @@ console.log('collision — capsule vs static BVH\n')
 
 const world = buildTestWorld()
 check('world builds', world.size === 5, `${world.size} colliders`)
+check(
+  'recognises walkable support beneath the spawn capsule',
+  world.hasWalkableSupport(new Vector3(0, 0, 0), CAPSULE),
+)
+{
+  const gateOnly = worldFromMeshes([box(0.08, 2.4, 1.6, 0, 1.2, 0)])
+  check(
+    'does not mistake a vertical transition gate for a loaded floor',
+    !gateOnly.hasWalkableSupport(new Vector3(0.3, 0, 0), CAPSULE),
+  )
+}
 
 // --- 1. Gravity and resting on the floor ----------------------------------
 {
@@ -288,10 +299,19 @@ check('world builds', world.size === 5, `${world.size} colliders`)
 {
   const position = new Vector3(0, 0, 0)
   const displacement = new Vector3(0.05, 0, 0.05)
+  const output = {
+    position: new Vector3(),
+    verticalVelocity: 0,
+    grounded: false,
+    stepped: false,
+  }
+  const returned = movePlayer(world, position, displacement, 0, STEP, CAPSULE, output)
+  check('can reuse a caller-owned move result', returned === output && returned.position === output.position)
+
   const iterations = 2000
   const started = process.hrtime.bigint()
   for (let index = 0; index < iterations; index += 1) {
-    movePlayer(world, position, displacement, 0, STEP, CAPSULE)
+    movePlayer(world, position, displacement, 0, STEP, CAPSULE, output)
   }
   const elapsedMs = Number(process.hrtime.bigint() - started) / 1e6
   const perFrame = elapsedMs / iterations

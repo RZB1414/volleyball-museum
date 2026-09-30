@@ -215,6 +215,15 @@ const FLOOR_STANDING = [
   'history-info-kiosk',
   'gym-court-lines',
   'gym-training-set',
+  'atrium-reception-desk',
+  'atrium-central-podium',
+  'atrium-display-tower',
+  'atrium-sofa',
+  'atrium-lectern',
+  'atrium-divider-screen',
+  'atrium-barrier-segment',
+  'atrium-lounge-set',
+  'atrium-display-console',
 ]
 
 for (const recipe of FLOOR_STANDING) {
@@ -233,6 +242,7 @@ for (const recipe of [
   'desk-lamp',
   'ledger-stack',
   'door-leaf',
+  'door-leaf-right',
   'threshold',
 ]) {
   const bounds = recipeBounds(recipe)
@@ -262,6 +272,10 @@ for (const recipe of [
   'breaker-panel',
   'office-corkboard',
   'history-case-run',
+  'wayfinding-plaque-navy',
+  'wayfinding-plaque-green',
+  'wayfinding-plaque-walnut',
+  'dedication-plaque',
 ]) {
   const bounds = recipeBounds(recipe)
   check(
@@ -283,6 +297,7 @@ for (const recipe of [
   'banner',
   'donation-box',
   'door-leaf',
+  'door-leaf-right',
   'ceiling-spot',
   'pendant',
   'office-chair',
@@ -302,6 +317,14 @@ for (const recipe of [
   'history-hero-case',
   'history-info-kiosk',
   'gym-training-set',
+  'atrium-reception-desk',
+  'atrium-central-podium',
+  'atrium-display-tower',
+  'atrium-sofa',
+  'atrium-lectern',
+  'atrium-divider-screen',
+  'atrium-lounge-set',
+  'atrium-display-console',
 ]) {
   const parts = recipeParts(recipe)
   check(

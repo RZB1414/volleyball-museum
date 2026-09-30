@@ -17,6 +17,7 @@ import { museumAudio } from '../engine/audio'
 import { isRoomPowered } from '../engine/power'
 import { useTranslate } from '../i18n'
 import { LockPanel } from './LockPanel'
+import { MobileControls } from './MobileControls'
 import { useMuseum } from '../state/store'
 
 const exhibitsById = new Map<string, ExhibitData>(
@@ -25,11 +26,12 @@ const exhibitsById = new Map<string, ExhibitData>(
 
 function InteractionPrompt() {
   const focused = useMuseum((state) => state.focusedExhibit)
+  const focusedDoor = useMuseum((state) => state.focusedTransitionDoor)
   const examining = useMuseum((state) => state.examining)
   const catalogued = useMuseum((state) => state.progress.catalogued)
   const t = useTranslate()
 
-  if (!focused || examining) return null
+  if (!focused || focusedDoor || examining) return null
   const exhibit = exhibitsById.get(focused)
   if (!exhibit) return null
 
@@ -55,13 +57,14 @@ function InteractionPrompt() {
 function ContainerPrompt() {
   const focusedContainer = useMuseum((state) => state.focusedContainer)
   const focusedExhibit = useMuseum((state) => state.focusedExhibit)
+  const focusedDoor = useMuseum((state) => state.focusedTransitionDoor)
   const examining = useMuseum((state) => state.examining)
   const read = useMuseum((state) => state.progress.documentsRead)
   const locksOpened = useMuseum((state) => state.progress.locksOpened)
   const t = useTranslate()
 
   // An exhibit under the crosshair wins the key, so it must also win the hint.
-  if (!focusedContainer || focusedExhibit || examining) return null
+  if (!focusedContainer || focusedExhibit || focusedDoor || examining) return null
 
   const container = MUSEUM.rooms
     .flatMap((room) => room.containers ?? [])
@@ -86,11 +89,12 @@ function PowerPrompt() {
   const focused = useMuseum((state) => state.focusedPowerControl)
   const focusedExhibit = useMuseum((state) => state.focusedExhibit)
   const focusedContainer = useMuseum((state) => state.focusedContainer)
+  const focusedDoor = useMuseum((state) => state.focusedTransitionDoor)
   const examining = useMuseum((state) => state.examining)
   const restored = useMuseum((state) => state.progress.roomsPowered)
   const t = useTranslate()
 
-  if (!focused || focusedExhibit || focusedContainer || examining) return null
+  if (!focused || focusedExhibit || focusedContainer || focusedDoor || examining) return null
   const room = MUSEUM.rooms.find((candidate) => candidate.powerControl?.id === focused)
   if (!room?.powerControl || isRoomPowered(room, restored)) return null
 
@@ -99,6 +103,36 @@ function PowerPrompt() {
       <span className="prompt-key">E</span>
       <span className="prompt-label">{t('prompt.power')}</span>
       <span className="prompt-title">{t(room.powerControl.titleKey as never)}</span>
+    </div>
+  )
+}
+
+function TransitionDoorPrompt() {
+  const focused = useMuseum((state) => state.focusedTransitionDoor)
+  const examining = useMuseum((state) => state.examining)
+  const openedContainer = useMuseum((state) => state.openedContainer)
+  const t = useTranslate()
+
+  if (!focused || examining || openedContainer) return null
+  const target = MUSEUM.rooms.find((room) => room.id === focused.targetRoom)
+  if (!target) return null
+
+  const label =
+    focused.status === 'blocked'
+      ? t('prompt.door.otherSide')
+      : focused.status === 'ready'
+      ? t('prompt.door.open')
+      : focused.status === 'opening'
+        ? t('prompt.door.opening')
+        : t('prompt.door.loading')
+
+  return (
+    <div className="prompt" role="status">
+      {focused.status !== 'blocked' && focused.status !== 'opening' && !focused.armed ? (
+        <span className="prompt-key">E</span>
+      ) : null}
+      <span className="prompt-label">{label}</span>
+      <span className="prompt-title">{t(target.titleKey as never)}</span>
     </div>
   )
 }
@@ -286,11 +320,13 @@ export function Hud() {
 
   return (
     <>
+      <MobileControls />
       {/* Meaningless while holding an object or reading a document. */}
       {examining || openedContainer ? null : <div className="crosshair" aria-hidden="true" />}
       <InteractionPrompt />
       <ContainerPrompt />
       <PowerPrompt />
+      <TransitionDoorPrompt />
       <ExaminePanel />
       <DocumentPanel />
       <LockPanel />

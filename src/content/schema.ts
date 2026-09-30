@@ -311,6 +311,10 @@ export type KitPartId =
   | 'vitrine-wall'
   | 'vitrine-tower'
   | 'label-plaque'
+  | 'wayfinding-plaque-navy'
+  | 'wayfinding-plaque-green'
+  | 'wayfinding-plaque-walnut'
+  | 'dedication-plaque'
   | 'label-angled'
   | 'interp-panel'
   | 'banner'
@@ -323,6 +327,7 @@ export type KitPartId =
   | 'donation-box'
   | 'archive-cabinet'
   | 'door-leaf'
+  | 'door-leaf-right'
   | 'threshold'
   | 'ceiling-spot'
   | 'pendant'
@@ -359,23 +364,50 @@ export type KitPartId =
   | 'atrium-banner-hardware'
   | 'atrium-sofa'
   | 'atrium-lectern'
+  | 'atrium-divider-screen'
+  | 'atrium-barrier-segment'
+  | 'atrium-lounge-set'
+  | 'atrium-display-console'
 
 /**
- * Wall lettering.
+ * Architectural wall copy.
  *
- * Real galleries carry their curatorial voice as vinyl on plaster, and it is
- * the cheapest thing in the building: no geometry, no texture, no draw call
- * worth counting. It is also the only way an eighteen-metre blank wall stops
- * being a blank wall without inventing an exhibit to hang on it.
+ * Minor copy may remain vinyl on plaster; major copy uses a baked substrate.
+ * The words stay runtime data either way, so localisation never has to be
+ * baked into geometry.
  *
  * `rotationY` is the wall's facing — the direction the text reads towards.
  */
+export type WayfindingPlaqueStyle = 'navy' | 'green' | 'walnut'
+
+/** Art-directed hierarchy for the sign that names a room at its entrances. */
+export type RoomWayfinding = {
+  readonly eyebrowKey?: string
+  /** Defaults to RoomData.titleKey when omitted. */
+  readonly titleKey?: string
+  readonly subtitleKey?: string
+  readonly plaqueStyle: WayfindingPlaqueStyle
+}
+
+/** A portal may suppress or override the destination's default wayfinding. */
+export type PortalSign = false | {
+  readonly eyebrowKey?: string
+  readonly titleKey?: string
+  readonly subtitleKey?: string
+  readonly plaqueStyle?: WayfindingPlaqueStyle
+}
+
 export type WallSign = {
   readonly id: string
+  readonly eyebrowKey?: string
   readonly headingKey: string
   readonly bodyKey?: string
   readonly position: Vec3
   readonly rotationY: number
+  /** Applied vinyl remains available; major copy belongs on a physical panel. */
+  readonly presentation?: 'vinyl' | 'dedication-plaque'
+  readonly width?: number
+  readonly height?: number
   /** Cap height of the heading, in metres. Body copy is derived from it. */
   readonly size?: number
   /** Wrap width in metres. Long dedications need a measure; titles do not. */
@@ -432,6 +464,8 @@ export type PowerControlData = {
   readonly rotationY?: number
   readonly scale?: number
   readonly titleKey: string
+  /** Local position of the always-mounted red locator while power is off. */
+  readonly pilotPosition: Vec3
   /** Optional practical light emitted by the control itself when powered. */
   readonly light?: {
     readonly position: Vec3
@@ -454,6 +488,26 @@ export type Portal = {
   readonly width: number
   readonly height: number
   readonly rotationY: number
+  /** Omit for the destination room's default sign; false hides this face. */
+  readonly sign?: PortalSign
+  /**
+   * Optional physical transition door owned by this portal declaration.
+   * Reciprocal portals share the same opening, so exactly one side authors the
+   * leaf; the runtime keeps its state available from either connected room.
+   */
+  readonly transitionDoor?: {
+    readonly style: 'double-panel'
+    /** Seconds from the first hinge movement until the opening is clear. */
+    readonly openDuration: number
+    /** Seconds from the first closing movement until the latch is seated. */
+    readonly closeDuration: number
+    /** Metres beyond the swept leaves before automatic closing may start. */
+    readonly closeDistance: number
+    /** Distance at which the destination starts warming, before interaction. */
+    readonly warmDistance: number
+    /** Optional side that may release a one-way shortcut for the first time. */
+    readonly opensFrom?: EraId
+  }
   readonly lockId?: string
   /** A one-way shortcut: openable only from `toRoom`. The cheapest and
    *  strongest primitive of spatial comprehension a level designer has. */
@@ -505,8 +559,10 @@ export type RoomData = {
    * Players navigate by phrases like "the room with the cracked leather ball",
    * not by cardinal directions. If a space cannot be nicknamed, it is a
    * corridor — shorten it or give it an identity.
-   */
+  */
   readonly nicknameKey: string
+  /** Physical wayfinding shown over portals that lead to this room. */
+  readonly wayfinding?: RoomWayfinding
   readonly shell: {
     readonly width: number
     readonly depth: number
@@ -517,7 +573,7 @@ export type RoomData = {
   readonly palette: PaletteId
   readonly portals: readonly Portal[]
   readonly kit: readonly KitPlacement[]
-  /** Vinyl lettering applied to a wall. Text, not geometry — see `WallSignage`. */
+  /** Localised architectural copy — see `RoomSignage`. */
   readonly signage?: readonly WallSign[]
   /** Licensed imagery mounted on walls, independent of interactive exhibits. */
   readonly wallArt?: readonly WallArtData[]

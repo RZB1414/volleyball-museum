@@ -11,7 +11,16 @@
 import { useGLTF } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-import { Box3, Mesh, Raycaster, Vector2, Vector3, type Group, type Object3D } from 'three'
+import {
+  Box3,
+  Mesh,
+  Raycaster,
+  Vector2,
+  Vector3,
+  type Group,
+  type Intersection,
+  type Object3D,
+} from 'three'
 
 import { MUSEUM } from '../content/museum'
 import type { PowerControlData, RoomData } from '../content/schema'
@@ -20,6 +29,8 @@ import { USE_DRACO, USE_MESHOPT } from './bundleCache'
 import { cloneKitPart, disposeKitPart } from './kitPart'
 import type { MaterialLibrary } from './materials'
 import { isRoomPowered } from './power'
+import { subscribePrimaryAction } from './primaryAction'
+import { buildPowerControlLightRig } from './powerControlLightRig'
 
 const CENTRE = new Vector2(0, 0)
 const INTERACTION_LAYER = 7
@@ -30,6 +41,54 @@ const controlsById = new Map(
     room.powerControl ? [[room.powerControl.id, { room, control: room.powerControl }] as const] : [],
   ),
 )
+const roomsById: ReadonlyMap<string, RoomData> = new Map(
+  MUSEUM.rooms.map((room) => [room.id, room] as const),
+)
+
+/**
+ * One point-light slot per visible side of the transition.
+ *
+ * Pilot and practical are mutually exclusive, so changing their parameters on
+ * a stable object preserves the authored look without compiling 0/2/4-light
+ * shader variants every time a cached room appears behind a door.
+ */
+export function PowerControlLights({
+  primaryRoomId,
+  retainedRoomId,
+}: {
+  primaryRoomId: string
+  retainedRoomId: string | null
+}) {
+  const poweredRoomIds = useMuseum((state) => state.progress.roomsPowered)
+  const brightness = useMuseum((state) => state.settings.brightness)
+  const currentRoom = roomsById.get(primaryRoomId) ?? MUSEUM.rooms[0]
+  const retainedRoom = retainedRoomId ? roomsById.get(retainedRoomId) ?? null : null
+  const slots = useMemo(
+    () => currentRoom ? buildPowerControlLightRig(currentRoom, retainedRoom) : [],
+    [currentRoom, retainedRoom],
+  )
+
+  return (
+    <group>
+      {slots.map((slot, index) => {
+        const room = roomsById.get(slot.roomId)
+        const powered = room ? isRoomPowered(room, poweredRoomIds) : false
+        const pose = powered ? slot.powered : slot.unpowered
+        return (
+          <pointLight
+            key={`power-control-light-${index}`}
+            position={pose.position as unknown as [number, number, number]}
+            color={pose.color}
+            intensity={pose.baseIntensity * brightness}
+            distance={pose.distance}
+            decay={2}
+            castShadow={false}
+          />
+        )
+      })}
+    </group>
+  )
+}
 
 export function PowerControlLayer({
   room,
@@ -45,7 +104,6 @@ export function PowerControlLayer({
 
   return (
     <PowerControl
-      room={room}
       control={room.powerControl}
       kit={scene as Group}
       materials={materials}
@@ -54,18 +112,14 @@ export function PowerControlLayer({
 }
 
 function PowerControl({
-  room,
   control,
   kit,
   materials,
 }: {
-  room: RoomData
   control: PowerControlData
   kit: Group
   materials: MaterialLibrary
 }) {
-  const powered = useMuseum((state) => isRoomPowered(room, state.progress.roomsPowered))
-  const brightness = useMuseum((state) => state.settings.brightness)
   const instance = useMemo(
     () => cloneKitPart(kit, control.part, materials),
     [control.part, kit, materials],
@@ -87,11 +141,6 @@ function PowerControl({
     return {
       centre: centre.toArray() as [number, number, number],
       size: size.toArray() as [number, number, number],
-      beacon: [centre.x, centre.y, Math.max(bounds.max.z + 0.05, 0.18)] as [
-        number,
-        number,
-        number,
-      ],
     }
   }, [instance])
 
@@ -105,30 +154,6 @@ function PowerControl({
       scale={control.scale ?? 1}
     >
       <primitive object={instance} />
-
-      {powered && control.light ? (
-        <pointLight
-          position={control.light.position as unknown as [number, number, number]}
-          color={control.light.color}
-          intensity={control.light.intensity * brightness}
-          distance={control.light.distance}
-          decay={2}
-          castShadow={false}
-        />
-      ) : null}
-
-      {/* A dim pilot makes the way out of darkness readable without lighting
-          the room itself. It vanishes when the house lights take over. */}
-      {powered ? null : (
-        <pointLight
-          position={proxy.beacon}
-          color="#d65a3a"
-          intensity={3.2 * brightness}
-          distance={2.4}
-          decay={2}
-          castShadow={false}
-        />
-      )}
 
       {/* The camera never renders layer 7; the interaction ray does. Keeping
           the proxy visible to three is necessary because Raycaster skips
@@ -164,26 +189,28 @@ export function PowerControlTargeting() {
   }, [])
 
   const targetsRef = useRef<Object3D[]>([])
+  const targetsInitialisedRef = useRef(false)
+  const intersectionsRef = useRef<Intersection<Object3D>[]>([])
   const rescanRef = useRef(0)
   const lastRef = useRef<string | null>(null)
 
   useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat || event.code !== 'KeyE') return
+    const interact = () => {
       const state = useMuseum.getState()
       if (
         state.examining ||
         state.openedContainer ||
         state.activeLock ||
+        state.focusedTransitionDoor ||
         state.focusedExhibit ||
         state.focusedContainer ||
         !state.focusedPowerControl
       ) {
-        return
+        return false
       }
 
       const record = controlsById.get(state.focusedPowerControl)
-      if (!record || isRoomPowered(record.room, state.progress.roomsPowered)) return
+      if (!record || isRoomPowered(record.room, state.progress.roomsPowered)) return false
 
       // A future locked breaker uses the existing lock graph. The current
       // slice leaves these controls open, so power restoration remains a
@@ -193,17 +220,26 @@ export function PowerControlTargeting() {
         !state.progress.locksOpened.includes(record.room.powerLockId)
       ) {
         state.setActiveLock(record.room.powerLockId)
-        return
+        return true
       }
 
-      event.preventDefault()
       state.powerRoom(record.room.id)
       state.setFocusedPowerControl(null)
       lastRef.current = null
+      return true
+    }
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.repeat || event.code !== 'KeyE') return
+      if (interact()) event.preventDefault()
     }
 
     window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
+    const unsubscribePrimaryAction = subscribePrimaryAction(interact, 100)
+    return () => {
+      unsubscribePrimaryAction()
+      window.removeEventListener('keydown', onKeyDown)
+    }
   }, [])
 
   useEffect(
@@ -225,11 +261,12 @@ export function PowerControlTargeting() {
     }
 
     rescanRef.current -= delta
-    if (rescanRef.current <= 0 || targetsRef.current.length === 0) {
+    if (rescanRef.current <= 0 || !targetsInitialisedRef.current) {
       rescanRef.current = 0.5
+      targetsInitialisedRef.current = true
       const targets: Object3D[] = []
-      scene.traverse((object) => {
-        if (object.name.startsWith('power-control:') && object.visible) targets.push(object)
+      scene.traverseVisible((object) => {
+        if (object.name.startsWith('power-control:')) targets.push(object)
       })
       targetsRef.current = targets
 
@@ -243,9 +280,28 @@ export function PowerControlTargeting() {
       }
     }
 
+    if (targetsRef.current.length === 0) {
+      if (lastRef.current !== null || state.focusedPowerControl !== null) {
+        lastRef.current = null
+        state.setFocusedPowerControl(null)
+      }
+      return
+    }
+
     raycaster.setFromCamera(CENTRE, camera)
-    const hit = raycaster.intersectObjects(targetsRef.current, true)[0]
+    const intersections = intersectionsRef.current
+    intersections.length = 0
+    raycaster.intersectObjects(targetsRef.current, true, intersections)
+    const hit = intersections[0]
     let found = hit ? powerControlIdFor(hit.object) : null
+    // The visibility cache updates twice a second. An ancestor can be hidden
+    // between scans during a portal crossing, and direct raycasts do not honour
+    // ancestor visibility, so reject that stale target immediately.
+    let hitNode: Object3D | null = hit?.object ?? null
+    while (found && hitNode) {
+      if (!hitNode.visible) found = null
+      hitNode = hitNode.parent
+    }
     if (found) {
       const record = controlsById.get(found)
       if (!record || isRoomPowered(record.room, state.progress.roomsPowered)) found = null

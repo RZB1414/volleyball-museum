@@ -15,8 +15,11 @@
  *   oak-matte       512 + 512 + 512  =  4.0 MB
  *   leather-tan    1024 + 1024 + 512 = 12.0 MB
  *   canvas          512 + 512 + 512  =  4.0 MB
+ *   ball-1964       512 + 512 + 256  =  3.0 MB
+ *   ball-1998       512 + 512 + 256  =  3.0 MB
+ *   ball-2008       512 + 512 + 256  =  3.0 MB
  *                                     -------
- *                                      36.0 MB   (mobile ceiling: 45 MB)
+ *                                      45.0 MB   (mobile ceiling: 45 MB)
  *
  * That fits, but with little headroom for five more wings. KTX2/ETC1S would cut
  * it roughly 8x; it is deferred because the Basis transcoder is a fixed ~260 KB
@@ -42,6 +45,30 @@ const LEATHER_LIGHT = hex(0xd6a874)
 const LEATHER_DARK = hex(0x8b5a2b)
 const CANVAS_LIGHT = hex(0xd9cba8)
 const CANVAS_SHADE = hex(0xb5a683)
+
+const BALL_IVORY = hex(0xe4ddc5)
+const BALL_TEXTURE_NEUTRAL = hex(0xf7f5ee)
+
+function ballPoleFade(v) {
+  return smoothstep(0.015, 0.08, v) * smoothstep(0.015, 0.08, 1 - v)
+}
+
+/**
+ * Fine, shallow cover tooth. A spherical map collapses its full width into one
+ * point at each pole, so detail fades there instead of forming a radial star.
+ * The 0.5 V aspect keeps texels physically near-square on a sphere whose U path
+ * is twice as long as its pole-to-pole V path.
+ */
+function coverTooth(noise, u, v, frequency) {
+  const value = fbm(noise, u, v, {
+    octaves: 2,
+    frequency,
+    lacunarity: 1.65,
+    gain: 0.35,
+    aspect: 0.5,
+  })
+  return 0.5 + value * 0.5 * ballPoleFade(v)
+}
 
 /**
  * Plain-sawn wood grain.
@@ -360,6 +387,125 @@ export function buildMaterialRecipes() {
       },
       roughness: (_u, _v, h) => 0.9 - h * 0.06,
       ao: (_u, _v, h) => 0.55 + h * 0.45,
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // Tokyo 1964 ball — ivory leather, narrow yellowed channels and restrained
+  // handling marks, based on the used and unused balls held by the Japan Sport
+  // Council. Marks and certification labels are intentionally not reproduced.
+  // -------------------------------------------------------------------------
+  {
+    const noise = tileableNoise(1964)
+    const grain = makeWorley(1964, 64)
+    const heightAt = (u, v) => {
+      const cells = grain((u * 2) % 1, v)
+      const pebble = smoothstep(0.04, 0.58, cells.second - cells.nearest)
+      const tooth = coverTooth(noise, u, v, 72)
+      return 0.5 + ((pebble - 0.5) * 0.12 + (tooth - 0.5) * 0.05) * ballPoleFade(v)
+    }
+
+    recipes.push({
+      id: 'ball-1964',
+      albedoSize: 512,
+      normalSize: 512,
+      ormSize: 256,
+      normalStrength: 1.05,
+      height: heightAt,
+      albedo: (u, v, h) => {
+        const handling = fbm(noise, u, v, { octaves: 3, frequency: 2.4 }) * 0.5 + 0.5
+        const spotting = smoothstep(
+          0.74,
+          0.93,
+          fbm(noise, u, v, { octaves: 2, frequency: 11 }) * 0.5 + 0.5,
+        )
+        const aged = mixColor(BALL_IVORY, [0.64, 0.59, 0.48], handling * 0.09 + spotting * 0.11)
+        return mixColor(aged, [0.94, 0.91, 0.82], (h - 0.42) * 0.055)
+      },
+      roughness: (_u, _v, h) => 0.66 - (h - 0.5) * 0.08,
+      ao: (_u, _v, h) => 0.93 + (h - 0.5) * 0.10,
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // 1998 MVL200 cover. Panel colour is geometry-backed in bake.mjs rather than
+  // painted into this spherical map: triangles crossing U=0 otherwise blend
+  // unrelated colours into long wedges at the poles. All three colours share
+  // this neutral microtexture and receive a linear tint at runtime.
+  // -------------------------------------------------------------------------
+  {
+    const noise = tileableNoise(1998)
+    const heightAt = (u, v) => {
+      const low = coverTooth(noise, u, v, 8)
+      const tooth = coverTooth(noise, u, v, 72)
+      return 0.5 + (low - 0.5) * 0.02 + (tooth - 0.5) * 0.16
+    }
+
+    recipes.push({
+      id: 'ball-1998',
+      albedoSize: 512,
+      normalSize: 512,
+      ormSize: 256,
+      normalStrength: 1.30,
+      height: heightAt,
+      albedo: (u, v, h) => {
+        const dust = smoothstep(
+          0.72,
+          0.94,
+          fbm(noise, u, v, { octaves: 2, frequency: 7 }) * 0.5 + 0.5,
+        )
+        const surface = mixColor(BALL_TEXTURE_NEUTRAL, [0.72, 0.71, 0.68], dust * 0.045)
+        return mixColor(surface, [1, 1, 1], (h - 0.42) * 0.035)
+      },
+      roughness: (_u, _v, h) => 0.52 - (h - 0.5) * 0.055,
+      ao: (_u, _v, h) => 0.95 + (h - 0.5) * 0.08,
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // 2008 MVA200 cover. The finer, shallower dimple field follows the documented
+  // two-scale surface treatment without turning a 210 mm ball into a golf ball.
+  // Blue and yellow are separate geometry groups sharing this neutral map.
+  // -------------------------------------------------------------------------
+  {
+    const noise = tileableNoise(2008)
+
+    const dimpleAt = (u, v) => {
+      const rows = 64
+      const columns = 128
+      const rowCoordinate = v * rows
+      const row = Math.floor(rowCoordinate)
+      const columnCoordinate = u * columns + (row % 2) * 0.5
+      const dx = Math.abs((columnCoordinate - Math.floor(columnCoordinate)) - 0.5)
+      const dy = Math.abs((rowCoordinate - row) - 0.5) * 0.86
+      return 1 - smoothstep(0.08, 0.40, Math.hypot(dx, dy))
+    }
+
+    const heightAt = (u, v) => {
+      const poleFade = ballPoleFade(v)
+      const dimple = dimpleAt(u, v) * mix(0.35, 1, poleFade)
+      const tooth = coverTooth(noise, u, v, 72)
+      return 0.62 - dimple * 0.20 + (tooth - 0.5) * 0.05
+    }
+
+    recipes.push({
+      id: 'ball-2008',
+      albedoSize: 512,
+      normalSize: 512,
+      ormSize: 256,
+      normalStrength: 2.20,
+      height: heightAt,
+      albedo: (u, v, h) => {
+        const handling = smoothstep(
+          0.76,
+          0.95,
+          fbm(noise, u, v, { octaves: 2, frequency: 5 }) * 0.5 + 0.5,
+        )
+        const touched = mixColor(BALL_TEXTURE_NEUTRAL, [0.70, 0.70, 0.68], handling * 0.03)
+        return mixColor(touched, [1, 1, 1], (h - 0.46) * 0.025)
+      },
+      roughness: (u, v) => 0.57 + dimpleAt(u, v) * 0.025,
+      ao: (u, v) => 0.97 - dimpleAt(u, v) * 0.07,
     })
   }
 

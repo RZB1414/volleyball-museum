@@ -21,6 +21,11 @@ import { useEffect, useRef } from 'react'
 import { Box3, Mesh, type Object3D } from 'three'
 
 import { useMuseum } from '../state/store'
+import {
+  createFrameSampleWindow,
+  recordFrameTime,
+  summariseFrameTimes,
+} from './frameMetrics'
 
 export type PerfSnapshot = {
   drawCalls: number
@@ -31,9 +36,24 @@ export type PerfSnapshot = {
   meshesTotal: number
   meshesVisible: number
   fps: number
+  frameMsAverage: number
+  frameMsP95: number
+  frameMsP99: number
+  frameMsMax: number
+  longFrames: number
+  frameSamples: number
+  dpr: number
+  performanceScale: number
+  quality: string
   currentRoom: string
   visibleRooms: string[]
   cameraPosition: [number, number, number]
+  cameraRotation: [number, number]
+  verticalFov: number
+  horizontalFov: number
+  cameraAspect: number
+  canvasCssSize: [number, number]
+  drawingBufferSize: [number, number]
 }
 
 declare global {
@@ -59,9 +79,10 @@ export function PerfHud() {
   const gl = useThree((state) => state.gl)
   const scene = useThree((state) => state.scene)
   const camera = useThree((state) => state.camera)
+  const getThree = useThree((state) => state.get)
 
-  const frameTimesRef = useRef<number[]>([])
-  const lastRef = useRef(performance.now())
+  const frameTimesRef = useRef(createFrameSampleWindow())
+  const skipNextFrameRef = useRef(false)
   const overlayRef = useRef<HTMLDivElement | null>(null)
   const overlayFrameRef = useRef(0)
 
@@ -89,12 +110,16 @@ export function PerfHud() {
     }
 
     const read = (): PerfSnapshot => {
-      const times = frameTimesRef.current
-      const average = times.length
-        ? times.reduce((sum, value) => sum + value, 0) / times.length
-        : 0
+      const frameMetrics = summariseFrameTimes(frameTimesRef.current.values)
       const { total, visible } = countMeshes()
-      const { currentRoom, visibleRooms } = useMuseum.getState()
+      const { currentRoom, visibleRooms, settings } = useMuseum.getState()
+      const renderState = getThree()
+      const canvas = gl.domElement
+      const cameraAspect = 'aspect' in camera ? camera.aspect : 1
+      const verticalFov = 'fov' in camera ? camera.fov : 0
+      const horizontalFov =
+        (2 * Math.atan(Math.tan((verticalFov * Math.PI) / 360) * cameraAspect) * 180) /
+        Math.PI
 
       return {
         drawCalls: gl.info.render.calls,
@@ -104,7 +129,16 @@ export function PerfHud() {
         textures: gl.info.memory.textures,
         meshesTotal: total,
         meshesVisible: visible,
-        fps: average > 0 ? Math.round(1000 / average) : 0,
+        fps: frameMetrics.average > 0 ? Math.round(1000 / frameMetrics.average) : 0,
+        frameMsAverage: frameMetrics.average,
+        frameMsP95: frameMetrics.p95,
+        frameMsP99: frameMetrics.p99,
+        frameMsMax: frameMetrics.maximum,
+        longFrames: frameMetrics.longFrames,
+        frameSamples: frameMetrics.samples,
+        dpr: Number(renderState.viewport.dpr.toFixed(2)),
+        performanceScale: Number(canvas.dataset.adaptiveScale ?? 1),
+        quality: settings.quality,
         currentRoom,
         visibleRooms,
         cameraPosition: [
@@ -112,6 +146,15 @@ export function PerfHud() {
           Number(camera.position.y.toFixed(2)),
           Number(camera.position.z.toFixed(2)),
         ],
+        cameraRotation: [
+          Number(camera.rotation.x.toFixed(4)),
+          Number(camera.rotation.y.toFixed(4)),
+        ],
+        verticalFov: Number(verticalFov.toFixed(2)),
+        horizontalFov: Number(horizontalFov.toFixed(2)),
+        cameraAspect: Number(cameraAspect.toFixed(3)),
+        canvasCssSize: [canvas.clientWidth, canvas.clientHeight],
+        drawingBufferSize: [canvas.width, canvas.height],
       }
     }
 
@@ -137,6 +180,11 @@ export function PerfHud() {
         advance(now)
       }
     }
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') skipNextFrameRef.current = true
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange)
 
     /**
      * Dumps every named mesh with its world position and effective visibility.
@@ -219,19 +267,23 @@ export function PerfHud() {
       delete window.__museumRender
       delete window.__museumScene
       delete window.__museumStep
+      document.removeEventListener('visibilitychange', onVisibilityChange)
       overlayRef.current?.remove()
       overlayRef.current = null
     }
-  }, [gl, scene, camera])
+  }, [gl, scene, camera, getThree])
 
-  useFrame(() => {
-    const now = performance.now()
-    const elapsed = now - lastRef.current
-    lastRef.current = now
+  useFrame((_, delta) => {
+    if (skipNextFrameRef.current) {
+      skipNextFrameRef.current = false
+      return
+    }
+
+    const elapsed = delta * 1000
 
     const times = frameTimesRef.current
-    times.push(elapsed)
-    if (times.length > 60) times.shift()
+    // A stopped debugger/OS-suspended tab is not a frame rendered by the game.
+    if (elapsed > 0 && elapsed < 1000) recordFrameTime(times, elapsed)
 
     overlayFrameRef.current += 1
     if (overlayRef.current && overlayFrameRef.current % 30 === 0) {
@@ -245,6 +297,12 @@ export function PerfHud() {
         `geometries ${snapshot.geometries} · textures ${snapshot.textures}`,
         `meshes ${snapshot.meshesVisible} / ${snapshot.meshesTotal} visible`,
         `room ${snapshot.currentRoom} · sees ${snapshot.visibleRooms.join(', ')}`,
+        `camera ${snapshot.cameraPosition.join(', ')} · rotation ${snapshot.cameraRotation.join(', ')}`,
+        `lens ${snapshot.verticalFov}° v · ${snapshot.horizontalFov}° h · aspect ${snapshot.cameraAspect}`,
+        `buffer ${snapshot.drawingBufferSize.join('×')} · CSS ${snapshot.canvasCssSize.join('×')}`,
+        `quality ${snapshot.quality} · DPR ${snapshot.dpr} · adaptive ${snapshot.performanceScale}`,
+        `frame ${snapshot.frameMsAverage.toFixed(1)} ms avg · p95 ${snapshot.frameMsP95.toFixed(1)} · p99 ${snapshot.frameMsP99.toFixed(1)} · max ${snapshot.frameMsMax.toFixed(1)}`,
+        `long frames ${snapshot.longFrames} / ${snapshot.frameSamples} (>33.3 ms)`,
         `${snapshot.fps} fps`,
       ]
       overlayRef.current.replaceChildren(
@@ -253,7 +311,9 @@ export function PerfHud() {
           line.textContent = text
           if (
             (index === 0 && snapshot.drawCalls > 120) ||
-            (index === 1 && snapshot.triangles > 350_000)
+            (index === 1 && snapshot.triangles > 350_000) ||
+            (index === 9 && snapshot.frameMsP99 > 33.3) ||
+            (index === 10 && snapshot.longFrames > 0)
           ) {
             line.className = 'is-over'
           }

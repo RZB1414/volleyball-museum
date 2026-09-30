@@ -8,9 +8,8 @@
  * an uncurated file.
  */
 
-import { Text } from '@react-three/drei'
 import { useLoader } from '@react-three/fiber'
-import { useEffect, useMemo } from 'react'
+import { useEffect, useLayoutEffect, useMemo } from 'react'
 import {
   DoubleSide,
   PlaneGeometry,
@@ -24,6 +23,7 @@ import { AUTHORED_MEDIA } from '../content/media.authored'
 import { GENERATED_MEDIA } from '../content/media.generated'
 import type { MediaAsset, RoomData, WallArtData } from '../content/schema'
 import { useMuseum } from '../state/store'
+import { RoomText } from './RoomText'
 
 const CURATED_MEDIA = [...GENERATED_MEDIA, ...AUTHORED_MEDIA] as const
 type CuratedMedia = (typeof CURATED_MEDIA)[number]
@@ -38,6 +38,25 @@ const FRAME_DEPTH = 0.024
 const THIN_FRAME_BORDER = 0.042
 const CREDIT_GAP = 0.052
 const CREDIT_SIZE = 0.03
+
+/**
+ * TextureLoader caches by URL, so a photograph can be shared by a wall panel
+ * and an exhibit. Only bump the texture version when configuration really
+ * changes; assigning `needsUpdate` on every remount forces an otherwise warm
+ * image back through the GPU upload path.
+ */
+function configureMediaTexture(texture: Texture) {
+  let changed = false
+  if (texture.colorSpace !== SRGBColorSpace) {
+    texture.colorSpace = SRGBColorSpace
+    changed = true
+  }
+  if (texture.anisotropy !== 8) {
+    texture.anisotropy = 8
+    changed = true
+  }
+  if (changed) texture.needsUpdate = true
+}
 
 /**
  * Builds plane UVs for a centred `cover` crop.
@@ -84,10 +103,8 @@ function WallArtPanel({ art, asset }: { art: WallArtData; asset: MediaAsset }) {
     [asset.credit, locale],
   )
 
-  useEffect(() => {
-    texture.colorSpace = SRGBColorSpace
-    texture.anisotropy = 8
-    texture.needsUpdate = true
+  useLayoutEffect(() => {
+    configureMediaTexture(texture)
   }, [texture])
 
   useEffect(() => () => geometry.dispose(), [geometry])
@@ -141,7 +158,8 @@ function WallArtPanel({ art, asset }: { art: WallArtData; asset: MediaAsset }) {
       </mesh>
 
       {art.showCredit === false ? null : (
-        <Text
+        <RoomText
+          readinessId={`wall-art-credit:${art.id}`}
           position={[
             -outerWidth / 2,
             -outerHeight / 2 - CREDIT_GAP,
@@ -157,7 +175,7 @@ function WallArtPanel({ art, asset }: { art: WallArtData; asset: MediaAsset }) {
           material-toneMapped={false}
         >
           {credit}
-        </Text>
+        </RoomText>
       )}
     </group>
   )

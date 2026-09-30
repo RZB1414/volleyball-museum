@@ -254,7 +254,7 @@ button {
   display: none;
 }
 
-@media (hover: none) and (pointer: coarse),
+@media (any-pointer: coarse),
   (max-width: 900px) and (orientation: landscape) {
   .controls-hint,
   .sit-prompt {
@@ -275,6 +275,7 @@ button {
   }
 
   .mobile-control-stick,
+  .mobile-action-button,
   .mobile-torch-toggle {
     -webkit-tap-highlight-color: transparent;
     touch-action: none;
@@ -340,7 +341,7 @@ button {
     box-shadow:
       0 8px 22px rgba(0, 0, 0, 0.26),
       inset 0 0 0 8px rgba(255, 255, 255, 0.18);
-    transition: transform 80ms ease-out;
+    transition: transform 45ms linear;
   }
 
   .mobile-control-stick:active .mobile-stick-thumb {
@@ -368,6 +369,34 @@ button {
       inset 0 0 0 1px rgba(255, 255, 255, 0.06);
   }
 
+  .mobile-action-button {
+    position: absolute;
+    z-index: 2;
+    right: calc(env(safe-area-inset-right) + 42px);
+    bottom: calc(env(safe-area-inset-bottom) + 146px);
+    min-width: 64px;
+    min-height: 48px;
+    border: 1px solid rgba(255, 224, 170, 0.5);
+    border-radius: 999px;
+    background: rgba(104, 70, 30, 0.82);
+    color: #fff3dc;
+    cursor: pointer;
+    pointer-events: auto;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    box-shadow:
+      0 14px 34px rgba(0, 0, 0, 0.3),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  }
+
+  .mobile-action-button:active {
+    background: rgba(150, 101, 43, 0.92);
+    transform: scale(0.96);
+  }
+
   .mobile-torch-toggle.is-on {
     border-color: rgba(255, 210, 125, 0.72);
     background:
@@ -380,6 +409,7 @@ button {
   }
 
   .mobile-torch-toggle:focus-visible,
+  .mobile-action-button:focus-visible,
   .mobile-control-stick:focus-visible {
     outline: 3px solid rgba(255, 255, 255, 0.72);
     outline-offset: 4px;
@@ -423,7 +453,7 @@ button {
   }
 }
 
-@media (hover: none) and (pointer: coarse) and (max-height: 420px),
+@media (any-pointer: coarse) and (max-height: 420px),
   (max-width: 900px) and (orientation: landscape) and (max-height: 420px) {
   .mobile-control-stick {
     bottom: calc(env(safe-area-inset-bottom) + 12px);
@@ -451,8 +481,140 @@ button {
     height: 44px;
   }
 
+  .mobile-action-button {
+    right: calc(env(safe-area-inset-right) + 34px);
+    bottom: calc(env(safe-area-inset-bottom) + 132px);
+    min-height: 44px;
+  }
+
   .mobile-torch-icon {
     width: 22px;
     height: 22px;
   }
+}
+
+@media (any-pointer: coarse) and (orientation: portrait) {
+  .mobile-controls {
+    display: none;
+  }
+}
+
+.mobile-orientation-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding:
+    calc(env(safe-area-inset-top) + 24px)
+    calc(env(safe-area-inset-right) + 24px)
+    calc(env(safe-area-inset-bottom) + 24px)
+    calc(env(safe-area-inset-left) + 24px);
+  background: rgba(8, 9, 11, 0.96);
+  touch-action: none;
+}
+
+.mobile-orientation-card {
+  width: min(28rem, 100%);
+  color: #e9e0cf;
+  font-family: Georgia, "Times New Roman", serif;
+  text-align: center;
+}
+
+.mobile-orientation-card h2 {
+  margin: 1.1rem 0 0.65rem;
+  color: #fff5df;
+  font-size: clamp(1.5rem, 7vw, 2.2rem);
+  font-weight: 400;
+}
+
+.mobile-orientation-card p {
+  margin: 0;
+  color: #bdb3a2;
+  line-height: 1.55;
+}
+
+.mobile-install-hint {
+  margin-top: 1rem !important;
+  color: #dbc18d !important;
+  font-size: 0.88rem;
+}
+
+.mobile-orientation-action {
+  min-height: 46px;
+  margin-top: 1.25rem;
+  border: 1px solid #9b7c46;
+  background: rgba(127, 91, 43, 0.34);
+  color: #fff0d2;
+  padding: 0.7rem 1.2rem;
+  font-family: inherit;
+  touch-action: manipulation;
+}
+
+.mobile-rotate-icon {
+  position: relative;
+  display: inline-block;
+  width: 72px;
+  height: 44px;
+  border: 2px solid #c9ad73;
+  border-radius: 8px;
+  transform: rotate(-10deg);
+}
+
+.mobile-rotate-icon::after {
+  position: absolute;
+  right: -20px;
+  bottom: -18px;
+  color: #c9ad73;
+  content: "↻";
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  font-size: 30px;
+  line-height: 1;
+}
+
+.mobile-fullscreen-resume {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: 50%;
+  z-index: 30;
+  min-height: 44px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(255, 224, 170, 0.52);
+  border-radius: 999px;
+  background: rgba(39, 31, 22, 0.88);
+  color: #fff0d2;
+  padding: 0.65rem 1.1rem;
+  font-family: Georgia, "Times New Roman", serif;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.mobile-install-banner {
+  position: fixed;
+  top: calc(env(safe-area-inset-top) + 12px);
+  left: 50%;
+  z-index: 30;
+  display: flex;
+  width: min(34rem, calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 24px));
+  transform: translateX(-50%);
+  align-items: center;
+  gap: 0.8rem;
+  border: 1px solid rgba(218, 188, 132, 0.34);
+  background: rgba(19, 17, 15, 0.92);
+  color: #e4d8c2;
+  padding: 0.55rem 0.65rem 0.55rem 0.9rem;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.mobile-install-banner button {
+  min-height: 44px;
+  flex: none;
+  border: 1px solid #8f7040;
+  background: transparent;
+  color: #f6e5c6;
+  padding: 0.45rem 0.7rem;
+  font-family: inherit;
+  touch-action: manipulation;
 }

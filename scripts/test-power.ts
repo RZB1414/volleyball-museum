@@ -77,5 +77,24 @@ check(
   progress.documentsRead.includes('effect-document'),
 )
 
+useMuseum.setState({ currentRoom: 'atrium', previousRoom: null })
+useMuseum.getState().powerRoom('atrium')
+useMuseum.getState().setCurrentRoom('holyoke')
+check(
+  'changing rooms records the room whose lighting must be retained',
+  useMuseum.getState().previousRoom === 'atrium',
+)
+check(
+  'a restored room remains powered after the visitor leaves it',
+  useMuseum.getState().progress.roomsPowered.includes('atrium'),
+)
+useMuseum.getState().setCurrentRoom('atrium')
+const atrium = MUSEUM.rooms.find((room) => room.id === 'atrium')
+assert.ok(atrium)
+check(
+  'returning reads the same authored and restored power state',
+  isRoomPowered(atrium, useMuseum.getState().progress.roomsPowered),
+)
+
 useMuseum.getState().resetProgress()
 console.log(`${checks}/${checks} checks passed`)

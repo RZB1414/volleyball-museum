@@ -1,0 +1,12 @@
+{
+  "name": "Players On Volleyball Museum",
+  "short_name": "Museu do Vôlei",
+  "description": "Museu interativo da história do voleibol mundial.",
+  "lang": "pt-BR",
+  "start_url": "/",
+  "scope": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#0a0b0d",
+  "theme_color": "#0a0b0d"
+}
