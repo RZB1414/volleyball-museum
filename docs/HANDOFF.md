@@ -428,7 +428,15 @@ em `ca4513c`, com o mesmo hash; não é regressão da abertura.
 - `__museumStep(n)` deve ser chamado uma vez com `n` frames, não `n` vezes com um.
 - Portas síncronas podem ser os primeiros colliders. O controller espera contato
   com uma superfície caminhável, não apenas `world.size > 0`, antes de ligar a
-  gravidade no spawn.
+  gravidade no spawn. Essa espera procura o piso até 2 cm abaixo do pé
+  (`hasWalkableSupportBelow`): o piso do escritório sai da dequantização uma fração
+  de milímetro abaixo de y = 0, o toque exato nunca acontecia e o spawn ficava sem
+  gravidade e sem WASD. O teleporte pula essa espera, então só o spawn natural (e o
+  `test:room-runtime`, que carrega o GLB de verdade) mostra o problema.
+- No OneDrive, o watcher do Vite pode perder a segunda de duas edições seguidas no
+  mesmo arquivo e continuar servindo a transformação velha, mesmo com reload. Se o
+  jogo não bate com o código, confira o que o servidor entrega
+  (`fetch('/src/...', { cache: 'no-store' })`) e reinicie o dev server.
 - `PropertyBinding.sanitizeNodeName` remove `[ ] . : /`; normalize os dois lados
   quando comparar nomes de nós.
 - O disco do Windows ignora maiúsculas: `devices.ts` ao lado de `Devices.tsx` faz o

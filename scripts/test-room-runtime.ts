@@ -219,6 +219,40 @@ for (const room of [holyoke, office]) {
   check(`${room.id} repeated cleanup stays empty`, collision.size === 0)
 }
 
+// PlayerController holds gravity, and with it WASD, until the floor under the
+// spawn answers the spawn gate. The office floor dequantises a hair below its
+// datum, so an exact-graze test never answered there and the opening night
+// began with a player who could look around but not take a step. Only the
+// loaded GLB shows this: the navigation suite's fresh shells sit exactly on 0.
+for (const room of [atrium, holyoke, office]) {
+  const collision = new CollisionWorld()
+  const registered = await registerFloor(room, collision)
+  const { min, max } = registered.floorPart.bounds
+  const datum = new Vector3(
+    room.origin[0] + (min[0] + max[0]) / 2,
+    room.origin[1],
+    room.origin[2] + (min[2] + max[2]) / 2,
+  )
+  check(
+    `${room.id} baked floor answers the spawn gate on its datum`,
+    collision.hasWalkableSupportBelow(datum, CAPSULE),
+  )
+
+  if (room.id === MUSEUM.spawn.room) {
+    const spawn = new Vector3(
+      room.origin[0] + MUSEUM.spawn.position[0],
+      room.origin[1] + MUSEUM.spawn.position[1],
+      room.origin[2] + MUSEUM.spawn.position[2],
+    )
+    check(
+      `the spawn gate finds the baked ${room.id} floor under the spawn`,
+      collision.hasWalkableSupportBelow(spawn, CAPSULE),
+    )
+  }
+
+  registered.dispose()
+}
+
 for (const [room, start, finish] of [
   [holyoke, new Vector3(-8, 0, -2), new Vector3(-10.5, 0, -2)],
   [office, new Vector3(8, 0, 3), new Vector3(10.5, 0, 3)],

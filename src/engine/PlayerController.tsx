@@ -278,7 +278,7 @@ export function PlayerController({
       let attempts = 0
       const applyWhenSupported = () => {
         attempts += 1
-        const supported = world?.hasWalkableSupport(probe, CAPSULE)
+        const supported = world?.hasWalkableSupportBelow(probe, CAPSULE)
         if (!supported && attempts < 60) {
           qaCameraHandle = window.setTimeout(applyWhenSupported, 50)
           return
@@ -416,10 +416,14 @@ export function PlayerController({
      * The symptom is a flat, featureless screen a second after entering: the
      * camera is under the building looking at nothing. It is also invisible to
      * every teleport-based test, because by then loading has finished.
+     *
+     * The check looks a little below the feet: a spawn on a floor's datum only
+     * grazes it, and an exact-graze test once left the office spawn waiting for
+     * a floor it was already standing on — no gravity, no WASD, forever.
      */
     const hasInitialSupport =
       !awaitingInitialSupportRef.current ||
-      Boolean(world?.hasWalkableSupport(positionRef.current, CAPSULE))
+      Boolean(world?.hasWalkableSupportBelow(positionRef.current, CAPSULE))
     if (hasInitialSupport) awaitingInitialSupportRef.current = false
 
     if (world && hasInitialSupport) {

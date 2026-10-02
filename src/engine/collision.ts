@@ -60,6 +60,17 @@ const MIN_GROUND_NORMAL_Y = 0.67
 /** Thresholds and the odd shallow step. Matches the old Rapier autostep. */
 const MAX_STEP_HEIGHT = 0.22
 /**
+ * How far below the feet the spawn check may look for a floor.
+ *
+ * A spawn authored on a floor's datum touches its top face with zero overlap,
+ * which `resolve` does not count as contact. Whether a baked floor then ends a
+ * hair above or below y = 0 after dequantisation decided whether the player
+ * could ever move: the atrium's floor happened to sit just above, the office's
+ * just below, and spawning in the office froze WASD for good. Two centimetres
+ * is far below any visible gap and far above the dequantisation error.
+ */
+export const SUPPORT_PROBE_DEPTH = 0.02
+/**
  * Downward speed applied while grounded, in metres per second, to keep the
  * capsule pressed into the floor so `grounded` stays true between frames.
  *
@@ -207,6 +218,7 @@ export class CollisionWorld {
   private readonly capsulePoint = new Vector3()
   private readonly pushTotal = new Vector3()
   private readonly overlapPush = new Vector3()
+  private readonly supportProbe = new Vector3()
   private readonly overlapResult: ResolveResult = {
     push: this.overlapPush,
     groundNormalY: 0,
@@ -315,6 +327,23 @@ export class CollisionWorld {
       this.resolve(position, capsule, this.overlapPush, this.overlapResult).groundNormalY >=
       MIN_GROUND_NORMAL_Y
     )
+  }
+
+  /**
+   * True when a walkable floor lies at the feet or within `depth` below them.
+   *
+   * The question the spawn asks before gravity starts: is this room's floor
+   * loaded under me? A flush floor must answer yes, and a vertical door gate —
+   * often the first collider registered — must still answer no.
+   */
+  hasWalkableSupportBelow(
+    position: Vector3,
+    capsule: CapsuleSpec,
+    depth = SUPPORT_PROBE_DEPTH,
+  ): boolean {
+    this.supportProbe.copy(position)
+    this.supportProbe.y -= depth
+    return this.hasWalkableSupport(this.supportProbe, capsule)
   }
 }
 

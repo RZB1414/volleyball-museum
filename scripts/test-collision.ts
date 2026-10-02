@@ -123,6 +123,21 @@ check(
     'does not mistake a vertical transition gate for a loaded floor',
     !gateOnly.hasWalkableSupport(new Vector3(0.3, 0, 0), CAPSULE),
   )
+  check(
+    'the spawn gate does not mistake a vertical transition gate for a floor either',
+    !gateOnly.hasWalkableSupportBelow(new Vector3(0.3, 0, 0), CAPSULE),
+  )
+}
+{
+  // A baked floor dequantises to within a fraction of a millimetre of its
+  // datum, on either side. One that lands below leaves feet on the datum
+  // touching nothing; the spawn gate must still find it, or gravity never
+  // starts and WASD does nothing (the office spawn, opening night).
+  const sunkenFloor = worldFromMeshes([box(20, 0.4, 20, 0, -0.2005, 0)])
+  check(
+    'the spawn gate finds a floor a hair below the feet',
+    sunkenFloor.hasWalkableSupportBelow(new Vector3(0, 0, 0), CAPSULE),
+  )
 }
 
 // --- 1. Gravity and resting on the floor ----------------------------------
