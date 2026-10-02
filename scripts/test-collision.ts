@@ -113,12 +113,23 @@ console.log('collision — capsule vs static BVH\n')
 
 const world = buildTestWorld()
 check('world builds', world.size === 5, `${world.size} colliders`)
+// The exact test passes here only because float32 rounds this floor's top a
+// few nanometres ABOVE 0. The spawn gate must not rely on that luck.
 check(
   'recognises walkable support beneath the spawn capsule',
   world.hasWalkableSupport(new Vector3(0, 0, 0), CAPSULE),
 )
+check(
+  'the spawn gate recognises the same floor',
+  world.hasWalkableSupportBelow(new Vector3(0, 0, 0), CAPSULE),
+)
 {
   const gateOnly = worldFromMeshes([box(0.08, 2.4, 1.6, 0, 1.2, 0)])
+  // Without real contact the two "no floor" checks below would pass vacuously.
+  check(
+    'the capsule beside the gate really touches it',
+    gateOnly.intersects(new Vector3(0.3, 0, 0), CAPSULE),
+  )
   check(
     'does not mistake a vertical transition gate for a loaded floor',
     !gateOnly.hasWalkableSupport(new Vector3(0.3, 0, 0), CAPSULE),

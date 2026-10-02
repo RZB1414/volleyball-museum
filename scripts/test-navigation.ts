@@ -590,9 +590,10 @@ const spawnPoint = roomPoint(
   MUSEUM.spawn.position[0],
   MUSEUM.spawn.position[2],
 )
+// The same question PlayerController asks before it lets gravity and WASD run.
 check(
   'the spawn capsule stands on walkable floor',
-  world.hasWalkableSupport(spawnPoint, CAPSULE),
+  world.hasWalkableSupportBelow(spawnPoint, CAPSULE),
 )
 const spawnToDesk = walk([spawnPoint.clone(), roomPoint('office', -1.2, -0.05)])
 check(
