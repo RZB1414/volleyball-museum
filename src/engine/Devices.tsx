@@ -24,17 +24,22 @@ import {
 
 import { MUSEUM } from '../content/museum'
 import type { DeviceData, RoomData } from '../content/schema'
-import { useMuseum } from '../state/store'
+import { contributeToSave, isModalOpen, useMuseum } from '../state/store'
 import { museumAudio } from './audio'
 import { USE_DRACO, USE_MESHOPT } from './bundleCache'
 import {
+  advanceClockSeconds,
+  CLOCK_SAVE_INTERVAL_SECONDS,
   clockHandAngles,
   clockTimeAfter,
   dueRadioCalls,
+  radioCallReady,
   radioDevices,
   radioHintFor,
+  savedClockSeconds,
   type RadioDevice,
 } from './deviceRules'
+import { INTERACTION_REACH, interactionWinnerOf, PROXY_MINIMUM } from './interactionTarget'
 import { cloneKitPart, disposeKitPart } from './kitPart'
 import type { MaterialLibrary } from './materials'
 import { isRoomPowered } from './power'
@@ -43,7 +48,7 @@ import { subscribePrimaryAction } from './primaryAction'
 
 const CENTRE = new Vector2(0, 0)
 const INTERACTION_LAYER = 7
-const REACH = 2.6
+const REACH = INTERACTION_REACH.device
 /** Beyond this the reader's latch is out of earshot. */
 const LATCH_AUDIBLE_DISTANCE = 10
 
@@ -147,16 +152,47 @@ function ClockDevice({
 }) {
   const pivots = useMemo(() => prepareClockHands(instance, device.part), [device.part, instance])
   const powered = usePowered(device.runsWithPowerOf)
-  const startedAtRef = useRef<number | null>(null)
+  // Seconds of play since the power came back, carried across sessions in
+  // the save: a reload used to put the hands back to 16h47 in a room that
+  // had been lit for an hour. Null while unpowered.
+  const elapsedRef = useRef<number | null>(null)
+  const sinceSaveRef = useRef(0)
 
   useEffect(() => {
-    if (powered && startedAtRef.current === null) startedAtRef.current = performance.now()
-    if (!powered) startedAtRef.current = null
-  }, [powered])
+    if (!powered) {
+      elapsedRef.current = null
+      return undefined
+    }
+    if (elapsedRef.current === null) {
+      elapsedRef.current = savedClockSeconds(useMuseum.getState().progress, device.id)
+    }
+    const record = () => {
+      if (elapsedRef.current !== null) {
+        useMuseum.getState().recordClockSeconds(device.id, elapsedRef.current)
+      }
+    }
+    // A hidden tab freezes the frame loop before the next periodic write;
+    // the forced flush on hide asks for the latest value instead. Recording
+    // on unmount too keeps a room that streams back in from finding its
+    // clock up to one save interval slow.
+    const stopContributing = contributeToSave(record)
+    return () => {
+      stopContributing()
+      record()
+    }
+  }, [device.id, powered])
 
-  useFrame(() => {
-    const elapsed =
-      startedAtRef.current === null ? 0 : (performance.now() - startedAtRef.current) / 1000
+  useFrame((_, delta) => {
+    let elapsed = 0
+    if (elapsedRef.current !== null) {
+      elapsed = advanceClockSeconds(elapsedRef.current, delta)
+      elapsedRef.current = elapsed
+      sinceSaveRef.current += delta
+      if (sinceSaveRef.current >= CLOCK_SAVE_INTERVAL_SECONDS) {
+        sinceSaveRef.current = 0
+        useMuseum.getState().recordClockSeconds(device.id, elapsed)
+      }
+    }
     const angles = clockHandAngles(clockTimeAfter(device.stoppedAt, elapsed))
     // The dial faces local +Z, so clockwise as the visitor sees it is -Z.
     if (pivots.hour) pivots.hour.rotation.z = -angles.hour
@@ -223,7 +259,8 @@ function RadioDeviceView({
     const centre = bounds.getCenter(new Vector3())
     const size = bounds.getSize(new Vector3())
     // "Looking at the radio", not threading the crosshair through an antenna.
-    size.set(Math.max(size.x, 0.3), Math.max(size.y, 0.32), Math.max(size.z, 0.3))
+    const [minX, minY, minZ] = PROXY_MINIMUM.radio
+    size.set(Math.max(size.x, minX), Math.max(size.y, minY), Math.max(size.z, minZ))
     return {
       centre: centre.toArray() as [number, number, number],
       size: size.toArray() as [number, number, number],
@@ -355,18 +392,11 @@ export function DeviceTargeting() {
   useEffect(() => {
     const interact = () => {
       const state = useMuseum.getState()
-      if (
-        state.examining ||
-        state.openedContainer ||
-        state.activeLock ||
-        state.focusedTransitionDoor ||
-        state.focusedExhibit ||
-        state.focusedContainer ||
-        !state.focusedDevice
-      ) {
-        return false
-      }
-      return operateRadio(state.focusedDevice)
+      // The same answer the prompt shows: nearest live desk target wins, and
+      // a radio without charge never takes the key from the lamp.
+      const winner = interactionWinnerOf(state, MUSEUM)
+      if (winner?.kind !== 'device' || !winner.live) return false
+      return operateRadio(winner.id)
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -393,7 +423,7 @@ export function DeviceTargeting() {
 
   useFrame((_, delta) => {
     const state = useMuseum.getState()
-    if (state.examining || state.openedContainer || state.activeLock) {
+    if (isModalOpen(state)) {
       if (state.focusedDevice) state.setFocusedDevice(null)
       return
     }
@@ -425,6 +455,7 @@ export function DeviceTargeting() {
     }
 
     let found: string | null = null
+    let distance: number | undefined
     if (targetsRef.current.length > 0) {
       raycaster.setFromCamera(CENTRE, camera)
       const intersections = intersectionsRef.current
@@ -432,6 +463,7 @@ export function DeviceTargeting() {
       raycaster.intersectObjects(targetsRef.current, true, intersections)
       const hit = intersections[0]
       found = hit ? deviceIdFor(hit.object) : null
+      distance = hit?.distance
       let node: Object3D | null = hit?.object ?? null
       while (found && node) {
         if (!node.visible) found = null
@@ -439,7 +471,7 @@ export function DeviceTargeting() {
       }
       intersections.length = 0
     }
-    state.setFocusedDevice(found)
+    state.setFocusedDevice(found, distance)
   })
 
   return null
@@ -463,11 +495,22 @@ export function RadioDirector() {
         if (timers.has(call.id)) continue
         const deliver = () => {
           const state = useMuseum.getState()
-          if (state.progress.radioCalls.includes(call.id)) {
+          const readiness = radioCallReady(device, call.id, state.progress, MUSEUM)
+          // Its moment passed while it waited (the player picked the notebook
+          // up during the first call): the reminder must not play anyway.
+          if (readiness === 'gone') {
             timers.delete(call.id)
             return
           }
-          if (state.radio || state.openedContainer || state.activeLock || state.journalTab) {
+          // Content order, not timer order: a reminder whose retry happened
+          // to fire first must never play before the porter's introduction.
+          if (
+            readiness === 'queued' ||
+            state.radio ||
+            state.openedContainer ||
+            state.activeLock ||
+            state.journalTab
+          ) {
             timers.set(call.id, window.setTimeout(deliver, 1200))
             return
           }

@@ -20,8 +20,9 @@ import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
 import { MathUtils, PerspectiveCamera, Vector3 } from 'three'
 
-import { useMuseum } from '../state/store'
+import { isModalOpen, useMuseum } from '../state/store'
 import type { CollisionWorld, MoveResultBuffer } from './collision'
+import { shouldCapturePointer } from './interactionTarget'
 import { movePlayer } from './collision'
 import {
   CAMERA_FOV_PUSH_DEGREES,
@@ -98,6 +99,7 @@ export function PlayerController({
   const lastCameraAspectRef = useRef(camera.aspect)
 
   const setPointerLocked = useMuseum((state) => state.setPointerLocked)
+  const setSceneReady = useMuseum((state) => state.setSceneReady)
 
   useEffect(() => {
     camera.rotation.order = 'YXZ'
@@ -152,8 +154,15 @@ export function PlayerController({
     }
 
     const handleMouseDown = (event: MouseEvent) => {
-      if (event.button !== 0 || document.pointerLockElement === canvas) return
-      if (useMuseum.getState().examining) return
+      // The overlays of the keypad and the document reader let clicks fall
+      // through to the canvas around their panels; capturing the pointer
+      // there hid the very cursor those panels need.
+      const capture = shouldCapturePointer({
+        button: event.button,
+        locked: document.pointerLockElement === canvas,
+        modal: isModalOpen(useMuseum.getState()),
+      })
+      if (!capture) return
       // unadjustedMovement skips the OS acceleration curve. Without it, a
       // high-polling-rate mouse produces visible stutter under pointer lock
       // while a trackpad feels fine — the classic misleading symptom.
@@ -195,6 +204,9 @@ export function PlayerController({
 
     canvas.addEventListener('mousedown', handleMouseDown)
     document.addEventListener('pointerlockchange', handleLockChange)
+    // From here a click on the canvas really does capture the mouse, which
+    // is the moment a "click to look" hint becomes true.
+    setSceneReady(true)
     if ('PointerEvent' in window) {
       canvas.addEventListener('pointermove', handlePointerMove, { passive: true })
     } else {
@@ -208,8 +220,9 @@ export function PlayerController({
       canvas.removeEventListener('pointermove', handlePointerMove)
       detachFallback()
       setPointerLocked(false)
+      setSceneReady(false)
     }
-  }, [setPointerLocked])
+  }, [setPointerLocked, setSceneReady])
 
   // --- keyboard -------------------------------------------------------------
   useEffect(() => {

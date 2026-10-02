@@ -21,8 +21,10 @@ import { MUSEUM } from '../content/museum'
 import { journalUnlocked } from '../engine/notebook'
 import { useTranslate } from '../i18n'
 import { useMuseum, type JournalTab } from '../state/store'
+import { closeLabel } from './hudRules'
 import { MuseumMap } from './MuseumMap'
 import { NotebookPageView } from './Notebook'
+import { useCoarsePointer } from './useCoarsePointer'
 
 type Tab = JournalTab
 
@@ -157,6 +159,7 @@ export function Journal() {
   const openTab = useMuseum((state) => state.journalTab)
   const setOpenTab = useMuseum((state) => state.setJournalTab)
   const examining = useMuseum((state) => state.examining)
+  const coarse = useCoarsePointer()
   const t = useTranslate()
 
   useEffect(() => {
@@ -212,7 +215,7 @@ export function Journal() {
             </button>
           ))}
           <button type="button" className="journal-close" onClick={() => setOpenTab(null)}>
-            {t('prompt.close')} · Tab
+            {closeLabel(t('prompt.close'), 'Tab', coarse)}
           </button>
         </nav>
 

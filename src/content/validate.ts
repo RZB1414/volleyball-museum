@@ -11,6 +11,7 @@
  * broken content edit fails loudly instead of at runtime.
  */
 
+import { PRE_OPENING_SAVE } from './legacySave.ts'
 import type {
   Credential,
   Fact,
@@ -635,7 +636,7 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
     for (const lockId of [...(condition.locksOpened ?? []), ...(condition.locksClosed ?? [])]) {
       if (!lockIds.has(lockId)) error('condition-lock-missing', `${where} names unknown lock "${lockId}".`)
     }
-    for (const documentId of condition.documentsRead ?? []) {
+    for (const documentId of [...(condition.documentsRead ?? []), ...(condition.documentsUnread ?? [])]) {
       if (!documentIds.has(documentId)) {
         error('condition-document-missing', `${where} names unknown document "${documentId}".`)
       }
@@ -749,6 +750,34 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
         }
       }
     }
+  }
+
+  // --- saves from before the opening -----------------------------------------
+  // The store migrates those saves by these ids; a renamed one would make the
+  // migration silently do nothing and replay the opening at a returning player.
+  const journalDocument = content.documents.find(
+    (doc) => doc.id === PRE_OPENING_SAVE.journalDocumentId,
+  )
+  const carriers = content.rooms.flatMap((room) =>
+    (room.containers ?? []).filter((container) => container.carriesJournal),
+  )
+  if (!journalDocument || !carriers.some((container) => container.id === journalDocument.containerId)) {
+    error(
+      'legacy-save-journal',
+      `The pre-opening save migration grants "${PRE_OPENING_SAVE.journalDocumentId}", which is not the document in a journal-carrying container.`,
+    )
+  }
+  if (!callIds.has(PRE_OPENING_SAVE.firstCallId)) {
+    error(
+      'legacy-save-call',
+      `The pre-opening save migration marks unknown radio call "${PRE_OPENING_SAVE.firstCallId}" as heard.`,
+    )
+  }
+  if (!roomIds.has(PRE_OPENING_SAVE.firstCallOverOncePowered)) {
+    error(
+      'legacy-save-room',
+      `The pre-opening save migration watches unknown room "${PRE_OPENING_SAVE.firstCallOverOncePowered}".`,
+    )
   }
 
   return issues
@@ -1293,10 +1322,10 @@ export function validateTranslations(
     }
   }
 
-  walk(content.rooms, 'rooms')
-  walk(content.exhibits, 'exhibits')
-  walk(content.documents, 'documents')
-  walk(content.locks, 'locks')
+  // Every collection, not a list of today's: the facts were once missing from
+  // that list, so a typo in the office drawer's question passed the gate and
+  // would have shown an empty paragraph on its keypad.
+  for (const [collection, value] of Object.entries(content)) walk(value, collection)
 
   return issues
 }

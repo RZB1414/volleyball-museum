@@ -26,6 +26,7 @@ import { useTranslate } from '../i18n'
 import { playerPosition } from '../engine/playerPosition'
 import { isRoomPowered } from '../engine/power'
 import { useMuseum } from '../state/store'
+import { portalOpening } from './mapGeometry'
 
 /** Metres to SVG units. The whole museum is ~40 m across. */
 const SCALE = 10
@@ -152,19 +153,37 @@ export function MuseumMap() {
                   })
                 : null}
 
-              {/* Doorways, drawn as gaps in the wall line. */}
-              {room.portals.map((portal) => (
-                <line
-                  key={portal.id}
-                  x1={toX(ox + portal.position[0]) - 3}
-                  y1={toY(oz + portal.position[2])}
-                  x2={toX(ox + portal.position[0]) + 3}
-                  y2={toY(oz + portal.position[2])}
-                  className={portal.oneWay ? 'map-portal is-oneway' : 'map-portal'}
-                />
-              ))}
             </g>
           )
+        })}
+
+        {/*
+          Doorways, cut into the walls after every room is drawn: two rooms
+          share each wall, and a neighbour drawn later would paint its outline
+          straight over an opening drawn with the first.
+        */}
+        {MUSEUM.rooms.flatMap((room) => {
+          const [ox, , oz] = room.origin
+          return room.portals.map((portal) => {
+            const opening = portalOpening(
+              toX(ox + portal.position[0]),
+              toY(oz + portal.position[2]),
+              portal.width * SCALE,
+              portal.rotationY,
+            )
+            return (
+              <g
+                key={`${room.id}:${portal.id}`}
+                className={portal.oneWay ? 'map-portal is-oneway' : 'map-portal'}
+              >
+                <line className="map-portal-gap" {...opening.gap} />
+                {portal.oneWay ? <line className="map-portal-oneway" {...opening.gap} /> : null}
+                {opening.jambs.map((jamb, index) => (
+                  <line key={index} className="map-portal-jamb" {...jamb} />
+                ))}
+              </g>
+            )
+          })
         })}
 
         <g className="map-player" transform={`translate(${playerX} ${playerY})`}>

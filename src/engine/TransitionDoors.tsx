@@ -12,7 +12,7 @@ import {
 
 import type { BakedBundle } from '../content/bake.generated'
 import { MUSEUM } from '../content/museum'
-import { useMuseum } from '../state/store'
+import { isModalOpen, useMuseum } from '../state/store'
 import { museumAudio } from './audio'
 import { USE_DRACO, USE_MESHOPT } from './bundleCache'
 import type { CollisionWorld } from './collision'
@@ -350,9 +350,9 @@ export function TransitionDoorLayer({
     const interact = () => {
       const museum = useMuseum.getState()
       const focused = museum.focusedTransitionDoor
-      if (!focused || museum.examining || museum.openedContainer || museum.activeLock) {
-        return false
-      }
+      // The journal included: a door opening behind it was the same bug as
+      // a keypad opening under it.
+      if (!focused || isModalOpen(museum)) return false
       if (focused.status === 'blocked') {
         // A powerless electric lock answers the press with a dead buzz: the
         // door is not broken, it is waiting for the room's electricity.
@@ -561,7 +561,7 @@ export function TransitionDoorLayer({
 
     let focusedRuntime: DoorRuntime | undefined
     let focusedTarget: string | null = null
-    if (!museum.examining && !museum.openedContainer && !museum.activeLock) {
+    if (!isModalOpen(museum)) {
       raycaster.setFromCamera(CENTRE, camera)
       const candidates = candidatesRef.current
       candidates.length = 0

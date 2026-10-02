@@ -13,6 +13,9 @@ export const en = {
   'ui.subtitle': 'The history of world volleyball, one room at a time.',
   'ui.enter': 'Enter the museum',
   'ui.continue': 'Continue',
+  'ui.newGame': 'New game',
+  'ui.newGame.confirm': 'Confirm — erase all progress',
+  'ui.lookHint': 'Click to look around',
   'ui.loading': 'Preparing the gallery…',
   'ui.settings': 'Settings',
   'ui.language': 'Language',
@@ -75,6 +78,8 @@ export const en = {
   'archive.title': 'Archive',
   'archive.empty': 'No documents found yet. Look in drawers and filing cabinets.',
   'archive.filed': 'Filed in your notebook — Tab to re-read',
+  'archive.filed.touch': 'Filed in your notebook — tap the notebook icon to re-read',
+  'archive.filed.noJournal': "It will be filed in the curator's notebook, still on the office desk.",
   'container.office.title': "Curator's locked drawer",
   'document.predecessor.title': 'Note from the previous curator',
   'document.predecessor.body':
@@ -146,6 +151,10 @@ export const en = {
     "The atrium breaker is on the west wall, beside the Wing 1 entrance. Look for the little red light.",
   'radio.call.first.4':
     "And don't go down to the basement: it flooded. Anything at all, call me on this radio. Over and out.",
+  'radio.call.notebook.1':
+    'Oh, and Helena left you a notebook there on the desk. Take it before you go — it explains everything. Over.',
+  'radio.hint.notebook':
+    'Notebook first, curator: Helena left you one on the office desk. It explains everything.',
   'radio.hint.atrium':
     'The atrium breaker is on the west wall, near the Wing 1 entrance. The little red light shows you where.',
   'radio.hint.holyoke':
@@ -257,8 +266,9 @@ export const en = {
   'exhibit.portrait-morgan.label':
     'Physical director of the YMCA in Holyoke, Massachusetts. In 1895, aged 25, he built a non-contact game for older, sedentary members. He called it Mintonette. He had met James Naismith, the inventor of basketball, in 1891.',
   'exhibit.portrait-morgan.catalogue':
-    'William George Morgan (Lockport, New York, 23 January 1870 — 27 December 1942). He graduated from the International YMCA Training School in 1894 and took up the Holyoke post on 30 August 1895. He left the YMCA in 1900 for industry.',
-  'hotspot.portrait-morgan.date.label': 'The invention date is disputed — see the catalogue entry',
+    'William George Morgan (Lockport, New York, 23 January 1870 — 27 December 1942). He graduated from the International YMCA Training School in 1894 and took up the Holyoke post on 30 August 1895. In July 1896, demonstrating the game at a YMCA conference in Springfield, he agreed to rename Mintonette Volley Ball. He left the YMCA in 1900 for industry.',
+  'hotspot.portrait-morgan.date.label':
+    'Frame plaque: in 1896, at a demonstration in Springfield, Mintonette was renamed Volley Ball',
 
   'exhibit.photo-gym.title': 'The gymnasium where it happened',
   'exhibit.photo-gym.label':

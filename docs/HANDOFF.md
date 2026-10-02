@@ -375,6 +375,7 @@ npm run check
 npm run validate:content
 npm run test:power
 npm run test:opening
+npm run test:opening-flow
 npm run test:collision
 npm run test:kit
 npm run test:kit-runtime
@@ -548,3 +549,41 @@ lanterna → caderno → luminária → porta → átrio escuro.
 - **Testes**: `npm run test:opening` (23 checagens: spawn, caderno, lista, trava,
   rádio, relógio, lanterna e validador). `validateOpening` cobre spawn, páginas,
   dispositivos e condições; `validateBake` exige os nós `__hand-*`, `__dial` e `__led`.
+
+### 9.1 O fluxo da abertura, depois da auditoria
+
+Regras que valem para qualquer sistema novo que responda ao `E`:
+
+- **Um modal por vez.** `isModalOpen` (`src/state/store.ts`: examinar, container
+  aberto, teclado ou diário) bloqueia todo `interact`, limpa todo foco nos
+  `useFrame` de mira e esconde mira, ferramentas e prompts. Abrir teclado, leitor ou
+  exame fecha o diário. Clique fora de um painel nunca captura o ponteiro
+  (`shouldCapturePointer`), e todo container aberto solta o ponteiro.
+- **O alvo mais próximo vence.** Cada mira publica a distância do acerto junto com
+  o foco; `interactionWinner` (`src/engine/interactionTarget.ts`) decide o dono do
+  `E` (porta e peça têm precedência; entre container, rádio e luminária vence o mais
+  perto, empate de 3 cm na ordem antiga; rádio sem carga nunca vence). Guardas,
+  prompts do HUD e o botão Ação móvel perguntam a mesma função.
+- **Caderno opcional, mas lembrado.** `ProgressCondition.documentsUnread`; a primeira
+  dica do rádio e a chamada `porter-notebook-reminder` mandam pegar o caderno. As
+  chamadas tocam na ordem do conteúdo e caem se a condição deixar de valer
+  (`radioCallReady`). O painel de documento só diz "Tab para reler" com o diário
+  liberado (variante de toque sem tecla; `hudRules.ts`).
+- **Save.** `migrateProgress` sanitiza todo campo e traz saves anteriores à abertura
+  (sem `radioCalls`) sem subir `SAVE_VERSION`: átrio aceso marca a primeira chamada
+  como ouvida, qualquer progresso concede `doc-welcome` (ids em
+  `src/content/legacySave.ts`, checados pelo validador). Campo novo em `Progress`
+  precisa entrar em `migrateProgress`, senão é descartado no load. O save é forçado
+  no `visibilitychange` → hidden e no `pagehide`; `contributeToSave` deixa o relógio
+  gravar o tempo decorrido (`progress.clockSeconds`, tempo de jogo, nunca relógio
+  real) antes desse flush. `hintsShown` guarda os avisos de uma vez só.
+- **Título.** "Novo jogo" aparece só com progresso real (`hasSavedProgress`), pede
+  dois cliques e zera progresso e sessão com gravação imediata.
+- **Outros.** "Clique para olhar" no desktop sem ponteiro travado; o toast de
+  catálogo só anuncia crescimento; o `AudioContext` volta depois de interrupções
+  (gestos, visibilidade, `onstatechange`) e nenhum som é agendado num contexto
+  parado; a planta desenha as portas ao longo da parede; o validador de traduções
+  percorre todas as coleções. O código da gaveta (1896) está na plaqueta da moldura
+  do retrato do Morgan e na ficha dele.
+- **Testes**: `npm run test:opening-flow` (38 checagens, com o save do navegador
+  simulado para provar a migração pelo caminho real de carga).

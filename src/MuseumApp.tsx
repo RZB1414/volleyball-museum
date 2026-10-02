@@ -6,12 +6,13 @@
  * history rather than in the production bundle.
  */
 
-import { Suspense, lazy, useState } from 'react'
+import { Suspense, lazy, useEffect, useState } from 'react'
 
 import { museumAudio } from './engine/audio'
 import { requestMobileImmersiveMode } from './engine/mobileImmersive'
-import { useMuseum, type Locale } from './state/store'
+import { hasSavedProgress, useMuseum, type Locale } from './state/store'
 import { useTranslate } from './i18n'
+import { NEW_GAME_CONFIRM_MS, newGameClick } from './ui/hudRules'
 import { MobileImmersiveGuard } from './ui/MobileImmersiveGuard'
 import './styles/museum.css'
 
@@ -44,9 +45,33 @@ function TitleScreen({ onEnter }: { onEnter: () => void }) {
   const locale = useMuseum((state) => state.settings.locale)
   const setSetting = useMuseum((state) => state.setSetting)
   const progress = useMuseum((state) => state.progress)
+  const resetProgress = useMuseum((state) => state.resetProgress)
   const t = useTranslate()
+  const [newGameArmed, setNewGameArmed] = useState(false)
 
-  const hasSave = progress.roomsVisited.length > 0
+  // Real progress, not "clicked Enter once": a save that only ever stood in
+  // the spawn room has nothing to continue and nothing to erase.
+  const hasSave = hasSavedProgress(progress)
+
+  // An armed "New game" disarms itself, so a click long after the warning is
+  // read as a first click again rather than as a confirmation.
+  useEffect(() => {
+    if (!newGameArmed) return undefined
+    const timer = window.setTimeout(() => setNewGameArmed(false), NEW_GAME_CONFIRM_MS)
+    return () => window.clearTimeout(timer)
+  }, [newGameArmed])
+
+  const handleNewGame = () => {
+    if (newGameClick(newGameArmed) === 'arm') {
+      setNewGameArmed(true)
+      return
+    }
+    setNewGameArmed(false)
+    // Erased and written to disk first, then entered in this same click: the
+    // audio unlock and the fullscreen request both need this gesture.
+    resetProgress()
+    onEnter()
+  }
 
   return (
     <main className="title">
@@ -63,6 +88,17 @@ function TitleScreen({ onEnter }: { onEnter: () => void }) {
         <button className="title-enter" type="button" onClick={onEnter}>
           {hasSave ? t('ui.continue') : t('ui.enter')}
         </button>
+
+        {hasSave ? (
+          <button
+            className={newGameArmed ? 'title-new-game is-armed' : 'title-new-game'}
+            type="button"
+            onClick={handleNewGame}
+            onBlur={() => setNewGameArmed(false)}
+          >
+            {newGameArmed ? t('ui.newGame.confirm') : t('ui.newGame')}
+          </button>
+        ) : null}
 
         <div className="title-locale" role="group" aria-label={t('ui.language')}>
           {(['pt-BR', 'en'] as Locale[]).map((option) => (

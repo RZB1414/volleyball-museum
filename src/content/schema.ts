@@ -280,6 +280,12 @@ export type ProgressCondition = {
   readonly locksOpened?: readonly string[]
   readonly locksClosed?: readonly string[]
   readonly documentsRead?: readonly string[]
+  /**
+   * None of these has been read yet. The reading layer stays optional, so
+   * nothing is locked behind the director's notebook; this is how the porter
+   * notices a player who walked past it and tells them to go back.
+   */
+  readonly documentsUnread?: readonly string[]
   /** Every room in the museum has its electricity back. */
   readonly allRoomsPowered?: boolean
   /** Every exhibit in the museum is catalogued. */

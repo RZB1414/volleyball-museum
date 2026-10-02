@@ -24,12 +24,13 @@ import {
 import { MUSEUM } from '../content/museum'
 import './bvhSetup'
 import type { ExhibitData } from '../content/schema'
-import { useMuseum } from '../state/store'
+import { isModalOpen, useMuseum } from '../state/store'
+import { INTERACTION_REACH, interactionWinnerOf } from './interactionTarget'
 import { subscribePrimaryAction } from './primaryAction'
 
 const CENTRE = new Vector2(0, 0)
 /** How far the player can reach to examine something. */
-const REACH = 2.6
+const REACH = INTERACTION_REACH.exhibit
 
 const exhibitsById = new Map<string, ExhibitData>(
   MUSEUM.exhibits.map((exhibit) => [exhibit.id, exhibit]),
@@ -78,7 +79,15 @@ export function InteractionTargeting() {
 
   useFrame((_, delta) => {
     const state = useMuseum.getState()
-    if (state.examining) return
+    // Every modal clears the focus, so nothing behind a reader or the
+    // journal keeps a prompt on screen or answers the next E.
+    if (isModalOpen(state)) {
+      if (lastRef.current !== null || state.focusedExhibit !== null) {
+        lastRef.current = null
+        state.setFocusedExhibit(null)
+      }
+      return
+    }
 
     /**
      * Cast against the EXHIBITS, not the scene.
@@ -199,11 +208,13 @@ export function ExamineView() {
         state.setExamining(null)
         return true
       }
-      if (!state.focusedExhibit || state.focusedTransitionDoor) return false
+      if (isModalOpen(state)) return false
+      const winner = interactionWinnerOf(state, MUSEUM)
+      if (winner?.kind !== 'exhibit') return false
 
       // Examining takes the mouse back so the player can turn the object.
       if (document.pointerLockElement) document.exitPointerLock()
-      state.setExamining(state.focusedExhibit)
+      state.setExamining(winner.id)
       return true
     }
 

@@ -56,6 +56,12 @@ export function progressConditionMet(
   ) {
     return false
   }
+  if (
+    condition.documentsUnread &&
+    condition.documentsUnread.some((documentId) => progress.documentsRead.includes(documentId))
+  ) {
+    return false
+  }
   if (condition.allRoomsPowered && !content.rooms.every((room) => powered(room.id))) {
     return false
   }

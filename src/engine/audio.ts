@@ -45,6 +45,31 @@ const SURFACES: Record<Surface, SurfaceVoice> = {
 /** ±12% per step. Without this the ear locks onto the repetition immediately. */
 const VARIATION = 0.12
 
+type AudioEvents = Pick<EventTarget, 'addEventListener' | 'removeEventListener'>
+
+/** Where the audio graph comes from and where gestures are heard. */
+export type AudioEnvironment = {
+  readonly createContext: () => AudioContext
+  /** Absent outside a browser, where nothing can resume anything. */
+  readonly gestures?: AudioEvents
+  readonly visibility?: AudioEvents & { readonly visibilityState: DocumentVisibilityState }
+}
+
+function browserEnvironment(): AudioEnvironment {
+  return {
+    createContext: () => new AudioContext(),
+    gestures: typeof window === 'undefined' ? undefined : window,
+    visibility: typeof document === 'undefined' ? undefined : document,
+  }
+}
+
+/**
+ * Gestures that may resume a context. Permanent listeners rather than `once`:
+ * a phone suspends the context again every time the screen locks or a call
+ * comes in, and Safari reports 'interrupted' rather than 'suspended'.
+ */
+const RESUME_GESTURES = ['touchend', 'click', 'pointerup', 'keydown'] as const
+
 export class MuseumAudio {
   private context: AudioContext | null = null
   private master: GainNode | null = null
@@ -53,6 +78,12 @@ export class MuseumAudio {
   private noise: AudioBuffer | null = null
   /** Alternating feet, so successive steps are not identical. */
   private foot = 0
+  private readonly environment: () => AudioEnvironment
+  private unbindResume: (() => void) | null = null
+
+  constructor(environment: () => AudioEnvironment = browserEnvironment) {
+    this.environment = environment
+  }
 
   /**
    * Must be called from inside a user gesture — the same click that requests
@@ -61,12 +92,14 @@ export class MuseumAudio {
    */
   unlock() {
     if (this.context) {
-      if (this.context.state === 'suspended') void this.context.resume()
+      this.resume()
       return
     }
 
-    const context = new AudioContext()
+    const environment = this.environment()
+    const context = environment.createContext()
     this.context = context
+    this.bindResume(environment, context)
 
     this.master = context.createGain()
     this.master.gain.value = 0.7
@@ -90,6 +123,56 @@ export class MuseumAudio {
     this.noise = noise
   }
 
+  /**
+   * Restarts a context the platform has paused.
+   *
+   * The title screen's click unlocks audio once, and there is no way back to
+   * the title: without this, the first screen lock on a phone silenced the
+   * latch, the radio and every footstep for the rest of the visit. After the
+   * first unlock iOS no longer insists on a gesture, so a resume on returning
+   * to the page often works alone; when it does not, the next tap does.
+   */
+  resume() {
+    const context = this.context
+    const state = context?.state as string | undefined
+    if (!context || state === 'running' || state === 'closed') return
+    void context.resume().catch(() => {
+      // Refused without a gesture; the next gesture listener tries again.
+    })
+  }
+
+  private bindResume(environment: AudioEnvironment, context: AudioContext) {
+    const resume = () => this.resume()
+    const visible = () => environment.visibility?.visibilityState !== 'hidden'
+    const resumeWhenVisible = () => {
+      if (visible()) this.resume()
+    }
+    const options = { capture: true, passive: true } as const
+    for (const type of RESUME_GESTURES) environment.gestures?.addEventListener(type, resume, options)
+    environment.visibility?.addEventListener('visibilitychange', resumeWhenVisible)
+    // An interruption while the page stays visible (a notification sound, an
+    // alarm) ends without any page event at all; the state change is the cue.
+    context.onstatechange = resumeWhenVisible
+
+    this.unbindResume = () => {
+      for (const type of RESUME_GESTURES) {
+        environment.gestures?.removeEventListener(type, resume, options)
+      }
+      environment.visibility?.removeEventListener('visibilitychange', resumeWhenVisible)
+      context.onstatechange = null
+    }
+  }
+
+  /**
+   * The context, only while it is actually running. Scheduling sounds on a
+   * suspended or interrupted context queues them to burst out together the
+   * moment it resumes.
+   */
+  private live(): AudioContext | null {
+    const context = this.context
+    return context && context.state === 'running' ? context : null
+  }
+
   private makeImpulse(seconds: number, falloff: number): AudioBuffer {
     const context = this.context as AudioContext
     const length = Math.floor(context.sampleRate * seconds)
@@ -108,9 +191,8 @@ export class MuseumAudio {
 
   /** One footstep. `intensity` is 0..1, from the player's speed. */
   footstep(surface: Surface = 'wood', intensity = 1) {
-    const context = this.context
+    const context = this.live()
     if (!context || !this.noise || !this.master || !this.reverb) return
-    if (context.state === 'suspended') return
 
     const voice = SURFACES[surface] ?? SURFACES.wood
     const now = context.currentTime
@@ -155,7 +237,7 @@ export class MuseumAudio {
 
   /** A soft confirmation, used when something enters the catalogue. */
   chime() {
-    const context = this.context
+    const context = this.live()
     if (!context || !this.master) return
 
     const now = context.currentTime
@@ -182,8 +264,8 @@ export class MuseumAudio {
 
   /** Short mortice-latch click followed by a restrained timber hinge creak. */
   doorOpen(duration = 0.8) {
-    const context = this.context
-    if (!context || !this.master || !this.noise || context.state === 'suspended') return
+    const context = this.live()
+    if (!context || !this.master || !this.noise) return
 
     const now = context.currentTime
 
@@ -223,8 +305,8 @@ export class MuseumAudio {
 
   /** A short square-wave buzz: an electric lock refusing a press without power. */
   lockDenied() {
-    const context = this.context
-    if (!context || !this.master || context.state === 'suspended') return
+    const context = this.live()
+    if (!context || !this.master) return
 
     const now = context.currentTime
     for (const offset of [0, 0.11]) {
@@ -251,8 +333,8 @@ export class MuseumAudio {
    * `gain` scales it with the listener's distance from the door.
    */
   lockRelease(gain = 1) {
-    const context = this.context
-    if (!context || !this.master || !this.noise || context.state === 'suspended') return
+    const context = this.live()
+    if (!context || !this.master || !this.noise) return
 
     const now = context.currentTime
     const thunk = context.createOscillator()
@@ -288,8 +370,8 @@ export class MuseumAudio {
 
   /** The radio opening: a burst of band-limited static and a two-tone beep. */
   radioSquelch() {
-    const context = this.context
-    if (!context || !this.master || !this.noise || context.state === 'suspended') return
+    const context = this.live()
+    if (!context || !this.master || !this.noise) return
 
     const now = context.currentTime
     const hiss = context.createBufferSource()
@@ -327,8 +409,8 @@ export class MuseumAudio {
 
   /** A faint crackle between two lines of the same transmission. */
   radioCrackle() {
-    const context = this.context
-    if (!context || !this.master || !this.noise || context.state === 'suspended') return
+    const context = this.live()
+    if (!context || !this.master || !this.noise) return
 
     const now = context.currentTime
     const crackle = context.createBufferSource()
@@ -352,6 +434,8 @@ export class MuseumAudio {
   }
 
   dispose() {
+    this.unbindResume?.()
+    this.unbindResume = null
     void this.context?.close()
     this.context = null
   }

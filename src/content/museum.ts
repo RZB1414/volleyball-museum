@@ -136,9 +136,11 @@ const LOCKS = [
     digits: 4,
     mapLabelKey: 'lock.office-drawer.mapLabel',
     hints: STANDARD_HINTS,
-    // The answer is taught by the Morgan portrait's catalogue entry and again
-    // by the Springfield document — both in the Holyoke wing, which the player
-    // reaches before ever needing the drawer.
+    // The answer is on the Morgan portrait: its frame plaque and its
+    // catalogue entry both give 1896, and the Springfield document repeats
+    // it — all in the Holyoke wing, which the player reaches before ever
+    // needing the drawer. The porter's drawer hint sends the player there,
+    // and `test-opening-flow` proves the year really is printed on it.
     sourceExhibitId: 'portrait-morgan',
   },
 ] as const satisfies readonly Lock[]
@@ -453,8 +455,11 @@ const HOLYOKE_EXHIBITS = [
     hotspots: [
       {
         id: 'date',
-        // Reading the catalogue entry is what teaches the 1896 renaming, which
-        // is the code to the office drawer.
+        // The frame plaque, turned towards the player, states the 1896
+        // renaming — the code to the office drawer — and completing it
+        // unlocks the catalogue entry that tells the same story at length.
+        // Morgan devised the game in Holyoke in 1895; the name "volley ball"
+        // came at the Springfield YMCA conference demonstration of 1896.
         localPosition: [0, -0.28, 0.03],
         labelKey: 'hotspot.portrait-morgan.date.label',
         revealsFactId: 'springfield-renaming',
@@ -673,7 +678,10 @@ const OFFICE_DEVICES = [
     calls: [
       {
         id: 'porter-first-call',
-        when: { powered: ['office'] },
+        // The call sends the player to the atrium's breaker, so it only makes
+        // sense while the atrium is still dark. The normal path cannot light
+        // the atrium first; a save from before the opening can.
+        when: { powered: ['office'], unpowered: ['atrium'] },
         delaySeconds: 2.4,
         lineKeys: [
           'radio.call.first.1',
@@ -682,9 +690,20 @@ const OFFICE_DEVICES = [
           'radio.call.first.4',
         ],
       },
+      {
+        // Reading stays optional, so nothing locks the lamp behind the
+        // notebook; the porter just notices the player skipped it. Calls are
+        // heard in this list's order, so it always follows his introduction,
+        // and it is dropped if the notebook is taken while it waits.
+        id: 'porter-notebook-reminder',
+        when: { powered: ['office'], documentsUnread: ['doc-welcome'] },
+        delaySeconds: 4,
+        lineKeys: ['radio.call.notebook.1'],
+      },
     ],
     // Ordered: the porter answers with the first thing the player still needs.
     hints: [
+      { when: { documentsUnread: ['doc-welcome'] }, lineKeys: ['radio.hint.notebook'] },
       { when: { unpowered: ['atrium'] }, lineKeys: ['radio.hint.atrium'] },
       { when: { unpowered: ['holyoke'] }, lineKeys: ['radio.hint.holyoke'] },
       { when: { locksClosed: ['office-drawer'] }, lineKeys: ['radio.hint.drawer'] },

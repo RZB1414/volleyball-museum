@@ -24,14 +24,19 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { MUSEUM } from '../content/museum'
 import { useTranslate } from '../i18n'
 import { useMuseum } from '../state/store'
+import { canSubmitCode, closeLabel, lockKeyIntent } from './hudRules'
+import { useCoarsePointer } from './useCoarsePointer'
 
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
+/** Only knowledge locks have a keypad; every one in the content has four. */
+const DEFAULT_DIGITS = 4
 
 export function LockPanel() {
   const lockId = useMuseum((state) => state.activeLock)
   const setActiveLock = useMuseum((state) => state.setActiveLock)
   const openLock = useMuseum((state) => state.openLock)
   const setOpenedContainer = useMuseum((state) => state.setOpenedContainer)
+  const coarse = useCoarsePointer()
   const t = useTranslate()
 
   const lock = useMemo(
@@ -51,6 +56,10 @@ export function LockPanel() {
   const [wrong, setWrong] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const openedAtRef = useRef(0)
+  // `submit` closes over this render's entry and is declared after the
+  // early return, so the key listener reaches it through a ref.
+  const submitRef = useRef<(() => void) | null>(null)
+  const digits = lock?.kind === 'knowledge' ? lock.digits : DEFAULT_DIGITS
 
   // Reset every time the panel opens, so hints do not carry between visits.
   useEffect(() => {
@@ -70,24 +79,36 @@ export function LockPanel() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!lockId) return
-      if (event.code === 'Escape') {
-        setActiveLock(null)
-        return
+      const intent = lockKeyIntent(event)
+      if (!intent) return
+      switch (intent.kind) {
+        case 'close':
+          setActiveLock(null)
+          return
+        case 'digit':
+          setEntry((current) => (current.length >= digits ? current : current + intent.digit))
+          setWrong(false)
+          return
+        case 'erase':
+          setEntry((current) => current.slice(0, -1))
+          return
+        case 'submit':
+          // Also stops Enter from "clicking" a keypad button that still has
+          // focus from the mouse, which would type a fifth digit.
+          event.preventDefault()
+          submitRef.current?.()
       }
-      if (/^Digit\d$/.test(event.code) || /^Numpad\d$/.test(event.code)) {
-        setEntry((current) => (current.length >= 4 ? current : current + event.code.slice(-1)))
-        setWrong(false)
-      }
-      if (event.code === 'Backspace') setEntry((current) => current.slice(0, -1))
     }
 
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [lockId, setActiveLock])
+  }, [digits, lockId, setActiveLock])
 
   if (!lock || lock.kind !== 'knowledge' || !fact) return null
 
   const submit = () => {
+    // The button is disabled below a full code; Enter obeys the same rule.
+    if (!canSubmitCode(entry, digits)) return
     if (entry === fact.value) {
       openLock(lock.id)
       setActiveLock(null)
@@ -109,6 +130,8 @@ export function LockPanel() {
     setWrong(true)
     setEntry('')
   }
+
+  submitRef.current = submit
 
   // --- the ladder -----------------------------------------------------------
   const showSource = elapsed > lock.hints.highlightAfterMs
@@ -142,7 +165,7 @@ export function LockPanel() {
               key={digit}
               type="button"
               onClick={() => {
-                setEntry((current) => (current.length >= 4 ? current : current + digit))
+                setEntry((current) => (current.length >= digits ? current : current + digit))
                 setWrong(false)
               }}
             >
@@ -164,11 +187,11 @@ export function LockPanel() {
         <div className="examine-actions">
           <span className="examine-drag">{t('lock.prompt')}</span>
           <span>
-            <button type="button" onClick={submit} disabled={entry.length < 4}>
+            <button type="button" onClick={submit} disabled={!canSubmitCode(entry, digits)}>
               {t('lock.submit')}
             </button>
             <button type="button" onClick={() => setActiveLock(null)}>
-              {t('prompt.close')} · Esc
+              {closeLabel(t('prompt.close'), 'Esc', coarse)}
             </button>
           </span>
         </div>

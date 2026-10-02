@@ -20,6 +20,9 @@ export const ptBR = {
   'ui.subtitle': 'A história do vôlei mundial, sala por sala.',
   'ui.enter': 'Entrar no museu',
   'ui.continue': 'Continuar',
+  'ui.newGame': 'Novo jogo',
+  'ui.newGame.confirm': 'Confirmar — apagar todo o progresso',
+  'ui.lookHint': 'Clique para olhar',
   'ui.loading': 'Preparando a galeria…',
   'ui.settings': 'Ajustes',
   'ui.language': 'Idioma',
@@ -85,6 +88,9 @@ export const ptBR = {
   'archive.title': 'Arquivo',
   'archive.empty': 'Nenhum documento encontrado. Procure gavetas e arquivos.',
   'archive.filed': 'Arquivado no caderno — Tab para reler',
+  'archive.filed.touch': 'Arquivado no caderno — toque no ícone do caderno para reler',
+  'archive.filed.noJournal':
+    'Será arquivado no caderno do curador, que continua na mesa do escritório.',
   'container.office.title': 'Gaveta trancada do curador',
   'document.predecessor.title': 'Bilhete do curador anterior',
   'document.predecessor.body':
@@ -158,6 +164,10 @@ export const ptBR = {
     'O quadro do átrio fica na parede oeste, do lado da entrada da Ala 1. Procure a luzinha vermelha.',
   'radio.call.first.4':
     'E não desce no subsolo, que alagou. Qualquer coisa, me chama neste rádio. Câmbio, desligo.',
+  'radio.call.notebook.1':
+    'Ah, e a Helena deixou um caderno pra você aí na mesa. Pega antes de sair, que tá tudo explicado lá. Câmbio.',
+  'radio.hint.notebook':
+    'Primeiro o caderno, curador: a Helena deixou um pra você na mesa do escritório. Tá tudo explicado lá.',
   'radio.hint.atrium':
     'O quadro do átrio fica na parede oeste, perto da entrada da Ala 1. A luzinha vermelha mostra onde.',
   'radio.hint.holyoke':
@@ -270,8 +280,9 @@ export const ptBR = {
   'exhibit.portrait-morgan.label':
     'Diretor de educação física da YMCA de Holyoke, Massachusetts. Em 1895, aos 25 anos, criou um jogo sem contato para sócios mais velhos e sedentários. Chamou-o de Mintonette. Havia conhecido James Naismith, o inventor do basquete, em 1891.',
   'exhibit.portrait-morgan.catalogue':
-    'William George Morgan (Lockport, Nova York, 23 de janeiro de 1870 — 27 de dezembro de 1942). Formou-se pela International YMCA Training School em 1894 e assumiu Holyoke em 30 de agosto de 1895. Deixou a YMCA em 1900 para trabalhar na indústria.',
-  'hotspot.portrait-morgan.date.label': 'A data de invenção é contestada — veja a ficha',
+    'William George Morgan (Lockport, Nova York, 23 de janeiro de 1870 — 27 de dezembro de 1942). Formou-se pela International YMCA Training School em 1894 e assumiu Holyoke em 30 de agosto de 1895. Em julho de 1896, ao demonstrar o jogo numa conferência da YMCA em Springfield, aceitou trocar o nome Mintonette por Volley Ball. Deixou a YMCA em 1900 para trabalhar na indústria.',
+  'hotspot.portrait-morgan.date.label':
+    'Plaqueta da moldura: em 1896, numa demonstração em Springfield, o Mintonette passou a se chamar Volley Ball',
 
   'exhibit.photo-gym.title': 'O ginásio onde aconteceu',
   'exhibit.photo-gym.label':

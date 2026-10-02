@@ -29,8 +29,9 @@ import {
   notebookAdvance,
   notebookPagesFor,
 } from './notebook'
+import { INTERACTION_REACH, interactionWinnerOf, PROXY_MINIMUM } from './interactionTarget'
 import { subscribePrimaryAction } from './primaryAction'
-import { useMuseum } from '../state/store'
+import { isModalOpen, useMuseum } from '../state/store'
 import './bvhSetup'
 
 const CENTRE = new Vector2(0, 0)
@@ -43,7 +44,7 @@ const CENTRE = new Vector2(0, 0)
  * it from the ray as well as from the screen.
  */
 const INTERACTION_LAYER = 7
-const REACH = 2.4
+const REACH = INTERACTION_REACH.container
 
 export function ContainerLayer({
   room,
@@ -125,7 +126,8 @@ function Container({
     const bounds = new Box3().setFromObject(instance)
     const centre = bounds.getCenter(new Vector3())
     const size = bounds.getSize(new Vector3())
-    size.set(Math.max(size.x, 0.3), Math.max(size.y, 0.14), Math.max(size.z, 0.32))
+    const [minX, minY, minZ] = PROXY_MINIMUM.notebook
+    size.set(Math.max(size.x, minX), Math.max(size.y, minY), Math.max(size.z, minZ))
     return {
       centre: centre.toArray() as [number, number, number],
       size: size.toArray() as [number, number, number],
@@ -252,16 +254,14 @@ export function ContainerTargeting() {
         state.setActiveLock(null)
         return true
       }
-      // Exhibits win the key when both are under the crosshair — you are
-      // reaching for the object, not the furniture behind it.
-      if (
-        state.examining ||
-        state.focusedTransitionDoor ||
-        state.focusedExhibit ||
-        !state.focusedContainer
-      ) {
-        return false
-      }
+      // The journal is a modal too: E behind it used to open a keypad hidden
+      // under the journal, which then swallowed every digit and Tab.
+      if (isModalOpen(state)) return false
+      // An exhibit wins outright — you reach for the object, not the
+      // furniture behind it — and otherwise the nearest desk target does.
+      const winner = interactionWinnerOf(state, MUSEUM)
+      if (winner?.kind !== 'container') return false
+      const containerId = winner.id
 
       /**
        * A locked cabinet opens its keypad instead of its contents.
@@ -271,7 +271,7 @@ export function ContainerTargeting() {
        */
       const container = MUSEUM.rooms
         .flatMap((room) => room.containers ?? [])
-        .find((candidate) => candidate.id === state.focusedContainer)
+        .find((candidate) => candidate.id === containerId)
 
       if (container?.lockId && !state.progress.locksOpened.includes(container.lockId)) {
         if (document.pointerLockElement) document.exitPointerLock()
@@ -279,17 +279,16 @@ export function ContainerTargeting() {
         return true
       }
 
-      const documents = MUSEUM.documents.filter(
-        (doc) => doc.containerId === state.focusedContainer,
-      )
+      const documents = MUSEUM.documents.filter((doc) => doc.containerId === containerId)
       for (const doc of documents) {
         state.recordDocument(doc.id)
         if (doc.revealsFactId) state.recordFact(doc.revealsFactId)
       }
-      // A notebook is read with the mouse as well as with E: its page buttons
-      // must be clickable, which they are not under pointer lock.
-      if (isNotebook(container) && document.pointerLockElement) document.exitPointerLock()
-      state.setOpenedContainer(state.focusedContainer)
+      // Every reader is used with the mouse as well as with E — a notebook's
+      // page buttons, a document's "Close" — and nothing is clickable under
+      // pointer lock. The look hint tells the player how to take it back.
+      if (document.pointerLockElement) document.exitPointerLock()
+      state.setOpenedContainer(containerId)
       return true
     }
 
@@ -317,7 +316,15 @@ export function ContainerTargeting() {
 
   useFrame((_, delta) => {
     const state = useMuseum.getState()
-    if (state.examining || state.activeLock) return
+    // No focus survives under a modal: a focus frozen behind the journal is
+    // how E reached through it, and how a prompt stayed over the keypad.
+    if (isModalOpen(state)) {
+      if (lastRef.current !== null || state.focusedContainer !== null) {
+        lastRef.current = null
+        state.setFocusedContainer(null)
+      }
+      return
+    }
 
     const scan = scanRef.current
     scan.remaining -= delta
@@ -366,11 +373,15 @@ export function ContainerTargeting() {
     }
     const hit = hits[hitIndex]
     const found = hit ? containerIdFor(hit.object) : null
+    const distance = hit?.distance
     hits.length = 0
 
-    if (found !== lastRef.current) {
+    // Every frame while something is focused, not only on a change of id:
+    // the distance is what lets a nearer lamp take the key from a notebook
+    // further along the same ray. The store skips writes that change nothing.
+    if (found !== lastRef.current || found !== null) {
       lastRef.current = found
-      state.setFocusedContainer(found)
+      state.setFocusedContainer(found, distance)
     }
   })
 

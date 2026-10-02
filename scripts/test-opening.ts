@@ -264,7 +264,10 @@ const [radioEntry] = radioDevices(MUSEUM)
 test('the radio is dead until the office has power, then calls exactly once', () => {
   assert.ok(radioEntry)
   const radio = radioEntry.device
+  // The designed order: the notebook is read before the lamp, so the
+  // porter has no reminder to add (test-opening-flow covers the skip).
   const save = freshSave()
+  save.documentsRead = ['doc-welcome']
   assert.equal(radioIsLive(MUSEUM, radio.id, save.roomsPowered), false)
   assert.equal(dueRadioCalls(radio, save, MUSEUM).length, 0)
 
@@ -282,6 +285,8 @@ test('the porter always answers with the next thing the player needs', () => {
   const radio = radioEntry.device
   const save = freshSave()
   save.roomsPowered = ['office']
+  assert.deepEqual(radioHintFor(radio, save, MUSEUM), ['radio.hint.notebook'])
+  save.documentsRead = ['doc-welcome']
   assert.deepEqual(radioHintFor(radio, save, MUSEUM), ['radio.hint.atrium'])
   save.roomsPowered = ['office', 'atrium']
   assert.deepEqual(radioHintFor(radio, save, MUSEUM), ['radio.hint.holyoke'])

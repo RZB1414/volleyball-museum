@@ -14,30 +14,42 @@ import { formatCreditLine } from '../content/credit'
 import { MUSEUM } from '../content/museum'
 import type { ExhibitData } from '../content/schema'
 import { museumAudio } from '../engine/audio'
-import { radioDevices, radioIsLive, radioLineSeconds } from '../engine/deviceRules'
+import { radioDevices, radioLineSeconds } from '../engine/deviceRules'
+import {
+  interactionWinnerKey,
+  parseInteractionWinnerKey,
+  type InteractionKind,
+} from '../engine/interactionTarget'
 import { containerById, isNotebook, journalUnlocked } from '../engine/notebook'
 import { isRoomPowered } from '../engine/power'
 import { useTranslate } from '../i18n'
+import {
+  archiveFiledKey,
+  closeLabel,
+  listGrew,
+  lookHintVisible,
+  shouldAnnounceJournal,
+} from './hudRules'
 import { LockPanel } from './LockPanel'
 import { MobileControls } from './MobileControls'
 import { NotebookPanel } from './Notebook'
-import { useMuseum } from '../state/store'
+import { useCoarsePointer } from './useCoarsePointer'
+import { isModalOpen, useMuseum } from '../state/store'
 
 const radiosById = new Map(radioDevices(MUSEUM).map((entry) => [entry.device.id, entry.device]))
 
-/** Touch layouts hide the keyboard glyphs, so hints are worded per input. */
-function useCoarsePointer() {
-  const query = '(any-pointer: coarse), (max-width: 900px) and (orientation: landscape)'
-  const [coarse, setCoarse] = useState(() =>
-    typeof window === 'undefined' ? false : window.matchMedia(query).matches,
-  )
-  useEffect(() => {
-    const media = window.matchMedia(query)
-    const update = () => setCoarse(media.matches)
-    media.addEventListener('change', update)
-    return () => media.removeEventListener('change', update)
-  }, [])
-  return coarse
+/**
+ * The id the E key would act on right now, if it is of this kind.
+ *
+ * Every prompt asks the same arbitration the key handlers ask, so a prompt
+ * can never name the notebook while E switches on the lamp. Selected as a
+ * string so the per-frame distance writes re-render nothing until the winner
+ * itself changes.
+ */
+function useWinner(kind: InteractionKind) {
+  const key = useMuseum((state) => interactionWinnerKey(state, MUSEUM))
+  const winner = parseInteractionWinnerKey(key)
+  return winner?.kind === kind ? winner : null
 }
 
 const exhibitsById = new Map<string, ExhibitData>(
@@ -45,13 +57,11 @@ const exhibitsById = new Map<string, ExhibitData>(
 )
 
 function InteractionPrompt() {
-  const focused = useMuseum((state) => state.focusedExhibit)
-  const focusedDoor = useMuseum((state) => state.focusedTransitionDoor)
-  const examining = useMuseum((state) => state.examining)
+  const focused = useWinner('exhibit')?.id ?? null
   const catalogued = useMuseum((state) => state.progress.catalogued)
   const t = useTranslate()
 
-  if (!focused || focusedDoor || examining) return null
+  if (!focused) return null
   const exhibit = exhibitsById.get(focused)
   if (!exhibit) return null
 
@@ -75,16 +85,12 @@ function InteractionPrompt() {
  * optional layer legible as optional depth rather than as another lock.
  */
 function ContainerPrompt() {
-  const focusedContainer = useMuseum((state) => state.focusedContainer)
-  const focusedExhibit = useMuseum((state) => state.focusedExhibit)
-  const focusedDoor = useMuseum((state) => state.focusedTransitionDoor)
-  const examining = useMuseum((state) => state.examining)
+  const focusedContainer = useWinner('container')?.id ?? null
   const read = useMuseum((state) => state.progress.documentsRead)
   const locksOpened = useMuseum((state) => state.progress.locksOpened)
   const t = useTranslate()
 
-  // An exhibit under the crosshair wins the key, so it must also win the hint.
-  if (!focusedContainer || focusedExhibit || focusedDoor || examining) return null
+  if (!focusedContainer) return null
 
   const container = MUSEUM.rooms
     .flatMap((room) => room.containers ?? [])
@@ -106,20 +112,11 @@ function ContainerPrompt() {
 }
 
 function PowerPrompt() {
-  const focused = useMuseum((state) => state.focusedPowerControl)
-  const focusedExhibit = useMuseum((state) => state.focusedExhibit)
-  const focusedContainer = useMuseum((state) => state.focusedContainer)
-  const focusedDoor = useMuseum((state) => state.focusedTransitionDoor)
-  const focusedDevice = useMuseum((state) => state.focusedDevice)
-  const examining = useMuseum((state) => state.examining)
+  const focused = useWinner('power-control')?.id ?? null
   const restored = useMuseum((state) => state.progress.roomsPowered)
   const t = useTranslate()
 
-  // Only a live radio wins over the lamp, matching the E key.
-  const liveDevice = focusedDevice !== null && radioIsLive(MUSEUM, focusedDevice, restored)
-  if (!focused || focusedExhibit || focusedContainer || focusedDoor || liveDevice || examining) {
-    return null
-  }
+  if (!focused) return null
   const room = MUSEUM.rooms.find((candidate) => candidate.powerControl?.id === focused)
   if (!room?.powerControl || isRoomPowered(room, restored)) return null
 
@@ -134,11 +131,10 @@ function PowerPrompt() {
 
 function TransitionDoorPrompt() {
   const focused = useMuseum((state) => state.focusedTransitionDoor)
-  const examining = useMuseum((state) => state.examining)
-  const openedContainer = useMuseum((state) => state.openedContainer)
   const t = useTranslate()
 
-  if (!focused || examining || openedContainer) return null
+  // The Hud mounts no prompt under a modal, so this needs no modal check.
+  if (!focused) return null
   const target = MUSEUM.rooms.find((room) => room.id === focused.targetRoom)
   if (!target) return null
 
@@ -166,19 +162,15 @@ function TransitionDoorPrompt() {
 
 /** The porter's radio: live once its charger has power. */
 function DevicePrompt() {
-  const focused = useMuseum((state) => state.focusedDevice)
-  const focusedExhibit = useMuseum((state) => state.focusedExhibit)
-  const focusedContainer = useMuseum((state) => state.focusedContainer)
-  const focusedDoor = useMuseum((state) => state.focusedTransitionDoor)
-  const examining = useMuseum((state) => state.examining)
-  const restored = useMuseum((state) => state.progress.roomsPowered)
-  const speaking = useMuseum((state) => state.radio?.deviceId === state.focusedDevice)
+  const winner = useWinner('device')
+  const focused = winner?.id ?? null
+  const speaking = useMuseum((state) => focused !== null && state.radio?.deviceId === focused)
   const t = useTranslate()
 
-  if (!focused || focusedExhibit || focusedContainer || focusedDoor || examining) return null
+  if (!focused) return null
   const radio = radiosById.get(focused)
   if (!radio) return null
-  const live = radioIsLive(MUSEUM, focused, restored)
+  const live = winner?.live ?? false
   // While this radio is talking, E moves the transmission on a line.
   const label = !live ? t('prompt.radio.dead') : speaking ? t('radio.skip') : t('prompt.radio.call')
 
@@ -231,6 +223,8 @@ function RadioSubtitles() {
 function DocumentPanel() {
   const openedContainer = useMuseum((state) => state.openedContainer)
   const setOpenedContainer = useMuseum((state) => state.setOpenedContainer)
+  const unlocked = useJournalUnlocked()
+  const coarse = useCoarsePointer()
   const t = useTranslate()
 
   if (!openedContainer) return null
@@ -251,9 +245,9 @@ function DocumentPanel() {
         ))}
 
         <div className="examine-actions">
-          <span className="examine-drag">{t('archive.filed')}</span>
+          <span className="examine-drag">{t(archiveFiledKey(unlocked, coarse))}</span>
           <button type="button" onClick={() => setOpenedContainer(null)}>
-            {t('prompt.close')} · Esc
+            {closeLabel(t('prompt.close'), 'Esc', coarse)}
           </button>
         </div>
       </div>
@@ -267,6 +261,7 @@ function ExaminePanel() {
   const catalogued = useMuseum((state) => state.progress.catalogued)
   const locale = useMuseum((state) => state.settings.locale)
   const setExamining = useMuseum((state) => state.setExamining)
+  const coarse = useCoarsePointer()
   const t = useTranslate()
 
   const exhibit = examining ? exhibitsById.get(examining) : undefined
@@ -336,7 +331,7 @@ function ExaminePanel() {
         <div className="examine-actions">
           <span className="examine-drag">{t('prompt.rotate')}</span>
           <button type="button" onClick={() => setExamining(null)}>
-            {t('prompt.close')} · Esc
+            {closeLabel(t('prompt.close'), 'Esc', coarse)}
           </button>
         </div>
       </div>
@@ -347,12 +342,21 @@ function ExaminePanel() {
 /** Brief confirmation when something enters the catalogue. */
 function CatalogueToast() {
   const catalogued = useMuseum((state) => state.progress.catalogued)
+  // The save arrives whole on the first render: what it holds was announced
+  // in the session that catalogued it, not on every Continue.
+  const seenLength = useRef(catalogued.length)
   const [shown, setShown] = useState<string | null>(null)
   const t = useTranslate()
 
   useEffect(() => {
+    const grew = listGrew(seenLength.current, catalogued.length)
+    seenLength.current = catalogued.length
+    if (!grew) {
+      // A new game empties the list; a toast still up belongs to the old one.
+      setShown(null)
+      return undefined
+    }
     const latest = catalogued[catalogued.length - 1]
-    if (!latest) return undefined
     setShown(latest)
     museumAudio.chime()
     const timer = window.setTimeout(() => setShown(null), 3200)
@@ -406,31 +410,37 @@ function PowerToast() {
   )
 }
 
-/**
- * Shown once, when the player closes the notebook they have just picked up:
- * the journal now exists, and this is how to open it.
- */
 /** Whether the player holds the notebook, derived from the stable read list. */
 function useJournalUnlocked() {
   const documentsRead = useMuseum((state) => state.progress.documentsRead)
   return useMemo(() => journalUnlocked(MUSEUM, documentsRead), [documentsRead])
 }
 
+const JOURNAL_TAKEN_HINT = 'journal-taken'
+
+/**
+ * Shown once, when the player closes the notebook they have just picked up:
+ * the journal now exists, and this is how to open it.
+ *
+ * "Once" is a flag in the save, not the state at mount: opening the notebook
+ * already counts as reading it, so a reload with the notebook still open
+ * used to skip the only lesson about Tab for good.
+ */
 function JournalTakenToast() {
   const unlocked = useJournalUnlocked()
   const openedContainer = useMuseum((state) => state.openedContainer)
+  const alreadyShown = useMuseum((state) => state.progress.hintsShown.includes(JOURNAL_TAKEN_HINT))
+  const recordHint = useMuseum((state) => state.recordHint)
   const coarse = useCoarsePointer()
   const t = useTranslate()
-  // A save that already holds the notebook never announces it again.
-  const announcedRef = useRef(unlocked)
   const [shown, setShown] = useState(false)
 
   useEffect(() => {
-    if (!unlocked || openedContainer || announcedRef.current) return
-    announcedRef.current = true
+    if (!shouldAnnounceJournal({ unlocked, reading: openedContainer !== null, alreadyShown })) return
+    recordHint(JOURNAL_TAKEN_HINT)
     setShown(true)
     museumAudio.chime()
-  }, [openedContainer, unlocked])
+  }, [alreadyShown, openedContainer, recordHint, unlocked])
 
   // Its own effect, keyed only on `shown`: opening a drawer during these few
   // seconds must not cancel the timer and leave the toast up for good.
@@ -532,24 +542,48 @@ function HudTools() {
   )
 }
 
+/**
+ * "Clique para olhar", bottom left, at a desktop whose mouse is free.
+ *
+ * Every panel that needs the cursor releases the pointer lock on purpose,
+ * and closing it does not take the lock back (Esc cannot, and E is not a
+ * click). Without a word on screen the camera simply stops turning.
+ */
+function LookHint() {
+  const sceneReady = useMuseum((state) => state.sceneReady)
+  const pointerLocked = useMuseum((state) => state.pointerLocked)
+  const modal = useMuseum(isModalOpen)
+  const coarse = useCoarsePointer()
+  const t = useTranslate()
+
+  if (!lookHintVisible({ sceneReady, pointerLocked, modal, coarse })) return null
+  return (
+    <div className="look-hint" aria-hidden="true">
+      {t('ui.lookHint')}
+    </div>
+  )
+}
+
 export function Hud() {
-  const examining = useMuseum((state) => state.examining)
-  const openedContainer = useMuseum((state) => state.openedContainer)
-  const activeLock = useMuseum((state) => state.activeLock)
-  const journalTab = useMuseum((state) => state.journalTab)
-  const modal = Boolean(examining || openedContainer || activeLock || journalTab)
+  const modal = useMuseum(isModalOpen)
 
   return (
     <>
       <MobileControls />
-      {/* Meaningless while holding an object or reading a document. */}
-      {examining || openedContainer ? null : <div className="crosshair" aria-hidden="true" />}
-      {modal ? null : <HudTools />}
-      <InteractionPrompt />
-      <ContainerPrompt />
-      <PowerPrompt />
-      <DevicePrompt />
-      <TransitionDoorPrompt />
+      {/* Under any modal there is nothing to aim at and nothing for E to do
+          in the world: no crosshair, no tools, no prompts. */}
+      {modal ? null : (
+        <>
+          <div className="crosshair" aria-hidden="true" />
+          <HudTools />
+          <InteractionPrompt />
+          <ContainerPrompt />
+          <PowerPrompt />
+          <DevicePrompt />
+          <TransitionDoorPrompt />
+        </>
+      )}
+      <LookHint />
       <RadioSubtitles />
       <ExaminePanel />
       <DocumentPanel />

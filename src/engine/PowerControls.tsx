@@ -24,9 +24,9 @@ import {
 
 import { MUSEUM } from '../content/museum'
 import type { PowerControlData, RoomData } from '../content/schema'
-import { useMuseum } from '../state/store'
+import { isModalOpen, useMuseum } from '../state/store'
 import { USE_DRACO, USE_MESHOPT } from './bundleCache'
-import { radioIsLive } from './deviceRules'
+import { INTERACTION_REACH, interactionWinnerOf, PROXY_MINIMUM } from './interactionTarget'
 import { cloneKitPart, disposeKitPart } from './kitPart'
 import type { MaterialLibrary } from './materials'
 import { isRoomPowered } from './power'
@@ -35,7 +35,7 @@ import { buildPowerControlLightRig } from './powerControlLightRig'
 
 const CENTRE = new Vector2(0, 0)
 const INTERACTION_LAYER = 7
-const REACH = 2.7
+const REACH = INTERACTION_REACH.powerControl
 
 const controlsById = new Map(
   MUSEUM.rooms.flatMap((room) =>
@@ -138,7 +138,8 @@ function PowerControl({
     // A lamp switch is physically tiny, but the interaction means "looking at
     // the lamp", not threading a crosshair through a ten-millimetre knob. The
     // minimum volume preserves that intent without content-specific hitboxes.
-    size.set(Math.max(size.x, 0.42), Math.max(size.y, 0.48), Math.max(size.z, 0.34))
+    const [minX, minY, minZ] = PROXY_MINIMUM.powerControl
+    size.set(Math.max(size.x, minX), Math.max(size.y, minY), Math.max(size.z, minZ))
     return {
       centre: centre.toArray() as [number, number, number],
       size: size.toArray() as [number, number, number],
@@ -198,23 +199,12 @@ export function PowerControlTargeting() {
   useEffect(() => {
     const interact = () => {
       const state = useMuseum.getState()
-      if (
-        state.examining ||
-        state.openedContainer ||
-        state.activeLock ||
-        state.focusedTransitionDoor ||
-        state.focusedExhibit ||
-        state.focusedContainer ||
-        // A live device on the same desk wins the key, as furniture does; a
-        // dead radio in front of the lamp must not swallow the press.
-        (state.focusedDevice &&
-          radioIsLive(MUSEUM, state.focusedDevice, state.progress.roomsPowered)) ||
-        !state.focusedPowerControl
-      ) {
-        return false
-      }
+      // The nearest live target on the desk owns the key, whatever system it
+      // belongs to; a dead radio in front of the lamp never swallows it.
+      const winner = interactionWinnerOf(state, MUSEUM)
+      if (winner?.kind !== 'power-control') return false
 
-      const record = controlsById.get(state.focusedPowerControl)
+      const record = controlsById.get(winner.id)
       if (!record || isRoomPowered(record.room, state.progress.roomsPowered)) return false
 
       // A future locked breaker uses the existing lock graph. The current
@@ -257,8 +247,8 @@ export function PowerControlTargeting() {
 
   useFrame((_, delta) => {
     const state = useMuseum.getState()
-    if (state.examining || state.openedContainer || state.activeLock) {
-      if (lastRef.current) {
+    if (isModalOpen(state)) {
+      if (lastRef.current || state.focusedPowerControl) {
         lastRef.current = null
         state.setFocusedPowerControl(null)
       }
@@ -299,6 +289,7 @@ export function PowerControlTargeting() {
     raycaster.intersectObjects(targetsRef.current, true, intersections)
     const hit = intersections[0]
     let found = hit ? powerControlIdFor(hit.object) : null
+    const distance = hit?.distance
     // The visibility cache updates twice a second. An ancestor can be hidden
     // between scans during a portal crossing, and direct raycasts do not honour
     // ancestor visibility, so reject that stale target immediately.
@@ -312,10 +303,14 @@ export function PowerControlTargeting() {
       if (!record || isRoomPowered(record.room, state.progress.roomsPowered)) found = null
     }
 
-    if (found !== lastRef.current) {
+    // Republished every frame while focused, with the hit distance the
+    // nearest-target arbitration needs; the store skips writes that change
+    // nothing.
+    if (found !== lastRef.current || found !== null) {
       lastRef.current = found
-      state.setFocusedPowerControl(found)
+      state.setFocusedPowerControl(found, distance)
     }
+    intersections.length = 0
   })
 
   return null

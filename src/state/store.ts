@@ -15,8 +15,10 @@
 import { create } from 'zustand'
 
 import type { UnlockEffect } from '../content/schema'
-// The spawn module has no runtime imports, so naming the start room here does
-// not pull the content set into the title screen's bundle.
+// The spawn and legacy-save modules have no runtime imports, so naming the
+// start room and the migration ids here does not pull the content set into
+// the title screen's bundle.
+import { PRE_OPENING_SAVE } from '../content/legacySave.ts'
 import { SPAWN } from '../content/spawn.ts'
 
 export type Locale = 'pt-BR' | 'en'
@@ -66,6 +68,15 @@ export type Progress = {
   locksOpened: string[]
   /** Radio calls already received; each one is heard exactly once. */
   radioCalls: string[]
+  /**
+   * Seconds each mains clock has run since its power came back, by device id.
+   * Elapsed play time rather than a wall-clock instant: a clock that caught
+   * up on the two days a player was away would break "it resumes from where
+   * it stopped".
+   */
+  clockSeconds: Record<string, number>
+  /** One-off teaching toasts already shown, so a reload never repeats one. */
+  hintsShown: string[]
   lastRoom: string
 }
 
@@ -93,30 +104,127 @@ const EMPTY_PROGRESS: Progress = {
   roomsPowered: [],
   locksOpened: [],
   radioCalls: [],
+  clockSeconds: {},
+  hintsShown: [],
   lastRoom: SPAWN.room,
+}
+
+/** A fresh copy, so a new game never shares a list with the constant. */
+function emptyProgress(): Progress {
+  return {
+    ...EMPTY_PROGRESS,
+    catalogued: [],
+    hotspots: [],
+    documentsRead: [],
+    factsKnown: [],
+    credentials: [],
+    roomsVisited: [],
+    roomsPowered: [],
+    locksOpened: [],
+    radioCalls: [],
+    clockSeconds: {},
+    hintsShown: [],
+  }
 }
 
 type Persisted = { settings: Settings; progress: Progress }
 
+const LIST_FIELDS = [
+  'catalogued',
+  'hotspots',
+  'documentsRead',
+  'factsKnown',
+  'credentials',
+  'roomsVisited',
+  'roomsPowered',
+  'locksOpened',
+  'radioCalls',
+  'hintsShown',
+] as const satisfies readonly (keyof Progress)[]
+
+function stringList(value: unknown): string[] | null {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : null
+}
+
 /**
- * Reads the save, discarding anything from an older schema rather than trying
- * to migrate it. Losing a partial playthrough of a portfolio museum is a far
- * smaller cost than shipping a crash on load.
+ * Turns whatever the save holds into a valid Progress.
+ *
+ * A save from another version is discarded rather than migrated: losing a
+ * partial playthrough of a portfolio museum is a far smaller cost than a crash
+ * on load. Within the version, every field is checked rather than trusted,
+ * and a save written before the opening scene existed (it has no `radioCalls`)
+ * is brought forward instead of being replayed against a story it predates.
  */
+export function migrateProgress(raw: unknown): Progress {
+  if (!raw || typeof raw !== 'object') return emptyProgress()
+  const saved = raw as Partial<Record<keyof Progress, unknown>>
+  if (saved.version !== SAVE_VERSION) return emptyProgress()
+
+  const progress = emptyProgress()
+  for (const field of LIST_FIELDS) progress[field] = stringList(saved[field]) ?? progress[field]
+  if (typeof saved.lastRoom === 'string') progress.lastRoom = saved.lastRoom
+  if (saved.clockSeconds && typeof saved.clockSeconds === 'object') {
+    for (const [clockId, seconds] of Object.entries(saved.clockSeconds)) {
+      if (typeof seconds === 'number' && Number.isFinite(seconds) && seconds >= 0) {
+        progress.clockSeconds[clockId] = seconds
+      }
+    }
+  }
+
+  if (!('radioCalls' in saved)) {
+    // The porter's first call names the atrium's breaker as the next step;
+    // with the atrium already lit, that call is history, not news.
+    if (progress.roomsPowered.includes(PRE_OPENING_SAVE.firstCallOverOncePowered)) {
+      progress.radioCalls = withValue(progress.radioCalls, PRE_OPENING_SAVE.firstCallId)
+    }
+    // A returning player already used the journal: keep it, rather than lock
+    // their catalogue away behind a notebook they never saw on the desk.
+    const played =
+      progress.catalogued.length > 0 ||
+      progress.hotspots.length > 0 ||
+      progress.documentsRead.length > 0 ||
+      progress.factsKnown.length > 0 ||
+      progress.credentials.length > 0 ||
+      progress.roomsPowered.length > 0 ||
+      progress.locksOpened.length > 0
+    if (played) {
+      progress.documentsRead = withValue(progress.documentsRead, PRE_OPENING_SAVE.journalDocumentId)
+    }
+  }
+  return progress
+}
+
+/**
+ * Whether the save holds anything a new game would erase.
+ *
+ * Walking around the spawn room is not progress: offering "New game" to a
+ * player who only clicked "Enter" once would be a button that erases nothing.
+ */
+export function hasSavedProgress(progress: Progress) {
+  return (
+    progress.roomsVisited.some((room) => room !== SPAWN.room) ||
+    progress.catalogued.length > 0 ||
+    progress.hotspots.length > 0 ||
+    progress.documentsRead.length > 0 ||
+    progress.factsKnown.length > 0 ||
+    progress.credentials.length > 0 ||
+    progress.roomsPowered.length > 0 ||
+    progress.locksOpened.length > 0 ||
+    progress.radioCalls.length > 0
+  )
+}
+
 function loadPersisted(): Persisted {
   if (typeof localStorage === 'undefined') {
-    return { settings: DEFAULT_SETTINGS, progress: EMPTY_PROGRESS }
+    return { settings: DEFAULT_SETTINGS, progress: emptyProgress() }
   }
 
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { settings: DEFAULT_SETTINGS, progress: EMPTY_PROGRESS }
+    if (!raw) return { settings: DEFAULT_SETTINGS, progress: emptyProgress() }
 
     const parsed = JSON.parse(raw) as Partial<Persisted>
-    const progress =
-      parsed.progress && parsed.progress.version === SAVE_VERSION
-        ? { ...EMPTY_PROGRESS, ...parsed.progress }
-        : EMPTY_PROGRESS
+    const progress = migrateProgress(parsed.progress)
 
     return {
       // Settings survive a version bump: they are the player's preferences,
@@ -125,7 +233,7 @@ function loadPersisted(): Persisted {
       progress,
     }
   } catch {
-    return { settings: DEFAULT_SETTINGS, progress: EMPTY_PROGRESS }
+    return { settings: DEFAULT_SETTINGS, progress: emptyProgress() }
   }
 }
 
@@ -167,12 +275,21 @@ export type MuseumStore = {
   visibleRooms: string[]
   touchMove: DirectionalInput
   touchLook: DirectionalInput
+  /** Whether the scene has mounted, so a hint about looking can mean it. */
+  sceneReady: boolean
   /** The exhibit currently under the crosshair, if any. */
   focusedExhibit: string | null
   /** The archive cabinet currently under the crosshair, if any. */
   focusedContainer: string | null
+  /**
+   * Metres from the eye to each desk-scale focus, Infinity when unfocused.
+   * Each system casts its own ray, so these are what lets the nearest target
+   * win when several are under the crosshair at once (`interactionTarget.ts`).
+   */
+  focusedContainerDistance: number
   /** The room power control currently under the crosshair, if any. */
   focusedPowerControl: string | null
+  focusedPowerControlDistance: number
   /** A closed transition door under the crosshair and its streaming state. */
   focusedTransitionDoor: TransitionDoorPrompt | null
   /** The cabinet whose contents are being read, if any. */
@@ -183,6 +300,7 @@ export type MuseumStore = {
   examining: string | null
   /** A device under the crosshair that can be operated (the radio), if any. */
   focusedDevice: string | null
+  focusedDeviceDistance: number
   /** The hand torch. Session state: every visit starts in the dark. */
   flashlightOn: boolean
   /** Whether the torch has been switched on yet, which ends its hint pulse. */
@@ -195,19 +313,21 @@ export type MuseumStore = {
 
   start: () => void
   setPointerLocked: (locked: boolean) => void
+  setSceneReady: (ready: boolean) => void
   setCurrentRoom: (room: string) => void
   setVisibleRooms: (rooms: string[]) => void
   setTouchMove: (x: number, y: number) => void
   setTouchLook: (x: number, y: number) => void
   resetTouch: () => void
   setFocusedExhibit: (id: string | null) => void
-  setFocusedContainer: (id: string | null) => void
-  setFocusedPowerControl: (id: string | null) => void
+  /** `distance` is the ray's hit distance; omitted, the focus counts as touching. */
+  setFocusedContainer: (id: string | null, distance?: number) => void
+  setFocusedPowerControl: (id: string | null, distance?: number) => void
   setFocusedTransitionDoor: (door: TransitionDoorPrompt | null) => void
   setOpenedContainer: (id: string | null) => void
   setActiveLock: (id: string | null) => void
   setExamining: (id: string | null) => void
-  setFocusedDevice: (id: string | null) => void
+  setFocusedDevice: (id: string | null, distance?: number) => void
   toggleFlashlight: () => void
   setNotebookPage: (page: number) => void
   setJournalTab: (tab: JournalTab | null) => void
@@ -225,13 +345,87 @@ export type MuseumStore = {
   powerRoom: (roomId: string) => void
   openLock: (lockId: string) => void
   recordRadioCall: (callId: string) => void
+  /** Whole seconds a mains clock has run; see `Progress.clockSeconds`. */
+  recordClockSeconds: (clockId: string, seconds: number) => void
+  recordHint: (hintId: string) => void
   applyUnlockEffect: (effect: UnlockEffect) => void
+  /**
+   * A new game: empty progress AND every session field back to its default,
+   * written to the save at once. Settings are the player's, and survive.
+   */
   resetProgress: () => void
 }
 
 /** Appends to a string array only when the value is new. */
 function withValue(list: string[], value: string): string[] {
   return list.includes(value) ? list : [...list, value]
+}
+
+/**
+ * One modal at a time owns the screen: holding an exhibit, reading a cabinet,
+ * entering a code or the journal. While any is open nothing in the world
+ * answers E, no focus is kept, and neither prompts nor the crosshair show.
+ */
+export function isModalOpen(
+  state: Pick<MuseumStore, 'examining' | 'openedContainer' | 'activeLock' | 'journalTab'>,
+) {
+  return (
+    state.examining !== null ||
+    state.openedContainer !== null ||
+    state.activeLock !== null ||
+    state.journalTab !== null
+  )
+}
+
+/** Half a centimetre: below this a moving hit is not worth a store write. */
+const FOCUS_DISTANCE_STEP = 0.005
+
+function sameDistance(first: number, second: number) {
+  return first === second || Math.abs(first - second) < FOCUS_DISTANCE_STEP
+}
+
+function focusDistance(id: string | null, distance: number | undefined) {
+  if (id === null) return Number.POSITIVE_INFINITY
+  return distance !== undefined && Number.isFinite(distance) ? Math.max(0, distance) : 0
+}
+
+type SaveFlushTargets = {
+  readonly window: Pick<Window, 'addEventListener' | 'removeEventListener'>
+  readonly document: Pick<Document, 'addEventListener' | 'removeEventListener' | 'visibilityState'>
+}
+
+/**
+ * Forces the coalesced save to disk when the page may be about to die.
+ *
+ * Pagehide still covers navigation and the back-forward cache, but on a phone
+ * the last event a browser reliably fires before discarding a backgrounded
+ * tab is visibilitychange to hidden — and the idle callback that would have
+ * written the lamp switch a moment later is frozen with the tab.
+ */
+export function bindSaveFlush(targets: SaveFlushTargets, flush: () => void) {
+  const flushWhenHidden = () => {
+    if (targets.document.visibilityState === 'hidden') flush()
+  }
+  targets.window.addEventListener('pagehide', flush)
+  targets.document.addEventListener('visibilitychange', flushWhenHidden)
+  return () => {
+    targets.window.removeEventListener('pagehide', flush)
+    targets.document.removeEventListener('visibilitychange', flushWhenHidden)
+  }
+}
+
+const saveContributors = new Set<() => void>()
+
+/**
+ * Lets a running system put its latest state into the save right before a
+ * forced write. A clock's elapsed time changes every frame and is never worth
+ * a write of its own, but it must not be lost when the tab is hidden.
+ */
+export function contributeToSave(contribute: () => void) {
+  saveContributors.add(contribute)
+  return () => {
+    saveContributors.delete(contribute)
+  }
 }
 
 export const useMuseum = create<MuseumStore>((set, get) => {
@@ -263,6 +457,9 @@ export const useMuseum = create<MuseumStore>((set, get) => {
   }
 
   const flushPersisted = () => {
+    // Contributors may schedule a write of their own; the cancel below folds
+    // it into this one.
+    for (const contribute of saveContributors) contribute()
     cancelScheduledPersist()
     writePersisted()
   }
@@ -288,14 +485,14 @@ export const useMuseum = create<MuseumStore>((set, get) => {
     }, 50)
   }
 
-  // An idle callback may not run before a tab is discarded. Pagehide is the
-  // last reliable opportunity to flush the latest coalesced snapshot.
-  if (typeof window !== 'undefined') {
-    window.addEventListener('pagehide', flushPersisted)
+  // An idle callback may not run before a tab is discarded, so a hidden or
+  // departing page flushes the latest coalesced snapshot itself.
+  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+    const unbindSaveFlush = bindSaveFlush({ window, document }, flushPersisted)
     // Vite replaces this module in place during local tuning. Leaving the old
-    // listener alive lets a stale store overwrite the new snapshot on exit.
+    // listeners alive lets a stale store overwrite the new snapshot on exit.
     import.meta.hot?.dispose(() => {
-      window.removeEventListener('pagehide', flushPersisted)
+      unbindSaveFlush()
       flushPersisted()
     })
   }
@@ -314,28 +511,8 @@ export const useMuseum = create<MuseumStore>((set, get) => {
 
     started: false,
     pointerLocked: false,
-    // Every session starts at the one authored, navigation-tested spawn.
-    // Starting the render tier at a persisted lastRoom mounted that room's
-    // detail only to tear it down on the first frame, when the player was
-    // detected back in the spawn room.
-    currentRoom: SPAWN.room,
-    previousRoom: null,
-    visibleRooms: [SPAWN.room],
-    touchMove: { x: 0, y: 0 },
-    touchLook: { x: 0, y: 0 },
-    focusedExhibit: null,
-    focusedContainer: null,
-    focusedPowerControl: null,
-    focusedTransitionDoor: null,
-    openedContainer: null,
-    activeLock: null,
-    examining: null,
-    focusedDevice: null,
-    flashlightOn: false,
-    flashlightUsed: false,
-    notebookPage: 0,
-    journalTab: null,
-    radio: null,
+    sceneReady: false,
+    ...sessionDefaults(),
 
     start: () => {
       set({ started: true })
@@ -347,6 +524,9 @@ export const useMuseum = create<MuseumStore>((set, get) => {
       }))
     },
     setPointerLocked: (pointerLocked) => set({ pointerLocked }),
+    setSceneReady: (sceneReady) => {
+      if (get().sceneReady !== sceneReady) set({ sceneReady })
+    },
     setCurrentRoom: (room) => {
       if (get().currentRoom === room) return
       // One external-store notification avoids reconciling the room tree once
@@ -373,8 +553,30 @@ export const useMuseum = create<MuseumStore>((set, get) => {
     setTouchLook: (x, y) => set({ touchLook: { x, y } }),
     resetTouch: () => set({ touchMove: { x: 0, y: 0 }, touchLook: { x: 0, y: 0 } }),
     setFocusedExhibit: (focusedExhibit) => set({ focusedExhibit }),
-    setFocusedContainer: (focusedContainer) => set({ focusedContainer }),
-    setFocusedPowerControl: (focusedPowerControl) => set({ focusedPowerControl }),
+    // Targeting calls these every frame with a moving hit distance; the
+    // write is skipped unless the id changes or the hit moves noticeably.
+    setFocusedContainer: (focusedContainer, distance) => {
+      const focusedContainerDistance = focusDistance(focusedContainer, distance)
+      const state = get()
+      if (
+        state.focusedContainer === focusedContainer &&
+        sameDistance(state.focusedContainerDistance, focusedContainerDistance)
+      ) {
+        return
+      }
+      set({ focusedContainer, focusedContainerDistance })
+    },
+    setFocusedPowerControl: (focusedPowerControl, distance) => {
+      const focusedPowerControlDistance = focusDistance(focusedPowerControl, distance)
+      const state = get()
+      if (
+        state.focusedPowerControl === focusedPowerControl &&
+        sameDistance(state.focusedPowerControlDistance, focusedPowerControlDistance)
+      ) {
+        return
+      }
+      set({ focusedPowerControl, focusedPowerControlDistance })
+    },
     setFocusedTransitionDoor: (focusedTransitionDoor) => {
       const current = get().focusedTransitionDoor
       if (
@@ -388,13 +590,27 @@ export const useMuseum = create<MuseumStore>((set, get) => {
       }
       set({ focusedTransitionDoor })
     },
-    // A notebook always opens on its first page, however it was left.
-    setOpenedContainer: (openedContainer) => set({ openedContainer, notebookPage: 0 }),
-    setActiveLock: (activeLock) => set({ activeLock }),
-    setExamining: (examining) => set({ examining }),
-    setFocusedDevice: (focusedDevice) => {
-      if (get().focusedDevice === focusedDevice) return
-      set({ focusedDevice })
+    // A notebook always opens on its first page, however it was left. Opening
+    // any other modal closes the journal: a keypad hidden under the journal
+    // would take the digits typed at it and leave Tab unable to close either.
+    setOpenedContainer: (openedContainer) =>
+      set(
+        openedContainer
+          ? { openedContainer, notebookPage: 0, journalTab: null }
+          : { openedContainer, notebookPage: 0 },
+      ),
+    setActiveLock: (activeLock) => set(activeLock ? { activeLock, journalTab: null } : { activeLock }),
+    setExamining: (examining) => set(examining ? { examining, journalTab: null } : { examining }),
+    setFocusedDevice: (focusedDevice, distance) => {
+      const focusedDeviceDistance = focusDistance(focusedDevice, distance)
+      const state = get()
+      if (
+        state.focusedDevice === focusedDevice &&
+        sameDistance(state.focusedDeviceDistance, focusedDeviceDistance)
+      ) {
+        return
+      }
+      set({ focusedDevice, focusedDeviceDistance })
     },
     toggleFlashlight: () =>
       set((state) => ({ flashlightOn: !state.flashlightOn, flashlightUsed: true })),
@@ -454,6 +670,20 @@ export const useMuseum = create<MuseumStore>((set, get) => {
         ...progress,
         radioCalls: withValue(progress.radioCalls, callId),
       })),
+    recordClockSeconds: (clockId, seconds) => {
+      if (!Number.isFinite(seconds)) return
+      const whole = Math.max(0, Math.floor(seconds))
+      if (get().progress.clockSeconds[clockId] === whole) return
+      mutateProgress((progress) => ({
+        ...progress,
+        clockSeconds: { ...progress.clockSeconds, [clockId]: whole },
+      }))
+    },
+    recordHint: (hintId) =>
+      mutateProgress((progress) => ({
+        ...progress,
+        hintsShown: withValue(progress.hintsShown, hintId),
+      })),
     applyUnlockEffect: (effect) => {
       const state = get()
       switch (effect.kind) {
@@ -472,16 +702,46 @@ export const useMuseum = create<MuseumStore>((set, get) => {
       }
     },
     resetProgress: () => {
-      set({
-        progress: EMPTY_PROGRESS,
-        currentRoom: SPAWN.room,
-        previousRoom: null,
-        radio: null,
-        journalTab: null,
-      })
-      persist()
+      set({ progress: emptyProgress(), ...sessionDefaults() })
+      // At once, not on the next idle callback: a reload straight after
+      // "New game" must not bring the old save back.
+      flushPersisted()
     },
   }
 })
+
+/**
+ * Every per-visit field at its start-of-session value.
+ *
+ * Every session starts at the one authored, navigation-tested spawn. Starting
+ * the render tier at a persisted lastRoom mounted that room's detail only to
+ * tear it down on the first frame, when the player was detected back in the
+ * spawn room.
+ */
+function sessionDefaults() {
+  return {
+    currentRoom: SPAWN.room as string,
+    previousRoom: null,
+    visibleRooms: [SPAWN.room as string],
+    touchMove: { x: 0, y: 0 },
+    touchLook: { x: 0, y: 0 },
+    focusedExhibit: null,
+    focusedContainer: null,
+    focusedContainerDistance: Number.POSITIVE_INFINITY,
+    focusedPowerControl: null,
+    focusedPowerControlDistance: Number.POSITIVE_INFINITY,
+    focusedTransitionDoor: null,
+    openedContainer: null,
+    activeLock: null,
+    examining: null,
+    focusedDevice: null,
+    focusedDeviceDistance: Number.POSITIVE_INFINITY,
+    flashlightOn: false,
+    flashlightUsed: false,
+    notebookPage: 0,
+    journalTab: null,
+    radio: null,
+  } satisfies Partial<MuseumStore>
+}
 
 export { DEFAULT_SETTINGS, EMPTY_PROGRESS, SAVE_VERSION, STORAGE_KEY }

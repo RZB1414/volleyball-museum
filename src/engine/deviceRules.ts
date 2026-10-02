@@ -26,6 +26,31 @@ export function clockTimeAfter(
   return { hours, minutes, seconds: total - hours * 3600 - minutes * 60 }
 }
 
+/**
+ * The longest single frame a mains clock counts.
+ *
+ * The clock runs on play time, summed frame by frame: the first frame after a
+ * hidden tab carries the whole absence, and a clock that swallowed it would
+ * catch up on time nobody played.
+ */
+export const CLOCK_MAX_STEP_SECONDS = 0.25
+/** How often a running clock writes its elapsed time into the save. */
+export const CLOCK_SAVE_INTERVAL_SECONDS = 15
+
+export function advanceClockSeconds(elapsedSeconds: number, deltaSeconds: number) {
+  const step = Number.isFinite(deltaSeconds) ? Math.min(Math.max(deltaSeconds, 0), CLOCK_MAX_STEP_SECONDS) : 0
+  return elapsedSeconds + step
+}
+
+/** The elapsed seconds a save holds for a clock, or zero if it holds none. */
+export function savedClockSeconds(
+  progress: { readonly clockSeconds?: Readonly<Record<string, number>> },
+  clockId: string,
+) {
+  const seconds = progress.clockSeconds?.[clockId]
+  return typeof seconds === 'number' && Number.isFinite(seconds) && seconds > 0 ? seconds : 0
+}
+
 /** Hand angles in radians, clockwise from twelve, for a twelve-hour dial. */
 export function clockHandAngles(time: ClockTime) {
   const fullTurn = Math.PI * 2
@@ -70,6 +95,26 @@ export function dueRadioCalls(
       !progress.radioCalls.includes(call.id) &&
       progressConditionMet(call.when, progress, content),
   )
+}
+
+/**
+ * Whether a scheduled call may play now.
+ *
+ * Calls are scheduled with their own delays but must be heard in content
+ * order: 'queued' while an earlier due call has not been heard, 'gone' once
+ * the call has been heard or its condition stopped holding while it waited —
+ * a reminder to take the notebook, queued behind the first call, must not
+ * play to a player who took the notebook in the meantime.
+ */
+export function radioCallReady(
+  device: RadioDevice,
+  callId: string,
+  progress: ConditionProgress & { readonly radioCalls: readonly string[] },
+  content: Pick<MuseumContent, 'rooms' | 'exhibits'>,
+): 'ready' | 'queued' | 'gone' {
+  const index = dueRadioCalls(device, progress, content).findIndex((call) => call.id === callId)
+  if (index < 0) return 'gone'
+  return index === 0 ? 'ready' : 'queued'
 }
 
 /** The porter answers with the first thing the player still needs. */

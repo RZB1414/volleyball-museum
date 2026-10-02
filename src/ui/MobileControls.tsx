@@ -7,7 +7,7 @@ import {
 } from 'react'
 
 import { MUSEUM } from '../content/museum'
-import { radioIsLive } from '../engine/deviceRules'
+import { interactionWinnerKey, parseInteractionWinnerKey } from '../engine/interactionTarget'
 import {
   beginDirectionalPadSession,
   createDirectionalPadSession,
@@ -197,18 +197,17 @@ export function MobileControls() {
   const setTouchMove = useMuseum((state) => state.setTouchMove)
   const setTouchLook = useMuseum((state) => state.setTouchLook)
   const resetTouch = useMuseum((state) => state.resetTouch)
-  const focusedExhibit = useMuseum((state) => state.focusedExhibit)
-  const focusedContainer = useMuseum((state) => state.focusedContainer)
-  const focusedPowerControl = useMuseum((state) => state.focusedPowerControl)
   const focusedDoor = useMuseum((state) => state.focusedTransitionDoor)
-  const focusedDevice = useMuseum((state) => state.focusedDevice)
-  const restored = useMuseum((state) => state.progress.roomsPowered)
+  // The button shows exactly when the shared arbitration has a live target,
+  // the same answer the key handlers and the prompts use.
+  const winner = parseInteractionWinnerKey(
+    useMuseum((state) => interactionWinnerKey(state, MUSEUM)),
+  )
   const examining = useMuseum((state) => state.examining)
   const openedContainer = useMuseum((state) => state.openedContainer)
   const activeLock = useMuseum((state) => state.activeLock)
   const journalTab = useMuseum((state) => state.journalTab)
   const t = useTranslate()
-  const focusedRadio = focusedDevice !== null && radioIsLive(MUSEUM, focusedDevice, restored)
   const [resetEpoch, setResetEpoch] = useState(0)
 
   const resetAllPads = useCallback(() => {
@@ -252,7 +251,8 @@ export function MobileControls() {
   )
   const actionVisible = Boolean(
     !suspended &&
-      (doorCanAct || focusedExhibit || focusedContainer || focusedPowerControl || focusedRadio),
+      winner &&
+      (winner.kind === 'door' ? doorCanAct : winner.live),
   )
 
   if (suspended) return null
