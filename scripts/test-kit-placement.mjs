@@ -342,5 +342,36 @@ for (const recipe of [
   )
 }
 
+/**
+ * The porter's radio leaves the desk while its charger stays: the handset is
+ * its own families, it sits on the cradle (not inside it, not floating), and
+ * the cradle alone still stands on the desk datum.
+ */
+{
+  const byName = new Map(recipeParts('desk-radio').map((part) => [part.name, part]))
+  const handset = ['desk-radio__handset', 'desk-radio__handset-metal', 'desk-radio__handset-led']
+  check(
+    'desk-radio splits the handset from the cradle',
+    byName.has('desk-radio') && byName.has('desk-radio__led') && handset.every((name) => byName.has(name)),
+    `found ${[...byName.keys()].join(', ')}`,
+  )
+  const cradle = byName.get('desk-radio')
+  const body = byName.get('desk-radio__handset')
+  check(
+    'desk-radio cradle stands on the desk datum',
+    cradle != null && Math.abs(cradle.bounds.min[1]) < FLOOR_EPSILON,
+    cradle ? `min Y is ${cradle.bounds.min[1]}` : 'cradle not baked',
+  )
+  check(
+    'desk-radio handset rests in its cradle',
+    cradle != null &&
+      body != null &&
+      body.bounds.min[1] > 0.005 &&
+      body.bounds.min[1] < cradle.bounds.max[1] &&
+      body.bounds.max[1] > cradle.bounds.max[1] + 0.1,
+    body && cradle ? `handset ${body.bounds.min[1]}–${body.bounds.max[1]}, cradle top ${cradle.bounds.max[1]}` : 'not baked',
+  )
+}
+
 console.log(`${checks - failures}/${checks} checks passed`)
 if (failures > 0) process.exitCode = 1

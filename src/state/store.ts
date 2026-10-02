@@ -66,7 +66,7 @@ export type Progress = {
   roomsVisited: string[]
   roomsPowered: string[]
   locksOpened: string[]
-  /** Radio calls already received; each one is heard exactly once. */
+  /** Radio calls heard to their last line; each one plays exactly once. */
   radioCalls: string[]
   /**
    * Seconds each mains clock has run since its power came back, by device id.
@@ -77,7 +77,75 @@ export type Progress = {
   clockSeconds: Record<string, number>
   /** One-off teaching toasts already shown, so a reload never repeats one. */
   hintsShown: string[]
+  /** Devices that left their furniture with the player (the porter's radio). */
+  devicesCarried: string[]
+  /** How each radio's voice feels about being called, by device id. */
+  radioMemory: Record<string, RadioMemory>
   lastRoom: string
+}
+
+/**
+ * What a radio's voice remembers of the player's calls.
+ *
+ * Persisted on purpose: a porter who forgot every insult on reload would make
+ * F5 the cure for his temper. Times are wall-clock epoch milliseconds because
+ * calming down is something real minutes do, not frames of play.
+ */
+export type RadioMemory = {
+  /** Every call he answered, ever; dead air and content calls not included. */
+  readonly calls: number
+  /** Calls since he last calmed down, which picks his tier. */
+  readonly temper: number
+  /** Epoch ms of the last answered call; 0 is never. */
+  readonly lastCallAt: number
+  /** The hint he gave last time, -1 for none: a different one is progress. */
+  readonly lastHint: number
+  /** The last opener or outburst, so no joke is told twice in a row. */
+  readonly lastReplyId: string | null
+  /** The last outburst, so the next one is a different tantrum. */
+  readonly lastOutburstId: string | null
+}
+
+export const FRESH_RADIO_MEMORY: RadioMemory = {
+  calls: 0,
+  temper: 0,
+  lastCallAt: 0,
+  lastHint: -1,
+  lastReplyId: null,
+  lastOutburstId: null,
+}
+
+const wholeAtLeast = (value: unknown, minimum: number) =>
+  typeof value === 'number' && Number.isFinite(value) && value >= minimum ? Math.floor(value) : null
+const idOrNull = (value: unknown) => (typeof value === 'string' ? value : null)
+
+/**
+ * A radio memory from the save, or nothing for a radio whose entry is junk.
+ *
+ * Dropping only the broken entry rather than the whole record: a corrupted
+ * number must cost the player at most one porter's good mood.
+ */
+export function sanitiseRadioMemory(raw: unknown): Record<string, RadioMemory> {
+  const memory: Record<string, RadioMemory> = {}
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return memory
+  for (const [deviceId, entry] of Object.entries(raw)) {
+    if (!entry || typeof entry !== 'object') continue
+    const saved = entry as Partial<Record<keyof RadioMemory, unknown>>
+    const calls = wholeAtLeast(saved.calls, 0)
+    const temper = wholeAtLeast(saved.temper, 0)
+    const lastCallAt = wholeAtLeast(saved.lastCallAt, 0)
+    const lastHint = wholeAtLeast(saved.lastHint, -1)
+    if (calls === null || temper === null || lastCallAt === null || lastHint === null) continue
+    memory[deviceId] = {
+      calls,
+      temper,
+      lastCallAt,
+      lastHint,
+      lastReplyId: idOrNull(saved.lastReplyId),
+      lastOutburstId: idOrNull(saved.lastOutburstId),
+    }
+  }
+  return memory
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -106,6 +174,8 @@ const EMPTY_PROGRESS: Progress = {
   radioCalls: [],
   clockSeconds: {},
   hintsShown: [],
+  devicesCarried: [],
+  radioMemory: {},
   lastRoom: SPAWN.room,
 }
 
@@ -124,6 +194,8 @@ function emptyProgress(): Progress {
     radioCalls: [],
     clockSeconds: {},
     hintsShown: [],
+    devicesCarried: [],
+    radioMemory: {},
   }
 }
 
@@ -140,6 +212,7 @@ const LIST_FIELDS = [
   'locksOpened',
   'radioCalls',
   'hintsShown',
+  'devicesCarried',
 ] as const satisfies readonly (keyof Progress)[]
 
 function stringList(value: unknown): string[] | null {
@@ -170,6 +243,9 @@ export function migrateProgress(raw: unknown): Progress {
       }
     }
   }
+  // A save from before the radio could be carried has no memory and holds
+  // nothing: its radio waits on the desk for the next E, like a new game's.
+  progress.radioMemory = sanitiseRadioMemory(saved.radioMemory)
 
   if (!('radioCalls' in saved)) {
     // The porter's first call names the atrium's breaker as the next step;
@@ -210,7 +286,8 @@ export function hasSavedProgress(progress: Progress) {
     progress.credentials.length > 0 ||
     progress.roomsPowered.length > 0 ||
     progress.locksOpened.length > 0 ||
-    progress.radioCalls.length > 0
+    progress.radioCalls.length > 0 ||
+    progress.devicesCarried.length > 0
   )
 }
 
@@ -258,6 +335,14 @@ export type RadioTransmission = {
   readonly speakerKey: string
   readonly lineKeys: readonly string[]
   readonly index: number
+  /**
+   * The content call this is, if it is one. It is recorded as heard when its
+   * last line ends, not when the first appears: a reload mid-call, or a call
+   * half spoken under the notebook, must not lose the rest for good.
+   */
+  readonly callId?: string
+  /** Seconds of dead air once this ends: he hung up on the player. */
+  readonly hangsUpFor?: number
 }
 
 export type MuseumStore = {
@@ -310,6 +395,11 @@ export type MuseumStore = {
   /** The journal's open tab, or null while it is closed. */
   journalTab: JournalTab | null
   radio: RadioTransmission | null
+  /**
+   * Epoch ms until which the porter has hung up and only static answers.
+   * Session state: a reload is a fresh night, and a fresh mood is cheap.
+   */
+  radioHungUpUntil: number | null
 
   start: () => void
   setPointerLocked: (locked: boolean) => void
@@ -332,8 +422,14 @@ export type MuseumStore = {
   setNotebookPage: (page: number) => void
   setJournalTab: (tab: JournalTab | null) => void
   startRadio: (transmission: Omit<RadioTransmission, 'serial' | 'index'>) => void
+  /**
+   * The next line, or the end. Ending a content call records it as heard;
+   * ending a hang-up starts the dead air. Takes no argument on purpose, so
+   * it can never be handed a click event by an `onClick={advanceRadio}`.
+   */
   advanceRadio: () => void
   stopRadio: () => void
+  clearRadioHangUp: () => void
 
   // --- progress -----------------------------------------------------------
   progress: Progress
@@ -345,6 +441,9 @@ export type MuseumStore = {
   powerRoom: (roomId: string) => void
   openLock: (lockId: string) => void
   recordRadioCall: (callId: string) => void
+  /** The player takes a `carriedOnUse` device with them. */
+  carryDevice: (deviceId: string) => void
+  rememberRadioCall: (deviceId: string, memory: RadioMemory) => void
   /** Whole seconds a mains clock has run; see `Progress.clockSeconds`. */
   recordClockSeconds: (clockId: string, seconds: number) => void
   recordHint: (hintId: string) => void
@@ -623,11 +722,26 @@ export const useMuseum = create<MuseumStore>((set, get) => {
     advanceRadio: () => {
       const radio = get().radio
       if (!radio) return
-      set({
-        radio: radio.index + 1 < radio.lineKeys.length ? { ...radio, index: radio.index + 1 } : null,
-      })
+      if (radio.index + 1 < radio.lineKeys.length) {
+        set({ radio: { ...radio, index: radio.index + 1 } })
+        return
+      }
+      // One write for the end and what it means, so a retry waiting on the
+      // radio to fall silent already sees the call as heard.
+      const callId = radio.callId
+      set((state) => ({
+        radio: null,
+        ...(radio.hangsUpFor ? { radioHungUpUntil: Date.now() + radio.hangsUpFor * 1000 } : {}),
+        ...(callId
+          ? { progress: { ...state.progress, radioCalls: withValue(state.progress.radioCalls, callId) } }
+          : {}),
+      }))
+      if (callId) persist()
     },
     stopRadio: () => set({ radio: null }),
+    clearRadioHangUp: () => {
+      if (get().radioHungUpUntil !== null) set({ radioHungUpUntil: null })
+    },
 
     progress: initial.progress,
     recordHotspot: (exhibitId, hotspotId) =>
@@ -669,6 +783,18 @@ export const useMuseum = create<MuseumStore>((set, get) => {
       mutateProgress((progress) => ({
         ...progress,
         radioCalls: withValue(progress.radioCalls, callId),
+      })),
+    carryDevice: (deviceId) => {
+      if (get().progress.devicesCarried.includes(deviceId)) return
+      mutateProgress((progress) => ({
+        ...progress,
+        devicesCarried: withValue(progress.devicesCarried, deviceId),
+      }))
+    },
+    rememberRadioCall: (deviceId, memory) =>
+      mutateProgress((progress) => ({
+        ...progress,
+        radioMemory: { ...progress.radioMemory, [deviceId]: memory },
       })),
     recordClockSeconds: (clockId, seconds) => {
       if (!Number.isFinite(seconds)) return
@@ -741,6 +867,7 @@ function sessionDefaults() {
     notebookPage: 0,
     journalTab: null,
     radio: null,
+    radioHungUpUntil: null,
   } satisfies Partial<MuseumStore>
 }
 

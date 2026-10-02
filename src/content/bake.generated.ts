@@ -726,8 +726,8 @@ export const BAKED_BUNDLES = [
   },
   {
     "name": "kit",
-    "url": "/models/kit.4c94b920.glb",
-    "bytes": 2094304,
+    "url": "/models/kit.da3f5536.glb",
+    "bytes": 2102592,
     "parts": [
       {
         "name": "plinth-block",
@@ -3403,24 +3403,78 @@ export const BAKED_BUNDLES = [
           ],
           "max": [
             0.045,
-            0.2419,
+            0.042,
             0.036
           ],
           "size": [
             0.09,
-            0.2419,
+            0.042,
             0.072
           ],
           "centre": [
             0,
-            0.1209,
+            0.021,
             0
           ]
         },
-        "triangles": 612
+        "triangles": 540
       },
       {
-        "name": "desk-radio__metal",
+        "name": "desk-radio__led",
+        "material": "led-off",
+        "bounds": {
+          "min": [
+            0.0265,
+            0.013,
+            0.0355
+          ],
+          "max": [
+            0.0355,
+            0.017,
+            0.0375
+          ],
+          "size": [
+            0.009,
+            0.004,
+            0.002
+          ],
+          "centre": [
+            0.031,
+            0.015,
+            0.0365
+          ]
+        },
+        "triangles": 12
+      },
+      {
+        "name": "desk-radio__handset",
+        "material": "plastic-black",
+        "bounds": {
+          "min": [
+            -0.0345,
+            0.0211,
+            -0.0329
+          ],
+          "max": [
+            0.031,
+            0.2419,
+            0.0121
+          ],
+          "size": [
+            0.0655,
+            0.2208,
+            0.045
+          ],
+          "centre": [
+            -0.0017,
+            0.1315,
+            -0.0104
+          ]
+        },
+        "triangles": 396
+      },
+      {
+        "name": "desk-radio__handset-metal",
         "material": "iron-cast",
         "bounds": {
           "min": [
@@ -3447,31 +3501,31 @@ export const BAKED_BUNDLES = [
         "triangles": 84
       },
       {
-        "name": "desk-radio__led",
+        "name": "desk-radio__handset-led",
         "material": "led-off",
         "bounds": {
           "min": [
             -0.017,
-            0.013,
+            0.1172,
             -0.0154
           ],
           "max": [
-            0.0355,
+            0.017,
             0.1647,
-            0.0375
+            0.0053
           ],
           "size": [
-            0.0525,
-            0.1517,
-            0.0529
+            0.034,
+            0.0475,
+            0.0208
           ],
           "centre": [
-            0.0093,
-            0.0889,
-            0.011
+            0,
+            0.141,
+            -0.0051
           ]
         },
-        "triangles": 64
+        "triangles": 52
       },
       {
         "name": "office-wall-clock",
@@ -7131,8 +7185,8 @@ export const BAKED_MATERIALS = {
 } as const satisfies Record<string, BakedMaterial>
 
 export const BAKE_TOTALS = {
-  bytes: 2868680,
-  triangles: 146376,
+  bytes: 2876968,
+  triangles: 146700,
   textureBytes: 1075092,
   /** Uncompressed VRAM with mips. The wire size says nothing about this. */
   textureVramBytes: 47185920,

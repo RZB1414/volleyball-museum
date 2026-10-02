@@ -16,6 +16,8 @@ export type ConditionProgress = {
   readonly locksOpened: readonly string[]
   readonly documentsRead: readonly string[]
   readonly catalogued: readonly string[]
+  /** Optional so a checklist asked before anything can be carried still answers. */
+  readonly devicesCarried?: readonly string[]
 }
 
 type ConditionContent = Pick<MuseumContent, 'rooms' | 'exhibits'>
@@ -59,6 +61,12 @@ export function progressConditionMet(
   if (
     condition.documentsUnread &&
     condition.documentsUnread.some((documentId) => progress.documentsRead.includes(documentId))
+  ) {
+    return false
+  }
+  if (
+    condition.carried &&
+    !condition.carried.every((deviceId) => (progress.devicesCarried ?? []).includes(deviceId))
   ) {
     return false
   }

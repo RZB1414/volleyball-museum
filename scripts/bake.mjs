@@ -811,10 +811,17 @@ async function main() {
       { cover: 'rope-velvet', pages: 'paper-aged', band: 'plastic-black', pen: 'brass' },
       'cover',
     ),
+    // The cradle is the root; the handset's families leave with the player.
     ...compoundKitParts(
       'desk-radio',
       buildDeskRadio(),
-      { body: 'plastic-black', metal: 'iron-cast', led: 'led-off' },
+      {
+        body: 'plastic-black',
+        led: 'led-off',
+        handset: 'plastic-black',
+        'handset-metal': 'iron-cast',
+        'handset-led': 'led-off',
+      },
       'body',
     ),
     ...compoundKitParts(

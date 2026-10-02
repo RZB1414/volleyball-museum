@@ -441,7 +441,7 @@
   }
 }
 
-/* --- tools: the torch and the notebook ------------------------------------ */
+/* --- tools: the radio, the notebook and the torch ------------------------- */
 
 .hud-tools {
   position: absolute;
@@ -533,6 +533,52 @@
   }
 }
 
+/* The porter is talking: the same green as the subtitle's rule, so the ring
+   and the line on screen read as one channel. A press skips a line. */
+.hud-tool.is-radio.is-on-air {
+  border-color: rgb(127 176 122 / 92%);
+  box-shadow:
+    0 0 0 3px rgb(127 176 122 / 30%),
+    0 0 22px rgb(127 176 122 / 34%),
+    0 14px 34px rgb(0 0 0 / 28%);
+  color: #cfe9cd;
+}
+
+/* He hung up: the button still answers (with static), so it dims rather
+   than disables, and an amber dot says the line is dead for now. */
+.hud-tool.is-radio.is-hung-up {
+  opacity: 0.62;
+}
+
+.hud-tool.is-radio.is-hung-up::after {
+  content: '';
+  position: absolute;
+  top: 0.32rem;
+  right: 0.32rem;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: #d9952f;
+  box-shadow: 0 0 6px rgb(217 149 47 / 70%);
+  animation: hud-tool-dead-air 1.1s ease-in-out infinite;
+}
+
+@keyframes hud-tool-dead-air {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-tool.is-radio.is-hung-up::after {
+    animation: none;
+  }
+}
+
 .hud-tool-key {
   position: absolute;
   right: -0.35rem;
@@ -550,12 +596,13 @@
 @media (any-pointer: coarse),
   (max-width: 900px) and (orientation: landscape) {
   /* A column directly above the right-hand stick, the torch nearest the
-     thumb. The stick's centre is 78 px from the edge; these are centred on
-     it. */
+     thumb: it is last in the DOM, so a plain column puts it at the bottom
+     (column-reverse put the notebook there the moment it was carried). The
+     stick's centre is 78 px from the edge; these are centred on it. */
   .hud-tools {
     right: calc(env(safe-area-inset-right) + 54px);
     bottom: calc(env(safe-area-inset-bottom) + 144px);
-    flex-direction: column-reverse;
+    flex-direction: column;
     align-items: center;
     gap: 0.75rem;
   }

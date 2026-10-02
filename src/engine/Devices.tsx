@@ -1,5 +1,6 @@
 /**
- * The working objects of a room: clocks, door readers, the porter's radio.
+ * The working objects of a room: clocks, door readers, the porter's radio —
+ * and, once it leaves the desk, the radio in the player's hand.
  *
  * Each device is a kit recipe cloned per placement — never instanced, because
  * every one carries its own state: a clock turns its own hands, a reader
@@ -10,7 +11,7 @@
 
 import { useGLTF } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   Box3,
   Group,
@@ -32,19 +33,22 @@ import {
   CLOCK_SAVE_INTERVAL_SECONDS,
   clockHandAngles,
   clockTimeAfter,
-  dueRadioCalls,
+  deskRadioIntent,
+  nextRadioCall,
   radioCallReady,
   radioDevices,
-  radioHintFor,
   savedClockSeconds,
   type RadioDevice,
 } from './deviceRules'
+import { isLensNode, prepareHandset } from './deviceNodes'
 import { INTERACTION_REACH, interactionWinnerOf, PROXY_MINIMUM } from './interactionTarget'
 import { cloneKitPart, disposeKitPart } from './kitPart'
 import type { MaterialLibrary } from './materials'
 import { isRoomPowered } from './power'
 import { playerPosition } from './playerPosition'
 import { subscribePrimaryAction } from './primaryAction'
+import { placeRadioCall, takeDeskRadio } from './radioCall'
+import { heldRadioId, isRadioCallKey } from './radioPatience'
 
 const CENTRE = new Vector2(0, 0)
 const INTERACTION_LAYER = 7
@@ -67,7 +71,11 @@ function poweredNow(roomId: string) {
   return room ? isRoomPowered(room, useMuseum.getState().progress.roomsPowered) : false
 }
 
-/** Points every lens of a device at one library material. */
+/**
+ * Points every lens of a device at one library material: the `__led` family
+ * and any `__*-led` one, such as a radio handset's display, which reads the
+ * same charger.
+ */
 function useLensMaterial(
   instance: Object3D | null,
   part: string,
@@ -75,13 +83,20 @@ function useLensMaterial(
   materialKey: string,
 ) {
   useEffect(() => {
-    const lens = instance?.getObjectByName(`${part}__led`)
     const material = materials.get(materialKey)
-    if (!lens || !material) return
-    lens.traverse((object) => {
-      if (object instanceof Mesh) object.material = material
+    if (!instance || !material) return
+    instance.traverse((lens) => {
+      if (!isLensNode(lens.name, part)) return
+      lens.traverse((object) => {
+        if (object instanceof Mesh) object.material = material
+      })
     })
   }, [instance, materialKey, materials, part])
+}
+
+/** Whether the player has taken this device with them, from the stable list. */
+function useCarried(deviceId: string) {
+  return useMuseum((state) => state.progress.devicesCarried.includes(deviceId))
 }
 
 function useDeviceInstance(kit: Group, part: string, materials: MaterialLibrary) {
@@ -251,7 +266,19 @@ function RadioDeviceView({
   materials: MaterialLibrary
 }) {
   const powered = usePowered(device.poweredBy)
+  // The cradle's lamp shows the charger, so it stays green on an empty desk;
+  // the handset's display goes with the player.
   useLensMaterial(instance, device.part, materials, powered ? 'led-green' : 'led-off')
+
+  const carried = useCarried(device.id)
+  const handset = useMemo(
+    () => (device.carriedOnUse ? prepareHandset(instance, device.part) : null),
+    [device.carriedOnUse, device.part, instance],
+  )
+  // Before paint, so the handset never flashes on the desk for a frame.
+  useLayoutEffect(() => {
+    if (handset) handset.visible = !carried
+  }, [carried, handset])
 
   const proxy = useMemo(() => {
     instance.updateMatrixWorld(true)
@@ -268,10 +295,14 @@ function RadioDeviceView({
   }, [instance])
 
   return (
-    <mesh position={proxy.centre} visible={false}>
-      <boxGeometry args={proxy.size} />
-      <meshBasicMaterial />
-    </mesh>
+    // A group, not the mesh: targeting switches invisible meshes back on for
+    // its ray layer, and rejects any hit under a hidden ancestor instead.
+    <group visible={!carried}>
+      <mesh position={proxy.centre} visible={false}>
+        <boxGeometry args={proxy.size} />
+        <meshBasicMaterial />
+      </mesh>
+    </group>
   )
 }
 
@@ -356,21 +387,22 @@ function deviceIdFor(object: Object3D | null): string | null {
   return null
 }
 
-/** Speaks a radio's hint, or moves its current transmission on a line. */
+/**
+ * E on a radio on its desk: pick it up if it is one the player carries away,
+ * otherwise the same press as the call button — skip a line, or call him.
+ */
 function operateRadio(deviceId: string) {
   const entry = RADIOS_BY_ID.get(deviceId)
   const state = useMuseum.getState()
-  if (!entry || !poweredNow(entry.device.poweredBy)) return false
-
-  if (state.radio?.deviceId === deviceId) {
-    state.advanceRadio()
-    return true
-  }
-  const lines = radioHintFor(entry.device, state.progress, MUSEUM)
-  if (lines.length === 0) return false
-  museumAudio.radioSquelch()
-  state.startRadio({ deviceId, speakerKey: entry.device.speakerKey, lineKeys: lines })
-  return true
+  if (!entry) return false
+  const intent = deskRadioIntent(entry.device, {
+    live: poweredNow(entry.device.poweredBy),
+    carried: state.progress.devicesCarried.includes(deviceId),
+    speaking: state.radio !== null,
+  })
+  if (intent === 'dead') return false
+  if (intent === 'take') return takeDeskRadio(deviceId)
+  return placeRadioCall(deviceId)
 }
 
 /** Targets operable devices from the crosshair and works them on E. */
@@ -433,13 +465,12 @@ export function DeviceTargeting() {
       rescanRef.current = 0.5
       scannedRef.current = true
       const targets: Object3D[] = []
+      const carried = state.progress.devicesCarried
       scene.traverseVisible((object) => {
-        if (
-          object.name.startsWith('device:') &&
-          RADIOS_BY_ID.has(object.name.slice('device:'.length))
-        ) {
-          targets.push(object)
-        }
+        if (!object.name.startsWith('device:')) return
+        const id = object.name.slice('device:'.length)
+        // A radio in the player's hand has left its desk: nothing to aim at.
+        if (RADIOS_BY_ID.has(id) && !carried.includes(id)) targets.push(object)
       })
       targetsRef.current = targets
       // Same arrangement as the power controls: the proxy stays `visible` for
@@ -480,8 +511,12 @@ export function DeviceTargeting() {
 /**
  * Delivers each radio call once, after its delay, when the radio has power.
  *
- * A call never interrupts the player reading, entering a code or listening to
- * another transmission; it waits politely and retries.
+ * Only the first call due is scheduled: calls are heard in content order, so
+ * "you took the radio" can never arrive before the porter introduces himself,
+ * and the next one is scheduled with its own delay when this one is heard. A
+ * call never interrupts the player holding an exhibit, reading, entering a
+ * code or listening to another transmission; it waits politely and retries.
+ * It is recorded as heard only when its last line ends (`advanceRadio`).
  */
 export function RadioDirector() {
   const progress = useMuseum((state) => state.progress)
@@ -491,40 +526,31 @@ export function RadioDirector() {
     const timers = timersRef.current
     for (const { device } of RADIOS) {
       if (!poweredNow(device.poweredBy)) continue
-      for (const call of dueRadioCalls(device, progress, MUSEUM)) {
-        if (timers.has(call.id)) continue
-        const deliver = () => {
-          const state = useMuseum.getState()
-          const readiness = radioCallReady(device, call.id, state.progress, MUSEUM)
-          // Its moment passed while it waited (the player picked the notebook
-          // up during the first call): the reminder must not play anyway.
-          if (readiness === 'gone') {
-            timers.delete(call.id)
-            return
-          }
-          // Content order, not timer order: a reminder whose retry happened
-          // to fire first must never play before the porter's introduction.
-          if (
-            readiness === 'queued' ||
-            state.radio ||
-            state.openedContainer ||
-            state.activeLock ||
-            state.journalTab
-          ) {
-            timers.set(call.id, window.setTimeout(deliver, 1200))
-            return
-          }
+      const call = nextRadioCall(device, progress, MUSEUM)
+      if (!call || timers.has(call.id)) continue
+      const deliver = () => {
+        const state = useMuseum.getState()
+        const readiness = radioCallReady(device, call.id, state.progress, MUSEUM)
+        // Heard meanwhile (the player called first), or its moment passed
+        // while it waited (the notebook was picked up during the first call).
+        if (readiness === 'gone') {
           timers.delete(call.id)
-          state.recordRadioCall(call.id)
-          museumAudio.radioSquelch()
-          state.startRadio({
-            deviceId: device.id,
-            speakerKey: device.speakerKey,
-            lineKeys: call.lineKeys,
-          })
+          return
         }
-        timers.set(call.id, window.setTimeout(deliver, call.delaySeconds * 1000))
+        if (readiness === 'queued' || state.radio || isModalOpen(state)) {
+          timers.set(call.id, window.setTimeout(deliver, 1200))
+          return
+        }
+        timers.delete(call.id)
+        museumAudio.radioSquelch()
+        state.startRadio({
+          deviceId: device.id,
+          speakerKey: device.speakerKey,
+          lineKeys: call.lineKeys,
+          callId: call.id,
+        })
       }
+      timers.set(call.id, window.setTimeout(deliver, call.delaySeconds * 1000))
     }
   }, [progress])
 
@@ -535,6 +561,49 @@ export function RadioDirector() {
       timers.clear()
     }
   }, [])
+
+  return null
+}
+
+/**
+ * The radio in the player's hand: R calls the porter from any room, and a
+ * hang-up is heard and then runs out on its own.
+ *
+ * Mounted once at the scene root, not with the office: the handset works in
+ * the atrium and the wings, where the office's devices are not mounted.
+ */
+export function RadioHandset() {
+  const hungUpUntil = useMuseum((state) => state.radioHungUpUntil)
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isRadioCallKey(event)) return
+      const id = heldRadioId(useMuseum.getState().progress.devicesCarried, MUSEUM)
+      if (id && placeRadioCall(id)) event.preventDefault()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [])
+
+  // The click of the handset going down, when the line he hung up on ends.
+  useEffect(
+    () =>
+      useMuseum.subscribe((state, previous) => {
+        if (state.radioHungUpUntil !== null && previous.radioHungUpUntil === null) {
+          museumAudio.radioHangUp()
+        }
+      }),
+    [],
+  )
+
+  useEffect(() => {
+    if (hungUpUntil === null) return undefined
+    const timer = window.setTimeout(
+      () => useMuseum.getState().clearRadioHangUp(),
+      Math.max(0, hungUpUntil - Date.now()),
+    )
+    return () => window.clearTimeout(timer)
+  }, [hungUpUntil])
 
   return null
 }

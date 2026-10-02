@@ -45,6 +45,10 @@ export const en = {
   'journal.taken': 'You took the notebook',
   'journal.taken.keyboard': 'Tab opens the plan, the catalogue and the archive.',
   'journal.taken.touch': 'The notebook icon opens the plan, the catalogue and the archive.',
+  'radio.taken': 'You took the radio',
+  'radio.taken.keyboard': 'R calls the porter, from any room.',
+  'radio.taken.touch': 'The radio icon calls the porter, from any room.',
+  'ui.radio.hungUp': 'Jorge hung up. Try again in a moment.',
 
   'prompt.examine': 'Examine',
   'prompt.read': 'Read',
@@ -60,6 +64,7 @@ export const en = {
   'prompt.door.unpowered': 'The lock has no power',
   'prompt.radio.call': 'Call the porter',
   'prompt.radio.dead': 'Not charging',
+  'prompt.radio.take': 'Take the radio',
   'power.restored': 'Power restored',
   'radio.skip': 'Skip',
   'notebook.next': 'Turn the page',
@@ -150,7 +155,7 @@ export const en = {
   'radio.call.first.3':
     "The atrium breaker is on the west wall, beside the Wing 1 entrance. Look for the little red light.",
   'radio.call.first.4':
-    "And don't go down to the basement: it flooded. Anything at all, call me on this radio. Over and out.",
+    "And don't go down to the basement: it flooded. Anything at all, take the radio off the desk and call me. Over and out.",
   'radio.call.notebook.1':
     'Oh, and Helena left you a notebook there on the desk. Take it before you go — it explains everything. Over.',
   'radio.hint.notebook':
@@ -163,6 +168,70 @@ export const en = {
     "That locked drawer in your office? Otávio used dates you can find on the labels. Have a look at Morgan's portrait in Wing 1.",
   'radio.hint.vault':
     "It's all yours now, curator. Otávio was always going on about three medals and a vault under the atrium. Over.",
+
+  'radio.speaker.static': 'Radio',
+  'radio.call.taken.1':
+    'Got the radio? Good, keep it on you. From the front desk I can reach the whole building.',
+  'radio.call.taken.2':
+    'Just press the side button and call me. Only not every five minutes, eh? Over.',
+  'radio.hint.notebook.curt': 'Notebook. On the desk. Pick it up and read it. Over.',
+  'radio.hint.atrium.curt': 'Atrium. West wall. Little red light. Over.',
+  'radio.hint.holyoke.curt': "Wing 1. Panel's inside. Torch in hand. Go.",
+  'radio.hint.drawer.curt': "Otávio's drawer: a date. The date's on the Wing 1 labels. Read them.",
+  'radio.hint.vault.curt': 'Three medals. One vault. Under the atrium. The rest is up to you.',
+  'radio.patience.t1.ready': 'Front desk, go ahead.',
+  'radio.patience.t1.listening': "Go on, curator. I'm listening.",
+  'radio.patience.t1.jorge': 'Jorge here. Over.',
+  'radio.patience.t2.again': 'Again, curator? All right, all right.',
+  'radio.patience.t2.coffee': "Go ahead. My coffee's gone cold anyway.",
+  'radio.patience.t2.reception':
+    "For the record, this is the porter's desk. Reception is that empty counter in the atrium.",
+  'radio.patience.t2.repeat': "I'll say it again. Repeating's free:",
+  'radio.patience.t2.chat': "I'm starting to think you just like talking to me.",
+  'radio.patience.t3.hotline': 'Curator, this is the front desk, not a helpline.',
+  'radio.patience.t3.hotline.close': "Write it in the notebook. That's what it's for.",
+  'radio.patience.t3.otavio':
+    'Otávio worked here thirty years and called me twice. Once was a wrong number.',
+  'radio.patience.t3.torch': 'Want me to come over and hold the torch for you too?',
+  'radio.patience.t3.crossword':
+    "I'd nearly finished the crossword. Just missing “pest”, four letters. Go on.",
+  'radio.patience.t3.announcer':
+    "I know it by heart now. I'll do my radio-announcer voice, it sounds nicer:",
+  'radio.patience.t4.please': "Curator… for heaven's sake.",
+  'radio.patience.t4.meter': "If this radio had a meter running, you'd owe me the building by now.",
+  'radio.patience.t4.slow': "I'll say it nice and slow. Must be the static:",
+  'radio.patience.t4.dark': "Scared of the dark, is that it? You can tell me. I won't tell a soul.",
+  'radio.patience.t4.dark.close': '…Except Helena, maybe.',
+  'radio.patience.t4.static.1': "Kssshh… curator… kssh… you're breaking up…",
+  'radio.patience.t4.static.2': "…kssh… battery's going… kssshh… over and out.",
+  'radio.patience.t4.penalty.1': "Hang on, there's a penalty on the transistor radio.",
+  'radio.patience.t4.penalty.2': '…MISSED! See? You jinxed it. Over and out.',
+  'radio.patience.t4.rounds.1': "Not now, curator, I'm doing my rounds.",
+  'radio.patience.t4.rounds.2': "…All right, I'm sitting down. They're mental rounds. Call me in a bit.",
+  'radio.patience.t5.age': "Curator, I'm sixty-two and I've never been called this much in my life.",
+  'radio.patience.t5.last': "Fine. Last time. I swear it's the last time. It's always the last time.",
+  'radio.patience.t5.collection':
+    "I'm putting this radio in the collection: “the most used object in museum history”.",
+  'radio.patience.t5.labels':
+    "Know what Otávio did when he wasn't sure? He read the labels. READ. THE. LABELS.",
+  'radio.patience.t5.babysitter': 'I should be getting a night-shift bonus for babysitting.',
+  'radio.patience.t5.no.1': 'No.',
+  'radio.patience.t5.no.2': 'Over and out. And this time I mean it.',
+  'radio.patience.t5.recording.1':
+    "You've reached the Volleyball Museum front desk. Our hours are nine to six.",
+  'radio.patience.t5.recording.2':
+    'If this is the curator, please hang up and read the labels. Beeep.',
+  'radio.patience.t5.soap.1': "Curator, I'm switching off to watch my soap.",
+  'radio.patience.t5.soap.2':
+    "…Which I can't, because the power's out. All I've got left is you. Over and out.",
+  'radio.patience.t5.song.1': "(humming) Oh curator, dear curator, won't you let me be…",
+  'radio.patience.t5.song.2': "Like it? It's brand new. Now let me rest my voice.",
+  'radio.patience.praise.went': 'Well, look at that — you got somewhere. Nice.',
+  'radio.patience.praise.knack': "Now we're talking, curator. You're getting the hang of it.",
+  'radio.patience.praise.needless': "See? You didn't need me that much. But since you called:",
+  'radio.deadAir.noAnswer': '(Static. No answer from the front desk.)',
+  'radio.deadAir.reallyOff': '(Just static. Jorge really did hang up.)',
+  'radio.deadAir.rain': '(Nothing. Only the rain against the windows.)',
 
   // ---------------------------------------------------------------------
   // Wall lettering

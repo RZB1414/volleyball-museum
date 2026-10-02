@@ -52,6 +52,10 @@ export const ptBR = {
   'journal.taken': 'Você pegou o caderno',
   'journal.taken.keyboard': 'Tab abre a planta, o catálogo e o arquivo.',
   'journal.taken.touch': 'O ícone do caderno abre a planta, o catálogo e o arquivo.',
+  'radio.taken': 'Você pegou o rádio',
+  'radio.taken.keyboard': 'R chama a portaria, de qualquer sala.',
+  'radio.taken.touch': 'O ícone do rádio chama a portaria, de qualquer sala.',
+  'ui.radio.hungUp': 'O Jorge desligou. Tente daqui a pouco.',
 
   // Prompts
   'prompt.examine': 'Examinar',
@@ -68,6 +72,7 @@ export const ptBR = {
   'prompt.door.unpowered': 'Fechadura sem energia',
   'prompt.radio.call': 'Chamar a portaria',
   'prompt.radio.dead': 'Sem carga',
+  'prompt.radio.take': 'Pegar o rádio',
   'power.restored': 'Energia restaurada',
   'radio.skip': 'Pular',
   'notebook.next': 'Virar a página',
@@ -163,7 +168,7 @@ export const ptBR = {
   'radio.call.first.3':
     'O quadro do átrio fica na parede oeste, do lado da entrada da Ala 1. Procure a luzinha vermelha.',
   'radio.call.first.4':
-    'E não desce no subsolo, que alagou. Qualquer coisa, me chama neste rádio. Câmbio, desligo.',
+    'E não desce no subsolo, que alagou. Qualquer coisa, pega o rádio aí na mesa e me chama. Câmbio, desligo.',
   'radio.call.notebook.1':
     'Ah, e a Helena deixou um caderno pra você aí na mesa. Pega antes de sair, que tá tudo explicado lá. Câmbio.',
   'radio.hint.notebook':
@@ -176,6 +181,75 @@ export const ptBR = {
     'Aquela gaveta trancada do escritório? O Otávio usava datas que estão nas placas. Dá uma olhada no retrato do Morgan, na Ala 1.',
   'radio.hint.vault':
     'Agora é com você, curador. O Otávio vivia falando de três medalhas e de um cofre embaixo do átrio. Câmbio.',
+
+  // The radio in the player's pocket, and the porter's patience with it.
+  // Jorge teases, he never insults: "curador" and "você", no "o senhor".
+  'radio.speaker.static': 'Rádio',
+  'radio.call.taken.1':
+    'Pegou o rádio? Isso, leva com você. Daqui da portaria eu falo com o prédio inteiro.',
+  'radio.call.taken.2':
+    'É só apertar o botão do lado e me chamar. Só não vai me chamar toda hora, hein? Câmbio.',
+  'radio.hint.notebook.curt': 'Caderno. Na mesa. Pega e lê. Câmbio.',
+  'radio.hint.atrium.curt': 'Átrio. Parede oeste. Luzinha vermelha. Câmbio.',
+  'radio.hint.holyoke.curt': 'Ala 1. Quadro lá dentro. Lanterna na mão. Vai.',
+  'radio.hint.drawer.curt': 'Gaveta do Otávio: uma data. A data tá nas placas da Ala 1. Lê.',
+  'radio.hint.vault.curt': 'Três medalhas. Um cofre. Embaixo do átrio. O resto é com você.',
+  'radio.patience.t1.ready': 'Portaria, pode falar.',
+  'radio.patience.t1.listening': 'Fala, curador. Tô na escuta.',
+  'radio.patience.t1.jorge': 'Jorge na escuta. Câmbio.',
+  'radio.patience.t2.again': 'De novo, curador? Tudo bem, tudo bem.',
+  'radio.patience.t2.coffee': 'Pode falar. Meu café já esfriou mesmo.',
+  'radio.patience.t2.reception':
+    'Só pra constar: aqui é a portaria. Recepção é aquele balcão vazio no átrio.',
+  'radio.patience.t2.repeat': 'Repito, que repetir é de graça:',
+  'radio.patience.t2.chat': 'Tô começando a achar que você gosta de conversar comigo.',
+  'radio.patience.t3.hotline': 'Curador, isso aqui é portaria, não é Disque-Dica.',
+  'radio.patience.t3.hotline.close': 'Anota no caderno, que é pra isso que ele serve.',
+  'radio.patience.t3.otavio':
+    'O Otávio trabalhou aqui trinta anos e me chamou duas vezes. Uma foi engano.',
+  'radio.patience.t3.torch': 'Quer que eu vá aí segurar a lanterna também?',
+  'radio.patience.t3.crossword':
+    'Eu tava quase fechando as palavras cruzadas. Faltava “chato”, cinco letras. Fala.',
+  'radio.patience.t3.announcer':
+    'Já sei de cor. Vou fazer com voz de locutor, que fica mais bonito:',
+  'radio.patience.t4.please': 'Curador… pelo amor de Deus.',
+  'radio.patience.t4.meter': 'Se esse rádio tivesse taxímetro, você já tava devendo o prédio.',
+  'radio.patience.t4.slow': 'Vou falar bem devagarinho, que deve ser o chiado:',
+  'radio.patience.t4.dark': 'É medo do escuro, é? Pode falar, eu não conto pra ninguém.',
+  'radio.patience.t4.dark.close': '…Só pra Helena, talvez.',
+  'radio.patience.t4.static.1': 'Chhhh… curador… chhh… tá cortando…',
+  'radio.patience.t4.static.2': '…chhh… acabando a bateria… chhhh… câmbio, desligo.',
+  'radio.patience.t4.penalty.1': 'Peraí, que vai sair pênalti no radinho de pilha.',
+  'radio.patience.t4.penalty.2': '…PERDEU! Tá vendo? Você me deu azar. Câmbio, desligo.',
+  'radio.patience.t4.rounds.1': 'Agora não dá, curador, tô fazendo a ronda.',
+  'radio.patience.t4.rounds.2':
+    '…Tá, eu tô sentado. Mas é uma ronda mental. Me chama daqui a pouco.',
+  'radio.patience.t5.age':
+    'Curador, eu tenho sessenta e dois anos e nunca fui tão chamado na vida.',
+  'radio.patience.t5.last': 'Tá. Última vez. Juro que é a última. É sempre a última.',
+  'radio.patience.t5.collection':
+    'Vou pôr esse rádio no acervo: “o objeto mais usado da história do museu”.',
+  'radio.patience.t5.labels':
+    'Sabe o que o Otávio fazia quando tinha dúvida? Lia as placas. LIA. AS. PLACAS.',
+  'radio.patience.t5.babysitter': 'Eu devia ganhar adicional noturno de babá.',
+  'radio.patience.t5.no.1': 'Não.',
+  'radio.patience.t5.no.2': 'Câmbio, desligo. E dessa vez é sério.',
+  'radio.patience.t5.recording.1':
+    'Você ligou para a portaria do Museu do Vôlei. Nosso horário é das nove às seis.',
+  'radio.patience.t5.recording.2':
+    'Se for o curador, por favor, desligue e leia as placas. Piiii.',
+  'radio.patience.t5.soap.1': 'Curador, vou desligar e ver minha novela.',
+  'radio.patience.t5.soap.2':
+    '…Que não tem, porque acabou a luz. Sobrou você. Câmbio, desligo.',
+  'radio.patience.t5.song.1':
+    '(cantarolando) Ô curador, ô curador, me deixa em paz, por favor…',
+  'radio.patience.t5.song.2': 'Gostou? É inédita. Agora deixa eu descansar a voz.',
+  'radio.patience.praise.went': 'Olha só, andou, hein? Gostei de ver.',
+  'radio.patience.praise.knack': 'Agora sim, curador. Tá pegando o jeito.',
+  'radio.patience.praise.needless': 'Viu? Nem precisava tanto de mim. Mas, já que chamou:',
+  'radio.deadAir.noAnswer': '(Chiado. Ninguém responde na portaria.)',
+  'radio.deadAir.reallyOff': '(Só chiado. O Jorge desligou mesmo.)',
+  'radio.deadAir.rain': '(Nada. Só a chuva batendo nas janelas.)',
 
   // ---------------------------------------------------------------------
   // Wall lettering. Vinyl on plaster, so it has to survive being read at a

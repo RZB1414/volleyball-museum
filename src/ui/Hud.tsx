@@ -13,8 +13,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { formatCreditLine } from '../content/credit'
 import { MUSEUM } from '../content/museum'
 import type { ExhibitData } from '../content/schema'
+import type { TranslationKey } from '../content/i18n/pt-BR'
 import { museumAudio } from '../engine/audio'
-import { radioDevices, radioLineSeconds } from '../engine/deviceRules'
+import { deskRadioIntent, radioDevices, radioLineSeconds } from '../engine/deviceRules'
 import {
   interactionWinnerKey,
   parseInteractionWinnerKey,
@@ -22,13 +23,19 @@ import {
 } from '../engine/interactionTarget'
 import { containerById, isNotebook, journalUnlocked } from '../engine/notebook'
 import { isRoomPowered } from '../engine/power'
+import { placeRadioCall } from '../engine/radioCall'
+import { heldRadioId } from '../engine/radioPatience'
 import { useTranslate } from '../i18n'
 import {
   archiveFiledKey,
   closeLabel,
   listGrew,
   lookHintVisible,
-  shouldAnnounceJournal,
+  radioLineDelayMs,
+  radioLineMark,
+  radioToolState,
+  shouldAnnounceTaken,
+  shouldCrackle,
 } from './hudRules'
 import { LockPanel } from './LockPanel'
 import { MobileControls } from './MobileControls'
@@ -160,24 +167,36 @@ function TransitionDoorPrompt() {
   )
 }
 
-/** The porter's radio: live once its charger has power. */
+const DESK_RADIO_LABEL = {
+  dead: 'prompt.radio.dead',
+  take: 'prompt.radio.take',
+  skip: 'radio.skip',
+  call: 'prompt.radio.call',
+} as const satisfies Record<ReturnType<typeof deskRadioIntent>, TranslationKey>
+
+/**
+ * The porter's radio on its desk: live once its charger has power, and taken
+ * on the first press. The label is the same intent E acts on.
+ */
 function DevicePrompt() {
   const winner = useWinner('device')
   const focused = winner?.id ?? null
-  const speaking = useMuseum((state) => focused !== null && state.radio?.deviceId === focused)
+  const speaking = useMuseum((state) => state.radio !== null)
+  const carried = useMuseum(
+    (state) => focused !== null && state.progress.devicesCarried.includes(focused),
+  )
   const t = useTranslate()
 
   if (!focused) return null
   const radio = radiosById.get(focused)
   if (!radio) return null
   const live = winner?.live ?? false
-  // While this radio is talking, E moves the transmission on a line.
-  const label = !live ? t('prompt.radio.dead') : speaking ? t('radio.skip') : t('prompt.radio.call')
+  const intent = deskRadioIntent(radio, { live, carried, speaking })
 
   return (
     <div className="prompt" role="status">
-      {live ? <span className="prompt-key">E</span> : null}
-      <span className="prompt-label">{label}</span>
+      {intent !== 'dead' ? <span className="prompt-key">E</span> : null}
+      <span className="prompt-label">{t(DESK_RADIO_LABEL[intent])}</span>
       <span className="prompt-title">{t(radio.titleKey as never)}</span>
     </div>
   )
@@ -188,31 +207,45 @@ function DevicePrompt() {
  *
  * There is no recorded voice, so the subtitle IS the transmission and is shown
  * regardless of the subtitle setting. Each line stays up for a reading pace
- * derived from its length; the skip control and E on the radio move it on.
+ * derived from its length; the skip control, R and E on the radio move it on.
+ * Under any modal the line is held and hidden — the same modals the director
+ * waits for — and starts its full time again when the modal closes.
  */
 function RadioSubtitles() {
   const radio = useMuseum((state) => state.radio)
+  const held = useMuseum(isModalOpen)
   const advance = useMuseum((state) => state.advanceRadio)
   const t = useTranslate()
   const line = radio ? t(radio.lineKeys[radio.index] as never) : ''
+  const crackledRef = useRef<string | null>(null)
+
+  // Its own effect, keyed on the line itself: a modal opening and closing
+  // re-arms the timer below, and must not crackle the same line again.
+  useEffect(() => {
+    if (!shouldCrackle(crackledRef.current, radio)) return
+    crackledRef.current = radioLineMark(radio)
+    museumAudio.radioCrackle()
+  }, [radio])
 
   useEffect(() => {
-    if (!radio) return undefined
-    if (radio.index > 0) museumAudio.radioCrackle()
+    const delay = radioLineDelayMs(radio, held, radioLineSeconds(line))
+    if (radio === null || delay === null) return undefined
     const timer = window.setTimeout(() => {
       const current = useMuseum.getState().radio
       if (current?.serial === radio.serial && current.index === radio.index) advance()
-    }, radioLineSeconds(line) * 1000)
+    }, delay)
     return () => window.clearTimeout(timer)
-  }, [advance, line, radio])
+  }, [advance, held, line, radio])
 
-  if (!radio) return null
+  if (!radio || held) return null
 
   return (
     <div className="radio-subtitle" role="status" aria-live="polite">
       <span className="radio-speaker">{t(radio.speakerKey as never)}</span>
       <span className="radio-line">{line}</span>
-      <button type="button" className="radio-skip" onClick={advance}>
+      {/* A wrapper, not the action itself: handed to onClick directly, the
+          click event would become an argument of a store action. */}
+      <button type="button" className="radio-skip" onClick={() => advance()}>
         {t('radio.skip')} ›
       </button>
     </div>
@@ -416,31 +449,44 @@ function useJournalUnlocked() {
   return useMemo(() => journalUnlocked(MUSEUM, documentsRead), [documentsRead])
 }
 
-const JOURNAL_TAKEN_HINT = 'journal-taken'
-
 /**
- * Shown once, when the player closes the notebook they have just picked up:
- * the journal now exists, and this is how to open it.
+ * Shown once, when the player has just picked up one of their tools: what it
+ * now does, and how to use it.
  *
  * "Once" is a flag in the save, not the state at mount: opening the notebook
  * already counts as reading it, so a reload with the notebook still open
  * used to skip the only lesson about Tab for good.
  */
-function JournalTakenToast() {
-  const unlocked = useJournalUnlocked()
-  const openedContainer = useMuseum((state) => state.openedContainer)
-  const alreadyShown = useMuseum((state) => state.progress.hintsShown.includes(JOURNAL_TAKEN_HINT))
+function TakenToast({
+  taken,
+  waiting,
+  hintId,
+  titleKey,
+  keyboardKey,
+  touchKey,
+  chime,
+}: {
+  readonly taken: boolean
+  /** Hold the lesson until the player is done with the thing itself. */
+  readonly waiting: boolean
+  readonly hintId: string
+  readonly titleKey: TranslationKey
+  readonly keyboardKey: TranslationKey
+  readonly touchKey: TranslationKey
+  readonly chime: boolean
+}) {
+  const alreadyShown = useMuseum((state) => state.progress.hintsShown.includes(hintId))
   const recordHint = useMuseum((state) => state.recordHint)
   const coarse = useCoarsePointer()
   const t = useTranslate()
   const [shown, setShown] = useState(false)
 
   useEffect(() => {
-    if (!shouldAnnounceJournal({ unlocked, reading: openedContainer !== null, alreadyShown })) return
-    recordHint(JOURNAL_TAKEN_HINT)
+    if (!shouldAnnounceTaken({ taken, waiting, alreadyShown })) return
+    recordHint(hintId)
     setShown(true)
-    museumAudio.chime()
-  }, [alreadyShown, openedContainer, recordHint, unlocked])
+    if (chime) museumAudio.chime()
+  }, [alreadyShown, chime, hintId, recordHint, taken, waiting])
 
   // Its own effect, keyed only on `shown`: opening a drawer during these few
   // seconds must not cancel the timer and leave the toast up for good.
@@ -455,9 +501,45 @@ function JournalTakenToast() {
     <div className="toast" role="status">
       <span className="toast-mark">✓</span>
       <span>
-        {t('journal.taken')} — {coarse ? t('journal.taken.touch') : t('journal.taken.keyboard')}
+        {t(titleKey)} — {coarse ? t(touchKey) : t(keyboardKey)}
       </span>
     </div>
+  )
+}
+
+/** The journal exists once the notebook closes in the player's hands. */
+function JournalTakenToast() {
+  const unlocked = useJournalUnlocked()
+  const reading = useMuseum((state) => state.openedContainer !== null)
+  return (
+    <TakenToast
+      taken={unlocked}
+      waiting={reading}
+      hintId="journal-taken"
+      titleKey="journal.taken"
+      keyboardKey="journal.taken.keyboard"
+      touchKey="journal.taken.touch"
+      chime
+    />
+  )
+}
+
+/**
+ * Taking the radio is said at once and without a chime: the porter's squelch
+ * a moment later is the sound of it working.
+ */
+function RadioTakenToast() {
+  const held = useMuseum((state) => heldRadioId(state.progress.devicesCarried, MUSEUM) !== null)
+  return (
+    <TakenToast
+      taken={held}
+      waiting={false}
+      hintId="radio-taken"
+      titleKey="radio.taken"
+      keyboardKey="radio.taken.keyboard"
+      touchKey="radio.taken.touch"
+      chime={false}
+    />
   )
 }
 
@@ -481,9 +563,52 @@ function NotebookIcon() {
   )
 }
 
+function RadioIcon() {
+  return (
+    <svg className="hud-tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="9.3" y="1.6" width="1.9" height="6.4" rx="0.9" />
+      <rect x="7" y="7" width="10" height="15.4" rx="1.8" />
+      <rect x="8.8" y="9" width="6.4" height="3.4" rx="0.5" className="hud-tool-icon-cut" />
+      <rect x="8.8" y="14.6" width="6.4" height="1.2" rx="0.4" className="hud-tool-icon-cut" />
+      <rect x="8.8" y="17.2" width="6.4" height="1.2" rx="0.4" className="hud-tool-icon-cut" />
+    </svg>
+  )
+}
+
 /**
- * The player's two tools, bottom right: the notebook (once carried) and the
- * torch, which sits closest to the thumb, directly above the right-hand stick.
+ * The radio button, once the handset is in hand: a press calls the porter
+ * from any room (or moves him on a line while he talks). It opens nothing,
+ * so it leaves the pointer lock alone.
+ */
+function RadioTool({ radioId }: { readonly radioId: string }) {
+  const onAir = useMuseum((state) => state.radio !== null)
+  const hungUp = useMuseum((state) => state.radioHungUpUntil !== null)
+  const calls = useMuseum((state) => state.progress.radioMemory[radioId]?.calls ?? 0)
+  const t = useTranslate()
+  const { modifiers, labelKey } = radioToolState({ onAir, hungUp, calls })
+
+  return (
+    <button
+      type="button"
+      className={['hud-tool', 'is-radio', ...modifiers].join(' ')}
+      aria-label={t(labelKey)}
+      title={t(labelKey)}
+      onClick={() => placeRadioCall(radioId)}
+      onPointerDown={(event) => event.stopPropagation()}
+    >
+      <RadioIcon />
+      <span className="hud-tool-key" aria-hidden="true">
+        R
+      </span>
+    </button>
+  )
+}
+
+/**
+ * The player's tools, bottom right: the radio and the notebook (once each is
+ * carried) and the torch, last in the DOM so it sits in the corner on a
+ * desktop and closest to the thumb, directly above the right-hand stick, on
+ * touch.
  *
  * The torch pulses while the player stands in a dark room and has never
  * switched it on — the first verb of the game is to light the way.
@@ -496,6 +621,7 @@ function HudTools() {
   const setJournalTab = useMuseum((state) => state.setJournalTab)
   const currentRoom = useMuseum((state) => state.currentRoom)
   const restored = useMuseum((state) => state.progress.roomsPowered)
+  const heldRadio = useMuseum((state) => heldRadioId(state.progress.devicesCarried, MUSEUM))
   const unlocked = useJournalUnlocked()
   const t = useTranslate()
 
@@ -505,6 +631,7 @@ function HudTools() {
 
   return (
     <div className="hud-tools">
+      {heldRadio ? <RadioTool radioId={heldRadio} /> : null}
       {unlocked ? (
         <button
           type="button"
@@ -594,6 +721,7 @@ export function Hud() {
         <CatalogueToast />
         <PowerToast />
         <JournalTakenToast />
+        <RadioTakenToast />
       </div>
     </>
   )

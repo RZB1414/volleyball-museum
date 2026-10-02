@@ -138,14 +138,19 @@ export function buildCuratorNotebook({ width = 0.15, depth = 0.212, thickness = 
  *
  * The museum is contemporary even where its collection is not, so this is a
  * modern handheld rather than a period set: it is how a night porter actually
- * reaches the building's one other person. Front is +Z. The display window and
- * both indicator lenses belong to the `led` family, which the runtime lights
- * when the charger has power: a dark radio and a live one read differently
- * from across the room without any extra light source.
+ * reaches the building's one other person. Front is +Z. The charger's lamp
+ * (`led`) and the handset's display and lens (`handset-led`) are lenses the
+ * runtime lights when the charger has power: a dark radio and a live one read
+ * differently from across the room without any extra light source.
+ *
+ * The handset is its own three families (`handset`, `handset-metal`,
+ * `handset-led`) rather than sharing the cradle's: the player takes it on the
+ * first use, and the runtime hides those nodes while the charger stays on the
+ * desk with its lamp still lit. Same triangles either way; two more draw calls
+ * while it stands on the desk, three fewer once it has gone.
  */
 export function buildDeskRadio() {
   const body = []
-  const metal = []
   const led = []
 
   // The charger: a low cradle with a front lip the radio leans against.
@@ -155,6 +160,17 @@ export function buildDeskRadio() {
   const lip = bevelledBox(0.08, 0.016, 0.01, 0.003, 1)
   lip.translate(0, 0.034, 0.031)
   body.push(lip)
+  // Side cheeks and a low back rail make a pocket the handset drops into.
+  // Once it has gone with the player, the empty well is what says that
+  // something lives here, instead of a plain black brick on the desk.
+  for (const side of [-1, 1]) {
+    const cheek = bevelledBox(0.008, 0.01, 0.062, 0.002, 1)
+    cheek.translate(side * 0.0405, 0.031, -0.004)
+    body.push(cheek)
+  }
+  const rail = bevelledBox(0.073, 0.008, 0.006, 0.002, 1)
+  rail.translate(0, 0.03, -0.033)
+  body.push(rail)
   led.push(plainBox(0.009, 0.004, 0.002, 0.031, 0.015, 0.0365))
 
   // The handset, authored upright at its own origin and then leaned back into
@@ -206,14 +222,14 @@ export function buildDeskRadio() {
     geometry.rotateX(-0.1)
     geometry.translate(0, 0.022, -0.004)
   }
-  body.push(...radioBody)
-  metal.push(...radioMetal)
-  led.push(...radioLed)
 
   return {
-    body: finalize(merge(body), { crease: Math.PI / 5, metresPerTile: 0.12 }),
-    metal: finalize(merge(metal), { crease: null, metresPerTile: 0.08 }),
+    // Bevelled boxes only, so `crease: null` keeps their authored normals.
+    body: finalize(merge(body), { crease: null, metresPerTile: 0.12 }),
     led: finalize(merge(led), { crease: null, metresPerTile: 0.05 }),
+    handset: finalize(merge(radioBody), { crease: Math.PI / 5, metresPerTile: 0.12 }),
+    'handset-metal': finalize(merge(radioMetal), { crease: null, metresPerTile: 0.08 }),
+    'handset-led': finalize(merge(radioLed), { crease: null, metresPerTile: 0.05 }),
   }
 }
 

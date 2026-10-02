@@ -376,6 +376,7 @@ npm run validate:content
 npm run test:power
 npm run test:opening
 npm run test:opening-flow
+npm run test:radio
 npm run test:collision
 npm run test:kit
 npm run test:kit-runtime
@@ -535,6 +536,7 @@ lanterna → caderno → luminária → porta → átrio escuro.
   `__led` vermelha → verde e o "clac" do trinco; rádio da portaria, sem carga até a
   luminária, que chama uma vez (`progress.radioCalls`) e responde dicas na ordem do
   que falta (átrio → Ala 1 → gaveta 1896 → cofre). Legendas em `RadioSubtitles`.
+  Desde §9.2 o rádio sai da mesa com o jogador no primeiro uso.
 - **Lanterna**: um spot permanente (`flashlightRig.ts`, `Flashlight.tsx`), tecla F
   ou o ícone no canto inferior direito, que pulsa enquanto a sala está escura e a
   lanterna nunca foi usada. Alcance de 6,2 m: o teste prova que nunca chega ao teto
@@ -587,3 +589,36 @@ Regras que valem para qualquer sistema novo que responda ao `E`:
   do retrato do Morgan e na ficha dele.
 - **Testes**: `npm run test:opening-flow` (38 checagens, com o save do navegador
   simulado para provar a migração pelo caminho real de carga).
+
+### 9.2 O rádio no bolso e a paciência do Jorge
+
+- **Pegar.** `carriedOnUse` no rádio da mesa: o primeiro `E` (ou Ação), com a
+  luminária acesa, leva o rádio (`progress.devicesCarried`), como o caderno. Pegar
+  nunca pula fala. No bake, o rádio de mão tem famílias próprias
+  (`desk-radio__handset`, `__handset-metal`, `__handset-led`); o runtime as junta num
+  `Group` (`prepareHandset`, `src/engine/deviceNodes.ts`) e esconde o grupo — nunca
+  as malhas, que a varredura da mira religa. O berço fica com o LED verde e um
+  encaixe vazio. `validateBake` exige `__handset` em rádio levável.
+- **Chamar.** `R` (sem Ctrl/Cmd/Alt, sem repetição, fora de campo de texto;
+  `isRadioCallKey` é o único lugar com `'KeyR'`) ou o ícone do rádio no HUD, de
+  qualquer sala, nunca com modal. Tudo passa por `placeRadioCall`
+  (`src/engine/radioCall.ts`, imperativo e sem React, para o HUD lazy não puxar
+  three): Jorge falando → pula uma fala; chamada de conteúdo devida → toca antes de
+  qualquer dica (a corrida dos 2,4 s acabou); desligou na cara → só chiado
+  (`radioHungUpUntil`, sessão); senão a resposta da paciência.
+- **Paciência** (`RadioPatience` em `museum.ts`, regras puras em
+  `src/engine/radioPatience.ts`): níveis a partir das chamadas 1, 3, 5, 7 e 10
+  (prestativo, seco, zoeira, impaciente com dica curta e 30% de explosão, sem
+  paciência com 50%). A dica nunca falta, exceto numa explosão; nunca duas explosões
+  seguidas; nada se repete em seguida. 300 s de silêncio descontam uma chamada, o
+  progresso perdoa uma e rende elogio, e o temperamento tem teto no último nível (15
+  minutos de silêncio sempre baixam um nível). `progress.radioMemory` guarda o
+  temperamento por rádio, sanitizado no `migrateProgress`. Desligar = 12 s de ar
+  morto, com o estalo `radioHangUp`.
+- **Chamadas e legendas.** Uma chamada de conteúdo leva `callId` e só entra em
+  `radioCalls` quando a última fala termina (recarregar no meio a repete). O
+  `RadioDirector` agenda só a primeira devida e espera qualquer modal, exame incluso.
+  A legenda some e congela sob qualquer modal e o chiado toca uma vez por fala. Na
+  tela de toque a coluna é rádio, caderno, lanterna, com a lanterna junto do polegar.
+- **Testes**: `npm run test:radio` (22 checagens com relógio e dado fixos, pelo
+  caminho real de chamada).

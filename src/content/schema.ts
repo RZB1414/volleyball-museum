@@ -286,6 +286,11 @@ export type ProgressCondition = {
    * notices a player who walked past it and tells them to go back.
    */
   readonly documentsUnread?: readonly string[]
+  /**
+   * The player carries all of these devices (`carriedOnUse`): how the porter
+   * notices his radio leaving the desk and tells the player how to call him.
+   */
+  readonly carried?: readonly string[]
   /** Every room in the museum has its electricity back. */
   readonly allRoomsPowered?: boolean
   /** Every exhibit in the museum is catalogued. */
@@ -640,6 +645,67 @@ export type RadioCall = {
 export type RadioHint = {
   readonly when: ProgressCondition
   readonly lineKeys: readonly string[]
+  /** The same help, said by someone who has run out of patience. */
+  readonly curtLineKeys?: readonly string[]
+}
+
+/**
+ * One whole answer from the porter: an opener said before the hint, with an
+ * optional closing line after it. Every variant is an object rather than a
+ * bare list of lists, so the translation gate's walk reaches its keys.
+ */
+export type RadioReply = {
+  /** Unique per radio: the save remembers the last one to avoid repeating it. */
+  readonly id: string
+  readonly lineKeys: readonly string[]
+  readonly closingKeys?: readonly string[]
+}
+
+/** He loses his temper: the whole answer, with no hint in it. */
+export type RadioOutburst = {
+  readonly id: string
+  readonly lineKeys: readonly string[]
+  /** He hangs up: the radio gives only static for `hangUpSeconds`. */
+  readonly hangsUp: boolean
+}
+
+export type RadioPatienceTier = {
+  /**
+   * The call, counted since he last calmed down and starting at 1, from which
+   * this tier answers. The first tier starts at 1.
+   */
+  readonly fromCall: number
+  /** Whether the hint is said in full or curtly. It is always said. */
+  readonly hint: 'full' | 'curt'
+  /** Never empty: there is always an answer that helps. */
+  readonly replies: readonly RadioReply[]
+  readonly outbursts?: readonly RadioOutburst[]
+  /**
+   * 0 to 1. Never two outbursts in a row, and never on a call that follows
+   * real progress: the player who did something deserves the answer.
+   */
+  readonly outburstChance?: number
+}
+
+/**
+ * How a radio's voice runs out of patience with a player who keeps calling.
+ *
+ * The count follows the player's own pace: each call adds one to his temper,
+ * real minutes of silence take it away again, and progress since the last
+ * call forgives one more — and earns a word of praise instead of a dig.
+ */
+export type RadioPatience = {
+  readonly tiers: readonly RadioPatienceTier[]
+  /** Real seconds of silence that take one call off his temper. */
+  readonly calmSecondsPerCall: number
+  /** Calls forgiven when the hint he would give has changed since last time. */
+  readonly progressForgives: number
+  /** Said before the hint when there has been progress since the last call. */
+  readonly praise?: readonly RadioReply[]
+  readonly hangUpSeconds: number
+  /** Who "speaks" the static after he hangs up: the radio, not him. */
+  readonly deadAirSpeakerKey: string
+  readonly deadAir: readonly RadioReply[]
 }
 
 type DevicePlacement = {
@@ -657,7 +723,8 @@ type DevicePlacement = {
  *
  * Each kind's runtime contract lives on node names checked by the validator:
  * a clock needs `<part>__hand-hour|minute|second` and `<part>__dial`, every
- * lit device needs `<part>__led`.
+ * lit device needs `<part>__led`, and a radio the player carries away needs
+ * `<part>__handset` (with its `__handset-*` families) to leave its cradle.
  */
 export type DeviceData =
   | (DevicePlacement & {
@@ -680,6 +747,14 @@ export type DeviceData =
       readonly poweredBy: EraId
       readonly calls: readonly RadioCall[]
       readonly hints: readonly RadioHint[]
+      /**
+       * Like a journal-carrying notebook: the first use takes the handset off
+       * its charger, and from then on the player calls from anywhere. Needs a
+       * baked `<part>__handset` node, which leaves while the cradle stays.
+       */
+      readonly carriedOnUse?: boolean
+      /** Without it, every call is answered with the bare hint. */
+      readonly patience?: RadioPatience
     })
 
 export type AudioEmitter = {

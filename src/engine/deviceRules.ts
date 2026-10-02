@@ -117,13 +117,54 @@ export function radioCallReady(
   return index === 0 ? 'ready' : 'queued'
 }
 
+/**
+ * Which hint the porter would give, by position, or -1 for none.
+ *
+ * An index rather than the lines because the patience rules remember it: a
+ * different hint from last time means the player got somewhere.
+ */
+export function radioHintIndex(
+  device: Pick<RadioDevice, 'hints'>,
+  progress: ConditionProgress,
+  content: Pick<MuseumContent, 'rooms' | 'exhibits'>,
+) {
+  return device.hints.findIndex((hint) => progressConditionMet(hint.when, progress, content))
+}
+
 /** The porter answers with the first thing the player still needs. */
 export function radioHintFor(
-  device: RadioDevice,
+  device: Pick<RadioDevice, 'hints'>,
   progress: ConditionProgress,
   content: Pick<MuseumContent, 'rooms' | 'exhibits'>,
 ): readonly string[] {
-  return device.hints.find((hint) => progressConditionMet(hint.when, progress, content))?.lineKeys ?? []
+  return device.hints[radioHintIndex(device, progress, content)]?.lineKeys ?? []
+}
+
+/** The first call due, if any: calls are heard in content order, one at a time. */
+export function nextRadioCall(
+  device: RadioDevice,
+  progress: ConditionProgress & { readonly radioCalls: readonly string[] },
+  content: Pick<MuseumContent, 'rooms' | 'exhibits'>,
+): RadioCall | null {
+  return dueRadioCalls(device, progress, content)[0] ?? null
+}
+
+export type DeskRadioIntent = 'dead' | 'take' | 'skip' | 'call'
+
+/**
+ * What E does to a radio on its desk — and so what its prompt says.
+ *
+ * A carried radio is picked up first, even mid-transmission: taking it never
+ * skips a line the porter is saying. Only once it is in hand (or for a radio
+ * that stays put) does E move a transmission on or place a call.
+ */
+export function deskRadioIntent(
+  device: Pick<RadioDevice, 'carriedOnUse'>,
+  input: { readonly live: boolean; readonly carried: boolean; readonly speaking: boolean },
+): DeskRadioIntent {
+  if (!input.live) return 'dead'
+  if (device.carriedOnUse && !input.carried) return 'take'
+  return input.speaking ? 'skip' : 'call'
 }
 
 /**

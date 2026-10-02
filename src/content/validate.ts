@@ -14,6 +14,7 @@
 import { PRE_OPENING_SAVE } from './legacySave.ts'
 import type {
   Credential,
+  DeviceData,
   Fact,
   Lock,
   MuseumContent,
@@ -590,6 +591,130 @@ export function validateSolvability(content: MuseumContent): ValidationIssue[] {
 // The opening: spawn, devices, notebooks and the conditions they ask
 // ---------------------------------------------------------------------------
 
+type RadioDeviceData = Extract<DeviceData, { readonly kind: 'radio' }>
+type Report = (code: string, message: string) => void
+
+/** Lines in a porter's answer longer than this outlast the player's patience. */
+const RADIO_ANSWER_MAX_LINES = 4
+
+/**
+ * A porter's temper, checked as the rules in `radioPatience.ts` read it.
+ *
+ * Each mistake here fails quietly in play: a first tier above 1 leaves the
+ * opening calls without a tier, a repeated id makes "never the same joke
+ * twice" skip the wrong one, a long hang-up keeps the help away from a stuck
+ * player, and a curt tier without curt lines says the polite hint instead.
+ */
+function validateRadioPatience(device: RadioDeviceData, error: Report, warning: Report) {
+  const patience = device.patience
+  if (!patience) return
+  const where = `Radio "${device.id}"`
+
+  if (patience.tiers.length === 0 || patience.tiers[0].fromCall !== 1) {
+    error('radio-patience-first-tier', `${where} patience must start with a tier from call 1.`)
+  }
+  for (const [index, tier] of patience.tiers.entries()) {
+    const previous = patience.tiers[index - 1]
+    if (!Number.isInteger(tier.fromCall) || (previous && tier.fromCall <= previous.fromCall)) {
+      error(
+        'radio-patience-order',
+        `${where} patience tier ${index + 1} starts at call ${tier.fromCall}; tiers start at whole, strictly increasing calls.`,
+      )
+    }
+    if (tier.replies.length === 0) {
+      error('radio-patience-silent', `${where} patience tier ${index + 1} has no reply, so it could never help.`)
+    }
+    const chance = tier.outburstChance ?? 0
+    if (!(chance >= 0 && chance < 1)) {
+      error(
+        'radio-outburst-chance',
+        `${where} patience tier ${index + 1} loses its temper with chance ${chance}; it must be in [0, 1).`,
+      )
+    } else if (chance > 0.6) {
+      warning(
+        'radio-outburst-chance',
+        `${where} patience tier ${index + 1} loses its temper ${Math.round(chance * 100)}% of the time.`,
+      )
+    }
+  }
+
+  const variants = [
+    ...patience.tiers.flatMap((tier) => [...tier.replies, ...(tier.outbursts ?? [])]),
+    ...(patience.praise ?? []),
+    ...patience.deadAir,
+  ]
+  const variantIds = new Set<string>()
+  for (const variant of variants) {
+    if (variantIds.has(variant.id)) {
+      error('radio-reply-duplicate', `${where} uses answer id "${variant.id}" twice.`)
+    }
+    variantIds.add(variant.id)
+    if (variant.lineKeys.length === 0) {
+      error('radio-patience-silent', `${where} answer "${variant.id}" has no lines.`)
+    }
+  }
+
+  if (!(patience.hangUpSeconds >= 3 && patience.hangUpSeconds <= 30)) {
+    error(
+      'radio-hang-up-time',
+      `${where} hangs up for ${patience.hangUpSeconds} s; between 3 and 30 keeps the help within reach.`,
+    )
+  }
+  if (!(patience.calmSecondsPerCall > 0)) {
+    error('radio-patience-calm', `${where} must calm down after a positive number of seconds.`)
+  }
+  if (!Number.isInteger(patience.progressForgives) || patience.progressForgives < 0) {
+    error('radio-patience-forgive', `${where} must forgive a whole, non-negative number of calls.`)
+  }
+  const hangsUp = patience.tiers.some((tier) => (tier.outbursts ?? []).some((outburst) => outburst.hangsUp))
+  if (hangsUp && patience.deadAir.length === 0) {
+    error('radio-dead-air-missing', `${where} can hang up but has no dead air to answer with meanwhile.`)
+  }
+
+  const curtTier = patience.tiers.some((tier) => tier.hint === 'curt')
+  if (curtTier) {
+    for (const [index, hint] of device.hints.entries()) {
+      if (!hint.curtLineKeys || hint.curtLineKeys.length === 0) {
+        warning(
+          'radio-curt-missing',
+          `${where} hint ${index + 1} has no curt lines, so the impatient tiers say it politely.`,
+        )
+      }
+    }
+  }
+
+  const longestHint = (curt: boolean) =>
+    Math.max(
+      0,
+      ...device.hints.map((hint) =>
+        curt && hint.curtLineKeys && hint.curtLineKeys.length > 0
+          ? hint.curtLineKeys.length
+          : hint.lineKeys.length,
+      ),
+    )
+  for (const tier of patience.tiers) {
+    const openers = [...tier.replies, ...(patience.praise ?? [])]
+    for (const opener of openers) {
+      const lines =
+        opener.lineKeys.length + longestHint(tier.hint === 'curt') + (opener.closingKeys?.length ?? 0)
+      if (lines > RADIO_ANSWER_MAX_LINES) {
+        warning(
+          'radio-answer-long',
+          `${where} answer "${opener.id}" can run to ${lines} lines; keep a call to ${RADIO_ANSWER_MAX_LINES}.`,
+        )
+      }
+    }
+    for (const outburst of tier.outbursts ?? []) {
+      if (outburst.lineKeys.length > RADIO_ANSWER_MAX_LINES) {
+        warning(
+          'radio-answer-long',
+          `${where} outburst "${outburst.id}" runs to ${outburst.lineKeys.length} lines.`,
+        )
+      }
+    }
+  }
+}
+
 /**
  * Everything the first minutes of the game depend on.
  *
@@ -602,9 +727,20 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
   const issues: ValidationIssue[] = []
   const error = (code: string, message: string) =>
     issues.push({ severity: 'error', code, message })
+  const warning = (code: string, message: string) =>
+    issues.push({ severity: 'warning', code, message })
   const roomIds = new Set<string>(content.rooms.map((room) => room.id))
   const lockIds = new Set(content.locks.map((lock) => lock.id))
   const documentIds = new Set(content.documents.map((doc) => doc.id))
+  // Only a device the player can take away is ever "carried": a condition
+  // naming any other id would wait for something that cannot happen.
+  const carriableIds = new Set(
+    content.rooms.flatMap((room) =>
+      (room.devices ?? []).flatMap((device) =>
+        device.kind === 'radio' && device.carriedOnUse ? [device.id] : [],
+      ),
+    ),
+  )
 
   // --- spawn ---------------------------------------------------------------
   const spawnRoom = content.rooms.find((room) => room.id === content.spawn.room)
@@ -639,6 +775,14 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
     for (const documentId of [...(condition.documentsRead ?? []), ...(condition.documentsUnread ?? [])]) {
       if (!documentIds.has(documentId)) {
         error('condition-document-missing', `${where} names unknown document "${documentId}".`)
+      }
+    }
+    for (const deviceId of condition.carried ?? []) {
+      if (!carriableIds.has(deviceId)) {
+        error(
+          'condition-device-missing',
+          `${where} waits for device "${deviceId}" to be carried, but no device with \`carriedOnUse\` has that id.`,
+        )
       }
     }
   }
@@ -748,6 +892,7 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
             message: `Radio "${device.id}" has no unconditional last hint, so a call can go unanswered.`,
           })
         }
+        if (device.patience) validateRadioPatience(device, error, warning)
       }
     }
   }
@@ -972,10 +1117,14 @@ export function validateBake(
         })
         continue
       }
+      // A carried radio leaves its cradle by hiding the handset's own nodes;
+      // without them the whole charger would vanish, or nothing would.
       const required =
         device.kind === 'clock'
           ? ['__dial', '__hand-hour', '__hand-minute', '__hand-second']
-          : ['__led']
+          : device.kind === 'radio' && device.carriedOnUse
+            ? ['__led', '__handset']
+            : ['__led']
       for (const suffix of required) {
         if (!partNames.has(`${device.part}${suffix}`)) {
           issues.push({

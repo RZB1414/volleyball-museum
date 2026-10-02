@@ -31,7 +31,7 @@ import { museumAudio } from '../engine/audio'
 import { preloadBundle, preloadTexture } from '../engine/bundleCache'
 import { CollisionWorld } from '../engine/collision'
 import { ContainerLayer, ContainerTargeting } from '../engine/Containers'
-import { DeviceLayer, DeviceTargeting, RadioDirector } from '../engine/Devices'
+import { DeviceLayer, DeviceTargeting, RadioDirector, RadioHandset } from '../engine/Devices'
 import { Flashlight } from '../engine/Flashlight'
 import { FramedMedia } from '../engine/FramedMedia'
 import {
@@ -1048,6 +1048,7 @@ export function MuseumScene() {
       <PowerControlTargeting />
       <DeviceTargeting />
       <RadioDirector />
+      <RadioHandset />
       <ExamineView />
       <PerfHud />
     </>

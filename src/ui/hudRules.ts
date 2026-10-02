@@ -6,6 +6,8 @@
  * a DOM, and the components only feed it the store.
  */
 
+// Type imports only: the title screen imports this module, and a runtime
+// import here would pull its dependencies into the title screen's bundle.
 import type { TranslationKey } from '../content/i18n/pt-BR'
 
 /**
@@ -46,13 +48,83 @@ export function listGrew(seenLength: number, length: number) {
   return length > seenLength
 }
 
+/**
+ * A "you took it" toast: once ever, when the thing is in hand, and not while
+ * the player is still busy with it (a notebook still open on its last page).
+ */
+export function shouldAnnounceTaken(input: {
+  readonly taken: boolean
+  readonly waiting: boolean
+  readonly alreadyShown: boolean
+}) {
+  return input.taken && !input.waiting && !input.alreadyShown
+}
+
 /** The journal-taken toast: once ever, and only after the notebook closes. */
 export function shouldAnnounceJournal(input: {
   readonly unlocked: boolean
   readonly reading: boolean
   readonly alreadyShown: boolean
 }) {
-  return input.unlocked && !input.reading && !input.alreadyShown
+  return shouldAnnounceTaken({
+    taken: input.unlocked,
+    waiting: input.reading,
+    alreadyShown: input.alreadyShown,
+  })
+}
+
+type LineOnAir = { readonly serial: number; readonly index: number }
+
+/**
+ * How long the current radio line stays up, or null for "do not count".
+ *
+ * Under a modal the line is held and hidden: the notebook and the journal
+ * cover the subtitle, and a call that ran out its timers under them used to
+ * be over — and recorded as heard — by the time the player looked up. When
+ * the modal closes the held line starts its full time again.
+ */
+export function radioLineDelayMs(radio: LineOnAir | null, held: boolean, lineSeconds: number) {
+  if (!radio || held) return null
+  return lineSeconds * 1000
+}
+
+/** Identifies one line of one transmission. */
+export function radioLineMark(radio: LineOnAir | null) {
+  return radio ? `${radio.serial}:${radio.index}` : null
+}
+
+/**
+ * The crackle between two lines: once per new line, never on the first (the
+ * squelch opened the channel) and never again for a line that was only held
+ * under a modal and released, or re-rendered.
+ */
+export function shouldCrackle(lastMark: string | null, radio: LineOnAir | null) {
+  return radio !== null && radio.index > 0 && radioLineMark(radio) !== lastMark
+}
+
+export type RadioToolModifier = 'is-on-air' | 'is-hung-up' | 'is-hinting'
+
+export type RadioToolState = {
+  readonly modifiers: readonly RadioToolModifier[]
+  readonly labelKey: TranslationKey
+}
+
+/**
+ * The HUD's radio button: green ring while the porter talks (a press skips a
+ * line), dimmed while he has hung up, and a breathing hint until the player
+ * has called him once — the same lesson the torch teaches.
+ */
+export function radioToolState(input: {
+  readonly onAir: boolean
+  readonly hungUp: boolean
+  readonly calls: number
+}): RadioToolState {
+  if (input.onAir) return { modifiers: ['is-on-air'], labelKey: 'radio.skip' }
+  if (input.hungUp) return { modifiers: ['is-hung-up'], labelKey: 'ui.radio.hungUp' }
+  return {
+    modifiers: input.calls === 0 ? ['is-hinting'] : [],
+    labelKey: 'prompt.radio.call',
+  }
 }
 
 export type LockKeyIntent =

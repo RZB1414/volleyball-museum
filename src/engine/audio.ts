@@ -429,6 +429,76 @@ export class MuseumAudio {
     crackle.stop(now + 0.13)
   }
 
+  /**
+   * Static with nobody behind it: half a second of hiss and no beep. The
+   * beeps of the squelch mean someone keyed a microphone; here nobody did.
+   */
+  radioStatic() {
+    const context = this.live()
+    if (!context || !this.master || !this.noise) return
+
+    const now = context.currentTime
+    const hiss = context.createBufferSource()
+    hiss.buffer = this.noise
+    hiss.loop = true
+    const band = context.createBiquadFilter()
+    band.type = 'bandpass'
+    band.frequency.value = 1500
+    band.Q.value = 0.7
+    const gain = context.createGain()
+    gain.gain.setValueAtTime(0.0001, now)
+    gain.gain.exponentialRampToValueAtTime(0.05, now + 0.04)
+    gain.gain.setValueAtTime(0.05, now + 0.38)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.52)
+    hiss.connect(band)
+    band.connect(gain)
+    gain.connect(this.master)
+    hiss.start(now)
+    hiss.stop(now + 0.54)
+  }
+
+  /**
+   * The porter hanging up on the player: the carrier's hiss cut dead mid
+   * breath, then the dry click of the handset going down.
+   */
+  radioHangUp() {
+    const context = this.live()
+    if (!context || !this.master || !this.noise) return
+
+    const now = context.currentTime
+    const hiss = context.createBufferSource()
+    hiss.buffer = this.noise
+    hiss.loop = true
+    const band = context.createBiquadFilter()
+    band.type = 'bandpass'
+    band.frequency.value = 1800
+    band.Q.value = 0.9
+    const hissGain = context.createGain()
+    hissGain.gain.setValueAtTime(0.0001, now)
+    hissGain.gain.exponentialRampToValueAtTime(0.06, now + 0.015)
+    // No release: the cut is the point.
+    hissGain.gain.setValueAtTime(0.06, now + 0.16)
+    hissGain.gain.linearRampToValueAtTime(0, now + 0.165)
+    hiss.connect(band)
+    band.connect(hissGain)
+    hissGain.connect(this.master)
+    hiss.start(now)
+    hiss.stop(now + 0.17)
+
+    const click = context.createOscillator()
+    click.type = 'triangle'
+    click.frequency.setValueAtTime(720, now + 0.17)
+    click.frequency.exponentialRampToValueAtTime(240, now + 0.2)
+    const clickGain = context.createGain()
+    clickGain.gain.setValueAtTime(0.0001, now + 0.17)
+    clickGain.gain.exponentialRampToValueAtTime(0.09, now + 0.173)
+    clickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.215)
+    click.connect(clickGain)
+    clickGain.connect(this.master)
+    click.start(now + 0.17)
+    click.stop(now + 0.23)
+  }
+
   setVolume(value: number) {
     if (this.master) this.master.gain.value = Math.max(0, Math.min(1, value))
   }

@@ -718,6 +718,7 @@ test('a new game empties progress and every session field, and writes at once', 
     journalTab: 'map',
     touchMove: { x: 1, y: 0 },
     radio: { serial: 9, deviceId: 'office-radio', speakerKey: 'radio.speaker.porter', lineKeys: ['a'], index: 0 },
+    radioHungUpUntil: Date.now() + 9000,
   })
   const settings = useMuseum.getState().settings
   writes.length = 0
@@ -743,6 +744,7 @@ test('a new game empties progress and every session field, and writes at once', 
     'focusedDevice',
     'journalTab',
     'radio',
+    'radioHungUpUntil',
   ] as const) {
     assert.equal(state[field], null, field)
   }

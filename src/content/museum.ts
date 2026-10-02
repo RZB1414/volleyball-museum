@@ -28,6 +28,7 @@ import type {
   Fact,
   Lock,
   MuseumContent,
+  RadioPatience,
   RoomData,
 } from './schema'
 
@@ -640,6 +641,142 @@ const OFFICE_CONTAINERS = [
 ] as const satisfies readonly ContainerData[]
 
 /**
+ * Jorge, the night porter, on the radio the player carries.
+ *
+ * Every call gets the help the player needs; what changes is the tone. The
+ * first two calls are pure service, then he gets dry, then he teases, and
+ * from the seventh call in a row he starts cutting the hint short and now
+ * and then loses it — hangs up, or breaks into song. Silence calms him (five
+ * real minutes per call), progress forgives one call and earns a word of
+ * praise instead, and the call after a tantrum always helps. The numbers are
+ * playtest dials, not rules: the rules live in `radioPatience.ts`.
+ */
+const PORTER_PATIENCE = {
+  calmSecondsPerCall: 300,
+  progressForgives: 1,
+  hangUpSeconds: 12,
+  deadAirSpeakerKey: 'radio.speaker.static',
+  tiers: [
+    {
+      // Helpful.
+      fromCall: 1,
+      hint: 'full',
+      replies: [
+        { id: 'porter-t1-ready', lineKeys: ['radio.patience.t1.ready'] },
+        { id: 'porter-t1-listening', lineKeys: ['radio.patience.t1.listening'] },
+        { id: 'porter-t1-jorge', lineKeys: ['radio.patience.t1.jorge'] },
+      ],
+    },
+    {
+      // Dry.
+      fromCall: 3,
+      hint: 'full',
+      replies: [
+        { id: 'porter-t2-again', lineKeys: ['radio.patience.t2.again'] },
+        { id: 'porter-t2-coffee', lineKeys: ['radio.patience.t2.coffee'] },
+        { id: 'porter-t2-reception', lineKeys: ['radio.patience.t2.reception'] },
+        { id: 'porter-t2-repeat', lineKeys: ['radio.patience.t2.repeat'] },
+        { id: 'porter-t2-chat', lineKeys: ['radio.patience.t2.chat'] },
+      ],
+    },
+    {
+      // Teasing.
+      fromCall: 5,
+      hint: 'full',
+      replies: [
+        {
+          id: 'porter-t3-hotline',
+          lineKeys: ['radio.patience.t3.hotline'],
+          closingKeys: ['radio.patience.t3.hotline.close'],
+        },
+        { id: 'porter-t3-otavio', lineKeys: ['radio.patience.t3.otavio'] },
+        { id: 'porter-t3-torch', lineKeys: ['radio.patience.t3.torch'] },
+        { id: 'porter-t3-crossword', lineKeys: ['radio.patience.t3.crossword'] },
+        { id: 'porter-t3-announcer', lineKeys: ['radio.patience.t3.announcer'] },
+      ],
+    },
+    {
+      // Impatient: the hint comes curt, and now and then he loses it.
+      fromCall: 7,
+      hint: 'curt',
+      outburstChance: 0.3,
+      replies: [
+        { id: 'porter-t4-please', lineKeys: ['radio.patience.t4.please'] },
+        { id: 'porter-t4-meter', lineKeys: ['radio.patience.t4.meter'] },
+        { id: 'porter-t4-slow', lineKeys: ['radio.patience.t4.slow'] },
+        {
+          id: 'porter-t4-dark',
+          lineKeys: ['radio.patience.t4.dark'],
+          closingKeys: ['radio.patience.t4.dark.close'],
+        },
+      ],
+      outbursts: [
+        {
+          id: 'porter-t4-static',
+          lineKeys: ['radio.patience.t4.static.1', 'radio.patience.t4.static.2'],
+          hangsUp: true,
+        },
+        {
+          id: 'porter-t4-penalty',
+          lineKeys: ['radio.patience.t4.penalty.1', 'radio.patience.t4.penalty.2'],
+          hangsUp: true,
+        },
+        {
+          id: 'porter-t4-rounds',
+          lineKeys: ['radio.patience.t4.rounds.1', 'radio.patience.t4.rounds.2'],
+          hangsUp: false,
+        },
+      ],
+    },
+    {
+      // Out of patience.
+      fromCall: 10,
+      hint: 'curt',
+      outburstChance: 0.5,
+      replies: [
+        { id: 'porter-t5-age', lineKeys: ['radio.patience.t5.age'] },
+        { id: 'porter-t5-last', lineKeys: ['radio.patience.t5.last'] },
+        { id: 'porter-t5-collection', lineKeys: ['radio.patience.t5.collection'] },
+        { id: 'porter-t5-labels', lineKeys: ['radio.patience.t5.labels'] },
+        { id: 'porter-t5-babysitter', lineKeys: ['radio.patience.t5.babysitter'] },
+      ],
+      outbursts: [
+        {
+          id: 'porter-t5-no',
+          lineKeys: ['radio.patience.t5.no.1', 'radio.patience.t5.no.2'],
+          hangsUp: true,
+        },
+        {
+          id: 'porter-t5-recording',
+          lineKeys: ['radio.patience.t5.recording.1', 'radio.patience.t5.recording.2'],
+          hangsUp: true,
+        },
+        {
+          id: 'porter-t5-soap',
+          lineKeys: ['radio.patience.t5.soap.1', 'radio.patience.t5.soap.2'],
+          hangsUp: true,
+        },
+        {
+          id: 'porter-t5-song',
+          lineKeys: ['radio.patience.t5.song.1', 'radio.patience.t5.song.2'],
+          hangsUp: false,
+        },
+      ],
+    },
+  ],
+  praise: [
+    { id: 'porter-praise-went', lineKeys: ['radio.patience.praise.went'] },
+    { id: 'porter-praise-knack', lineKeys: ['radio.patience.praise.knack'] },
+    { id: 'porter-praise-needless', lineKeys: ['radio.patience.praise.needless'] },
+  ],
+  deadAir: [
+    { id: 'porter-air-no-answer', lineKeys: ['radio.deadAir.noAnswer'] },
+    { id: 'porter-air-really-off', lineKeys: ['radio.deadAir.reallyOff'] },
+    { id: 'porter-air-rain', lineKeys: ['radio.deadAir.rain'] },
+  ],
+} as const satisfies RadioPatience
+
+/**
  * The office's working objects: what the room says before the player has read
  * a word. The stopped clock dates the storm, the reader by the door explains
  * why it will not open, and the porter's radio is the building's one voice.
@@ -675,6 +812,8 @@ const OFFICE_DEVICES = [
     titleKey: 'device.office-radio.title',
     speakerKey: 'radio.speaker.porter',
     poweredBy: 'office',
+    // Like the notebook: the first E takes the handset, the charger stays.
+    carriedOnUse: true,
     calls: [
       {
         id: 'porter-first-call',
@@ -700,15 +839,41 @@ const OFFICE_DEVICES = [
         delaySeconds: 4,
         lineKeys: ['radio.call.notebook.1'],
       },
+      {
+        // He hears his radio leave the charger. Last in the list, so it waits
+        // for his introduction even when the player grabs the radio mid-call.
+        id: 'porter-radio-taken',
+        when: { carried: ['office-radio'] },
+        delaySeconds: 0.8,
+        lineKeys: ['radio.call.taken.1', 'radio.call.taken.2'],
+      },
     ],
     // Ordered: the porter answers with the first thing the player still needs.
+    // The curt lines are the same help, from a porter called once too often.
     hints: [
-      { when: { documentsUnread: ['doc-welcome'] }, lineKeys: ['radio.hint.notebook'] },
-      { when: { unpowered: ['atrium'] }, lineKeys: ['radio.hint.atrium'] },
-      { when: { unpowered: ['holyoke'] }, lineKeys: ['radio.hint.holyoke'] },
-      { when: { locksClosed: ['office-drawer'] }, lineKeys: ['radio.hint.drawer'] },
-      { when: {}, lineKeys: ['radio.hint.vault'] },
+      {
+        when: { documentsUnread: ['doc-welcome'] },
+        lineKeys: ['radio.hint.notebook'],
+        curtLineKeys: ['radio.hint.notebook.curt'],
+      },
+      {
+        when: { unpowered: ['atrium'] },
+        lineKeys: ['radio.hint.atrium'],
+        curtLineKeys: ['radio.hint.atrium.curt'],
+      },
+      {
+        when: { unpowered: ['holyoke'] },
+        lineKeys: ['radio.hint.holyoke'],
+        curtLineKeys: ['radio.hint.holyoke.curt'],
+      },
+      {
+        when: { locksClosed: ['office-drawer'] },
+        lineKeys: ['radio.hint.drawer'],
+        curtLineKeys: ['radio.hint.drawer.curt'],
+      },
+      { when: {}, lineKeys: ['radio.hint.vault'], curtLineKeys: ['radio.hint.vault.curt'] },
     ],
+    patience: PORTER_PATIENCE,
   },
 ] as const satisfies readonly DeviceData[]
 
