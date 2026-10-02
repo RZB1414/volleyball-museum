@@ -133,8 +133,12 @@ function Container({
   }, [instance, notebook])
 
   // Reading the notebook is picking it up: it leaves the desk with the player.
-  const taken = useMuseum((state) =>
-    isContainerTaken(MUSEUM, container, state.progress.documentsRead),
+  // Selected as the stable array and derived here, so the store's per-frame
+  // touch writes do not rerun the lookup.
+  const documentsRead = useMuseum((state) => state.progress.documentsRead)
+  const taken = useMemo(
+    () => isContainerTaken(MUSEUM, container, documentsRead),
+    [container, documentsRead],
   )
 
   if (!instance) return null
@@ -144,8 +148,11 @@ function Container({
       name={`container:${container.id}`}
       position={container.position as unknown as [number, number, number]}
       rotation={[0, container.rotationY ?? 0, 0]}
-      visible={!taken}
     >
+      {/* The named root stays visible, as the door reveal requires; only its
+          contents go when the object is taken, and every targeting pass
+          rejects hits under a hidden ancestor. */}
+      <group visible={!taken}>
       <primitive object={instance} />
 
       {/*
@@ -171,6 +178,7 @@ function Container({
           <meshBasicMaterial />
         </mesh>
       )}
+      </group>
     </group>
   )
 }

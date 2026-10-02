@@ -115,7 +115,9 @@ function PowerPrompt() {
   const restored = useMuseum((state) => state.progress.roomsPowered)
   const t = useTranslate()
 
-  if (!focused || focusedExhibit || focusedContainer || focusedDoor || focusedDevice || examining) {
+  // Only a live radio wins over the lamp, matching the E key.
+  const liveDevice = focusedDevice !== null && radioIsLive(MUSEUM, focusedDevice, restored)
+  if (!focused || focusedExhibit || focusedContainer || focusedDoor || liveDevice || examining) {
     return null
   }
   const room = MUSEUM.rooms.find((candidate) => candidate.powerControl?.id === focused)
@@ -170,17 +172,20 @@ function DevicePrompt() {
   const focusedDoor = useMuseum((state) => state.focusedTransitionDoor)
   const examining = useMuseum((state) => state.examining)
   const restored = useMuseum((state) => state.progress.roomsPowered)
+  const speaking = useMuseum((state) => state.radio?.deviceId === state.focusedDevice)
   const t = useTranslate()
 
   if (!focused || focusedExhibit || focusedContainer || focusedDoor || examining) return null
   const radio = radiosById.get(focused)
   if (!radio) return null
   const live = radioIsLive(MUSEUM, focused, restored)
+  // While this radio is talking, E moves the transmission on a line.
+  const label = !live ? t('prompt.radio.dead') : speaking ? t('radio.skip') : t('prompt.radio.call')
 
   return (
     <div className="prompt" role="status">
       {live ? <span className="prompt-key">E</span> : null}
-      <span className="prompt-label">{live ? t('prompt.radio.call') : t('prompt.radio.dead')}</span>
+      <span className="prompt-label">{label}</span>
       <span className="prompt-title">{t(radio.titleKey as never)}</span>
     </div>
   )
@@ -405,8 +410,14 @@ function PowerToast() {
  * Shown once, when the player closes the notebook they have just picked up:
  * the journal now exists, and this is how to open it.
  */
+/** Whether the player holds the notebook, derived from the stable read list. */
+function useJournalUnlocked() {
+  const documentsRead = useMuseum((state) => state.progress.documentsRead)
+  return useMemo(() => journalUnlocked(MUSEUM, documentsRead), [documentsRead])
+}
+
 function JournalTakenToast() {
-  const unlocked = useMuseum((state) => journalUnlocked(MUSEUM, state.progress.documentsRead))
+  const unlocked = useJournalUnlocked()
   const openedContainer = useMuseum((state) => state.openedContainer)
   const coarse = useCoarsePointer()
   const t = useTranslate()
@@ -415,13 +426,19 @@ function JournalTakenToast() {
   const [shown, setShown] = useState(false)
 
   useEffect(() => {
-    if (!unlocked || openedContainer || announcedRef.current) return undefined
+    if (!unlocked || openedContainer || announcedRef.current) return
     announcedRef.current = true
     setShown(true)
     museumAudio.chime()
+  }, [openedContainer, unlocked])
+
+  // Its own effect, keyed only on `shown`: opening a drawer during these few
+  // seconds must not cancel the timer and leave the toast up for good.
+  useEffect(() => {
+    if (!shown) return undefined
     const timer = window.setTimeout(() => setShown(false), 5200)
     return () => window.clearTimeout(timer)
-  }, [openedContainer, unlocked])
+  }, [shown])
 
   if (!shown) return null
   return (
@@ -469,7 +486,7 @@ function HudTools() {
   const setJournalTab = useMuseum((state) => state.setJournalTab)
   const currentRoom = useMuseum((state) => state.currentRoom)
   const restored = useMuseum((state) => state.progress.roomsPowered)
-  const unlocked = useMuseum((state) => journalUnlocked(MUSEUM, state.progress.documentsRead))
+  const unlocked = useJournalUnlocked()
   const t = useTranslate()
 
   const room = MUSEUM.rooms.find((candidate) => candidate.id === currentRoom)
@@ -537,9 +554,13 @@ export function Hud() {
       <ExaminePanel />
       <DocumentPanel />
       <LockPanel />
-      <CatalogueToast />
-      <PowerToast />
-      <JournalTakenToast />
+      {/* One stack, so the notebook, the lamp and a catalogue entry arriving
+          seconds apart queue up instead of printing over one another. */}
+      <div className="toast-stack">
+        <CatalogueToast />
+        <PowerToast />
+        <JournalTakenToast />
+      </div>
     </>
   )
 }

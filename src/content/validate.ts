@@ -369,16 +369,35 @@ export function validateSolvability(content: MuseumContent): ValidationIssue[] {
   }
 
   /**
-   * Electric locks, keyed by the unordered pair of rooms they join. A door is
-   * authored on one side only, so the requirement has to bind both portals of
-   * the opening — otherwise the walk would simply leave by the other one.
+   * Electric locks, keyed by both portal endpoints of the one opening. A door
+   * is authored on one side only, so the requirement has to bind the
+   * reciprocal portal too — otherwise the walk would simply leave by it — but
+   * only that one: a second doorway between the same two rooms stays free.
+   * The reciprocal is matched exactly as the runtime topology matches it.
    */
-  const pairKey = (first: string, second: string) => [first, second].sort().join('|')
-  const powerLockedPairs = new Map<string, string>()
+  const endpointKey = (roomId: string, portalId: string) => `${roomId}:${portalId}`
+  const powerLockedPortals = new Map<string, string>()
   for (const room of content.rooms) {
     for (const portal of room.portals) {
       const required = portal.transitionDoor?.requiresPower
-      if (required) powerLockedPairs.set(pairKey(room.id, portal.toRoom), required)
+      if (!required) continue
+      powerLockedPortals.set(endpointKey(room.id, portal.id), required)
+
+      const target = roomsById.get(portal.toRoom)
+      const reciprocal = target?.portals.find(
+        (candidate) =>
+          candidate.toRoom === room.id &&
+          Math.abs(candidate.width - portal.width) < 1e-6 &&
+          Math.abs(candidate.height - portal.height) < 1e-6 &&
+          Math.hypot(
+            target.origin[0] + candidate.position[0] - (room.origin[0] + portal.position[0]),
+            target.origin[1] + candidate.position[1] - (room.origin[1] + portal.position[1]),
+            target.origin[2] + candidate.position[2] - (room.origin[2] + portal.position[2]),
+          ) < 0.35,
+      )
+      if (target && reciprocal) {
+        powerLockedPortals.set(endpointKey(target.id, reciprocal.id), required)
+      }
     }
   }
 
@@ -430,7 +449,7 @@ export function validateSolvability(content: MuseumContent): ValidationIssue[] {
         // barred from the hub side and opens from inside the wing, which is
         // the direction declared here.
         if (!lockIsOpen(portal.lockId)) continue
-        const required = powerLockedPairs.get(pairKey(roomId, portal.toRoom))
+        const required = powerLockedPortals.get(endpointKey(roomId, portal.id))
         if (required && !hasPower(required)) continue
         if (seen.has(portal.toRoom)) continue
         seen.add(portal.toRoom)

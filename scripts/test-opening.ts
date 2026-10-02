@@ -12,6 +12,7 @@
  */
 
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 import { MUSEUM } from '../src/content/museum.ts'
 import type { MuseumContent } from '../src/content/schema.ts'
@@ -360,7 +361,14 @@ test('the torch never reaches the atrium ceiling the plan saves for last', () =>
 
 test('the torch is one permanent spot added to the gallery pool', () => {
   assert.equal(FLASHLIGHT_SPOT_SLOTS, 1)
-  assert.equal(GALLERY_SPOT_SLOTS + FLASHLIGHT_SPOT_SLOTS, 9)
+  // Mounted unconditionally at the scene root and never hidden: either would
+  // change the light count and recompile every material at the first press.
+  const component = readFileSync(new URL('../src/engine/Flashlight.tsx', import.meta.url), 'utf8')
+  const scene = readFileSync(new URL('../src/scenes/MuseumScene.tsx', import.meta.url), 'utf8')
+  assert.equal((component.match(/<spotLight\b/g) ?? []).length, FLASHLIGHT_SPOT_SLOTS)
+  assert.ok(!/visible=\{/.test(component), 'the torch spot is never hidden')
+  assert.ok(/\n\s*<Flashlight \/>\n/.test(scene), 'the scene always mounts the torch')
+  assert.equal(GALLERY_SPOT_SLOTS, 8, 'the permanent pool the torch joins')
   assert.equal(flashlightIntensity(false, 1, false), 0, 'off is intensity zero, never unmounted')
   assert.equal(flashlightIntensity(true, 1, false), FLASHLIGHT.intensity)
   assert.ok(

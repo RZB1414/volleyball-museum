@@ -108,13 +108,21 @@ type HandPivots = Partial<Record<'hour' | 'minute' | 'second', Group>>
  * relative to it, so dequantisation survives untouched.
  */
 function prepareClockHands(instance: Object3D, part: string): HandPivots {
+  const pivots: HandPivots = {}
+  // Idempotent: a repeated call (StrictMode runs memos twice) must find the
+  // pivots it already made rather than nest a second set inside them.
+  for (const hand of ['hour', 'minute', 'second'] as const) {
+    const existing = instance.getObjectByName(`clock-pivot:${hand}`)
+    if (existing instanceof Group) pivots[hand] = existing
+  }
+  if (Object.keys(pivots).length > 0) return pivots
+
   instance.updateMatrixWorld(true)
   const dial = instance.getObjectByName(`${part}__dial`)
   if (!dial) return {}
   // Still detached at its own origin, so world space is the assembly's space.
   const centre = new Box3().setFromObject(dial).getCenter(new Vector3())
 
-  const pivots: HandPivots = {}
   for (const hand of ['hour', 'minute', 'second'] as const) {
     const node = instance.getObjectByName(`${part}__hand-${hand}`)
     if (!node?.parent) continue
@@ -249,11 +257,12 @@ function Device({
   if (!instance) return null
 
   return (
+    // No `userData` prop here: R3F would replace the whole object on every
+    // re-render. Operability is decided by id in DeviceTargeting instead.
     <group
       name={`device:${device.id}`}
       position={device.position as unknown as [number, number, number]}
       rotation={[0, device.rotationY ?? 0, 0]}
-      userData={{ operable: device.kind === 'radio' }}
     >
       {/* The placement rides on this wrapper; the primitive keeps the node
           transforms that undo quantisation. */}
@@ -395,7 +404,12 @@ export function DeviceTargeting() {
       scannedRef.current = true
       const targets: Object3D[] = []
       scene.traverseVisible((object) => {
-        if (object.name.startsWith('device:') && object.userData.operable) targets.push(object)
+        if (
+          object.name.startsWith('device:') &&
+          RADIOS_BY_ID.has(object.name.slice('device:'.length))
+        ) {
+          targets.push(object)
+        }
       })
       targetsRef.current = targets
       // Same arrangement as the power controls: the proxy stays `visible` for

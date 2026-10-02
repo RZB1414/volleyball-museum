@@ -26,6 +26,7 @@ import { MUSEUM } from '../content/museum'
 import type { PowerControlData, RoomData } from '../content/schema'
 import { useMuseum } from '../state/store'
 import { USE_DRACO, USE_MESHOPT } from './bundleCache'
+import { radioIsLive } from './deviceRules'
 import { cloneKitPart, disposeKitPart } from './kitPart'
 import type { MaterialLibrary } from './materials'
 import { isRoomPowered } from './power'
@@ -204,8 +205,10 @@ export function PowerControlTargeting() {
         state.focusedTransitionDoor ||
         state.focusedExhibit ||
         state.focusedContainer ||
-        // A device on the same desk wins the key, as furniture does.
-        state.focusedDevice ||
+        // A live device on the same desk wins the key, as furniture does; a
+        // dead radio in front of the lamp must not swallow the press.
+        (state.focusedDevice &&
+          radioIsLive(MUSEUM, state.focusedDevice, state.progress.roomsPowered)) ||
         !state.focusedPowerControl
       ) {
         return false

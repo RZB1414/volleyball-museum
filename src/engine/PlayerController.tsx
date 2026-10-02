@@ -318,11 +318,16 @@ export function PlayerController({
       touchMove,
       touchLook,
       examining,
+      openedContainer,
+      activeLock,
+      journalTab,
     } = useMuseum.getState()
 
     // Examining an object freezes locomotion: the player is holding something
-    // up to their face, not walking.
-    const frozen = examining !== null
+    // up to their face, not walking. So does reading, a keypad and the
+    // journal — and the notebook's arrow keys would otherwise also strafe.
+    const frozen =
+      examining !== null || openedContainer !== null || activeLock !== null || journalTab !== null
 
     // --- look ---------------------------------------------------------------
     const pending = pendingLookRef.current

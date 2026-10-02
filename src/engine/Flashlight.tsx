@@ -39,6 +39,8 @@ export function Flashlight() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.repeat || event.code !== 'KeyF' || isTextEntryTarget(event.target)) return
+      // Ctrl/Cmd+F is the browser's find, not the torch.
+      if (event.ctrlKey || event.metaKey || event.altKey) return
       if (!useMuseum.getState().started) return
       useMuseum.getState().toggleFlashlight()
     }

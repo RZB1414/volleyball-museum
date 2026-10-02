@@ -1,7 +1,7 @@
 /** Focused guards for the generic portal detail policy. */
 
 import assert from 'node:assert/strict'
-import { Group, Mesh, MeshBasicMaterial, BoxGeometry, Raycaster } from 'three'
+import { Group, Mesh, MeshBasicMaterial, BoxGeometry, Raycaster, Vector3 } from 'three'
 
 import {
   openDoorNeighbourRooms,
@@ -136,8 +136,35 @@ check(
   parkedTarget.raycast === originalRaycast && parkedTarget.layers.mask === originalLayerMask,
 )
 assert.equal(parkedTarget.visible, true)
-parkedMesh.geometry.dispose()
-parkedMesh.material.dispose()
+
+// A re-render that hands the root a fresh `userData` object (any JSX userData
+// prop does) must not erase what parking saved: the porter's radio once went
+// blind for good after the player left the office and came back.
+const deviceRoot = new Group()
+const deviceTarget = new Group()
+deviceTarget.name = 'device:radio-test'
+const deviceMesh = new Mesh(new BoxGeometry(), new MeshBasicMaterial())
+deviceTarget.add(deviceMesh)
+deviceRoot.add(deviceTarget)
+const deviceRaycast = deviceTarget.raycast
+const deviceLayerMask = deviceTarget.layers.mask
+check('device targets are parked with their room', syncRoomDetailTargets(deviceRoot, false) === 1)
+deviceTarget.userData = { replacedByARender: true }
+syncRoomDetailTargets(deviceRoot, true)
+check(
+  'parking survives a userData replacement while the room is away',
+  deviceTarget.raycast === deviceRaycast && deviceTarget.layers.mask === deviceLayerMask,
+)
+const deviceHits: ReturnType<Raycaster['intersectObjects']> = []
+const towardDevice = new Raycaster()
+towardDevice.set(new Vector3(0, 0, 5), new Vector3(0, 0, -1))
+towardDevice.intersectObject(deviceTarget, true, deviceHits)
+check('a restored device is aimable again', deviceHits.length > 0)
+
+for (const mesh of [parkedMesh, deviceMesh]) {
+  mesh.geometry.dispose()
+  mesh.material.dispose()
+}
 
 console.log(`\n${passed} passed, ${failed} failed`)
 if (failed > 0) process.exitCode = 1

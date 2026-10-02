@@ -201,14 +201,14 @@ export function MobileControls() {
   const focusedContainer = useMuseum((state) => state.focusedContainer)
   const focusedPowerControl = useMuseum((state) => state.focusedPowerControl)
   const focusedDoor = useMuseum((state) => state.focusedTransitionDoor)
-  const focusedRadio = useMuseum((state) =>
-    state.focusedDevice !== null &&
-    radioIsLive(MUSEUM, state.focusedDevice, state.progress.roomsPowered),
-  )
+  const focusedDevice = useMuseum((state) => state.focusedDevice)
+  const restored = useMuseum((state) => state.progress.roomsPowered)
   const examining = useMuseum((state) => state.examining)
   const openedContainer = useMuseum((state) => state.openedContainer)
   const activeLock = useMuseum((state) => state.activeLock)
+  const journalTab = useMuseum((state) => state.journalTab)
   const t = useTranslate()
+  const focusedRadio = focusedDevice !== null && radioIsLive(MUSEUM, focusedDevice, restored)
   const [resetEpoch, setResetEpoch] = useState(0)
 
   const resetAllPads = useCallback(() => {
@@ -238,14 +238,15 @@ export function MobileControls() {
     }
   }, [resetAllPads, resetTouch])
 
-  const suspended = Boolean(examining || openedContainer || activeLock)
+  const suspended = Boolean(examining || openedContainer || activeLock || journalTab)
   useEffect(() => {
     if (suspended) resetAllPads()
   }, [resetAllPads, suspended])
 
+  // A powerless lock still answers a press, with its buzz, on touch as well.
   const doorCanAct = Boolean(
     focusedDoor &&
-      focusedDoor.status !== 'blocked' &&
+      (focusedDoor.status !== 'blocked' || focusedDoor.blockedBy === 'unpowered') &&
       focusedDoor.status !== 'opening' &&
       !focusedDoor.armed,
   )

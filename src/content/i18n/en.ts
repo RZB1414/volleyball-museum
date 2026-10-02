@@ -39,7 +39,7 @@ export const en = {
   'ui.torch.on': 'Switch the torch off',
   'ui.torch.off': 'Switch the torch on',
   'ui.journal.open': 'Open the notebook',
-  'journal.taken': 'Notebook taken',
+  'journal.taken': 'You took the notebook',
   'journal.taken.keyboard': 'Tab opens the plan, the catalogue and the archive.',
   'journal.taken.touch': 'The notebook icon opens the plan, the catalogue and the archive.',
 

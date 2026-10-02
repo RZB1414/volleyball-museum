@@ -342,11 +342,21 @@
 
 /* --- catalogue toast ------------------------------------------------------ */
 
-/* Above the tool buttons, which own the bottom-right corner. */
-.toast {
+/* Confirmations queue top right: the bottom-right corner belongs to the tool
+   buttons and the bottom centre to the porter's subtitles. */
+.toast-stack {
   position: absolute;
+  z-index: 14;
+  top: 1.4rem;
   right: 1.6rem;
-  bottom: 5.6rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.toast {
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -365,14 +375,17 @@
 
 @media (any-pointer: coarse),
   (max-width: 900px) and (orientation: landscape) {
-  /* The bottom corners belong to the thumbs; confirmations go up top. */
-  .toast {
+  /* The corners belong to the thumbs; confirmations go top centre. */
+  .toast-stack {
     top: calc(env(safe-area-inset-top) + 12px);
     right: auto;
-    bottom: auto;
     left: 50%;
-    max-width: min(34rem, 70vw);
+    align-items: center;
     transform: translateX(-50%);
+  }
+
+  .toast {
+    max-width: min(34rem, 70vw);
   }
 }
 
@@ -803,6 +816,9 @@
 
 .journal {
   position: absolute;
+  /* Above the touch controls and the radio subtitles it now shares a screen
+     with: the journal opens from an icon on touch devices too. */
+  z-index: 20;
   inset: 0;
   display: grid;
   place-items: center;

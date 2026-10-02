@@ -46,7 +46,7 @@ export const ptBR = {
   'ui.torch.on': 'Apagar a lanterna',
   'ui.torch.off': 'Acender a lanterna',
   'ui.journal.open': 'Abrir o caderno',
-  'journal.taken': 'Caderno guardado',
+  'journal.taken': 'Você pegou o caderno',
   'journal.taken.keyboard': 'Tab abre a planta, o catálogo e o arquivo.',
   'journal.taken.touch': 'O ícone do caderno abre a planta, o catálogo e o arquivo.',
 
@@ -157,7 +157,7 @@ export const ptBR = {
   'radio.call.first.3':
     'O quadro do átrio fica na parede oeste, do lado da entrada da Ala 1. Procure a luzinha vermelha.',
   'radio.call.first.4':
-    'E não desça ao subsolo: alagou. Qualquer coisa, me chama neste rádio. Câmbio, desligo.',
+    'E não desce no subsolo, que alagou. Qualquer coisa, me chama neste rádio. Câmbio, desligo.',
   'radio.hint.atrium':
     'O quadro do átrio fica na parede oeste, perto da entrada da Ala 1. A luzinha vermelha mostra onde.',
   'radio.hint.holyoke':
