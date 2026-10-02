@@ -241,6 +241,8 @@ for (const recipe of [
   'medallion-socket',
   'desk-lamp',
   'ledger-stack',
+  'curator-notebook',
+  'desk-radio',
   'door-leaf',
   'door-leaf-right',
   'threshold',
@@ -271,6 +273,8 @@ for (const recipe of [
   'vent-grille',
   'breaker-panel',
   'office-corkboard',
+  'office-wall-clock',
+  'door-access-panel',
   'history-case-run',
   'wayfinding-plaque-navy',
   'wayfinding-plaque-green',
@@ -325,6 +329,10 @@ for (const recipe of [
   'atrium-divider-screen',
   'atrium-lounge-set',
   'atrium-display-console',
+  'curator-notebook',
+  'desk-radio',
+  'office-wall-clock',
+  'door-access-panel',
 ]) {
   const parts = recipeParts(recipe)
   check(

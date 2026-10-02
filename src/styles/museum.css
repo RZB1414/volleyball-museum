@@ -342,10 +342,11 @@
 
 /* --- catalogue toast ------------------------------------------------------ */
 
+/* Above the tool buttons, which own the bottom-right corner. */
 .toast {
   position: absolute;
   right: 1.6rem;
-  bottom: 1.6rem;
+  bottom: 5.6rem;
   display: flex;
   align-items: center;
   gap: 0.6rem;
@@ -360,6 +361,423 @@
 
 .toast-mark {
   color: #8fb98a;
+}
+
+@media (any-pointer: coarse),
+  (max-width: 900px) and (orientation: landscape) {
+  /* The bottom corners belong to the thumbs; confirmations go up top. */
+  .toast {
+    top: calc(env(safe-area-inset-top) + 12px);
+    right: auto;
+    bottom: auto;
+    left: 50%;
+    max-width: min(34rem, 70vw);
+    transform: translateX(-50%);
+  }
+}
+
+/* --- tools: the torch and the notebook ------------------------------------ */
+
+.hud-tools {
+  position: absolute;
+  z-index: 13;
+  right: 1.4rem;
+  bottom: 1.4rem;
+  display: flex;
+  align-items: flex-end;
+  gap: 0.7rem;
+}
+
+.hud-tool {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 3.1rem;
+  height: 3.1rem;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 18%);
+  border-radius: 50%;
+  background: rgb(10 12 14 / 62%);
+  color: #f3f5f8;
+  cursor: pointer;
+  box-shadow:
+    0 14px 34px rgb(0 0 0 / 28%),
+    inset 0 0 0 1px rgb(255 255 255 / 6%);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.hud-tool:focus {
+  outline: none;
+}
+
+.hud-tool:focus-visible {
+  outline: 3px solid rgb(255 255 255 / 72%);
+  outline-offset: 4px;
+}
+
+.hud-tool-icon {
+  width: 1.45rem;
+  height: 1.45rem;
+  fill: currentColor;
+}
+
+.hud-tool-icon-cut {
+  fill: rgb(10 12 14 / 80%);
+}
+
+.hud-tool.is-torch.is-on {
+  border-color: rgb(214 228 255 / 78%);
+  background:
+    radial-gradient(circle at 50% 30%, rgb(245 249 255 / 96%), rgb(190 210 255 / 88%) 56%, rgb(70 92 140 / 85%)),
+    rgb(200 216 255 / 90%);
+  color: #101622;
+  box-shadow:
+    0 0 26px rgb(190 210 255 / 45%),
+    0 14px 34px rgb(0 0 0 / 30%);
+}
+
+.hud-tool.is-torch.is-on .hud-tool-icon-cut {
+  fill: rgb(230 238 255 / 90%);
+}
+
+/* The first verb of the game: until the torch has been used, it breathes. */
+.hud-tool.is-hinting {
+  animation: hud-tool-hint 1.6s ease-in-out infinite;
+}
+
+@keyframes hud-tool-hint {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 rgb(214 228 255 / 0%),
+      0 14px 34px rgb(0 0 0 / 28%);
+  }
+  50% {
+    box-shadow:
+      0 0 0 9px rgb(214 228 255 / 22%),
+      0 14px 34px rgb(0 0 0 / 28%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hud-tool.is-hinting {
+    animation: none;
+    border-color: rgb(214 228 255 / 80%);
+  }
+}
+
+.hud-tool-key {
+  position: absolute;
+  right: -0.35rem;
+  bottom: -0.3rem;
+  min-width: 1.2rem;
+  padding: 0.05rem 0.25rem;
+  border: 1px solid #a98a52;
+  background: #14120f;
+  color: #f0dfb8;
+  font-family: ui-monospace, monospace;
+  font-size: 0.62rem;
+  line-height: 1.2;
+}
+
+@media (any-pointer: coarse),
+  (max-width: 900px) and (orientation: landscape) {
+  /* A column directly above the right-hand stick, the torch nearest the
+     thumb. The stick's centre is 78 px from the edge; these are centred on
+     it. */
+  .hud-tools {
+    right: calc(env(safe-area-inset-right) + 54px);
+    bottom: calc(env(safe-area-inset-bottom) + 144px);
+    flex-direction: column-reverse;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .hud-tool {
+    width: 48px;
+    height: 48px;
+  }
+
+  .hud-tool-key {
+    display: none;
+  }
+}
+
+@media (any-pointer: coarse) and (max-height: 420px),
+  (max-width: 900px) and (orientation: landscape) and (max-height: 420px) {
+  .hud-tools {
+    right: calc(env(safe-area-inset-right) + 44px);
+    bottom: calc(env(safe-area-inset-bottom) + 124px);
+    gap: 0.6rem;
+  }
+
+  .hud-tool {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+@media (any-pointer: coarse) and (orientation: portrait) {
+  .hud-tools {
+    display: none;
+  }
+}
+
+/* --- the porter's radio --------------------------------------------------- */
+
+.radio-subtitle {
+  position: absolute;
+  left: 50%;
+  bottom: 6.4rem;
+  z-index: 12;
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  max-width: min(42rem, 72vw);
+  padding: 0.65rem 0.75rem 0.65rem 1rem;
+  transform: translateX(-50%);
+  background: rgb(10 12 16 / 84%);
+  border-left: 2px solid #7fb07a;
+  color: #e8e0cf;
+  font-family: Georgia, serif;
+  font-size: 0.98rem;
+  line-height: 1.45;
+}
+
+.radio-speaker {
+  flex: none;
+  color: #9fd0a0;
+  font-family: ui-monospace, monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.radio-line {
+  flex: 1;
+}
+
+.radio-skip {
+  flex: none;
+  align-self: center;
+  appearance: none;
+  border: 1px solid rgb(159 208 160 / 35%);
+  background: transparent;
+  color: #b9d9b9;
+  font: inherit;
+  font-size: 0.78rem;
+  padding: 0.2rem 0.55rem;
+  cursor: pointer;
+}
+
+@media (any-pointer: coarse),
+  (max-width: 900px) and (orientation: landscape) {
+  /* Between the two sticks. */
+  .radio-subtitle {
+    bottom: calc(env(safe-area-inset-bottom) + 14px);
+    max-width: min(30rem, 52vw);
+    font-size: 0.86rem;
+  }
+}
+
+/* --- the curator's notebook ----------------------------------------------- */
+
+.notebook {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 3vh 4vw;
+  background: radial-gradient(70% 70% at 50% 50%, rgb(6 6 8 / 52%), rgb(6 6 8 / 88%));
+}
+
+.notebook-sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(30rem, 88vw);
+  max-height: 90vh;
+  background: #efe5cf;
+  color: #2c241a;
+  border-left: 10px solid #6e1f2a;
+  border-radius: 3px 8px 8px 3px;
+  box-shadow:
+    0 30px 80px rgb(0 0 0 / 55%),
+    inset 0 0 60px rgb(120 90 50 / 18%);
+  font-family: Georgia, 'Times New Roman', serif;
+}
+
+.notebook-body {
+  flex: 1;
+  min-height: min(21rem, 58vh);
+  overflow-y: auto;
+  padding: 2.1rem 2.2rem 1.3rem;
+}
+
+.notebook-page h3 {
+  margin: 0 0 1rem;
+  font-size: 1.15rem;
+  font-weight: 400;
+  letter-spacing: 0.05em;
+}
+
+.notebook-page p {
+  margin: 0 0 0.9rem;
+}
+
+.notebook-page.is-printed {
+  display: grid;
+  place-items: center;
+  min-height: min(17rem, 46vh);
+  text-align: center;
+  font-size: 1.32rem;
+  line-height: 1.55;
+  letter-spacing: 0.01em;
+}
+
+.notebook-page.is-printed p::after {
+  display: block;
+  margin-top: 1.2rem;
+  color: #8a6a3a;
+  content: '— ✦ —';
+  font-size: 0.9rem;
+}
+
+/* Ruled paper, handwritten lines sitting on the rules. */
+.notebook-page.is-handwritten {
+  font-size: 1.04rem;
+  font-style: italic;
+  line-height: 2rem;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    transparent 0 1.93rem,
+    rgb(80 110 150 / 24%) 1.93rem 2rem
+  );
+}
+
+.notebook-page.is-handwritten p {
+  margin: 0 0 2rem;
+}
+
+.notebook-signature {
+  text-align: right;
+}
+
+.notebook-page .notebook-postscript {
+  margin: 0;
+  color: #5a4a35;
+  font-size: 0.94rem;
+}
+
+.notebook-checklist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-style: italic;
+}
+
+.notebook-checklist li {
+  display: flex;
+  gap: 0.7rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid rgb(80 110 150 / 22%);
+}
+
+.notebook-box {
+  flex: none;
+  color: #6e1f2a;
+  font-style: normal;
+}
+
+.notebook-checklist li.is-done span:last-child {
+  color: #7a6a52;
+  text-decoration: line-through;
+}
+
+.notebook-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.8rem 1.2rem;
+  border-top: 1px solid rgb(60 40 20 / 18%);
+}
+
+.notebook-actions button {
+  appearance: none;
+  border: 1px solid rgb(60 40 20 / 35%);
+  background: transparent;
+  color: #3a2e20;
+  font: inherit;
+  font-size: 0.88rem;
+  padding: 0.45rem 0.9rem;
+  cursor: pointer;
+}
+
+.notebook-actions button.is-primary {
+  border-color: #6e1f2a;
+  background: #6e1f2a;
+  color: #f6ead6;
+}
+
+.notebook-actions button[disabled] {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.notebook-folio {
+  color: #7a6a52;
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+}
+
+/* The same pages, re-read inside the journal's archive. */
+.journal-pages {
+  display: grid;
+  gap: 1rem;
+}
+
+.notebook-sheet.is-inline {
+  width: auto;
+  max-height: none;
+  padding: 1.2rem 1.5rem;
+  box-shadow: none;
+}
+
+.notebook-sheet.is-inline .notebook-page.is-printed {
+  min-height: 0;
+}
+
+@media (max-height: 420px) {
+  .notebook-body {
+    min-height: 0;
+    padding: 1.1rem 1.4rem 0.7rem;
+  }
+
+  .notebook-page.is-printed {
+    min-height: 9rem;
+    font-size: 1.1rem;
+  }
+
+  .notebook-page.is-handwritten {
+    font-size: 0.9rem;
+    line-height: 1.6rem;
+    background-image: repeating-linear-gradient(
+      to bottom,
+      transparent 0 1.54rem,
+      rgb(80 110 150 / 24%) 1.54rem 1.6rem
+    );
+  }
+
+  .notebook-page.is-handwritten p {
+    margin-bottom: 1.6rem;
+  }
+
+  .notebook-actions {
+    padding: 0.5rem 1rem;
+  }
 }
 
 /* --- perf hud ------------------------------------------------------------- */

@@ -567,10 +567,20 @@ function coatHookCurve(angle, y, upper) {
   )
 }
 
-/** A turned oak hall stand with four double hooks and brass finials. */
+/**
+ * A turned oak hall stand with four double hooks and brass finials, still
+ * holding the previous curator's felt hat and the umbrella from this
+ * afternoon's storm.
+ *
+ * The two belongings are the room's quietest storytelling: somebody worked
+ * here for decades and has only just gone, and it rained. They hang on the
+ * side away from the wall sconce, whose bowl sits right above the stand.
+ */
 export function buildCoatStand({ height = 1.86 } = {}) {
   const wood = []
   const hardware = []
+  const hat = []
+  const umbrella = []
 
   const base = lathe(
     [
@@ -582,7 +592,7 @@ export function buildCoatStand({ height = 1.86 } = {}) {
       [0.075, 0.13],
       [0, 0.15],
     ],
-    14,
+    12,
   )
   wood.push(base)
 
@@ -618,11 +628,13 @@ export function buildCoatStand({ height = 1.86 } = {}) {
     const angle = (index * Math.PI) / 2
     for (const upper of [false, true]) {
       const curve = coatHookCurve(angle, hookBase + (upper ? 0.03 : 0), upper)
-      const hook = new TubeGeometry(curve, 8, 0.015, 6, false)
+      const hook = new TubeGeometry(curve, 8, 0.015, 5, false)
       wood.push(hook)
 
       const tip = curve.getPoint(1)
-      const finial = new SphereGeometry(0.025, 8, 6)
+      // Six by four is still round at 25 mm and leaves the triangle budget for
+      // the hat and umbrella, which carry far more of the room's character.
+      const finial = new SphereGeometry(0.025, 6, 4)
       finial.translate(tip.x, tip.y, tip.z)
       hardware.push(finial)
     }
@@ -635,8 +647,70 @@ export function buildCoatStand({ height = 1.86 } = {}) {
   crown.translate(0, height - 0.11, 0)
   wood.push(crown)
 
+  // A brown felt fedora hung by its crown on the +X upper hook: tilted so the
+  // opening faces the stem and the hook disappears inside it.
+  const fedora = lathe(
+    [
+      [0, 0.112],
+      [0.05, 0.116],
+      [0.078, 0.107],
+      [0.088, 0.09],
+      [0.092, 0.035],
+      [0.097, 0.018],
+      [0.15, 0.012],
+      [0.172, 0.019],
+      [0.174, 0.012],
+      [0.15, 0.004],
+      [0.096, 0.008],
+      [0, 0.01],
+    ],
+    14,
+  )
+  fedora.scale(1, 1, 0.88)
+  fedora.rotateZ(-1.25)
+  fedora.translate(0.155, height - 0.19, 0)
+  hat.push(fedora)
+
+  // A furled umbrella hooked over the -Z lower hook by a walnut crook. The
+  // crook belongs to the stand's timber family; the canopy is black nylon.
+  const crookZ = -0.15
+  const crookY = height - 0.275
+  const crook = new TorusGeometry(0.03, 0.0075, 5, 10, Math.PI)
+  crook.rotateY(Math.PI / 2)
+  crook.translate(0, crookY, crookZ)
+  wood.push(crook)
+  const tail = new CylinderGeometry(0.0075, 0.0075, 0.035, 6)
+  tail.translate(0, crookY - 0.0175, crookZ + 0.03)
+  wood.push(tail)
+
+  const shaftZ = crookZ - 0.03
+  const shaftTop = crookY
+  const shaftBottom = 0.8
+  const shaft = new CylinderGeometry(0.0045, 0.0045, shaftTop - shaftBottom, 6)
+  shaft.translate(0, (shaftTop + shaftBottom) / 2, shaftZ)
+  umbrella.push(shaft)
+  const canopy = lathe(
+    [
+      [0.006, 0],
+      [0.016, 0.02],
+      [0.034, 0.14],
+      [0.04, 0.3],
+      [0.034, 0.48],
+      [0.016, 0.58],
+      [0.006, 0.6],
+    ],
+    10,
+  )
+  canopy.translate(0, 0.86, shaftZ)
+  umbrella.push(canopy)
+  const ferrule = new CylinderGeometry(0.006, 0.002, 0.05, 6)
+  ferrule.translate(0, 0.815, shaftZ)
+  umbrella.push(ferrule)
+
   return {
     wood: finishMixed(wood, 0.34),
     hardware: finishMixed(hardware, 0.10),
+    hat: finishMixed(hat, 0.22),
+    umbrella: finishMixed(umbrella, 0.2),
   }
 }

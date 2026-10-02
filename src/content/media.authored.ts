@@ -99,4 +99,14 @@ export const AUTHORED_MEDIA = [
       generator: 'imagegen/atrium-banner-burgundy-block-v1',
     },
   },
+  {
+    id: 'graphic-office-blueprint',
+    kind: 'diagram',
+    src: '/textures/media/office-blueprint.svg',
+    aspect: 1.5,
+    credit: {
+      license: 'procedural',
+      generator: 'svg/office-blueprint-v1',
+    },
+  },
 ] as const satisfies readonly MediaAsset[]

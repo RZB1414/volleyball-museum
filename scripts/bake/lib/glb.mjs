@@ -109,6 +109,18 @@ export const MATERIALS = {
   // More opacity than vitrine glazing keeps its silhouette legible while still
   // allowing the warm desk light to read through the curved inner surface.
   'glass-green': { baseColor: [0.035, 0.19, 0.085, 0.68], roughness: 0.16, metallic: 0, alphaMode: 'BLEND' },
+  // Moulded black plastic: the porter's radio, an elastic band, an umbrella.
+  // Untextured and dielectric, so it shares its shader program with the
+  // painted materials rather than adding one.
+  'plastic-black': { baseColor: [0.026, 0.026, 0.03, 1], roughness: 0.52, metallic: 0 },
+  // Indicator lenses. Emission is a uniform, not a shader define, so the three
+  // states are one program; the runtime swaps a lens between them as power
+  // returns instead of animating a shared material.
+  'led-off': { baseColor: [0.07, 0.06, 0.06, 1], roughness: 0.3, metallic: 0 },
+  // Kept below the tone mapper's shoulder: brighter, both lamps read as the
+  // same white dot and the one piece of information they carry is lost.
+  'led-red': { baseColor: [0.42, 0.04, 0.03, 1], roughness: 0.3, metallic: 0, emissive: [1.0, 0.07, 0.035], emissiveIntensity: 1.5 },
+  'led-green': { baseColor: [0.04, 0.32, 0.1, 1], roughness: 0.3, metallic: 0, emissive: [0.1, 1.0, 0.28], emissiveIntensity: 1.2 },
 }
 
 function createMaterials(doc) {

@@ -19,8 +19,10 @@
 // guess the extension. Type-only imports are erased, so they do not need it.
 import { GENERATED_MEDIA } from './media.generated.ts'
 import { AUTHORED_MEDIA } from './media.authored.ts'
+import { SPAWN } from './spawn.ts'
 import type {
   ContainerData,
+  DeviceData,
   DocumentData,
   ExhibitData,
   Fact,
@@ -525,6 +527,40 @@ const DOCUMENTS = [
     containerId: 'office-cabinet',
     lockId: 'office-drawer',
   },
+  /**
+   * The first thing the player reads, on the desk they spawn facing.
+   *
+   * Three pages and three jobs: the flyleaf names the museum, the director's
+   * letter gives the night its one rule (power, room by room) and its deadline,
+   * and the checklist is the quest log that ticks itself. The postscript is
+   * the tutorial for knowledge locks, delivered before the first one exists.
+   */
+  {
+    id: 'doc-welcome',
+    era: 'office',
+    kind: 'notebook',
+    titleKey: 'document.welcome.title',
+    bodyKey: 'document.welcome.summary',
+    containerId: 'office-notebook',
+    pages: [
+      { style: 'printed', bodyKey: 'notebook.welcome.flyleaf' },
+      {
+        style: 'handwritten',
+        bodyKey: 'notebook.welcome.letter',
+        signatureKey: 'notebook.welcome.signature',
+        postscriptKey: 'notebook.welcome.postscript',
+      },
+      {
+        style: 'checklist',
+        headingKey: 'notebook.todo.heading',
+        items: [
+          { labelKey: 'notebook.todo.power', doneWhen: { allRoomsPowered: true } },
+          { labelKey: 'notebook.todo.catalogue', doneWhen: { allCatalogued: true } },
+          { labelKey: 'notebook.todo.vault' },
+        ],
+      },
+    ],
+  },
 ] as const satisfies readonly DocumentData[]
 
 
@@ -580,7 +616,82 @@ const OFFICE_CONTAINERS = [
     titleKey: 'container.office.title',
     lockId: 'office-drawer',
   },
+  /**
+   * The curator's notebook, on the visitor half of the blotter.
+   *
+   * Between the lamp and the ledgers, so the torch finds it, the lamp and the
+   * notebook are both within reach of the one standing point past the visitor
+   * chairs, and neither interaction volume swallows the other.
+   */
+  {
+    id: 'office-notebook',
+    part: 'curator-notebook',
+    position: [0.38, 0.747, -0.22],
+    rotationY: 0.12,
+    titleKey: 'container.office-notebook.title',
+    presentation: 'notebook',
+    carriesJournal: true,
+  },
 ] as const satisfies readonly ContainerData[]
+
+/**
+ * The office's working objects: what the room says before the player has read
+ * a word. The stopped clock dates the storm, the reader by the door explains
+ * why it will not open, and the porter's radio is the building's one voice.
+ */
+const OFFICE_DEVICES = [
+  {
+    kind: 'clock',
+    id: 'office-clock',
+    part: 'office-wall-clock',
+    // The east wall between the last bookcase and the safe, in view from the
+    // spawn just above the desk.
+    position: [2.875, 1.93, 1.48],
+    rotationY: -Math.PI / 2,
+    stoppedAt: { hours: 16, minutes: 47 },
+    runsWithPowerOf: 'office',
+  },
+  {
+    kind: 'power-indicator',
+    id: 'office-door-reader',
+    part: 'door-access-panel',
+    // Beside the door on its latch side, at hand height.
+    position: [-2.875, 1.16, 1.12],
+    rotationY: Math.PI / 2,
+    showsPowerOf: 'office',
+  },
+  {
+    kind: 'radio',
+    id: 'office-radio',
+    part: 'desk-radio',
+    // On the walnut border past the telephone, clear of the blotter's step.
+    position: [0.36, 0.74, 0.64],
+    rotationY: -Math.PI / 2,
+    titleKey: 'device.office-radio.title',
+    speakerKey: 'radio.speaker.porter',
+    poweredBy: 'office',
+    calls: [
+      {
+        id: 'porter-first-call',
+        when: { powered: ['office'] },
+        delaySeconds: 2.4,
+        lineKeys: [
+          'radio.call.first.1',
+          'radio.call.first.2',
+          'radio.call.first.3',
+          'radio.call.first.4',
+        ],
+      },
+    ],
+    // Ordered: the porter answers with the first thing the player still needs.
+    hints: [
+      { when: { unpowered: ['atrium'] }, lineKeys: ['radio.hint.atrium'] },
+      { when: { unpowered: ['holyoke'] }, lineKeys: ['radio.hint.holyoke'] },
+      { when: { locksClosed: ['office-drawer'] }, lineKeys: ['radio.hint.drawer'] },
+      { when: {}, lineKeys: ['radio.hint.vault'] },
+    ],
+  },
+] as const satisfies readonly DeviceData[]
 
 // ---------------------------------------------------------------------------
 // Rooms
@@ -641,6 +752,9 @@ const ROOMS = [
           closeDuration: 0.55,
           closeDistance: 1.25,
           warmDistance: 5,
+          // The night begins inside: the office's electric lock holds the
+          // door until its own lamp brings the room's power back.
+          requiresPower: 'office',
         },
       },
       {
@@ -1122,9 +1236,27 @@ const ROOMS = [
       { part: 'coat-stand', position: [-2.55, 0, -1.2] },
       { part: 'wall-sconce', position: [-2.84, 1.58, -1.12], rotationY: Math.PI / 2 },
     ],
+    /**
+     * The south wall was the one bare plane in a room otherwise dense with
+     * use. The building's plan, with the predecessor's red pencil round the
+     * vault, fills it and states the long goal before any letter does.
+     */
+    wallArt: [
+      {
+        id: 'office-blueprint',
+        mediaId: 'graphic-office-blueprint',
+        position: [0.35, 1.62, 3.375],
+        rotationY: Math.PI,
+        width: 1.08,
+        height: 0.72,
+        presentation: 'framed',
+        showCredit: false,
+      },
+    ],
     exhibitIds: [],
-    documentIds: ['doc-predecessor'],
+    documentIds: ['doc-predecessor', 'doc-welcome'],
     containers: OFFICE_CONTAINERS,
+    devices: OFFICE_DEVICES,
     audio: [],
   },
 ] as const satisfies readonly RoomData[]
@@ -1132,6 +1264,7 @@ const ROOMS = [
 // ---------------------------------------------------------------------------
 
 export const MUSEUM: MuseumContent = {
+  spawn: SPAWN,
   rooms: ROOMS,
   exhibits: [...ATRIUM_EXHIBITS, ...HOLYOKE_EXHIBITS],
   documents: DOCUMENTS,

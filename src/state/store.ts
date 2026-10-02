@@ -15,6 +15,9 @@
 import { create } from 'zustand'
 
 import type { UnlockEffect } from '../content/schema'
+// The spawn module has no runtime imports, so naming the start room here does
+// not pull the content set into the title screen's bundle.
+import { SPAWN } from '../content/spawn.ts'
 
 export type Locale = 'pt-BR' | 'en'
 export type QualityTier = 'low' | 'medium' | 'high'
@@ -61,6 +64,8 @@ export type Progress = {
   roomsVisited: string[]
   roomsPowered: string[]
   locksOpened: string[]
+  /** Radio calls already received; each one is heard exactly once. */
+  radioCalls: string[]
   lastRoom: string
 }
 
@@ -87,7 +92,8 @@ const EMPTY_PROGRESS: Progress = {
   roomsVisited: [],
   roomsPowered: [],
   locksOpened: [],
-  lastRoom: 'atrium',
+  radioCalls: [],
+  lastRoom: SPAWN.room,
 }
 
 type Persisted = { settings: Settings; progress: Progress }
@@ -126,11 +132,24 @@ function loadPersisted(): Persisted {
 const initial = loadPersisted()
 
 export type DirectionalInput = { x: number; y: number }
+export type TransitionDoorBlock = 'other-side' | 'unpowered'
 export type TransitionDoorPrompt = {
   readonly id: string
   readonly targetRoom: string
   readonly status: 'blocked' | 'loading' | 'ready' | 'opening'
   readonly armed: boolean
+  /** Why a blocked door will not open, so the prompt can say so. */
+  readonly blockedBy?: TransitionDoorBlock
+}
+export type JournalTab = 'map' | 'catalogue' | 'archive' | 'credits'
+/** What the radio is saying right now: one line at a time, in order. */
+export type RadioTransmission = {
+  /** Unique per transmission, so a repeated hint restarts its own timing. */
+  readonly serial: number
+  readonly deviceId: string
+  readonly speakerKey: string
+  readonly lineKeys: readonly string[]
+  readonly index: number
 }
 
 export type MuseumStore = {
@@ -162,6 +181,17 @@ export type MuseumStore = {
   activeLock: string | null
   /** The exhibit being examined in the rotate view, if any. */
   examining: string | null
+  /** A device under the crosshair that can be operated (the radio), if any. */
+  focusedDevice: string | null
+  /** The hand torch. Session state: every visit starts in the dark. */
+  flashlightOn: boolean
+  /** Whether the torch has been switched on yet, which ends its hint pulse. */
+  flashlightUsed: boolean
+  /** The page an open notebook shows. Reset whenever a container opens. */
+  notebookPage: number
+  /** The journal's open tab, or null while it is closed. */
+  journalTab: JournalTab | null
+  radio: RadioTransmission | null
 
   start: () => void
   setPointerLocked: (locked: boolean) => void
@@ -177,6 +207,13 @@ export type MuseumStore = {
   setOpenedContainer: (id: string | null) => void
   setActiveLock: (id: string | null) => void
   setExamining: (id: string | null) => void
+  setFocusedDevice: (id: string | null) => void
+  toggleFlashlight: () => void
+  setNotebookPage: (page: number) => void
+  setJournalTab: (tab: JournalTab | null) => void
+  startRadio: (transmission: Omit<RadioTransmission, 'serial' | 'index'>) => void
+  advanceRadio: () => void
+  stopRadio: () => void
 
   // --- progress -----------------------------------------------------------
   progress: Progress
@@ -187,6 +224,7 @@ export type MuseumStore = {
   grantCredential: (key: string) => void
   powerRoom: (roomId: string) => void
   openLock: (lockId: string) => void
+  recordRadioCall: (callId: string) => void
   applyUnlockEffect: (effect: UnlockEffect) => void
   resetProgress: () => void
 }
@@ -197,6 +235,8 @@ function withValue(list: string[], value: string): string[] {
 }
 
 export const useMuseum = create<MuseumStore>((set, get) => {
+  let radioSerial = 0
+
   // Autosave on room change and on any progress mutation. No typewriter ritual:
   // for a web museum, silent autosave plus an explicit "Continue" on the title
   // screen is the right shape, and the in-world visitor logbook can be a VIEW
@@ -274,13 +314,13 @@ export const useMuseum = create<MuseumStore>((set, get) => {
 
     started: false,
     pointerLocked: false,
-    // PlayerController currently has one authored, navigation-tested spawn in
-    // the atrium. Starting the render tier at a persisted lastRoom mounted that
-    // room's detail only to tear it down on the first frame when the spawn was
-    // detected in the atrium.
-    currentRoom: 'atrium',
+    // Every session starts at the one authored, navigation-tested spawn.
+    // Starting the render tier at a persisted lastRoom mounted that room's
+    // detail only to tear it down on the first frame, when the player was
+    // detected back in the spawn room.
+    currentRoom: SPAWN.room,
     previousRoom: null,
-    visibleRooms: ['atrium'],
+    visibleRooms: [SPAWN.room],
     touchMove: { x: 0, y: 0 },
     touchLook: { x: 0, y: 0 },
     focusedExhibit: null,
@@ -290,6 +330,12 @@ export const useMuseum = create<MuseumStore>((set, get) => {
     openedContainer: null,
     activeLock: null,
     examining: null,
+    focusedDevice: null,
+    flashlightOn: false,
+    flashlightUsed: false,
+    notebookPage: 0,
+    journalTab: null,
+    radio: null,
 
     start: () => {
       set({ started: true })
@@ -335,15 +381,37 @@ export const useMuseum = create<MuseumStore>((set, get) => {
         current?.id === focusedTransitionDoor?.id &&
         current?.targetRoom === focusedTransitionDoor?.targetRoom &&
         current?.status === focusedTransitionDoor?.status &&
-        current?.armed === focusedTransitionDoor?.armed
+        current?.armed === focusedTransitionDoor?.armed &&
+        current?.blockedBy === focusedTransitionDoor?.blockedBy
       ) {
         return
       }
       set({ focusedTransitionDoor })
     },
-    setOpenedContainer: (openedContainer) => set({ openedContainer }),
+    // A notebook always opens on its first page, however it was left.
+    setOpenedContainer: (openedContainer) => set({ openedContainer, notebookPage: 0 }),
     setActiveLock: (activeLock) => set({ activeLock }),
     setExamining: (examining) => set({ examining }),
+    setFocusedDevice: (focusedDevice) => {
+      if (get().focusedDevice === focusedDevice) return
+      set({ focusedDevice })
+    },
+    toggleFlashlight: () =>
+      set((state) => ({ flashlightOn: !state.flashlightOn, flashlightUsed: true })),
+    setNotebookPage: (notebookPage) => set({ notebookPage: Math.max(0, notebookPage) }),
+    setJournalTab: (journalTab) => set({ journalTab }),
+    startRadio: (transmission) => {
+      radioSerial += 1
+      set({ radio: { ...transmission, serial: radioSerial, index: 0 } })
+    },
+    advanceRadio: () => {
+      const radio = get().radio
+      if (!radio) return
+      set({
+        radio: radio.index + 1 < radio.lineKeys.length ? { ...radio, index: radio.index + 1 } : null,
+      })
+    },
+    stopRadio: () => set({ radio: null }),
 
     progress: initial.progress,
     recordHotspot: (exhibitId, hotspotId) =>
@@ -381,6 +449,11 @@ export const useMuseum = create<MuseumStore>((set, get) => {
         ...progress,
         locksOpened: withValue(progress.locksOpened, lockId),
       })),
+    recordRadioCall: (callId) =>
+      mutateProgress((progress) => ({
+        ...progress,
+        radioCalls: withValue(progress.radioCalls, callId),
+      })),
     applyUnlockEffect: (effect) => {
       const state = get()
       switch (effect.kind) {
@@ -399,7 +472,13 @@ export const useMuseum = create<MuseumStore>((set, get) => {
       }
     },
     resetProgress: () => {
-      set({ progress: EMPTY_PROGRESS, currentRoom: 'atrium', previousRoom: null })
+      set({
+        progress: EMPTY_PROGRESS,
+        currentRoom: SPAWN.room,
+        previousRoom: null,
+        radio: null,
+        journalTab: null,
+      })
       persist()
     },
   }

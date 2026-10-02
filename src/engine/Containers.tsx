@@ -13,7 +13,7 @@
 import { useGLTF } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-import { Mesh, Raycaster, Vector2, type Group, type Object3D } from 'three'
+import { Box3, Mesh, Raycaster, Vector2, Vector3, type Group, type Object3D } from 'three'
 
 import type { BakedBundle } from '../content/bake.generated'
 import { MUSEUM } from '../content/museum'
@@ -22,6 +22,13 @@ import { USE_DRACO, USE_MESHOPT } from './bundleCache'
 import type { CollisionWorld } from './collision'
 import { cloneKitPart, disposeKitPart, registerKitColliders } from './kitPart'
 import type { MaterialLibrary } from './materials'
+import {
+  containerById,
+  isContainerTaken,
+  isNotebook,
+  notebookAdvance,
+  notebookPagesFor,
+} from './notebook'
 import { subscribePrimaryAction } from './primaryAction'
 import { useMuseum } from '../state/store'
 import './bvhSetup'
@@ -108,6 +115,28 @@ function Container({
     [collision, container.part, container.position, container.rotationY, kit, kitBundle, roomOrigin],
   )
 
+  const notebook = isNotebook(container)
+  // A notebook is aimed at by its own bounds, padded to a forgiving minimum:
+  // the cabinet's chest-high box around a book on a desk would also swallow
+  // the lamp, the radio and the ledgers beside it.
+  const proxy = useMemo(() => {
+    if (!instance || !notebook) return null
+    instance.updateMatrixWorld(true)
+    const bounds = new Box3().setFromObject(instance)
+    const centre = bounds.getCenter(new Vector3())
+    const size = bounds.getSize(new Vector3())
+    size.set(Math.max(size.x, 0.3), Math.max(size.y, 0.14), Math.max(size.z, 0.32))
+    return {
+      centre: centre.toArray() as [number, number, number],
+      size: size.toArray() as [number, number, number],
+    }
+  }, [instance, notebook])
+
+  // Reading the notebook is picking it up: it leaves the desk with the player.
+  const taken = useMuseum((state) =>
+    isContainerTaken(MUSEUM, container, state.progress.documentsRead),
+  )
+
   if (!instance) return null
 
   return (
@@ -115,6 +144,7 @@ function Container({
       name={`container:${container.id}`}
       position={container.position as unknown as [number, number, number]}
       rotation={[0, container.rotationY ?? 0, 0]}
+      visible={!taken}
     >
       <primitive object={instance} />
 
@@ -130,10 +160,17 @@ function Container({
         at the cabinet" is enough. It is invisible and casts nothing; the ray
         hits it, everything else ignores it.
       */}
-      <mesh position={[0, 0.85, 0.12]} visible={false}>
-        <boxGeometry args={[0.78, 1.7, 0.8]} />
-        <meshBasicMaterial />
-      </mesh>
+      {proxy ? (
+        <mesh position={proxy.centre} visible={false}>
+          <boxGeometry args={proxy.size} />
+          <meshBasicMaterial />
+        </mesh>
+      ) : (
+        <mesh position={[0, 0.85, 0.12]} visible={false}>
+          <boxGeometry args={[0.78, 1.7, 0.8]} />
+          <meshBasicMaterial />
+        </mesh>
+      )}
     </group>
   )
 }
@@ -186,8 +223,20 @@ export function ContainerTargeting() {
       const state = useMuseum.getState()
 
       // Pressing E again while reading closes the panel, matching the exhibit
-      // examine view — one key in, the same key out.
+      // examine view — one key in, the same key out. A notebook turns its
+      // pages first and closes from the last one.
       if (state.openedContainer) {
+        const opened = containerById(MUSEUM, state.openedContainer)
+        if (isNotebook(opened)) {
+          const next = notebookAdvance(
+            notebookPagesFor(MUSEUM, state.openedContainer).length,
+            state.notebookPage,
+          )
+          if (next !== 'close') {
+            state.setNotebookPage(next)
+            return true
+          }
+        }
         state.setOpenedContainer(null)
         return true
       }
@@ -229,6 +278,9 @@ export function ContainerTargeting() {
         state.recordDocument(doc.id)
         if (doc.revealsFactId) state.recordFact(doc.revealsFactId)
       }
+      // A notebook is read with the mouse as well as with E: its page buttons
+      // must be clickable, which they are not under pointer lock.
+      if (isNotebook(container) && document.pointerLockElement) document.exitPointerLock()
       state.setOpenedContainer(state.focusedContainer)
       return true
     }

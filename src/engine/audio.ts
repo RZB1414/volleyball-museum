@@ -221,6 +221,132 @@ export class MuseumAudio {
     hinge.stop(now + duration + 0.02)
   }
 
+  /** A short square-wave buzz: an electric lock refusing a press without power. */
+  lockDenied() {
+    const context = this.context
+    if (!context || !this.master || context.state === 'suspended') return
+
+    const now = context.currentTime
+    for (const offset of [0, 0.11]) {
+      const buzz = context.createOscillator()
+      buzz.type = 'square'
+      buzz.frequency.value = 148
+      const filter = context.createBiquadFilter()
+      filter.type = 'lowpass'
+      filter.frequency.value = 900
+      const gain = context.createGain()
+      gain.gain.setValueAtTime(0.0001, now + offset)
+      gain.gain.exponentialRampToValueAtTime(0.05, now + offset + 0.008)
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + offset + 0.085)
+      buzz.connect(filter)
+      filter.connect(gain)
+      gain.connect(this.master)
+      buzz.start(now + offset)
+      buzz.stop(now + offset + 0.1)
+    }
+  }
+
+  /**
+   * The electric strike letting go: a solenoid thunk and a bright tick.
+   * `gain` scales it with the listener's distance from the door.
+   */
+  lockRelease(gain = 1) {
+    const context = this.context
+    if (!context || !this.master || !this.noise || context.state === 'suspended') return
+
+    const now = context.currentTime
+    const thunk = context.createOscillator()
+    thunk.type = 'sine'
+    thunk.frequency.setValueAtTime(190, now)
+    thunk.frequency.exponentialRampToValueAtTime(70, now + 0.09)
+    const thunkGain = context.createGain()
+    thunkGain.gain.setValueAtTime(0.0001, now)
+    thunkGain.gain.exponentialRampToValueAtTime(0.16 * gain, now + 0.005)
+    thunkGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12)
+    thunk.connect(thunkGain)
+    thunkGain.connect(this.master)
+    if (this.reverb) thunkGain.connect(this.reverb)
+    thunk.start(now)
+    thunk.stop(now + 0.13)
+
+    const tick = context.createBufferSource()
+    tick.buffer = this.noise
+    const filter = context.createBiquadFilter()
+    filter.type = 'bandpass'
+    filter.frequency.value = 3200
+    filter.Q.value = 6
+    const tickGain = context.createGain()
+    tickGain.gain.setValueAtTime(0.0001, now + 0.02)
+    tickGain.gain.exponentialRampToValueAtTime(0.12 * gain, now + 0.024)
+    tickGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.06)
+    tick.connect(filter)
+    filter.connect(tickGain)
+    tickGain.connect(this.master)
+    tick.start(now + 0.02)
+    tick.stop(now + 0.07)
+  }
+
+  /** The radio opening: a burst of band-limited static and a two-tone beep. */
+  radioSquelch() {
+    const context = this.context
+    if (!context || !this.master || !this.noise || context.state === 'suspended') return
+
+    const now = context.currentTime
+    const hiss = context.createBufferSource()
+    hiss.buffer = this.noise
+    hiss.loop = true
+    const band = context.createBiquadFilter()
+    band.type = 'bandpass'
+    band.frequency.value = 1800
+    band.Q.value = 0.9
+    const hissGain = context.createGain()
+    hissGain.gain.setValueAtTime(0.0001, now)
+    hissGain.gain.exponentialRampToValueAtTime(0.07, now + 0.02)
+    hissGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.32)
+    hiss.connect(band)
+    band.connect(hissGain)
+    hissGain.connect(this.master)
+    hiss.start(now)
+    hiss.stop(now + 0.34)
+
+    for (const [index, frequency] of [1320, 990].entries()) {
+      const beep = context.createOscillator()
+      beep.type = 'sine'
+      beep.frequency.value = frequency
+      const beepGain = context.createGain()
+      const start = now + 0.08 + index * 0.09
+      beepGain.gain.setValueAtTime(0.0001, start)
+      beepGain.gain.exponentialRampToValueAtTime(0.045, start + 0.01)
+      beepGain.gain.exponentialRampToValueAtTime(0.0001, start + 0.08)
+      beep.connect(beepGain)
+      beepGain.connect(this.master)
+      beep.start(start)
+      beep.stop(start + 0.09)
+    }
+  }
+
+  /** A faint crackle between two lines of the same transmission. */
+  radioCrackle() {
+    const context = this.context
+    if (!context || !this.master || !this.noise || context.state === 'suspended') return
+
+    const now = context.currentTime
+    const crackle = context.createBufferSource()
+    crackle.buffer = this.noise
+    const filter = context.createBiquadFilter()
+    filter.type = 'highpass'
+    filter.frequency.value = 2400
+    const gain = context.createGain()
+    gain.gain.setValueAtTime(0.0001, now)
+    gain.gain.exponentialRampToValueAtTime(0.03, now + 0.01)
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.12)
+    crackle.connect(filter)
+    filter.connect(gain)
+    gain.connect(this.master)
+    crackle.start(now)
+    crackle.stop(now + 0.13)
+  }
+
   setVolume(value: number) {
     if (this.master) this.master.gain.value = Math.max(0, Math.min(1, value))
   }

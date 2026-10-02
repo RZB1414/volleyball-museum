@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#3a6390" stroke-width="1" opacity="0.55"/>
+    </pattern>
+  </defs>
+  <rect width="1200" height="800" fill="#1d3a5c"/>
+  <rect width="1200" height="800" fill="url(#grid)"/>
+  <rect x="24" y="24" width="1152" height="752" fill="none" stroke="#d6e3f1" stroke-width="3"/>
+  <rect x="34" y="34" width="1132" height="732" fill="none" stroke="#d6e3f1" stroke-width="1" opacity="0.7"/>
+
+  <g fill="none" stroke="#e4eef8" stroke-linejoin="round">
+    <!-- Built: Holyoke, the atrium and the curator's office. -->
+    <rect x="232" y="252" width="216" height="288" stroke-width="5"/>
+    <rect x="460" y="240" width="324" height="324" stroke-width="6"/>
+    <rect x="796" y="372" width="108" height="126" stroke-width="5"/>
+    <path d="M448 340v40M448 470v38M784 410v40M622 252v-12" stroke="#1d3a5c" stroke-width="9"/>
+    <circle cx="622" cy="402" r="20" stroke-width="2.5"/>
+    <!-- Planned: the remaining wings and the mezzanine, dashed. -->
+    <g stroke-dasharray="14 9" stroke-width="3" opacity="0.8">
+      <rect x="232" y="84" width="216" height="140"/>
+      <rect x="460" y="84" width="324" height="140"/>
+      <rect x="796" y="84" width="216" height="270"/>
+      <rect x="460" y="580" width="324" height="150"/>
+      <rect x="232" y="560" width="216" height="170"/>
+    </g>
+    <rect x="490" y="268" width="264" height="268" stroke-width="2" stroke-dasharray="4 8" opacity="0.7"/>
+  </g>
+
+  <g fill="#e4eef8" font-family="'Courier New', Courier, monospace" font-size="21" text-anchor="middle" letter-spacing="1">
+    <text x="340" y="402">ALA 1</text>
+    <text x="340" y="428" font-size="16">HOLYOKE</text>
+    <text x="622" y="300">ÁTRIO</text>
+    <text x="850" y="430" font-size="15">ESCRIT.</text>
+    <text x="850" y="450" font-size="15">CURADOR</text>
+    <text x="340" y="160">ALA 2</text>
+    <text x="340" y="184" font-size="16">PARIS</text>
+    <text x="622" y="160">ALA 3</text>
+    <text x="622" y="184" font-size="16">TÓQUIO</text>
+    <text x="904" y="214">ALA 4</text>
+    <text x="904" y="238" font-size="16">FERRO E AREIA</text>
+    <text x="622" y="650">ALA 5</text>
+    <text x="622" y="674" font-size="16">A REESCRITA</text>
+    <text x="340" y="642">ALA 6</text>
+    <text x="340" y="666" font-size="16">GLOBAL</text>
+    <text x="622" y="526" font-size="14" opacity="0.8">MEZANINO (PROJ.)</text>
+  </g>
+
+  <!-- The vault lies under the atrium: drawn in the dashed convention for
+       anything below the ground floor. -->
+  <rect x="566" y="374" width="112" height="70" fill="none" stroke="#e4eef8" stroke-width="2.5" stroke-dasharray="6 6"/>
+  <text x="622" y="470" fill="#e4eef8" font-family="'Courier New', Courier, monospace" font-size="14" text-anchor="middle">COFRE · SUBSOLO</text>
+
+  <!-- The previous curator's red pencil. -->
+  <g fill="none" stroke="#d2503c" stroke-width="4" stroke-linecap="round" opacity="0.9">
+    <path d="M553 392c6-34 76-44 112-30 34 13 40 52 14 74-30 26-102 24-124-4-12-15-8-30 6-42"/>
+    <path d="M700 368c38-26 92-30 136-14M826 344l12 12-17 6"/>
+  </g>
+  <text x="906" y="330" fill="#e2644e" font-family="'Segoe Print', 'Bradley Hand', 'Comic Sans MS', cursive" font-size="27" transform="rotate(-6 906 330)" text-anchor="middle">3 medalhas?</text>
+
+  <g font-family="'Courier New', Courier, monospace" fill="#e4eef8">
+    <rect x="896" y="636" width="264" height="114" fill="#1d3a5c" stroke="#d6e3f1" stroke-width="2"/>
+    <text x="912" y="668" font-size="19" letter-spacing="1">MUSEU DO VOLEIBOL</text>
+    <text x="912" y="696" font-size="14">PLANTA GERAL · TÉRREO</text>
+    <text x="912" y="720" font-size="14">PROJETO DE AMPLIAÇÃO</text>
+    <text x="912" y="740" font-size="12" opacity="0.8">ESC. 1:200 · FOLHA 01/06</text>
+  </g>
+</svg>

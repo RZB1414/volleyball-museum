@@ -262,15 +262,73 @@ export type ExhibitData = {
 }
 
 // ---------------------------------------------------------------------------
+// Progress conditions
+// ---------------------------------------------------------------------------
+
+/**
+ * A question about the save, asked by content rather than by code.
+ *
+ * The opening scene needs a radio that speaks when a room comes back, a hint
+ * that changes with the player's progress and a checklist that ticks itself.
+ * Writing each of those as a runtime branch would put story in components; a
+ * condition keeps it in this file, where the validator can check every id it
+ * names. Every listed requirement must hold; an empty condition always holds.
+ */
+export type ProgressCondition = {
+  readonly powered?: readonly EraId[]
+  readonly unpowered?: readonly EraId[]
+  readonly locksOpened?: readonly string[]
+  readonly locksClosed?: readonly string[]
+  readonly documentsRead?: readonly string[]
+  /** Every room in the museum has its electricity back. */
+  readonly allRoomsPowered?: boolean
+  /** Every exhibit in the museum is catalogued. */
+  readonly allCatalogued?: boolean
+}
+
+// ---------------------------------------------------------------------------
 // Documents — the reading layer
 // ---------------------------------------------------------------------------
+
+/** One line of a notebook checklist; ticked by the game when `doneWhen` holds. */
+export type ChecklistItem = {
+  readonly labelKey: string
+  readonly doneWhen?: ProgressCondition
+}
+
+/**
+ * One page of a bound notebook.
+ *
+ * Pages are separate records rather than one long body because a notebook is
+ * read by turning pages: the welcome printed on the flyleaf, a handwritten
+ * letter, a to-do list. Each one keeps its own typography and the reader never
+ * scrolls a letter that was written to fit a page.
+ */
+export type NotebookPage = {
+  readonly style: 'printed' | 'handwritten' | 'checklist'
+  readonly headingKey?: string
+  readonly bodyKey?: string
+  readonly signatureKey?: string
+  readonly postscriptKey?: string
+  readonly items?: readonly ChecklistItem[]
+}
 
 export type DocumentData = {
   readonly id: string
   readonly era: EraId
-  readonly kind: 'letter' | 'minutes' | 'clipping' | 'telegram' | 'scorecard' | 'oral-history'
+  readonly kind:
+    | 'letter'
+    | 'minutes'
+    | 'clipping'
+    | 'telegram'
+    | 'scorecard'
+    | 'oral-history'
+    | 'notebook'
   readonly titleKey: string
+  /** The body, or for a paged notebook the one-line summary the archive lists. */
   readonly bodyKey: string
+  /** A paged document opens on its first page in the notebook reader. */
+  readonly pages?: readonly NotebookPage[]
   /** Oral history plays while the player keeps walking — depth never stops the game. */
   readonly audioId?: string
   readonly mediaId?: string
@@ -368,6 +426,10 @@ export type KitPartId =
   | 'atrium-barrier-segment'
   | 'atrium-lounge-set'
   | 'atrium-display-console'
+  | 'curator-notebook'
+  | 'desk-radio'
+  | 'office-wall-clock'
+  | 'door-access-panel'
 
 /**
  * Architectural wall copy.
@@ -507,6 +569,14 @@ export type Portal = {
     readonly warmDistance: number
     /** Optional side that may release a one-way shortcut for the first time. */
     readonly opensFrom?: EraId
+    /**
+     * An electric lock: the leaves stay latched until this room has power.
+     *
+     * It must name one of the door's two rooms, and that room's own control
+     * must be reachable without passing through this door — the solvability
+     * gate proves both.
+     */
+    readonly requiresPower?: EraId
   }
   readonly lockId?: string
   /** A one-way shortcut: openable only from `toRoom`. The cheapest and
@@ -531,7 +601,80 @@ export type ContainerData = {
   readonly titleKey: string
   /** Set when the container itself is locked. */
   readonly lockId?: string
+  /**
+   * `drawer` (the default) reads every document at once and is targeted by a
+   * chest-high volume, which is right for a cabinet. `notebook` turns pages
+   * and is targeted by its own small bounds: a chest-high box around a book
+   * on a desk would swallow the lamp and everything else beside it.
+   */
+  readonly presentation?: 'drawer' | 'notebook'
+  /**
+   * Reading it puts the curator's notebook in the visitor's hands: the object
+   * leaves the desk and the journal (map, catalogue, archive) opens from then
+   * on. Until one such container is read, there is no journal to open.
+   */
+  readonly carriesJournal?: boolean
 }
+
+// ---------------------------------------------------------------------------
+// Devices
+// ---------------------------------------------------------------------------
+
+/** One message on the porter's radio. Lines are shown one after another. */
+export type RadioCall = {
+  readonly id: string
+  /** Fires once, the first time this holds while the radio has power. */
+  readonly when: ProgressCondition
+  /** Seconds between the condition becoming true and the call arriving. */
+  readonly delaySeconds: number
+  readonly lineKeys: readonly string[]
+}
+
+/** What the porter says when called; the first entry whose condition holds wins. */
+export type RadioHint = {
+  readonly when: ProgressCondition
+  readonly lineKeys: readonly string[]
+}
+
+type DevicePlacement = {
+  readonly id: string
+  readonly part: KitPartId
+  /** Room-local, on the support or wall datum like any kit placement. */
+  readonly position: Vec3
+  readonly rotationY?: number
+}
+
+/**
+ * Small working objects with state: they read power and progress, and change
+ * how they look. They are not interaction-free furniture (`kit`), not reading
+ * containers and not the room's own power control, so they get their own list.
+ *
+ * Each kind's runtime contract lives on node names checked by the validator:
+ * a clock needs `<part>__hand-hour|minute|second` and `<part>__dial`, every
+ * lit device needs `<part>__led`.
+ */
+export type DeviceData =
+  | (DevicePlacement & {
+      readonly kind: 'clock'
+      /** The time the hands show while stopped, 24-hour. */
+      readonly stoppedAt: { readonly hours: number; readonly minutes: number }
+      /** A mains clock: it starts running, from where it stopped, with this room. */
+      readonly runsWithPowerOf: EraId
+    })
+  | (DevicePlacement & {
+      readonly kind: 'power-indicator'
+      /** Red until this room has electricity, then green with an audible latch. */
+      readonly showsPowerOf: EraId
+    })
+  | (DevicePlacement & {
+      readonly kind: 'radio'
+      readonly titleKey: string
+      readonly speakerKey: string
+      /** The charger: no power, no reception and no way to call out. */
+      readonly poweredBy: EraId
+      readonly calls: readonly RadioCall[]
+      readonly hints: readonly RadioHint[]
+    })
 
 export type AudioEmitter = {
   readonly id: string
@@ -580,6 +723,7 @@ export type RoomData = {
   readonly exhibitIds: readonly string[]
   readonly documentIds: readonly string[]
   readonly containers?: readonly ContainerData[]
+  readonly devices?: readonly DeviceData[]
   readonly audio: readonly AudioEmitter[]
   /** Unlit rooms are the progression language: unlit === unexplored. */
   readonly startsPowered: boolean
@@ -593,7 +737,18 @@ export type RoomData = {
 // The assembled museum
 // ---------------------------------------------------------------------------
 
+/**
+ * Where a session begins: a room, a room-local point on its floor and the
+ * initial heading (radians, three's convention: 0 faces -Z, PI/2 faces -X).
+ */
+export type SpawnData = {
+  readonly room: EraId
+  readonly position: Vec3
+  readonly yaw: number
+}
+
 export type MuseumContent = {
+  readonly spawn: SpawnData
   readonly rooms: readonly RoomData[]
   readonly exhibits: readonly ExhibitData[]
   readonly documents: readonly DocumentData[]

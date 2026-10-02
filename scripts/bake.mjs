@@ -66,6 +66,12 @@ import {
   buildVisitorChair,
 } from './bake/parts/officeDecor.mjs'
 import {
+  buildCuratorNotebook,
+  buildDeskRadio,
+  buildDoorAccessPanel,
+  buildWallClock,
+} from './bake/parts/officeProps.mjs'
+import {
   buildGymCourtLines,
   buildGymTrainingSet,
   buildHistoryCaseRun,
@@ -166,6 +172,10 @@ const MATERIAL_TEXTURES = {
   'holyoke-navy': 'canvas',
   'glass-vitrine': null,
   'glass-green': null,
+  'plastic-black': null,
+  'led-off': null,
+  'led-red': null,
+  'led-green': null,
 }
 
 /** Mobile VRAM ceiling for all material textures, uncompressed with mips. */
@@ -733,7 +743,14 @@ async function main() {
     ...compoundKitParts(
       'bookshelf',
       bookshelf,
-      { carcass: 'walnut-polished', books: 'leather-worn', boxes: 'archive-green', brass: 'brass' },
+      {
+        carcass: 'walnut-polished',
+        books: 'leather-worn',
+        booksGreen: 'leather-green',
+        booksRed: 'rope-velvet',
+        boxes: 'archive-green',
+        brass: 'brass',
+      },
       'carcass',
     ),
     ...compoundKitParts(
@@ -781,8 +798,43 @@ async function main() {
     ...compoundKitParts(
       'coat-stand',
       coatStand,
-      { wood: 'walnut-polished', hardware: 'brass' },
+      { wood: 'walnut-polished', hardware: 'brass', hat: 'leather-worn', umbrella: 'plastic-black' },
       'wood',
+    ),
+
+    // The opening scene's working props. The notebook is a container, the
+    // other three are devices: none is instanced, so each placement clones
+    // its own nodes and the runtime may recolour a lens or turn a hand.
+    ...compoundKitParts(
+      'curator-notebook',
+      buildCuratorNotebook(),
+      { cover: 'rope-velvet', pages: 'paper-aged', band: 'plastic-black', pen: 'brass' },
+      'cover',
+    ),
+    ...compoundKitParts(
+      'desk-radio',
+      buildDeskRadio(),
+      { body: 'plastic-black', metal: 'iron-cast', led: 'led-off' },
+      'body',
+    ),
+    ...compoundKitParts(
+      'office-wall-clock',
+      buildWallClock(),
+      {
+        casing: 'walnut-polished',
+        bezel: 'brass',
+        dial: 'paper-aged',
+        'hand-hour': 'iron-cast',
+        'hand-minute': 'iron-cast',
+        'hand-second': 'rope-velvet',
+      },
+      'casing',
+    ),
+    ...compoundKitParts(
+      'door-access-panel',
+      buildDoorAccessPanel(),
+      { plate: 'iron-cast', trim: 'brass', led: 'led-red' },
+      'plate',
     ),
 
     // Holyoke historical gallery. The wall case is one authored run so its five

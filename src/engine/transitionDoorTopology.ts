@@ -20,6 +20,8 @@ export type TransitionDoorSpec = {
   readonly closeDistance: number
   readonly warmDistance: number
   readonly opensFrom: EraId | null
+  /** The room whose electricity releases this door's electric lock, if any. */
+  readonly requiresPower: EraId | null
   readonly reciprocalPortalId: string
 }
 
@@ -85,6 +87,15 @@ export function buildTransitionDoorSpecs(
           `One-way transition door "${portal.id}" must open from its destination.`,
         )
       }
+      if (
+        authored.requiresPower &&
+        authored.requiresPower !== room.id &&
+        authored.requiresPower !== portal.toRoom
+      ) {
+        throw new Error(
+          `Transition door "${portal.id}" can only be powered by one of its two rooms.`,
+        )
+      }
 
       const worldPosition: Vec3 = [
         room.origin[0] + portal.position[0],
@@ -133,6 +144,7 @@ export function buildTransitionDoorSpecs(
         closeDistance: authored.closeDistance,
         warmDistance: authored.warmDistance,
         opensFrom: authored.opensFrom ?? null,
+        requiresPower: authored.requiresPower ?? null,
         reciprocalPortalId: reciprocal.id,
       })
     }
@@ -175,6 +187,24 @@ export function canOpenTransitionDoor(
     transitionDoorTarget(door, currentRoom) &&
       (!door.opensFrom || door.opensFrom === currentRoom),
   )
+}
+
+/**
+ * Why a door will not open for this visitor right now, or null when it will.
+ *
+ * Kept apart from `canOpenTransitionDoor` on purpose. That answers "may this
+ * side ever operate the door", which also decides whether the far room starts
+ * warming; an unpowered lock must not stop the warm-up, or the first press
+ * after the lamp comes on would wait on a cold gallery instead of opening.
+ */
+export function transitionDoorBlock(
+  door: TransitionDoorSpec,
+  currentRoom: string,
+  isPowered: (roomId: string) => boolean,
+): 'other-side' | 'unpowered' | null {
+  if (door.opensFrom && door.opensFrom !== currentRoom) return 'other-side'
+  if (door.requiresPower && !isPowered(door.requiresPower)) return 'unpowered'
+  return null
 }
 
 /** Positive opens towards local -Z; the reciprocal side reverses away from its visitor. */

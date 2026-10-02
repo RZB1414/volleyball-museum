@@ -721,14 +721,21 @@ export function buildDeskLamp() {
  * wide and 0.34 m deep: enough vertical mass to make the north wall feel used,
  * while leaving the archive cabinet and its interaction approach unobstructed.
  *
- * Returns carcass, books, archive boxes and their brass label holders as four
- * materials sharing one origin. Structural members keep authored normals with
- * `crease: null`; the small contents use plain boxes because a bevel there
+ * Returns carcass, three binding families, archive boxes and their brass label
+ * holders, all sharing one origin. Structural members keep authored normals
+ * with `crease: null`; the small contents use plain boxes because a bevel there
  * would be below a pixel and would crowd out useful silhouettes.
+ *
+ * The bindings are split across brown leather, green leather and crimson cloth.
+ * One colour for thirty-odd spines read as a single brown block from the desk;
+ * the mix is what makes a shelf look collected over decades rather than
+ * ordered by the metre, and it costs two draw calls for every case in the room.
  */
 export function buildBookshelf({ width = 1.18, depth = 0.34, height = 2.72 } = {}) {
   const carcass = []
   const books = []
+  const booksGreen = []
+  const booksRed = []
   const boxes = []
   const brass = []
   const side = 0.055
@@ -781,7 +788,10 @@ export function buildBookshelf({ width = 1.18, depth = 0.34, height = 2.72 } = {
       const book = new BoxGeometry(bookWidth, bookHeight, bookDepth)
       book.rotateZ(index === 2 && row % 2 === 0 ? -0.055 : 0)
       book.translate(cursor + bookWidth / 2, floor + bookHeight / 2, 0.035)
-      books.push(book)
+      // Runs of two or three in a colour, as sets are shelved together, with
+      // the brown majority keeping the wall calm.
+      const binding = (row * 7 + Math.floor(index / 2) * 3) % 5
+      ;(binding === 3 ? booksGreen : binding === 4 ? booksRed : books).push(book)
       cursor += bookWidth + 0.013
     }
   }
@@ -816,6 +826,8 @@ export function buildBookshelf({ width = 1.18, depth = 0.34, height = 2.72 } = {
   return {
     carcass: finalize(merge(carcass), { crease: null, metresPerTile: 0.42 }),
     books: finalize(merge(books), { crease: null, metresPerTile: 0.24 }),
+    booksGreen: finalize(merge(booksGreen), { crease: null, metresPerTile: 0.24 }),
+    booksRed: finalize(merge(booksRed), { crease: null, metresPerTile: 0.24 }),
     boxes: finalize(merge(boxes), { crease: null, metresPerTile: 0.3 }),
     brass: finalize(merge(brass), { crease: null, metresPerTile: 0.16 }),
   }

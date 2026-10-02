@@ -14,11 +14,31 @@ import { formatCreditLine } from '../content/credit'
 import { MUSEUM } from '../content/museum'
 import type { ExhibitData } from '../content/schema'
 import { museumAudio } from '../engine/audio'
+import { radioDevices, radioIsLive, radioLineSeconds } from '../engine/deviceRules'
+import { containerById, isNotebook, journalUnlocked } from '../engine/notebook'
 import { isRoomPowered } from '../engine/power'
 import { useTranslate } from '../i18n'
 import { LockPanel } from './LockPanel'
 import { MobileControls } from './MobileControls'
+import { NotebookPanel } from './Notebook'
 import { useMuseum } from '../state/store'
+
+const radiosById = new Map(radioDevices(MUSEUM).map((entry) => [entry.device.id, entry.device]))
+
+/** Touch layouts hide the keyboard glyphs, so hints are worded per input. */
+function useCoarsePointer() {
+  const query = '(any-pointer: coarse), (max-width: 900px) and (orientation: landscape)'
+  const [coarse, setCoarse] = useState(() =>
+    typeof window === 'undefined' ? false : window.matchMedia(query).matches,
+  )
+  useEffect(() => {
+    const media = window.matchMedia(query)
+    const update = () => setCoarse(media.matches)
+    media.addEventListener('change', update)
+    return () => media.removeEventListener('change', update)
+  }, [])
+  return coarse
+}
 
 const exhibitsById = new Map<string, ExhibitData>(
   MUSEUM.exhibits.map((exhibit) => [exhibit.id, exhibit]),
@@ -90,11 +110,14 @@ function PowerPrompt() {
   const focusedExhibit = useMuseum((state) => state.focusedExhibit)
   const focusedContainer = useMuseum((state) => state.focusedContainer)
   const focusedDoor = useMuseum((state) => state.focusedTransitionDoor)
+  const focusedDevice = useMuseum((state) => state.focusedDevice)
   const examining = useMuseum((state) => state.examining)
   const restored = useMuseum((state) => state.progress.roomsPowered)
   const t = useTranslate()
 
-  if (!focused || focusedExhibit || focusedContainer || focusedDoor || examining) return null
+  if (!focused || focusedExhibit || focusedContainer || focusedDoor || focusedDevice || examining) {
+    return null
+  }
   const room = MUSEUM.rooms.find((candidate) => candidate.powerControl?.id === focused)
   if (!room?.powerControl || isRoomPowered(room, restored)) return null
 
@@ -119,7 +142,9 @@ function TransitionDoorPrompt() {
 
   const label =
     focused.status === 'blocked'
-      ? t('prompt.door.otherSide')
+      ? focused.blockedBy === 'unpowered'
+        ? t('prompt.door.unpowered')
+        : t('prompt.door.otherSide')
       : focused.status === 'ready'
       ? t('prompt.door.open')
       : focused.status === 'opening'
@@ -137,6 +162,66 @@ function TransitionDoorPrompt() {
   )
 }
 
+/** The porter's radio: live once its charger has power. */
+function DevicePrompt() {
+  const focused = useMuseum((state) => state.focusedDevice)
+  const focusedExhibit = useMuseum((state) => state.focusedExhibit)
+  const focusedContainer = useMuseum((state) => state.focusedContainer)
+  const focusedDoor = useMuseum((state) => state.focusedTransitionDoor)
+  const examining = useMuseum((state) => state.examining)
+  const restored = useMuseum((state) => state.progress.roomsPowered)
+  const t = useTranslate()
+
+  if (!focused || focusedExhibit || focusedContainer || focusedDoor || examining) return null
+  const radio = radiosById.get(focused)
+  if (!radio) return null
+  const live = radioIsLive(MUSEUM, focused, restored)
+
+  return (
+    <div className="prompt" role="status">
+      {live ? <span className="prompt-key">E</span> : null}
+      <span className="prompt-label">{live ? t('prompt.radio.call') : t('prompt.radio.dead')}</span>
+      <span className="prompt-title">{t(radio.titleKey as never)}</span>
+    </div>
+  )
+}
+
+/**
+ * What the radio is saying, one line at a time.
+ *
+ * There is no recorded voice, so the subtitle IS the transmission and is shown
+ * regardless of the subtitle setting. Each line stays up for a reading pace
+ * derived from its length; the skip control and E on the radio move it on.
+ */
+function RadioSubtitles() {
+  const radio = useMuseum((state) => state.radio)
+  const advance = useMuseum((state) => state.advanceRadio)
+  const t = useTranslate()
+  const line = radio ? t(radio.lineKeys[radio.index] as never) : ''
+
+  useEffect(() => {
+    if (!radio) return undefined
+    if (radio.index > 0) museumAudio.radioCrackle()
+    const timer = window.setTimeout(() => {
+      const current = useMuseum.getState().radio
+      if (current?.serial === radio.serial && current.index === radio.index) advance()
+    }, radioLineSeconds(line) * 1000)
+    return () => window.clearTimeout(timer)
+  }, [advance, line, radio])
+
+  if (!radio) return null
+
+  return (
+    <div className="radio-subtitle" role="status" aria-live="polite">
+      <span className="radio-speaker">{t(radio.speakerKey as never)}</span>
+      <span className="radio-line">{line}</span>
+      <button type="button" className="radio-skip" onClick={advance}>
+        {t('radio.skip')} ›
+      </button>
+    </div>
+  )
+}
+
 /** The documents found in a cabinet the player just opened. */
 function DocumentPanel() {
   const openedContainer = useMuseum((state) => state.openedContainer)
@@ -144,6 +229,8 @@ function DocumentPanel() {
   const t = useTranslate()
 
   if (!openedContainer) return null
+  // Notebooks have their own page-turning reader.
+  if (isNotebook(containerById(MUSEUM, openedContainer))) return <NotebookPanel />
 
   const documents = MUSEUM.documents.filter((doc) => doc.containerId === openedContainer)
   if (documents.length === 0) return null
@@ -314,24 +401,145 @@ function PowerToast() {
   )
 }
 
+/**
+ * Shown once, when the player closes the notebook they have just picked up:
+ * the journal now exists, and this is how to open it.
+ */
+function JournalTakenToast() {
+  const unlocked = useMuseum((state) => journalUnlocked(MUSEUM, state.progress.documentsRead))
+  const openedContainer = useMuseum((state) => state.openedContainer)
+  const coarse = useCoarsePointer()
+  const t = useTranslate()
+  // A save that already holds the notebook never announces it again.
+  const announcedRef = useRef(unlocked)
+  const [shown, setShown] = useState(false)
+
+  useEffect(() => {
+    if (!unlocked || openedContainer || announcedRef.current) return undefined
+    announcedRef.current = true
+    setShown(true)
+    museumAudio.chime()
+    const timer = window.setTimeout(() => setShown(false), 5200)
+    return () => window.clearTimeout(timer)
+  }, [openedContainer, unlocked])
+
+  if (!shown) return null
+  return (
+    <div className="toast" role="status">
+      <span className="toast-mark">✓</span>
+      <span>
+        {t('journal.taken')} — {coarse ? t('journal.taken.touch') : t('journal.taken.keyboard')}
+      </span>
+    </div>
+  )
+}
+
+function TorchIcon() {
+  return (
+    <svg className="hud-tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M7.2 3h9.6l-1.5 5.3H8.7z" />
+      <rect x="8.7" y="9.3" width="6.6" height="11.7" rx="1.4" />
+      <rect x="11" y="12.3" width="2" height="3.2" rx="0.6" className="hud-tool-icon-cut" />
+    </svg>
+  )
+}
+
+function NotebookIcon() {
+  return (
+    <svg className="hud-tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="5" y="3" width="14" height="18" rx="1.6" />
+      <rect x="7.6" y="3" width="1.6" height="18" className="hud-tool-icon-cut" />
+      <rect x="15.4" y="3" width="1.4" height="18" className="hud-tool-icon-cut" />
+    </svg>
+  )
+}
+
+/**
+ * The player's two tools, bottom right: the notebook (once carried) and the
+ * torch, which sits closest to the thumb, directly above the right-hand stick.
+ *
+ * The torch pulses while the player stands in a dark room and has never
+ * switched it on — the first verb of the game is to light the way.
+ */
+function HudTools() {
+  const on = useMuseum((state) => state.flashlightOn)
+  const used = useMuseum((state) => state.flashlightUsed)
+  const toggle = useMuseum((state) => state.toggleFlashlight)
+  const journalTab = useMuseum((state) => state.journalTab)
+  const setJournalTab = useMuseum((state) => state.setJournalTab)
+  const currentRoom = useMuseum((state) => state.currentRoom)
+  const restored = useMuseum((state) => state.progress.roomsPowered)
+  const unlocked = useMuseum((state) => journalUnlocked(MUSEUM, state.progress.documentsRead))
+  const t = useTranslate()
+
+  const room = MUSEUM.rooms.find((candidate) => candidate.id === currentRoom)
+  const dark = room ? !isRoomPowered(room, restored) : false
+  const hinting = dark && !used && !on
+
+  return (
+    <div className="hud-tools">
+      {unlocked ? (
+        <button
+          type="button"
+          className="hud-tool is-journal"
+          aria-label={t('ui.journal.open')}
+          title={t('ui.journal.open')}
+          aria-pressed={journalTab !== null}
+          onClick={() => {
+            if (document.pointerLockElement) document.exitPointerLock()
+            setJournalTab(journalTab ? null : 'map')
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
+        >
+          <NotebookIcon />
+          <span className="hud-tool-key" aria-hidden="true">
+            Tab
+          </span>
+        </button>
+      ) : null}
+      <button
+        type="button"
+        className={`hud-tool is-torch${on ? ' is-on' : ''}${hinting ? ' is-hinting' : ''}`}
+        aria-label={on ? t('ui.torch.on') : t('ui.torch.off')}
+        title={t('ui.torch')}
+        aria-pressed={on}
+        onClick={toggle}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <TorchIcon />
+        <span className="hud-tool-key" aria-hidden="true">
+          F
+        </span>
+      </button>
+    </div>
+  )
+}
+
 export function Hud() {
   const examining = useMuseum((state) => state.examining)
   const openedContainer = useMuseum((state) => state.openedContainer)
+  const activeLock = useMuseum((state) => state.activeLock)
+  const journalTab = useMuseum((state) => state.journalTab)
+  const modal = Boolean(examining || openedContainer || activeLock || journalTab)
 
   return (
     <>
       <MobileControls />
       {/* Meaningless while holding an object or reading a document. */}
       {examining || openedContainer ? null : <div className="crosshair" aria-hidden="true" />}
+      {modal ? null : <HudTools />}
       <InteractionPrompt />
       <ContainerPrompt />
       <PowerPrompt />
+      <DevicePrompt />
       <TransitionDoorPrompt />
+      <RadioSubtitles />
       <ExaminePanel />
       <DocumentPanel />
       <LockPanel />
       <CatalogueToast />
       <PowerToast />
+      <JournalTakenToast />
     </>
   )
 }

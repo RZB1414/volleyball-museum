@@ -204,6 +204,8 @@ export function PowerControlTargeting() {
         state.focusedTransitionDoor ||
         state.focusedExhibit ||
         state.focusedContainer ||
+        // A device on the same desk wins the key, as furniture does.
+        state.focusedDevice ||
         !state.focusedPowerControl
       ) {
         return false

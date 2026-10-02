@@ -35,6 +35,13 @@ export const en = {
   'mobile.fullscreen.install':
     'In this browser, use “Add to Home Screen” for a complete fullscreen experience.',
   'mobile.fullscreen.dismiss': 'Got it',
+  'ui.torch': 'Torch',
+  'ui.torch.on': 'Switch the torch off',
+  'ui.torch.off': 'Switch the torch on',
+  'ui.journal.open': 'Open the notebook',
+  'journal.taken': 'Notebook taken',
+  'journal.taken.keyboard': 'Tab opens the plan, the catalogue and the archive.',
+  'journal.taken.touch': 'The notebook icon opens the plan, the catalogue and the archive.',
 
   'prompt.examine': 'Examine',
   'prompt.read': 'Read',
@@ -47,7 +54,13 @@ export const en = {
   'prompt.door.loading': 'Preparing the next gallery…',
   'prompt.door.opening': 'Opening…',
   'prompt.door.otherSide': 'Opens from the other side',
+  'prompt.door.unpowered': 'The lock has no power',
+  'prompt.radio.call': 'Call the porter',
+  'prompt.radio.dead': 'Not charging',
   'power.restored': 'Power restored',
+  'radio.skip': 'Skip',
+  'notebook.next': 'Turn the page',
+  'notebook.previous': 'Back',
 
   'map.title': 'Museum plan',
   'map.state.unlit': 'No power',
@@ -103,6 +116,44 @@ export const en = {
   'power.atrium.title': 'Atrium main breaker',
   'power.holyoke.title': 'Wing 1 breaker panel',
   'power.office.title': "Curator's lamp",
+
+  // ---------------------------------------------------------------------
+  // The opening: the curator's office at night
+  // ---------------------------------------------------------------------
+  'container.office-notebook.title': "Curator's notebook",
+  'document.welcome.title': "The director's welcome",
+  'document.welcome.summary':
+    "The first pages of the notebook, left on the desk for the new curator.",
+  'notebook.welcome.flyleaf':
+    'Welcome to the Volleyball Museum, where history is told in a way you can touch.',
+  'notebook.welcome.letter':
+    'Hello, new curator! Welcome to your new job.\n\n' +
+    "This afternoon's storm knocked out the power across the whole museum, and you will have to bring it back room by room.\n\n" +
+    'We reopen tomorrow at 9. Good luck!',
+  'notebook.welcome.signature': '— Helena, director',
+  'notebook.welcome.postscript':
+    'P.S. The previous curator left his things here. He locked everything with dates from volleyball history.',
+  'notebook.todo.heading': 'Before 9 a.m.',
+  'notebook.todo.power': 'Restore the power: office, atrium and wings',
+  'notebook.todo.catalogue': 'Catalogue the collection',
+  'notebook.todo.vault': 'The vault — only Otávio knew how to open it',
+  'device.office-radio.title': "Porter's radio",
+  'radio.speaker.porter': 'Jorge · porter',
+  'radio.call.first.1': "Curator? It's Jorge, at the front desk. Over.",
+  'radio.call.first.2':
+    'The panel here says the office lights are back. The storm tripped every breaker in the building.',
+  'radio.call.first.3':
+    "The atrium breaker is on the west wall, beside the Wing 1 entrance. Look for the little red light.",
+  'radio.call.first.4':
+    "And don't go down to the basement: it flooded. Anything at all, call me on this radio. Over and out.",
+  'radio.hint.atrium':
+    'The atrium breaker is on the west wall, near the Wing 1 entrance. The little red light shows you where.',
+  'radio.hint.holyoke':
+    "Wing 1 has its own breaker panel, inside. Cross it in the dark if you have to — the torch will do.",
+  'radio.hint.drawer':
+    "That locked drawer in your office? Otávio used dates you can find on the labels. Have a look at Morgan's portrait in Wing 1.",
+  'radio.hint.vault':
+    "It's all yours now, curator. Otávio was always going on about three medals and a vault under the atrium. Over.",
 
   // ---------------------------------------------------------------------
   // Wall lettering

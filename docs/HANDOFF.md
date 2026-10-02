@@ -1,7 +1,8 @@
 # Handoff — Museu do Voleibol
 
-Atualizado em 2026-08-12. Este documento é o ponto de entrada para retomar o projeto
-sem depender da conversa anterior.
+Atualizado em 2026-10-02 (a abertura no escritório, §9); o estado técnico das salas é
+o de 2026-08-12. Este documento é o ponto de entrada para retomar o projeto sem
+depender da conversa anterior.
 
 Leia também, nesta ordem: `docs/PLANO-DO-ZERO.md` (o desenho do jogo),
 `docs/REFERENCIA-TECNICA.md` (gramática de Resident Evil + pipeline web-3D) e
@@ -373,6 +374,7 @@ npm run bake
 npm run check
 npm run validate:content
 npm run test:power
+npm run test:opening
 npm run test:collision
 npm run test:kit
 npm run test:kit-runtime
@@ -391,9 +393,12 @@ materiais ou colliders, rode `npm run bake` antes do check. Nunca corrija um tes
 diminuindo sua cobertura.
 
 O gate de kit soma a receita inteira (`root` + `root__*`) e limita cada prop a
-2.500 triângulos. Os casos mais próximos do teto são `coat-stand` (2.344),
-`office-flatfile` (2.336), `curator-desk` (2.300), `door-leaf` e
-`door-leaf-right` (2.236 cada).
+2.500 triângulos. Os casos mais próximos do teto são `coat-stand` (2.440, com o
+chapéu e o guarda-chuva), `office-flatfile` (2.336), `curator-desk` (2.300),
+`door-leaf` e `door-leaf-right` (2.236 cada).
+
+O aviso do Vite de chunk acima de 700 kB (`playerPosition-*.js`, 725 kB) já existia
+em `ca4513c`, com o mesmo hash; não é regressão da abertura.
 
 ---
 
@@ -426,6 +431,14 @@ O gate de kit soma a receita inteira (`root` + `root__*`) e limita cada prop a
   gravidade no spawn.
 - `PropertyBinding.sanitizeNodeName` remove `[ ] . : /`; normalize os dois lados
   quando comparar nomes de nós.
+- O disco do Windows ignora maiúsculas: `devices.ts` ao lado de `Devices.tsx` faz o
+  `tsc` resolver o arquivo errado. Módulos puros levam outro nome (`deviceRules.ts`,
+  `flashlightRig.ts`).
+- Uma luz nova muda a contagem de luzes de todo programa de shader. A lanterna é um
+  spot permanente com intensidade zero quando apagada; desmontá-la ou usar
+  `visible = false` recompila o prédio no primeiro clique.
+- Para girar um nó do kit (ponteiros do relógio), reparente-o num pivô no centro
+  medido; a rotação direta gira em torno da origem de quantização.
 
 ---
 
@@ -440,7 +453,13 @@ O gate de kit soma a receita inteira (`root` + `root__*`) e limita cada prop a
 3. **Paleta por ala.** Material de piso, temperatura e acabamento ainda têm pouca
    variação real apesar de `PaletteId`.
 4. **Áudio e acabamento.** `RoomData.audio` continua sem leitor; pós-processamento,
-   desgaste e assimetria seguem ausentes.
+   desgaste e assimetria seguem ausentes. A música calma no clique da luminária
+   (contrato da sala segura) ainda não existe.
+5. **Continuação da abertura** (ideias aprovadas pelo dono, ainda não feitas):
+   folheto na recepção liberando a aba Planta, quadro do átrio religando só a luz de
+   serviço (o disjuntor GERAL fica para o final), goteira e claraboia trincada no
+   átrio, secretária eletrônica com o recado do Otávio, e o relógio marcando o
+   avanço da noite até o amanhecer.
 
 ---
 
@@ -480,3 +499,43 @@ A inspeção visual final desta etapa confirmou no build servido:
   recriam seu detail e as luzes retomam o estado de energia anterior;
 - teleports de QA aguardam o piso da coordenada alvo registrar antes de mover a
   câmera; átrio, Holyoke e escritório estabilizaram em `y = 1,62`.
+
+---
+
+## 9. A abertura: o escritório à noite (2026-10-02)
+
+É noite, véspera da reabertura; a tempestade da tarde derrubou a energia. A sessão
+começa no escritório, de costas para a porta e de frente para a mesa
+(`src/content/spawn.ts`, re-exportado como `MUSEUM.spawn`). A ordem desenhada é:
+lanterna → caderno → luminária → porta → átrio escuro.
+
+- **Caderno** (`office-notebook`, `presentation: 'notebook'`, `carriesJournal`):
+  três páginas (`DocumentData.pages`): folha de rosto impressa, carta manuscrita da
+  diretora Helena com P.S. sobre as datas do Otávio, e a lista "Antes das 9h", que
+  se risca sozinha por `ProgressCondition`. `E` vira a página e fecha na última.
+  Ler é pegar: o caderno some da mesa e só então o diário (Tab, ou o ícone na tela)
+  passa a existir. Regras em `src/engine/notebook.ts`, leitor em `src/ui/Notebook.tsx`.
+- **Trava elétrica**: `transitionDoor.requiresPower: 'office'` na porta do átrio.
+  `transitionDoorBlock` responde `'unpowered'`, o prompt diz "Fechadura sem energia"
+  e o `E` dá um zumbido. O aquecimento da sala vizinha continua (só a abertura é
+  bloqueada). O portão de solvabilidade trata a trava nos dois sentidos da abertura.
+- **Dispositivos** (`RoomData.devices`, `src/engine/Devices.tsx`, regras puras em
+  `deviceRules.ts`): relógio elétrico parado às 16h47 que volta a andar com a energia
+  (ponteiros em pivôs no centro medido do `__dial`); leitor da porta com lente
+  `__led` vermelha → verde e o "clac" do trinco; rádio da portaria, sem carga até a
+  luminária, que chama uma vez (`progress.radioCalls`) e responde dicas na ordem do
+  que falta (átrio → Ala 1 → gaveta 1896 → cofre). Legendas em `RadioSubtitles`.
+- **Lanterna**: um spot permanente (`flashlightRig.ts`, `Flashlight.tsx`), tecla F
+  ou o ícone no canto inferior direito, que pulsa enquanto a sala está escura e a
+  lanterna nunca foi usada. Alcance de 6,2 m: o teste prova que nunca chega ao teto
+  do átrio.
+- **Modelos novos** (`scripts/bake/parts/officeProps.mjs`): caderno de capa vermelha
+  com elástico e caneta, rádio no carregador, relógio de parede e leitor da porta.
+  **Melhorados:** estante com encadernações em três cores, cabideiro com o chapéu do
+  antigo curador e o guarda-chuva da tempestade, e a planta do museu
+  (`public/textures/media/office-blueprint.svg`) na parede sul, com o cofre circulado
+  a lápis vermelho. Materiais novos sem textura: `plastic-black`, `led-off`,
+  `led-red` e `led-green`.
+- **Testes**: `npm run test:opening` (23 checagens: spawn, caderno, lista, trava,
+  rádio, relógio, lanterna e validador). `validateOpening` cobre spawn, páginas,
+  dispositivos e condições; `validateBake` exige os nós `__hand-*`, `__dial` e `__led`.

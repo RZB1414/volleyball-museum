@@ -1,6 +1,11 @@
 import type { Object3D } from 'three'
 
-const INTERACTION_TARGET_PREFIXES = ['exhibit:', 'container:', 'power-control:'] as const
+const INTERACTION_TARGET_PREFIXES = [
+  'exhibit:',
+  'container:',
+  'power-control:',
+  'device:',
+] as const
 const TARGET_CACHE_KEY = '__museumWarmDetailTarget'
 const INTERACTION_LAYER = 7
 const BLOCK_DESCENDANT_RAYCAST: Object3D['raycast'] = () => false

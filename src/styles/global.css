@@ -275,8 +275,7 @@ button {
   }
 
   .mobile-control-stick,
-  .mobile-action-button,
-  .mobile-torch-toggle {
+  .mobile-action-button {
     -webkit-tap-highlight-color: transparent;
     touch-action: none;
     user-select: none;
@@ -348,32 +347,13 @@ button {
     transition: none;
   }
 
-  .mobile-torch-toggle {
-    position: absolute;
-    z-index: 2;
-    right: calc(env(safe-area-inset-right) + 18px);
-    bottom: calc(env(safe-area-inset-bottom) + 150px);
-    display: inline-flex;
-    width: 48px;
-    height: 48px;
-    align-items: center;
-    justify-content: center;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 50%;
-    background: rgba(10, 12, 14, 0.58);
-    color: #f3f5f8;
-    cursor: pointer;
-    pointer-events: auto;
-    box-shadow:
-      0 14px 34px rgba(0, 0, 0, 0.28),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-  }
-
+  /* The torch sits directly above the right-hand stick (see museum.css), so
+     the contextual action moves to its left, still under the right thumb. */
   .mobile-action-button {
     position: absolute;
     z-index: 2;
-    right: calc(env(safe-area-inset-right) + 42px);
-    bottom: calc(env(safe-area-inset-bottom) + 146px);
+    right: calc(env(safe-area-inset-right) + 116px);
+    bottom: calc(env(safe-area-inset-bottom) + 144px);
     min-width: 64px;
     min-height: 48px;
     border: 1px solid rgba(255, 224, 170, 0.5);
@@ -397,28 +377,10 @@ button {
     transform: scale(0.96);
   }
 
-  .mobile-torch-toggle.is-on {
-    border-color: rgba(255, 210, 125, 0.72);
-    background:
-      radial-gradient(circle at 50% 32%, rgba(255, 244, 190, 0.96), rgba(255, 171, 67, 0.9) 54%, rgba(137, 71, 26, 0.82)),
-      rgba(255, 169, 62, 0.9);
-    color: #1d150d;
-    box-shadow:
-      0 0 28px rgba(255, 159, 56, 0.5),
-      0 14px 34px rgba(0, 0, 0, 0.3);
-  }
-
-  .mobile-torch-toggle:focus-visible,
   .mobile-action-button:focus-visible,
   .mobile-control-stick:focus-visible {
     outline: 3px solid rgba(255, 255, 255, 0.72);
     outline-offset: 4px;
-  }
-
-  .mobile-torch-icon {
-    width: 24px;
-    height: 24px;
-    fill: currentColor;
   }
 
   .mobile-sit-toggle {
@@ -474,22 +436,10 @@ button {
     margin: -19px 0 0 -19px;
   }
 
-  .mobile-torch-toggle {
-    right: calc(env(safe-area-inset-right) + 16px);
-    bottom: calc(env(safe-area-inset-bottom) + 142px);
-    width: 44px;
-    height: 44px;
-  }
-
   .mobile-action-button {
-    right: calc(env(safe-area-inset-right) + 34px);
-    bottom: calc(env(safe-area-inset-bottom) + 132px);
+    right: calc(env(safe-area-inset-right) + 100px);
+    bottom: calc(env(safe-area-inset-bottom) + 124px);
     min-height: 44px;
-  }
-
-  .mobile-torch-icon {
-    width: 22px;
-    height: 22px;
   }
 }
 

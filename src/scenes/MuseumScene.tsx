@@ -31,6 +31,8 @@ import { museumAudio } from '../engine/audio'
 import { preloadBundle, preloadTexture } from '../engine/bundleCache'
 import { CollisionWorld } from '../engine/collision'
 import { ContainerLayer, ContainerTargeting } from '../engine/Containers'
+import { DeviceLayer, DeviceTargeting, RadioDirector } from '../engine/Devices'
+import { Flashlight } from '../engine/Flashlight'
 import { FramedMedia } from '../engine/FramedMedia'
 import {
   beginGpuWarmupDiscovery,
@@ -407,6 +409,12 @@ function clearFocusedTargetsForRoom(room: RoomData) {
   if (state.focusedPowerControl === room.powerControl?.id) {
     state.setFocusedPowerControl(null)
   }
+  if (
+    state.focusedDevice &&
+    (room.devices ?? []).some((device) => device.id === state.focusedDevice)
+  ) {
+    state.setFocusedDevice(null)
+  }
 }
 
 /** Reports the real commit of a Suspense subtree, including cached loads. */
@@ -440,7 +448,10 @@ function CachedRoomDetail({
   const retryRef = useRef(0)
   const targetCountRef = useRef(0)
   const expectedTargets =
-    room.exhibitIds.length + (room.containers?.length ?? 0) + (room.powerControl ? 1 : 0)
+    room.exhibitIds.length +
+    (room.containers?.length ?? 0) +
+    (room.devices?.length ?? 0) +
+    (room.powerControl ? 1 : 0)
 
   useLayoutEffect(() => {
     const root = rootRef.current
@@ -478,6 +489,7 @@ function CachedRoomDetail({
           collision={collision}
         />
         <PowerControlLayer room={room} kitUrl={KIT_URL} materials={materials} />
+        <DeviceLayer room={room} kitUrl={KIT_URL} materials={materials} />
         <KitLayer
           room={room}
           kitBundle={KIT_BUNDLE}
@@ -874,14 +886,22 @@ export function MuseumScene() {
   )
 
   /**
-   * Spawn looking WEST, at the Holyoke doorway.
+   * Spawn from the content set: the curator's office, back to the door.
    *
-   * The default camera looks down -Z, which from the middle of the atrium is a
-   * blank eighteen-metre wall. The first frame of a museum should show a way
-   * in, not plaster.
+   * The default camera looks down -Z, whatever is there; the authored heading
+   * is what makes the first frame the desk, the notebook and the stopped clock
+   * instead of a wall.
    */
-  const spawn = useMemo<[number, number, number]>(() => [2.5, 0, 1], [])
-  const spawnYaw = Math.PI / 2
+  const spawn = useMemo<[number, number, number]>(() => {
+    const room = roomsById.get(MUSEUM.spawn.room)
+    const origin = room?.origin ?? [0, 0, 0]
+    return [
+      origin[0] + MUSEUM.spawn.position[0],
+      origin[1] + MUSEUM.spawn.position[1],
+      origin[2] + MUSEUM.spawn.position[2],
+    ]
+  }, [])
+  const spawnYaw = MUSEUM.spawn.yaw
 
   useEffect(() => {
     const candidates = new Set(requestedWarmRoomsRef.current)
@@ -1020,10 +1040,14 @@ export function MuseumScene() {
           museumAudio.footstep(surface as 'wood' | 'stone' | 'carpet', intensity)
         }
       />
+      {/* After the controller, so the beam follows this frame's camera. */}
+      <Flashlight />
       <VisibilityDriver visibleTransitionDoors={visibleTransitionDoors} />
       <InteractionTargeting />
       <ContainerTargeting />
       <PowerControlTargeting />
+      <DeviceTargeting />
+      <RadioDirector />
       <ExamineView />
       <PerfHud />
     </>

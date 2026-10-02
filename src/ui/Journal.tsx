@@ -8,17 +8,23 @@
  *
  * Opening it releases pointer lock, which is what the player expects: they are
  * looking at a book, not at the room.
+ *
+ * It is the notebook found on the curator's desk, so it does not exist until
+ * the player has picked that up: before then Tab does nothing, and afterwards
+ * the HUD shows its icon for touch players, who have no Tab key.
  */
 
 import { useEffect, useState } from 'react'
 
 import { formatCreditEntry } from '../content/credit'
 import { MUSEUM } from '../content/museum'
+import { journalUnlocked } from '../engine/notebook'
 import { useTranslate } from '../i18n'
-import { useMuseum } from '../state/store'
+import { useMuseum, type JournalTab } from '../state/store'
 import { MuseumMap } from './MuseumMap'
+import { NotebookPageView } from './Notebook'
 
-type Tab = 'map' | 'catalogue' | 'archive' | 'credits'
+type Tab = JournalTab
 
 function CatalogueTab() {
   const catalogued = useMuseum((state) => state.progress.catalogued)
@@ -74,13 +80,32 @@ function ArchiveTab() {
         ))}
       </ul>
 
-      {open ? (
-        <article className="journal-doc">
-          <h3>{t(MUSEUM.documents.find((d) => d.id === open)!.titleKey as never)}</h3>
-          <p>{t(MUSEUM.documents.find((d) => d.id === open)!.bodyKey as never)}</p>
-        </article>
-      ) : null}
+      {open ? <ArchiveDocument documentId={open} /> : null}
     </div>
+  )
+}
+
+/** A filed document; a paged notebook is re-read as its pages, in order. */
+function ArchiveDocument({ documentId }: { documentId: string }) {
+  const t = useTranslate()
+  const doc = MUSEUM.documents.find((candidate) => candidate.id === documentId)
+  if (!doc) return null
+
+  return (
+    <article className="journal-doc">
+      <h3>{t(doc.titleKey as never)}</h3>
+      {doc.pages ? (
+        <div className="journal-pages">
+          {doc.pages.map((page, index) => (
+            <div key={index} className="notebook-sheet is-inline">
+              <NotebookPageView page={page} />
+            </div>
+          ))}
+        </div>
+      ) : (
+        <p>{t(doc.bodyKey as never)}</p>
+      )}
+    </article>
   )
 }
 
@@ -129,7 +154,8 @@ function CreditsTab() {
 }
 
 export function Journal() {
-  const [openTab, setOpenTab] = useState<Tab | null>(null)
+  const openTab = useMuseum((state) => state.journalTab)
+  const setOpenTab = useMuseum((state) => state.setJournalTab)
   const examining = useMuseum((state) => state.examining)
   const t = useTranslate()
 
@@ -141,13 +167,16 @@ export function Journal() {
         // Tab moves focus by default, which would walk the player out of the
         // canvas entirely.
         event.preventDefault()
-        // Never open over the examine view — one modal at a time.
-        if (useMuseum.getState().examining) return
-        setOpenTab((current) => (current ? null : 'map'))
+        const state = useMuseum.getState()
+        // Never open over the examine view or a document — one modal at a
+        // time — and never before the notebook has been picked up.
+        if (state.examining || state.openedContainer || state.activeLock) return
+        if (!journalUnlocked(MUSEUM, state.progress.documentsRead)) return
+        state.setJournalTab(state.journalTab ? null : 'map')
         if (document.pointerLockElement) document.exitPointerLock()
       }
 
-      if (event.code === 'Escape') setOpenTab(null)
+      if (event.code === 'Escape') useMuseum.getState().setJournalTab(null)
     }
 
     window.addEventListener('keydown', onKeyDown)
@@ -156,7 +185,7 @@ export function Journal() {
 
   useEffect(() => {
     if (examining) setOpenTab(null)
-  }, [examining])
+  }, [examining, setOpenTab])
 
   if (!openTab) return null
 

@@ -42,6 +42,13 @@ export const ptBR = {
   'mobile.fullscreen.install':
     'Neste navegador, use “Adicionar à Tela de Início” para ter tela cheia completa.',
   'mobile.fullscreen.dismiss': 'Entendi',
+  'ui.torch': 'Lanterna',
+  'ui.torch.on': 'Apagar a lanterna',
+  'ui.torch.off': 'Acender a lanterna',
+  'ui.journal.open': 'Abrir o caderno',
+  'journal.taken': 'Caderno guardado',
+  'journal.taken.keyboard': 'Tab abre a planta, o catálogo e o arquivo.',
+  'journal.taken.touch': 'O ícone do caderno abre a planta, o catálogo e o arquivo.',
 
   // Prompts
   'prompt.examine': 'Examinar',
@@ -55,7 +62,13 @@ export const ptBR = {
   'prompt.door.loading': 'Preparando a próxima sala…',
   'prompt.door.opening': 'Abrindo…',
   'prompt.door.otherSide': 'Abre pelo outro lado',
+  'prompt.door.unpowered': 'Fechadura sem energia',
+  'prompt.radio.call': 'Chamar a portaria',
+  'prompt.radio.dead': 'Sem carga',
   'power.restored': 'Energia restaurada',
+  'radio.skip': 'Pular',
+  'notebook.next': 'Virar a página',
+  'notebook.previous': 'Voltar',
 
   // Map
   'map.title': 'Planta do museu',
@@ -115,6 +128,44 @@ export const ptBR = {
   'power.atrium.title': 'Quadro geral do átrio',
   'power.holyoke.title': 'Quadro de força da Ala 1',
   'power.office.title': 'Luminária do curador',
+
+  // ---------------------------------------------------------------------
+  // The opening: the curator's office at night
+  // ---------------------------------------------------------------------
+  'container.office-notebook.title': 'Caderno do curador',
+  'document.welcome.title': 'Boas-vindas da diretora',
+  'document.welcome.summary':
+    'As primeiras páginas do caderno, deixadas na mesa para o novo curador.',
+  'notebook.welcome.flyleaf':
+    'Bem-vindos ao Museu do Vôlei, onde a história é contada de um jeito interativo.',
+  'notebook.welcome.letter':
+    'Olá, novo curador! Bem-vindo ao seu novo trabalho.\n\n' +
+    'A tempestade desta tarde derrubou a energia do museu inteiro, e você vai ter que religá-la sala por sala.\n\n' +
+    'Reabrimos amanhã às 9h. Bom trabalho!',
+  'notebook.welcome.signature': '— Helena, diretora',
+  'notebook.welcome.postscript':
+    'P.S.: O antigo curador deixou as coisas dele por aqui. Ele trancava tudo com datas da história do vôlei.',
+  'notebook.todo.heading': 'Antes das 9h',
+  'notebook.todo.power': 'Religar a energia: escritório, átrio e alas',
+  'notebook.todo.catalogue': 'Catalogar o acervo',
+  'notebook.todo.vault': 'Cofre — só o Otávio sabia abrir',
+  'device.office-radio.title': 'Rádio da portaria',
+  'radio.speaker.porter': 'Jorge · portaria',
+  'radio.call.first.1': 'Curador? Aqui é o Jorge, da portaria. Câmbio.',
+  'radio.call.first.2':
+    'Vi no painel que a luz do escritório voltou. A tempestade desarmou os quadros do prédio inteiro.',
+  'radio.call.first.3':
+    'O quadro do átrio fica na parede oeste, do lado da entrada da Ala 1. Procure a luzinha vermelha.',
+  'radio.call.first.4':
+    'E não desça ao subsolo: alagou. Qualquer coisa, me chama neste rádio. Câmbio, desligo.',
+  'radio.hint.atrium':
+    'O quadro do átrio fica na parede oeste, perto da entrada da Ala 1. A luzinha vermelha mostra onde.',
+  'radio.hint.holyoke':
+    'A Ala 1 tem um quadro de força só dela, lá dentro. Pode atravessar no escuro mesmo: a lanterna dá conta.',
+  'radio.hint.drawer':
+    'Aquela gaveta trancada do escritório? O Otávio usava datas que estão nas placas. Dá uma olhada no retrato do Morgan, na Ala 1.',
+  'radio.hint.vault':
+    'Agora é com você, curador. O Otávio vivia falando de três medalhas e de um cofre embaixo do átrio. Câmbio.',
 
   // ---------------------------------------------------------------------
   // Wall lettering. Vinyl on plaster, so it has to survive being read at a

@@ -16,6 +16,7 @@ import type {
   Fact,
   Lock,
   MuseumContent,
+  ProgressCondition,
   RoomData,
 } from './schema'
 
@@ -25,7 +26,8 @@ export type ValidationIssue = {
   readonly message: string
 }
 
-const START_ROOM = 'atrium'
+/** The player's physical radius; a spawn must leave this much clear floor. */
+const SPAWN_CLEARANCE = 0.3
 
 function credentialKey(credential: Credential): string {
   return `${credential.kind}:${credential.id}`
@@ -356,6 +358,7 @@ export function validateSolvability(content: MuseumContent): ValidationIssue[] {
   const roomsById = new Map<string, RoomData>(content.rooms.map((room) => [room.id, room]))
   const locksById = new Map(content.locks.map((lock) => [lock.id, lock]))
   const exhibitsById = new Map(content.exhibits.map((exhibit) => [exhibit.id, exhibit]))
+  const START_ROOM: string = content.spawn.room
 
   if (!roomsById.has(START_ROOM)) {
     return [{
@@ -363,6 +366,20 @@ export function validateSolvability(content: MuseumContent): ValidationIssue[] {
       code: 'no-start-room',
       message: `The museum has no "${START_ROOM}" room to start from.`,
     }]
+  }
+
+  /**
+   * Electric locks, keyed by the unordered pair of rooms they join. A door is
+   * authored on one side only, so the requirement has to bind both portals of
+   * the opening — otherwise the walk would simply leave by the other one.
+   */
+  const pairKey = (first: string, second: string) => [first, second].sort().join('|')
+  const powerLockedPairs = new Map<string, string>()
+  for (const room of content.rooms) {
+    for (const portal of room.portals) {
+      const required = portal.transitionDoor?.requiresPower
+      if (required) powerLockedPairs.set(pairKey(room.id, portal.toRoom), required)
+    }
   }
 
   const heldCredentials = new Set<string>()
@@ -388,6 +405,15 @@ export function validateSolvability(content: MuseumContent): ValidationIssue[] {
     const queue: string[] = [START_ROOM]
     const seen = new Set<string>([START_ROOM])
 
+    // A room has power once the player can stand at its control: reached, and
+    // with any lock on that control opened.
+    const hasPower = (roomId: string) => {
+      const room = roomsById.get(roomId)
+      if (!room) return false
+      if (room.startsPowered) return true
+      return (seen.has(roomId) || reachableRooms.has(roomId)) && lockIsOpen(room.powerLockId)
+    }
+
     while (queue.length > 0) {
       const roomId = queue.shift() as string
       if (!reachableRooms.has(roomId)) {
@@ -404,6 +430,8 @@ export function validateSolvability(content: MuseumContent): ValidationIssue[] {
         // barred from the hub side and opens from inside the wing, which is
         // the direction declared here.
         if (!lockIsOpen(portal.lockId)) continue
+        const required = powerLockedPairs.get(pairKey(roomId, portal.toRoom))
+        if (required && !hasPower(required)) continue
         if (seen.has(portal.toRoom)) continue
         seen.add(portal.toRoom)
         queue.push(portal.toRoom)
@@ -531,6 +559,175 @@ export function validateSolvability(content: MuseumContent): ValidationIssue[] {
           code: 'credential-orphan',
           message: `Exhibit "${exhibit.id}" grants "${key}" but no lock requires it.`,
         })
+      }
+    }
+  }
+
+  return issues
+}
+
+// ---------------------------------------------------------------------------
+// The opening: spawn, devices, notebooks and the conditions they ask
+// ---------------------------------------------------------------------------
+
+/**
+ * Everything the first minutes of the game depend on.
+ *
+ * Each of these fails silently at runtime: a spawn inside a wall drops the
+ * player into the void before the first frame, a condition naming a renamed
+ * lock never becomes true and the porter's call never comes, a notebook
+ * container with no pages opens an empty reader. None of them is a type error.
+ */
+export function validateOpening(content: MuseumContent): ValidationIssue[] {
+  const issues: ValidationIssue[] = []
+  const error = (code: string, message: string) =>
+    issues.push({ severity: 'error', code, message })
+  const roomIds = new Set<string>(content.rooms.map((room) => room.id))
+  const lockIds = new Set(content.locks.map((lock) => lock.id))
+  const documentIds = new Set(content.documents.map((doc) => doc.id))
+
+  // --- spawn ---------------------------------------------------------------
+  const spawnRoom = content.rooms.find((room) => room.id === content.spawn.room)
+  if (!spawnRoom) {
+    error('spawn-room-missing', `The spawn names unknown room "${content.spawn.room}".`)
+  } else {
+    const [x, y, z] = content.spawn.position
+    const inner = (extent: number) => extent / 2 - 0.125 - SPAWN_CLEARANCE
+    if (
+      Math.abs(x) > inner(spawnRoom.shell.width) ||
+      Math.abs(z) > inner(spawnRoom.shell.depth) ||
+      Math.abs(y) > 1e-6
+    ) {
+      error(
+        'spawn-outside-room',
+        `The spawn [${content.spawn.position.join(', ')}] is not on the floor of room "${spawnRoom.id}" with ${SPAWN_CLEARANCE} m to spare.`,
+      )
+    }
+  }
+  if (!Number.isFinite(content.spawn.yaw)) {
+    error('spawn-yaw', 'The spawn heading must be a finite number of radians.')
+  }
+
+  // --- conditions ------------------------------------------------------------
+  const checkCondition = (condition: ProgressCondition, where: string) => {
+    for (const roomId of [...(condition.powered ?? []), ...(condition.unpowered ?? [])]) {
+      if (!roomIds.has(roomId)) error('condition-room-missing', `${where} names unknown room "${roomId}".`)
+    }
+    for (const lockId of [...(condition.locksOpened ?? []), ...(condition.locksClosed ?? [])]) {
+      if (!lockIds.has(lockId)) error('condition-lock-missing', `${where} names unknown lock "${lockId}".`)
+    }
+    for (const documentId of condition.documentsRead ?? []) {
+      if (!documentIds.has(documentId)) {
+        error('condition-document-missing', `${where} names unknown document "${documentId}".`)
+      }
+    }
+  }
+
+  // --- notebooks -------------------------------------------------------------
+  for (const doc of content.documents) {
+    for (const [index, page] of (doc.pages ?? []).entries()) {
+      const where = `Document "${doc.id}" page ${index + 1}`
+      if (page.style === 'checklist' && !(page.items && page.items.length > 0)) {
+        error('notebook-checklist-empty', `${where} is a checklist with no items.`)
+      }
+      if (page.style !== 'checklist' && !page.bodyKey && !page.headingKey) {
+        error('notebook-page-empty', `${where} has neither a heading nor a body.`)
+      }
+      for (const item of page.items ?? []) {
+        if (item.doneWhen) checkCondition(item.doneWhen, `${where} item "${item.labelKey}"`)
+      }
+    }
+  }
+
+  for (const room of content.rooms) {
+    for (const container of room.containers ?? []) {
+      const inside = content.documents.filter((doc) => doc.containerId === container.id)
+      if (container.presentation === 'notebook' && !inside.some((doc) => (doc.pages ?? []).length > 0)) {
+        error(
+          'notebook-without-pages',
+          `Notebook "${container.id}" holds no paged document, so its reader would open empty.`,
+        )
+      }
+      if (container.carriesJournal && inside.length === 0) {
+        error(
+          'journal-carrier-empty',
+          `Container "${container.id}" carries the journal but holds no document, so it can never be picked up.`,
+        )
+      }
+      if (container.carriesJournal && container.lockId) {
+        error(
+          'journal-carrier-locked',
+          `Container "${container.id}" carries the journal behind lock "${container.lockId}": the map would be locked away with it.`,
+        )
+      }
+    }
+  }
+
+  // --- devices ---------------------------------------------------------------
+  const deviceIds = new Set<string>()
+  const callIds = new Set<string>()
+  for (const room of content.rooms) {
+    for (const device of room.devices ?? []) {
+      if (deviceIds.has(device.id)) error('device-duplicate', `Device id "${device.id}" is used twice.`)
+      deviceIds.add(device.id)
+
+      const [x, y, z] = device.position
+      if (
+        Math.abs(x) > room.shell.width / 2 + 0.15 ||
+        Math.abs(z) > room.shell.depth / 2 + 0.15 ||
+        y < 0 ||
+        y > room.shell.height
+      ) {
+        error('device-outside-room', `Device "${device.id}" is outside room "${room.id}".`)
+      }
+
+      const watched =
+        device.kind === 'clock'
+          ? device.runsWithPowerOf
+          : device.kind === 'power-indicator'
+            ? device.showsPowerOf
+            : device.poweredBy
+      if (!roomIds.has(watched)) {
+        error('device-room-missing', `Device "${device.id}" watches unknown room "${watched}".`)
+      }
+
+      if (device.kind === 'clock') {
+        const { hours, minutes } = device.stoppedAt
+        if (
+          !Number.isInteger(hours) || hours < 0 || hours > 23 ||
+          !Number.isInteger(minutes) || minutes < 0 || minutes > 59
+        ) {
+          error('clock-time', `Clock "${device.id}" stops at an impossible time.`)
+        }
+      }
+
+      if (device.kind === 'radio') {
+        for (const call of device.calls) {
+          if (callIds.has(call.id)) error('radio-call-duplicate', `Radio call id "${call.id}" is used twice.`)
+          callIds.add(call.id)
+          if (call.lineKeys.length === 0) {
+            error('radio-call-silent', `Radio call "${call.id}" has no lines.`)
+          }
+          if (!(call.delaySeconds >= 0)) {
+            error('radio-call-delay', `Radio call "${call.id}" needs a non-negative delay.`)
+          }
+          checkCondition(call.when, `Radio call "${call.id}"`)
+        }
+        for (const [index, hint] of device.hints.entries()) {
+          if (hint.lineKeys.length === 0) {
+            error('radio-hint-silent', `Radio "${device.id}" hint ${index + 1} has no lines.`)
+          }
+          checkCondition(hint.when, `Radio "${device.id}" hint ${index + 1}`)
+        }
+        // A press on a live radio must always get an answer.
+        const last = device.hints[device.hints.length - 1]
+        if (!last || Object.keys(last.when).length > 0) {
+          issues.push({
+            severity: 'warning',
+            code: 'radio-hint-no-fallback',
+            message: `Radio "${device.id}" has no unconditional last hint, so a call can go unanswered.`,
+          })
+        }
       }
     }
   }
@@ -710,6 +907,35 @@ export function validateBake(
           code: 'container-part-not-baked',
           message: `Container "${container.id}" uses recipe "${container.part}", which the bake does not produce.`,
         })
+      }
+    }
+
+    /**
+     * Devices animate or relight named nodes. A missing hand compiles, loads
+     * and renders a clock that never moves; a missing lens leaves a door
+     * reader that never turns green. Both are checked against the manifest.
+     */
+    for (const device of room.devices ?? []) {
+      if (!resolves(device.part)) {
+        issues.push({
+          severity: 'error',
+          code: 'device-part-not-baked',
+          message: `Device "${device.id}" uses recipe "${device.part}", which the bake does not produce.`,
+        })
+        continue
+      }
+      const required =
+        device.kind === 'clock'
+          ? ['__dial', '__hand-hour', '__hand-minute', '__hand-second']
+          : ['__led']
+      for (const suffix of required) {
+        if (!partNames.has(`${device.part}${suffix}`)) {
+          issues.push({
+            severity: 'error',
+            code: 'device-node-missing',
+            message: `Device "${device.id}" needs baked node "${device.part}${suffix}" for its ${device.kind} behaviour.`,
+          })
+        }
       }
     }
   }
@@ -1029,8 +1255,9 @@ export function validateTranslations(
   }
 
   // Walks anything shaped like content and requires every property whose name
-  // ends in "Key". Structural rather than field-by-field on purpose: a rule
-  // that enumerates today's fields silently stops covering tomorrow's.
+  // ends in "Key", and every string in a list whose name ends in "Keys" (a
+  // radio call's lines). Structural rather than field-by-field on purpose: a
+  // rule that enumerates today's fields silently stops covering tomorrow's.
   const walk = (node: unknown, path: string) => {
     if (Array.isArray(node)) {
       node.forEach((item, index) => walk(item, `${path}[${index}]`))
@@ -1039,7 +1266,11 @@ export function validateTranslations(
     if (!node || typeof node !== 'object') return
     for (const [field, value] of Object.entries(node as Record<string, unknown>)) {
       if (field.endsWith('Key') && typeof value === 'string') require(value, path)
-      else walk(value, `${path}.${field}`)
+      else if (field.endsWith('Keys') && Array.isArray(value)) {
+        value.forEach((item, index) => {
+          if (typeof item === 'string') require(item, `${path}.${field}[${index}]`)
+        })
+      } else walk(value, `${path}.${field}`)
     }
   }
 
@@ -1064,6 +1295,7 @@ export function validateContent(
     ...validateFacts(content.facts),
     ...validateAttribution(content),
     ...validateSolvability(content),
+    ...validateOpening(content),
     ...validatePortals(content),
     ...validateWallMounts(content),
     ...validatePacing(content),

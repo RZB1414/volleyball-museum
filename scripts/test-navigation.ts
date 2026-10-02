@@ -582,6 +582,31 @@ for (const [index, screen] of atriumScreens.entries()) {
   }
 }
 
+// The night starts here. The spawn must stand on real floor with nothing
+// around the capsule, step forward to the lane where the notebook, lamp and
+// radio are all in reach, and turn round to the door it was facing away from.
+const spawnPoint = roomPoint(
+  MUSEUM.spawn.room,
+  MUSEUM.spawn.position[0],
+  MUSEUM.spawn.position[2],
+)
+check(
+  'the spawn capsule stands on walkable floor',
+  world.hasWalkableSupport(spawnPoint, CAPSULE),
+)
+const spawnToDesk = walk([spawnPoint.clone(), roomPoint('office', -1.2, -0.05)])
+check(
+  'from the spawn one step reaches the desk lane',
+  spawnToDesk.arrived && spawnToDesk.lowest > FALL_LIMIT,
+  `stopped at ${spawnToDesk.position.toArray().map((n) => n.toFixed(2)).join(',')}`,
+)
+const spawnToDoor = walk([spawnPoint.clone(), roomPoint('office', -2.45, 0)])
+check(
+  'from the spawn the player can turn round and reach the door',
+  spawnToDoor.arrived && spawnToDoor.lowest > FALL_LIMIT,
+  `stopped at ${spawnToDoor.position.toArray().map((n) => n.toFixed(2)).join(',')}`,
+)
+
 // The office is intentionally dense, but its two gameplay targets cannot be
 // decoration casualties. Walk the same 1.2 m lane a player uses from the door
 // past the lamp and then north to the locked archive cabinet.
@@ -768,7 +793,7 @@ for (const crossing of CROSSINGS) {
  * This is the property that actually matters, and the one the owner tested by
  * pressing W.
  */
-const reachable = new Set<string>(['atrium'])
+const reachable = new Set<string>([MUSEUM.spawn.room])
 let grew = true
 while (grew) {
   grew = false

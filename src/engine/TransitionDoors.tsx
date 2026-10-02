@@ -39,6 +39,7 @@ import {
 import {
   buildTransitionDoorSpecs,
   canOpenTransitionDoor,
+  transitionDoorBlock,
   transitionDoorTarget,
   transitionDoorSwingSign,
   TRANSITION_DOOR_PLANE_Z,
@@ -46,6 +47,7 @@ import {
   type TransitionDoorSpec,
 } from './transitionDoorTopology'
 import { PLAYER_CAPSULE, playerPosition } from './playerPosition'
+import { isRoomPowered } from './power'
 
 const CENTRE = new Vector2(0, 0)
 const INTERACTION_LAYER = 7
@@ -53,6 +55,15 @@ const INTERACTION_DISTANCE = 2.6
 const OPEN_ANGLE = Math.PI * 0.53
 const ABANDON_DISTANCE_PADDING = 0.5
 const DOORS = buildTransitionDoorSpecs(MUSEUM.rooms)
+const ROOMS_BY_ID = new Map(MUSEUM.rooms.map((room) => [room.id as string, room] as const))
+
+/** Reads authored and restored power the same way the lighting does. */
+function poweredGiven(restored: readonly string[]) {
+  return (roomId: string) => {
+    const room = ROOMS_BY_ID.get(roomId)
+    return room ? isRoomPowered(room, restored) : false
+  }
+}
 
 type DoorRuntime = {
   readonly config: ReturnType<typeof createTransitionDoorConfig>
@@ -339,19 +350,27 @@ export function TransitionDoorLayer({
     const interact = () => {
       const museum = useMuseum.getState()
       const focused = museum.focusedTransitionDoor
-      if (
-        !focused ||
-        focused.status === 'blocked' ||
-        museum.examining ||
-        museum.openedContainer ||
-        museum.activeLock
-      ) {
+      if (!focused || museum.examining || museum.openedContainer || museum.activeLock) {
+        return false
+      }
+      if (focused.status === 'blocked') {
+        // A powerless electric lock answers the press with a dead buzz: the
+        // door is not broken, it is waiting for the room's electricity.
+        if (focused.blockedBy === 'unpowered') {
+          museumAudio.lockDenied()
+          return true
+        }
         return false
       }
       const runtime = runtimes.get(focused.id)
       if (
         !runtime ||
         !canOpenTransitionDoor(runtime.spec, museum.currentRoom) ||
+        transitionDoorBlock(
+          runtime.spec,
+          museum.currentRoom,
+          poweredGiven(museum.progress.roomsPowered),
+        ) !== null ||
         !canTargetDoor(runtime.state.phase)
       ) {
         return false
@@ -566,8 +585,17 @@ export function TransitionDoorLayer({
       hits.length = 0
     }
 
+    // The block joins the focus key so a prompt reading "no power" changes the
+    // moment the lamp is switched on, without the player looking away first.
+    const block = focusedRuntime
+      ? transitionDoorBlock(
+          focusedRuntime.spec,
+          currentRoom,
+          poweredGiven(museum.progress.roomsPowered),
+        )
+      : null
     const focusKey = focusedRuntime
-      ? `${focusedRuntime.spec.id}:${focusedRuntime.state.phase}:${focusedRuntime.state.interactionArmed}:${focusedTarget}`
+      ? `${focusedRuntime.spec.id}:${focusedRuntime.state.phase}:${focusedRuntime.state.interactionArmed}:${focusedTarget}:${block}`
       : null
     if (focusKey === lastFocusRef.current) return
     lastFocusRef.current = focusKey
@@ -576,10 +604,9 @@ export function TransitionDoorLayer({
       museum.setFocusedTransitionDoor(null)
       return
     }
-    const status =
-      focusedRuntime.spec.opensFrom && focusedRuntime.spec.opensFrom !== currentRoom
-        ? 'blocked'
-        : focusedRuntime.state.phase === 'opening'
+    const status = block
+      ? 'blocked'
+      : focusedRuntime.state.phase === 'opening'
         ? 'opening'
         : focusedRuntime.state.phase === 'ready'
           ? 'ready'
@@ -589,6 +616,7 @@ export function TransitionDoorLayer({
       targetRoom: focusedTarget,
       status,
       armed: focusedRuntime.state.interactionArmed,
+      ...(block ? { blockedBy: block } : {}),
     })
   })
 

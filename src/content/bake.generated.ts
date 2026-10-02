@@ -726,8 +726,8 @@ export const BAKED_BUNDLES = [
   },
   {
     "name": "kit",
-    "url": "/models/kit.0906420e.glb",
-    "bytes": 2007028,
+    "url": "/models/kit.4c94b920.glb",
+    "bytes": 2094304,
     "parts": [
       {
         "name": "plinth-block",
@@ -2428,6 +2428,33 @@ export const BAKED_BUNDLES = [
         "bounds": {
           "min": [
             -0.505,
+            0.128,
+            -0.0875
+          ],
+          "max": [
+            0.297,
+            2.624,
+            0.1575
+          ],
+          "size": [
+            0.802,
+            2.496,
+            0.245
+          ],
+          "centre": [
+            -0.104,
+            1.376,
+            0.035
+          ]
+        },
+        "triangles": 288
+      },
+      {
+        "name": "bookshelf__booksGreen",
+        "material": "leather-green",
+        "bounds": {
+          "min": [
+            -0.465,
             0.1263,
             -0.0875
           ],
@@ -2437,17 +2464,44 @@ export const BAKED_BUNDLES = [
             0.1575
           ],
           "size": [
-            0.976,
+            0.936,
             2.4977,
             0.245
           ],
           "centre": [
-            -0.017,
+            0.003,
             1.3751,
             0.035
           ]
         },
-        "triangles": 504
+        "triangles": 120
+      },
+      {
+        "name": "bookshelf__booksRed",
+        "material": "rope-velvet",
+        "bounds": {
+          "min": [
+            -0.485,
+            0.128,
+            -0.0875
+          ],
+          "max": [
+            0.096,
+            2.576,
+            0.1575
+          ],
+          "size": [
+            0.581,
+            2.448,
+            0.245
+          ],
+          "centre": [
+            -0.1945,
+            1.352,
+            0.035
+          ]
+        },
+        "triangles": 96
       },
       {
         "name": "bookshelf__boxes",
@@ -3147,7 +3201,7 @@ export const BAKED_BUNDLES = [
             0
           ]
         },
-        "triangles": 1704
+        "triangles": 1676
       },
       {
         "name": "coat-stand__hardware",
@@ -3156,17 +3210,17 @@ export const BAKED_BUNDLES = [
           "min": [
             -0.165,
             1.635,
-            -0.165
+            -0.1617
           ],
           "max": [
             0.165,
             1.765,
-            0.165
+            0.1617
           ],
           "size": [
             0.33,
             0.13,
-            0.33
+            0.3233
           ],
           "centre": [
             0,
@@ -3174,7 +3228,493 @@ export const BAKED_BUNDLES = [
             0
           ]
         },
-        "triangles": 640
+        "triangles": 288
+      },
+      {
+        "name": "coat-stand__hat",
+        "material": "leather-worn",
+        "bounds": {
+          "min": [
+            0.1127,
+            1.5128,
+            -0.1531
+          ],
+          "max": [
+            0.2805,
+            1.8351,
+            0.1531
+          ],
+          "size": [
+            0.1678,
+            0.3223,
+            0.3062
+          ],
+          "centre": [
+            0.1966,
+            1.674,
+            0
+          ]
+        },
+        "triangles": 308
+      },
+      {
+        "name": "coat-stand__umbrella",
+        "material": "plastic-black",
+        "bounds": {
+          "min": [
+            -0.038,
+            0.79,
+            -0.22
+          ],
+          "max": [
+            0.038,
+            1.585,
+            -0.14
+          ],
+          "size": [
+            0.0761,
+            0.795,
+            0.08
+          ],
+          "centre": [
+            0,
+            1.1875,
+            -0.18
+          ]
+        },
+        "triangles": 168
+      },
+      {
+        "name": "curator-notebook",
+        "material": "rope-velvet",
+        "bounds": {
+          "min": [
+            -0.075,
+            0,
+            -0.106
+          ],
+          "max": [
+            0.075,
+            0.026,
+            0.106
+          ],
+          "size": [
+            0.15,
+            0.026,
+            0.212
+          ],
+          "centre": [
+            0,
+            0.013,
+            0
+          ]
+        },
+        "triangles": 324
+      },
+      {
+        "name": "curator-notebook__pages",
+        "material": "paper-aged",
+        "bounds": {
+          "min": [
+            -0.072,
+            0.0035,
+            -0.103
+          ],
+          "max": [
+            0.068,
+            0.0225,
+            0.103
+          ],
+          "size": [
+            0.14,
+            0.019,
+            0.206
+          ],
+          "centre": [
+            -0.002,
+            0.013,
+            0
+          ]
+        },
+        "triangles": 108
+      },
+      {
+        "name": "curator-notebook__band",
+        "material": "plastic-black",
+        "bounds": {
+          "min": [
+            -0.0247,
+            0,
+            -0.1072
+          ],
+          "max": [
+            0.054,
+            0.0272,
+            0.1596
+          ],
+          "size": [
+            0.0787,
+            0.0272,
+            0.2668
+          ],
+          "centre": [
+            0.0146,
+            0.0136,
+            0.0262
+          ]
+        },
+        "triangles": 48
+      },
+      {
+        "name": "curator-notebook__pen",
+        "material": "brass",
+        "bounds": {
+          "min": [
+            0.0873,
+            0,
+            -0.0821
+          ],
+          "max": [
+            0.1157,
+            0.0124,
+            0.0852
+          ],
+          "size": [
+            0.0283,
+            0.0124,
+            0.1673
+          ],
+          "centre": [
+            0.1015,
+            0.0062,
+            0.0015
+          ]
+        },
+        "triangles": 148
+      },
+      {
+        "name": "desk-radio",
+        "material": "plastic-black",
+        "bounds": {
+          "min": [
+            -0.045,
+            0,
+            -0.036
+          ],
+          "max": [
+            0.045,
+            0.2419,
+            0.036
+          ],
+          "size": [
+            0.09,
+            0.2419,
+            0.072
+          ],
+          "centre": [
+            0,
+            0.1209,
+            0
+          ]
+        },
+        "triangles": 612
+      },
+      {
+        "name": "desk-radio__metal",
+        "material": "iron-cast",
+        "bounds": {
+          "min": [
+            -0.025,
+            0.0481,
+            0.0005
+          ],
+          "max": [
+            0.025,
+            0.1423,
+            0.012
+          ],
+          "size": [
+            0.05,
+            0.0941,
+            0.0114
+          ],
+          "centre": [
+            0,
+            0.0952,
+            0.0062
+          ]
+        },
+        "triangles": 84
+      },
+      {
+        "name": "desk-radio__led",
+        "material": "led-off",
+        "bounds": {
+          "min": [
+            -0.017,
+            0.013,
+            -0.0154
+          ],
+          "max": [
+            0.0355,
+            0.1647,
+            0.0375
+          ],
+          "size": [
+            0.0525,
+            0.1517,
+            0.0529
+          ],
+          "centre": [
+            0.0093,
+            0.0889,
+            0.011
+          ]
+        },
+        "triangles": 64
+      },
+      {
+        "name": "office-wall-clock",
+        "material": "walnut-polished",
+        "bounds": {
+          "min": [
+            -0.189,
+            0,
+            0
+          ],
+          "max": [
+            0.189,
+            0.378,
+            0.042
+          ],
+          "size": [
+            0.378,
+            0.378,
+            0.042
+          ],
+          "centre": [
+            0,
+            0.189,
+            0.021
+          ]
+        },
+        "triangles": 560
+      },
+      {
+        "name": "office-wall-clock__bezel",
+        "material": "brass",
+        "bounds": {
+          "min": [
+            -0.1765,
+            0.0125,
+            0.0382
+          ],
+          "max": [
+            0.1765,
+            0.3655,
+            0.0498
+          ],
+          "size": [
+            0.353,
+            0.353,
+            0.0116
+          ],
+          "centre": [
+            0,
+            0.189,
+            0.044
+          ]
+        },
+        "triangles": 824
+      },
+      {
+        "name": "office-wall-clock__dial",
+        "material": "paper-aged",
+        "bounds": {
+          "min": [
+            -0.165,
+            0.024,
+            0.036
+          ],
+          "max": [
+            0.165,
+            0.354,
+            0.039
+          ],
+          "size": [
+            0.33,
+            0.33,
+            0.003
+          ],
+          "centre": [
+            0,
+            0.189,
+            0.0375
+          ]
+        },
+        "triangles": 192
+      },
+      {
+        "name": "office-wall-clock__hand-hour",
+        "material": "iron-cast",
+        "bounds": {
+          "min": [
+            -0.0065,
+            0.173,
+            0.0396
+          ],
+          "max": [
+            0.0065,
+            0.277,
+            0.0414
+          ],
+          "size": [
+            0.013,
+            0.104,
+            0.0018
+          ],
+          "centre": [
+            0,
+            0.225,
+            0.0405
+          ]
+        },
+        "triangles": 28
+      },
+      {
+        "name": "office-wall-clock__hand-minute",
+        "material": "iron-cast",
+        "bounds": {
+          "min": [
+            -0.0036,
+            0.169,
+            0.0416
+          ],
+          "max": [
+            0.0036,
+            0.321,
+            0.0434
+          ],
+          "size": [
+            0.0072,
+            0.152,
+            0.0018
+          ],
+          "centre": [
+            0,
+            0.245,
+            0.0425
+          ]
+        },
+        "triangles": 12
+      },
+      {
+        "name": "office-wall-clock__hand-second",
+        "material": "rope-velvet",
+        "bounds": {
+          "min": [
+            -0.0055,
+            0.155,
+            0.0438
+          ],
+          "max": [
+            0.0055,
+            0.331,
+            0.0452
+          ],
+          "size": [
+            0.011,
+            0.176,
+            0.0014
+          ],
+          "centre": [
+            0,
+            0.243,
+            0.0445
+          ]
+        },
+        "triangles": 60
+      },
+      {
+        "name": "door-access-panel",
+        "material": "iron-cast",
+        "bounds": {
+          "min": [
+            -0.043,
+            0,
+            0
+          ],
+          "max": [
+            0.043,
+            0.142,
+            0.022
+          ],
+          "size": [
+            0.086,
+            0.142,
+            0.022
+          ],
+          "centre": [
+            0,
+            0.071,
+            0.011
+          ]
+        },
+        "triangles": 108
+      },
+      {
+        "name": "door-access-panel__trim",
+        "material": "brass",
+        "bounds": {
+          "min": [
+            -0.03,
+            0.0178,
+            0.022
+          ],
+          "max": [
+            0.03,
+            0.0914,
+            0.026
+          ],
+          "size": [
+            0.06,
+            0.0736,
+            0.004
+          ],
+          "centre": [
+            0,
+            0.0546,
+            0.024
+          ]
+        },
+        "triangles": 168
+      },
+      {
+        "name": "door-access-panel__led",
+        "material": "led-red",
+        "bounds": {
+          "min": [
+            -0.0066,
+            0.1142,
+            0.022
+          ],
+          "max": [
+            0.0066,
+            0.1278,
+            0.026
+          ],
+          "size": [
+            0.0133,
+            0.0136,
+            0.004
+          ],
+          "centre": [
+            0,
+            0.121,
+            0.024
+          ]
+        },
+        "triangles": 56
       },
       {
         "name": "holyoke-entry-screen",
@@ -6535,12 +7075,64 @@ export const BAKED_MATERIALS = {
     "roughness": 0.16,
     "metalness": 0,
     "alphaMode": "BLEND"
+  },
+  "plastic-black": {
+    "baseColor": [
+      0.026,
+      0.026,
+      0.03,
+      1
+    ],
+    "roughness": 0.52,
+    "metalness": 0
+  },
+  "led-off": {
+    "baseColor": [
+      0.07,
+      0.06,
+      0.06,
+      1
+    ],
+    "roughness": 0.3,
+    "metalness": 0
+  },
+  "led-red": {
+    "baseColor": [
+      0.42,
+      0.04,
+      0.03,
+      1
+    ],
+    "roughness": 0.3,
+    "metalness": 0,
+    "emissive": [
+      1,
+      0.07,
+      0.035
+    ],
+    "emissiveIntensity": 1.5
+  },
+  "led-green": {
+    "baseColor": [
+      0.04,
+      0.32,
+      0.1,
+      1
+    ],
+    "roughness": 0.3,
+    "metalness": 0,
+    "emissive": [
+      0.1,
+      1,
+      0.28
+    ],
+    "emissiveIntensity": 1.2
   }
 } as const satisfies Record<string, BakedMaterial>
 
 export const BAKE_TOTALS = {
-  bytes: 2781404,
-  triangles: 142884,
+  bytes: 2868680,
+  triangles: 146376,
   textureBytes: 1075092,
   /** Uncompressed VRAM with mips. The wire size says nothing about this. */
   textureVramBytes: 47185920,

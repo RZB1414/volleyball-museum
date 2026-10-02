@@ -6,6 +6,8 @@ import {
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 
+import { MUSEUM } from '../content/museum'
+import { radioIsLive } from '../engine/deviceRules'
 import {
   beginDirectionalPadSession,
   createDirectionalPadSession,
@@ -199,6 +201,10 @@ export function MobileControls() {
   const focusedContainer = useMuseum((state) => state.focusedContainer)
   const focusedPowerControl = useMuseum((state) => state.focusedPowerControl)
   const focusedDoor = useMuseum((state) => state.focusedTransitionDoor)
+  const focusedRadio = useMuseum((state) =>
+    state.focusedDevice !== null &&
+    radioIsLive(MUSEUM, state.focusedDevice, state.progress.roomsPowered),
+  )
   const examining = useMuseum((state) => state.examining)
   const openedContainer = useMuseum((state) => state.openedContainer)
   const activeLock = useMuseum((state) => state.activeLock)
@@ -245,7 +251,7 @@ export function MobileControls() {
   )
   const actionVisible = Boolean(
     !suspended &&
-      (doorCanAct || focusedExhibit || focusedContainer || focusedPowerControl),
+      (doorCanAct || focusedExhibit || focusedContainer || focusedPowerControl || focusedRadio),
   )
 
   if (suspended) return null
