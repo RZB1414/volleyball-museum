@@ -52,8 +52,8 @@ Portão verde em 2026-10-02 (`npm run check`, depois da rodada da abertura, §9)
 
 O único aviso é o preexistente `react(only-export-components)` em `src/main.tsx:17`.
 Deploy de produção: `https://volleyball-museum.renanbuiatti14.workers.dev`, versão
-Cloudflare `a2cd24b2-f045-4644-b798-e7c74575aae7` (anterior à abertura; a rodada
-de §9 ainda não foi publicada).
+Cloudflare `0027afaa-9600-4e0f-a5d3-0a5e699cf735` (2026-10-03: toda a rodada de §9,
+até `db4cc70`).
 
 Bake atual:
 
