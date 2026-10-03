@@ -1,0 +1,327 @@
+
+## room-atrium
+atrium                          10832 tris  6 fam  size 18.750x8.720x18.250  y[-0.180,8.540]  | UNPLACED
+    atrium__floor                            maple-floor          300  min -9.125,-0.180,-9.125 max 9.125,0.000,9.125  [collider]
+    atrium__ceiling                          plaster              300  min -9.125,8.400,-9.125 max 9.125,8.540,9.125  [collider]
+    atrium__structure                        plaster             3000  min -9.125,0.000,-9.125 max 9.125,8.400,9.125  [collider]
+    atrium__panelling                        oak-matte            756  min -9.000,0.160,-9.000 max 9.000,1.020,9.000  [collider]
+    atrium__trim                             oak-varnished       6296  min -9.375,-0.002,-9.002 max 9.375,8.402,9.002  [collider]
+    atrium__threshold                        brass                180  min -9.375,0.000,-2.810 max 9.375,0.014,7.210  [collider]
+
+## room-holyoke
+holyoke                          5808 tris  5 fam  size 12.250x4.520x16.250  y[-0.180,4.340]  | UNPLACED
+    holyoke__floor                           maple-floor          300  min -6.125,-0.180,-8.125 max 6.125,0.000,8.125  [collider]
+    holyoke__ceiling                         plaster              300  min -6.125,4.200,-8.125 max 6.125,4.340,8.125  [collider]
+    holyoke__structure                       plaster             2400  min -6.125,0.000,-8.125 max 6.125,4.200,8.125  [collider]
+    holyoke__panelling                       oak-matte            648  min -6.000,0.160,-8.000 max 6.000,1.020,8.000  [collider]
+    holyoke__trim                            oak-varnished       2160  min -6.002,-0.002,-8.002 max 6.002,4.202,8.002  [collider]
+
+## room-office
+office                           4636 tris  5 fam  size 6.250x3.520x7.250  y[-0.180,3.340]  | UNPLACED
+    office__floor                            maple-floor          300  min -3.125,-0.180,-3.625 max 3.125,0.000,3.625  [collider]
+    office__ceiling                          plaster              300  min -3.125,3.200,-3.625 max 3.125,3.340,3.625  [collider]
+    office__structure                        plaster             1800  min -3.125,0.000,-3.625 max 3.125,3.200,3.625  [collider]
+    office__panelling                        oak-matte            540  min -3.000,0.160,-3.500 max 3.000,1.020,3.500  [collider]
+    office__trim                             oak-varnished       1696  min -3.002,-0.002,-3.502 max 3.002,3.202,3.502  [collider]
+
+## kit
+plinth-block                      648 tris  1 fam  size 0.480x1.080x0.480  y[0.000,1.080]  | UNPLACED
+    plinth-block                             oak-varnished        648  min -0.240,0.000,-0.240 max 0.240,1.080,0.240  [collider]
+plinth-tapered                    648 tris  1 fam  size 0.900x1.060x0.900  y[0.000,1.060]  | UNPLACED
+    plinth-tapered                           oak-varnished        648  min -0.450,0.000,-0.450 max 0.450,1.060,0.450  [collider]
+medallion-socket                 1432 tris  1 fam  size 0.600x0.042x0.600  y[0.000,0.042]  | UNPLACED
+    medallion-socket                         brass               1432  min -0.300,0.000,-0.300 max 0.300,0.042,0.300
+vitrine-table                    1800 tris  1 fam  size 1.100x0.940x0.700  y[0.000,0.940]  | UNPLACED
+    vitrine-table                            oak-varnished       1800  min -0.550,0.000,-0.350 max 0.550,0.940,0.350  [collider]
+vitrine-glass                    1500 tris  1 fam  size 1.068x0.504x0.668  y[0.000,0.504]  | UNPLACED
+    vitrine-glass                            glass-vitrine       1500  min -0.534,0.000,-0.334 max 0.534,0.504,0.334
+label-plaque                      588 tris  1 fam  size 0.340x1.050x0.204  y[0.000,1.050]  | UNPLACED
+    label-plaque                             brass                588  min -0.170,0.000,-0.102 max 0.170,1.050,0.102
+wayfinding-plaque-navy            924 tris  1 fam  size 2.640x0.660x0.078  y[-0.330,0.330]  | UNPLACED
+    wayfinding-plaque-navy                   holyoke-navy         924  min -1.320,-0.330,0.000 max 1.320,0.330,0.078
+wayfinding-plaque-green           924 tris  1 fam  size 2.640x0.660x0.078  y[-0.330,0.330]  | UNPLACED
+    wayfinding-plaque-green                  archive-green        924  min -1.320,-0.330,0.000 max 1.320,0.330,0.078
+wayfinding-plaque-walnut          924 tris  1 fam  size 2.640x0.660x0.078  y[-0.330,0.330]  | UNPLACED
+    wayfinding-plaque-walnut                 walnut-polished      924  min -1.320,-0.330,0.000 max 1.320,0.330,0.078
+dedication-plaque                2280 tris  1 fam  size 5.200x1.500x0.097  y[-0.750,0.750]  | UNPLACED
+    dedication-plaque                        walnut-polished     2280  min -2.600,-0.750,0.000 max 2.600,0.750,0.097
+archive-cabinet                  2212 tris  1 fam  size 0.650x1.280x0.567  y[0.000,1.280]  | holyoke: cont2; office: cont1
+    archive-cabinet                          oak-varnished       2212  min -0.325,0.000,-0.275 max 0.325,1.280,0.292  [collider]
+rope-stanchion                    512 tris  1 fam  size 0.340x0.985x0.340  y[0.000,0.985]  | atrium:kit5
+    rope-stanchion                           brass                512  min -0.170,0.000,-0.170 max 0.170,0.985,0.170
+rope-span                         528 tris  1 fam  size 1.675x0.203x0.056  y[0.673,0.876]  | atrium:kit4
+    rope-span                                rope-velvet          528  min -0.837,0.673,-0.028 max 0.837,0.876,0.028
+bench                            1156 tris  1 fam  size 1.600x0.440x0.420  y[0.000,0.440]  | holyoke:kit1
+    bench                                    oak-varnished       1156  min -0.800,0.000,-0.210 max 0.800,0.440,0.210  [collider]
+vitrine-wall                     1324 tris  2 fam  size 1.600x1.100x0.420  y[0.000,1.100]  | UNPLACED
+    vitrine-wall                             oak-varnished       1000  min -0.800,0.000,0.000 max 0.800,1.100,0.420  [collider]
+    vitrine-wall__glass                      glass-vitrine        324  min -0.759,0.094,0.018 max 0.759,1.016,0.382
+vitrine-tower                    1988 tris  2 fam  size 0.700x1.900x0.700  y[0.000,1.900]  | UNPLACED
+    vitrine-tower                            oak-varnished       1448  min -0.350,0.000,-0.350 max 0.350,1.900,0.350  [collider]
+    vitrine-tower__glass                     glass-vitrine        540  min -0.313,1.023,-0.313 max 0.313,1.828,0.313
+partition                         792 tris  2 fam  size 3.200x2.400x0.766  y[0.000,2.400]  | UNPLACED
+    partition                                plaster              648  min -1.574,0.000,-0.060 max 1.574,2.400,0.654
+    partition__foot                          oak-varnished        144  min -1.600,0.000,-0.086 max 1.600,0.160,0.680  [collider]
+frame-empty                       284 tris  1 fam  size 1.024x1.374x0.052  y[-0.687,0.687]  | UNPLACED
+    frame-empty                              oak-varnished        284  min -0.512,-0.687,0.000 max 0.512,0.687,0.052
+label-angled                      620 tris  1 fam  size 0.424x0.902x0.280  y[0.000,0.902]  | holyoke:kit3
+    label-angled                             brass                620  min -0.212,0.000,-0.140 max 0.212,0.902,0.140
+interp-panel                     1164 tris  1 fam  size 1.200x1.999x0.440  y[0.000,1.999]  | UNPLACED
+    interp-panel                             plaster-dark        1164  min -0.600,0.000,-0.280 max 0.600,1.999,0.160  [collider]
+banner                            744 tris  2 fam  size 1.344x4.000x0.319  y[-4.000,0.000]  | UNPLACED
+    banner__cloth                            canvas               360  min -0.550,-3.970,-0.122 max 0.550,-0.030,0.122
+    banner__battens                          oak-varnished        384  min -0.672,-4.000,-0.159 max 0.672,0.000,0.159
+reception-desk                   1732 tris  1 fam  size 2.448x1.050x1.528  y[0.000,1.050]  | UNPLACED
+    reception-desk                           oak-varnished       1732  min -1.224,0.000,-1.098 max 1.224,1.050,0.430  [collider]
+donation-box                     2104 tris  2 fam  size 0.370x1.148x0.370  y[0.000,1.148]  | atrium:kit1
+    donation-box                             brass               1672  min -0.185,0.000,-0.185 max 0.185,1.148,0.185  [collider]
+    donation-box__glass                      glass-vitrine        432  min -0.143,0.860,-0.143 max 0.143,1.130,0.143
+door-leaf                        2236 tris  2 fam  size 0.807x2.340x0.126  y[0.000,2.340]  | UNPLACED
+    door-leaf                                oak-varnished        852  min 0.000,0.000,-0.022 max 0.800,2.340,0.022  [collider]
+    door-leaf__furniture                     brass               1384  min -0.007,0.251,-0.063 max 0.756,2.089,0.063
+door-leaf-right                  2236 tris  2 fam  size 0.807x2.340x0.126  y[0.000,2.340]  | UNPLACED
+    door-leaf-right                          oak-varnished        852  min -0.800,0.000,-0.022 max 0.000,2.340,0.022  [collider]
+    door-leaf-right__furniture               brass               1384  min -0.756,0.251,-0.063 max 0.007,2.089,0.063
+threshold                          60 tris  1 fam  size 1.620x0.014x0.500  y[0.000,0.014]  | UNPLACED
+    threshold                                brass                 60  min -0.810,0.000,-0.250 max 0.810,0.014,0.250
+ceiling-spot                      692 tris  2 fam  size 2.400x0.261x0.099  y[-0.261,0.000]  | holyoke:kit7
+    ceiling-spot__track                      iron-cast            268  min -1.200,-0.052,-0.030 max 1.200,0.000,0.030
+    ceiling-spot__head                       brass                424  min -0.056,-0.261,-0.034 max 0.056,0.000,0.065
+pendant                          1528 tris  2 fam  size 0.354x0.992x0.354  y[-0.992,0.000]  | UNPLACED
+    pendant__fitting                         brass                888  min -0.064,-0.978,-0.064 max 0.064,0.000,0.064
+    pendant__shade                           plaster              640  min -0.177,-0.992,-0.177 max 0.177,-0.900,0.177
+wall-sconce                      1516 tris  1 fam  size 0.244x0.361x0.272  y[0.000,0.361]  | office:kit1
+    wall-sconce                              brass               1516  min -0.122,0.000,0.000 max 0.122,0.361,0.272
+vent-grille                       604 tris  1 fam  size 0.500x0.300x0.032  y[0.000,0.300]  | holyoke:kit1
+    vent-grille                              iron-cast            604  min -0.250,0.000,0.000 max 0.250,0.300,0.032
+breaker-panel                     892 tris  3 fam  size 0.460x0.640x0.249  y[0.000,0.640]  | atrium: power1; holyoke: power1
+    breaker-panel                            iron-cast            540  min -0.230,0.000,0.000 max 0.230,0.640,0.167
+    breaker-panel__handle                    brass                304  min -0.055,0.250,0.148 max 0.075,0.507,0.249
+    breaker-panel__indicator                 glass-green           48  min 0.096,0.476,0.153 max 0.154,0.534,0.171
+curator-desk                     2460 tris  5 fam  size 1.750x0.912x0.900  y[0.000,0.912]  | office:kit1
+    curator-desk                             walnut-polished      924  min -0.875,0.000,-0.450 max 0.875,0.740,0.450  [collider]
+    curator-desk__brass                      brass               1116  min -0.702,0.167,-0.304 max 0.702,0.896,0.441
+    curator-desk__leather                    leather-desk         108  min -0.705,0.740,-0.325 max 0.705,0.747,0.355
+    curator-desk__paper                      paper-writing         60  min -0.235,0.747,-0.284 max 0.035,0.755,0.044
+    curator-desk__props                      walnut-polished      252  min -0.557,0.747,-0.268 max 0.263,0.912,-0.018
+desk-telephone                   1508 tris  2 fam  size 0.260x0.138x0.227  y[0.000,0.138]  | office:kit1
+    desk-telephone                           bakelite-black      1476  min -0.130,0.000,-0.123 max 0.130,0.138,0.104
+    desk-telephone__card                     enamel-cream          32  min -0.027,0.037,0.040 max 0.027,0.069,0.084
+office-chair                     2444 tris  4 fam  size 0.464x0.948x0.499  y[0.000,0.948]  | office:kit1
+    office-chair__frame                      walnut-polished      944  min -0.217,0.425,-0.294 max 0.217,0.948,0.096
+    office-chair__base                       walnut-polished       96  min -0.229,0.000,-0.199 max 0.229,0.408,0.199  [collider]
+    office-chair__leather                    leather-green       1060  min -0.212,0.408,-0.263 max 0.212,0.900,0.205
+    office-chair__brass                      brass                344  min -0.232,0.000,-0.235 max 0.232,0.857,0.202
+desk-lamp                        1024 tris  2 fam  size 0.268x0.366x0.194  y[0.000,0.366]  | office: power1
+    desk-lamp__base                          brass                892  min -0.134,0.000,-0.097 max 0.134,0.322,0.097
+    desk-lamp__shade                         glass-green          132  min -0.130,0.298,-0.092 max 0.130,0.366,0.092
+bookshelf                        2396 tris  8 fam  size 1.260x2.720x0.375  y[0.000,2.720]  | office:kit2
+    bookshelf                                walnut-satin         534  min -0.630,0.000,-0.183 max 0.630,2.720,0.192  [collider]
+    bookshelf__books                         book-brown           480  min -0.533,0.128,-0.131 max 0.535,2.403,0.154
+    bookshelf__booksGreen                    book-green           178  min -0.533,0.128,-0.141 max 0.533,2.417,0.170
+    bookshelf__booksCalf                     book-calf            296  min -0.533,0.128,-0.118 max 0.533,2.443,0.169
+    bookshelf__booksRed                      book-cloth           160  min -0.533,0.128,-0.135 max 0.527,2.421,0.169
+    bookshelf__pages                         book-pages           122  min -0.533,0.128,-0.135 max 0.533,2.443,0.168
+    bookshelf__boxes                         archive-buckram       56  min 0.095,0.638,-0.111 max 0.533,1.833,0.161
+    bookshelf__brass                         brass                570  min -0.533,0.130,-0.141 max 0.532,2.441,0.169
+bookshelf-b                      2380 tris  8 fam  size 1.260x2.720x0.375  y[0.000,2.720]  | office:kit2
+    bookshelf-b                              walnut-satin         534  min -0.630,0.000,-0.183 max 0.630,2.720,0.192  [collider]
+    bookshelf-b__books                       book-brown           448  min -0.529,0.128,-0.132 max 0.535,2.393,0.170
+    bookshelf-b__booksGreen                  book-green           170  min -0.533,0.128,-0.132 max 0.533,2.410,0.154
+    bookshelf-b__booksCalf                   book-calf            312  min -0.533,0.128,-0.129 max 0.517,2.404,0.169
+    bookshelf-b__booksRed                    book-cloth           164  min -0.533,0.128,-0.122 max 0.527,2.402,0.169
+    bookshelf-b__pages                       book-pages           136  min -0.533,0.206,-0.132 max 0.535,2.406,0.168
+    bookshelf-b__boxes                       archive-buckram       42  min -0.533,0.128,-0.111 max 0.533,1.821,0.161
+    bookshelf-b__brass                       brass                574  min -0.533,0.136,0.023 max 0.532,2.405,0.169
+ledger-stack                     1674 tris  3 fam  size 0.361x0.192x0.282  y[0.000,0.192]  | office:kit1
+    ledger-stack                             leather-ledger      1392  min -0.174,0.000,-0.135 max 0.185,0.192,0.146
+    ledger-stack__pages                      paper-writing        194  min -0.175,0.006,-0.128 max 0.183,0.192,0.140
+    ledger-stack__brass                      brass                 88  min -0.174,0.016,-0.135 max 0.186,0.192,0.147
+office-rug                       1380 tris  3 fam  size 3.250x0.018x4.317  y[0.000,0.018]  | office:kit1
+    office-rug                               rug-burgundy         168  min -1.625,0.000,-2.075 max 1.625,0.018,2.075
+    office-rug__border                       rug-ivory            204  min -1.570,0.012,-2.020 max 1.570,0.016,2.020
+    office-rug__fringe                       canvas              1008  min -1.563,0.001,-2.159 max 1.563,0.003,2.159
+office-corkboard                  752 tris  4 fam  size 2.250x1.320x0.052  y[0.000,1.320]  | office:kit1
+    office-corkboard                         walnut-polished      432  min -1.125,0.000,0.000 max 1.125,1.320,0.052
+    office-corkboard__cork                   cork                  12  min -1.050,0.075,0.009 max 1.050,1.245,0.027
+    office-corkboard__papers                 paper-writing         84  min -0.966,0.264,0.029 max 0.929,1.080,0.033
+    office-corkboard__pins                   brass                224  min -0.799,0.508,0.034 max 0.779,1.035,0.043
+office-flatfile                  2336 tris  3 fam  size 1.155x1.034x0.669  y[0.000,1.034]  | office:kit1
+    office-flatfile                          archive-green       1404  min -0.578,0.000,-0.328 max 0.578,1.030,0.328  [collider]
+    office-flatfile__hardware                brass                920  min -0.080,0.061,0.326 max 0.080,0.965,0.341
+    office-flatfile__map                     paper-aged            12  min -0.481,1.030,-0.231 max 0.411,1.034,0.255
+archive-trolley                  2192 tris  3 fam  size 0.840x1.170x0.452  y[0.000,1.170]  | office:kit1
+    archive-trolley                          archive-green       1400  min -0.420,0.000,-0.215 max 0.420,1.170,0.237  [collider]
+    archive-trolley__boxes                   canvas               720  min -0.367,0.188,-0.182 max 0.352,1.087,0.182
+    archive-trolley__labels                  paper-aged            72  min -0.284,0.298,0.138 max 0.267,1.026,0.182
+office-safe                      1084 tris  2 fam  size 0.905x1.620x0.805  y[0.000,1.620]  | office:kit1
+    office-safe                              archive-green        432  min -0.453,0.000,-0.338 max 0.453,1.620,0.395  [collider]
+    office-safe__hardware                    brass                652  min -0.429,0.204,0.348 max 0.329,1.466,0.468
+visitor-chair                    2430 tris  3 fam  size 0.634x0.969x0.582  y[0.000,0.969]  | office:kit2
+    visitor-chair                            walnut-polished     1324  min -0.317,0.000,-0.312 max 0.317,0.955,0.265  [collider]
+    visitor-chair__upholstery                velvet-green         818  min -0.275,0.393,-0.313 max 0.275,0.969,0.257
+    visitor-chair__studs                     brass                288  min -0.223,0.530,-0.317 max 0.223,0.929,-0.272
+coat-stand                       2472 tris  4 fam  size 0.515x1.860x0.467  y[0.000,1.860]  | office:kit1
+    coat-stand                               walnut-polished     1656  min -0.234,0.000,-0.234 max 0.234,1.860,0.234
+    coat-stand__hardware                     brass                288  min -0.165,1.635,-0.162 max 0.165,1.765,0.162
+    coat-stand__hat                          felt-brown           320  min 0.112,1.509,-0.153 max 0.281,1.839,0.153
+    coat-stand__umbrella                     plastic-black        208  min -0.038,0.790,-0.220 max 0.219,1.773,0.087
+curator-notebook                  592 tris  4 fam  size 0.191x0.027x0.267  y[0.000,0.027]  | office: cont1
+    curator-notebook                         rope-velvet          228  min -0.075,0.000,-0.106 max 0.075,0.026,0.106
+    curator-notebook__pages                  paper-writing        108  min -0.072,0.004,-0.103 max 0.068,0.022,0.103
+    curator-notebook__band                   plastic-black        168  min -0.066,0.000,-0.107 max 0.116,0.027,0.160
+    curator-notebook__pen                    brass                 88  min -0.029,0.000,-0.082 max 0.116,0.026,0.077
+desk-radio                       1084 tris  5 fam  size 0.090x0.242x0.073  y[0.000,0.242]  | office: dev1
+    desk-radio                               plastic-black        540  min -0.045,0.000,-0.036 max 0.045,0.042,0.036
+    desk-radio__led                          led-off               12  min 0.026,0.013,0.035 max 0.035,0.017,0.037
+    desk-radio__handset                      plastic-black        396  min -0.035,0.021,-0.033 max 0.031,0.242,0.012
+    desk-radio__handset-metal                iron-cast             84  min -0.025,0.048,0.001 max 0.025,0.142,0.012
+    desk-radio__handset-led                  led-off               52  min -0.017,0.117,-0.015 max 0.017,0.165,0.005
+office-wall-clock                1676 tris  6 fam  size 0.378x0.378x0.050  y[0.000,0.378]  | office: dev1
+    office-wall-clock                        walnut-polished      560  min -0.189,0.000,0.000 max 0.189,0.378,0.042
+    office-wall-clock__bezel                 brass                824  min -0.176,0.013,0.038 max 0.176,0.365,0.050
+    office-wall-clock__dial                  enamel-cream         192  min -0.165,0.024,0.036 max 0.165,0.354,0.039
+    office-wall-clock__hand-hour             iron-cast             28  min -0.006,0.173,0.040 max 0.006,0.277,0.041
+    office-wall-clock__hand-minute           iron-cast             12  min -0.004,0.169,0.042 max 0.004,0.321,0.043
+    office-wall-clock__hand-second           rope-velvet           60  min -0.005,0.155,0.044 max 0.005,0.331,0.045
+door-access-panel                 332 tris  3 fam  size 0.086x0.142x0.026  y[0.000,0.142]  | office: dev1
+    door-access-panel                        iron-cast            108  min -0.043,0.000,0.000 max 0.043,0.142,0.022
+    door-access-panel__trim                  brass                168  min -0.030,0.018,0.022 max 0.030,0.091,0.026
+    door-access-panel__led                   led-red               56  min -0.007,0.114,0.022 max 0.007,0.128,0.026
+holyoke-entry-screen             1500 tris  4 fam  size 2.800x3.480x0.825  y[0.000,3.480]  | holyoke:kit1
+    holyoke-entry-screen                     holyoke-navy         516  min -1.400,0.000,-0.275 max 1.400,3.480,0.305  [collider]
+    holyoke-entry-screen__art                holyoke-navy          12  min -1.105,0.805,0.243 max 1.215,3.355,0.251
+    holyoke-entry-screen__trim               brass                864  min -1.130,0.192,0.230 max 1.240,3.380,0.550
+    holyoke-entry-screen__glass              glass-vitrine        108  min -0.320,0.227,0.508 max 0.680,0.515,0.520
+history-case-run                 2308 tris  7 fam  size 10.265x2.640x1.042  y[0.000,2.640]  | holyoke:kit1
+    history-case-run                         walnut-polished      816  min -5.133,0.000,0.000 max 5.133,2.640,1.028  [collider]
+    history-case-run__accent                 rope-velvet           12  min -5.100,2.473,0.643 max 5.100,2.518,0.661
+    history-case-run__lining                 holyoke-navy          48  min -5.040,0.785,0.026 max 5.040,2.510,0.378
+    history-case-run__trim                   brass                652  min -5.113,0.370,0.384 max 5.113,2.500,1.042
+    history-case-run__glass                  glass-vitrine         60  min -5.058,0.805,0.640 max 5.058,2.490,0.648
+    history-case-run__paper                  paper-aged           312  min -4.930,0.792,0.145 max 4.930,2.210,0.960
+    history-case-run__artefacts              leather-worn         408  min -4.848,0.749,0.128 max 4.827,1.995,0.510
+history-hero-case                 960 tris  4 fam  size 1.455x2.132x1.255  y[0.000,2.132]  | holyoke:kit1
+    history-hero-case                        walnut-polished      540  min -0.728,0.000,-0.627 max 0.728,0.780,0.627  [collider]
+    history-hero-case__trim                  brass                144  min -0.670,0.787,-0.557 max 0.670,2.132,0.557
+    history-hero-case__glass                 glass-vitrine         60  min -0.650,0.850,-0.550 max 0.650,2.125,0.550
+    history-hero-case__display               paper-aged           216  min -0.310,0.780,-0.310 max 0.310,1.020,0.310
+history-info-kiosk               1416 tris  4 fam  size 2.480x1.127x1.100  y[0.000,1.127]  | holyoke:kit1
+    history-info-kiosk                       walnut-polished      732  min -1.240,0.000,-0.550 max 1.240,0.965,0.550  [collider]
+    history-info-kiosk__lining               holyoke-navy         324  min -1.140,0.836,-0.268 max 1.140,1.124,0.348
+    history-info-kiosk__graphics             paper-aged            36  min -1.110,0.869,-0.238 max 1.085,1.127,0.323
+    history-info-kiosk__trim                 brass                324  min -1.170,0.115,0.465 max 1.170,0.794,0.502
+gym-court-lines                   132 tris  1 fam  size 4.800x0.006x7.000  y[0.000,0.006]  | holyoke:kit1
+    gym-court-lines                          paper-aged           132  min -2.400,0.000,-3.500 max 2.400,0.006,3.500
+gym-training-set                 2088 tris  3 fam  size 1.555x0.882x1.298  y[0.000,0.882]  | holyoke:kit1
+    gym-training-set                         oak-varnished        800  min -0.604,0.000,-0.670 max 0.201,0.882,-0.035  [collider]
+    gym-training-set__rope                   cord-hemp           1120  min -0.208,0.000,-0.441 max 0.951,0.502,0.628
+    gym-training-set__leather                leather-worn         168  min 0.450,0.001,-0.440 max 0.950,0.501,0.060
+atrium-floor-inlay               2832 tris  3 fam  size 16.400x0.027x16.400  y[0.000,0.027]  | atrium:kit1
+    atrium-floor-inlay                       maple-floor          384  min -8.200,0.000,-8.200 max 8.200,0.004,8.200
+    atrium-floor-inlay__dark                 iron-cast            384  min -5.658,0.005,-5.658 max 5.658,0.005,5.658
+    atrium-floor-inlay__brass                brass               2064  min -8.120,0.004,-8.120 max 8.120,0.027,8.120
+atrium-reception-desk            4508 tris  6 fam  size 6.360x1.540x3.110  y[0.000,1.540]  | atrium:kit1
+    atrium-reception-desk                    walnut-matte         924  min -3.190,0.000,-0.743 max 3.167,1.339,0.718  [collider]
+    atrium-reception-desk__timber            walnut-polished      928  min -3.160,0.125,-2.078 max 3.170,1.540,0.750
+    atrium-reception-desk__brass             brass                716  min -3.160,0.378,-2.048 max 3.150,1.354,0.734
+    atrium-reception-desk__light             atrium-glow          416  min -2.279,0.680,-2.063 max 3.100,1.475,0.736
+    atrium-reception-desk__props             iron-cast           1416  min -1.582,0.043,-0.939 max 1.060,1.423,0.137
+    atrium-reception-desk__storage           walnut-matte         108  min -2.190,0.000,-2.360 max 0.090,1.500,-2.080  [collider]
+atrium-wall-bay                   924 tris  6 fam  size 3.240x1.480x0.170  y[0.000,1.480]  | UNPLACED
+    atrium-wall-bay                          walnut-matte         108  min -1.600,0.000,0.000 max 1.600,1.480,0.070
+    atrium-wall-bay__slats                   walnut-polished      216  min -1.577,0.085,0.070 max 1.577,1.395,0.115
+    atrium-wall-bay__trim                    walnut-polished      324  min -1.620,0.000,0.000 max 1.620,1.480,0.160
+    atrium-wall-bay__plaque                  plaster-dark         108  min -0.540,0.440,0.114 max 0.540,1.140,0.142
+    atrium-wall-bay__graphics                paper-aged            60  min -0.460,0.625,0.142 max 0.320,1.020,0.148
+    atrium-wall-bay__light                   atrium-glow          108  min -0.130,1.236,0.092 max 0.130,1.254,0.170
+atrium-wall-bay-plain             276 tris  3 fam  size 3.240x1.480x0.150  y[0.000,1.480]  | atrium:kit18
+    atrium-wall-bay-plain                    walnut-matte          12  min -1.600,0.000,0.000 max 1.600,1.480,0.070
+    atrium-wall-bay-plain__slats             walnut-polished      240  min -1.583,0.085,0.070 max 1.583,1.395,0.115
+    atrium-wall-bay-plain__trim              walnut-polished       24  min -1.620,0.000,0.000 max 1.620,1.480,0.150
+atrium-central-podium            2052 tris  5 fam  size 1.080x1.084x0.920  y[0.000,1.084]  | atrium:kit1
+    atrium-central-podium                    walnut-polished      516  min -0.520,0.000,-0.440 max 0.520,0.840,0.440  [collider]
+    atrium-central-podium__top               plaster-dark          44  min -0.444,0.836,-0.364 max 0.444,1.084,0.364
+    atrium-central-podium__brass             brass               1124  min -0.540,0.075,-0.460 max 0.540,1.046,0.460
+    atrium-central-podium__controls          paper-aged           320  min -0.358,1.000,-0.038 max 0.358,1.042,0.108
+    atrium-central-podium__light             atrium-glow           48  min -0.532,0.004,-0.452 max 0.532,0.016,0.452
+atrium-display-tower             5184 tris  6 fam  size 0.820x2.340x0.820  y[0.000,2.340]  | atrium:kit1
+    atrium-display-tower                     walnut-polished     1248  min -0.410,0.000,-0.410 max 0.410,2.340,0.410  [collider]
+    atrium-display-tower__glass              glass-vitrine        432  min -0.363,0.905,-0.363 max 0.363,2.225,0.363
+    atrium-display-tower__brass              brass               1128  min -0.355,0.896,-0.376 max 0.355,2.239,0.382
+    atrium-display-tower__shelves            walnut-matte         324  min -0.330,1.054,-0.330 max 0.330,1.840,0.330
+    atrium-display-tower__light              atrium-glow          192  min -0.075,1.081,-0.075 max 0.075,1.851,0.075
+    atrium-display-tower__artefacts          brass               1860  min -0.273,1.080,-0.118 max 0.279,2.043,0.118
+atrium-ceiling-coffer            1272 tris  4 fam  size 12.400x0.205x8.800  y[-0.205,0.000]  | atrium:kit1
+    atrium-ceiling-coffer                    plaster-dark         108  min -5.980,-0.140,-4.180 max 5.980,-0.045,4.180
+    atrium-ceiling-coffer__slats             walnut-matte         684  min -5.907,-0.192,-4.140 max 5.907,-0.142,4.140
+    atrium-ceiling-coffer__trim              walnut-polished      432  min -6.200,-0.180,-4.400 max 6.200,0.000,4.400
+    atrium-ceiling-coffer__light             atrium-glow           48  min -5.942,-0.205,-4.143 max 5.942,-0.187,4.143
+atrium-pin-pendant                256 tris  2 fam  size 0.104x1.303x0.104  y[-1.303,0.000]  | atrium:kit9
+    atrium-pin-pendant                       iron-cast            200  min -0.052,-1.294,-0.052 max 0.052,0.000,0.052
+    atrium-pin-pendant__head                 atrium-glow           56  min -0.018,-1.303,-0.019 max 0.018,-1.294,0.019
+atrium-aerial-installation       6444 tris  5 fam  size 7.750x2.195x4.550  y[-2.195,0.000]  | atrium:kit1
+    atrium-aerial-installation__cables       iron-cast            192  min -3.804,-1.800,-2.204 max 3.804,0.000,2.204
+    atrium-aerial-installation               brass               1728  min -3.807,-1.502,-1.665 max 3.806,-0.447,1.867
+    atrium-aerial-installation__brassB       brass               1728  min -3.456,-1.792,-2.207 max 3.657,-0.571,2.211
+    atrium-aerial-installation__finials      brass               1008  min -3.875,-1.855,-2.275 max 3.875,-0.845,2.275
+    atrium-aerial-installation__net          iron-cast           1788  min -2.583,-2.195,-0.918 max 2.585,-1.190,0.558
+atrium-banner-hardware            384 tris  1 fam  size 1.344x4.000x0.319  y[-4.000,0.000]  | atrium:kit4
+    atrium-banner-hardware                   walnut-polished      384  min -0.672,-4.000,-0.159 max 0.672,0.000,0.159
+atrium-sofa                      2264 tris  3 fam  size 2.560x0.873x0.708  y[0.000,0.873]  | atrium:kit1
+    atrium-sofa                              walnut-polished     1080  min -1.260,0.000,-0.338 max 1.260,0.632,0.282  [collider]
+    atrium-sofa__upholstery                  holyoke-navy         648  min -1.250,0.315,-0.368 max 1.250,0.873,0.340
+    atrium-sofa__brass                       brass                536  min -1.280,0.000,-0.310 max 1.280,0.463,0.340
+atrium-lectern                    896 tris  4 fam  size 0.925x1.054x0.675  y[0.000,1.054]  | atrium:kit1
+    atrium-lectern                           walnut-polished      624  min -0.450,0.000,-0.325 max 0.450,0.820,0.325  [collider]
+    atrium-lectern__top                      plaster-dark          44  min -0.454,0.816,-0.329 max 0.454,1.054,0.329
+    atrium-lectern__brass                    brass                216  min -0.463,0.070,-0.338 max 0.463,0.945,0.338
+    atrium-lectern__light                    atrium-glow           12  min -0.340,0.774,0.258 max 0.340,0.796,0.276
+atrium-divider-screen             468 tris  3 fam  size 1.610x2.400x0.340  y[0.000,2.400]  | atrium:kit3
+    atrium-divider-screen                    holyoke-navy         228  min -0.805,0.000,-0.170 max 0.805,0.480,0.170  [collider]
+    atrium-divider-screen__frame             walnut-polished       48  min -0.775,0.000,-0.036 max 0.775,2.400,0.036
+    atrium-divider-screen__mesh              brass                192  min -0.692,0.565,0.009 max 0.692,2.305,0.027
+atrium-barrier-segment            220 tris  1 fam  size 0.259x0.834x1.421  y[0.000,0.834]  | atrium:kit8
+    atrium-barrier-segment                   brass                220  min 1.466,0.000,-0.761 max 1.725,0.834,0.660  [collider]
+atrium-lounge-set                1436 tris  3 fam  size 4.100x0.992x2.600  y[0.000,0.992]  | atrium:kit1
+    atrium-lounge-set                        walnut-polished      592  min -1.466,0.000,-0.794 max 1.970,0.970,1.000  [collider]
+    atrium-lounge-set__upholstery            holyoke-navy         444  min -2.050,0.000,-1.300 max 2.050,0.992,1.300
+    atrium-lounge-set__brass                 brass                400  min -0.818,0.000,-0.400 max 1.880,0.682,0.938
+atrium-display-console            636 tris  3 fam  size 3.240x1.050x0.767  y[0.000,1.050]  | atrium:kit1
+    atrium-display-console                   walnut-polished      444  min -1.620,0.000,-0.375 max 1.620,1.050,0.375  [collider]
+    atrium-display-console__glass            glass-vitrine         60  min -1.553,0.715,-0.328 max 1.553,1.002,0.328
+    atrium-display-console__brass            brass                132  min -1.550,0.318,-0.190 max 1.550,0.716,0.392
+
+## exhibits-atrium
+ball/leather-laced-1900          2224 tris  2 fam  size 0.214x0.204x0.213  y[-0.102,0.102]  | atrium: exh1
+    ball/leather-laced-1900__leather         ball-leather-aged   1584  min -0.107,-0.102,-0.105 max 0.107,0.102,0.105
+    ball/leather-laced-1900__fastenings      rawhide-lace         640  min -0.016,-0.031,0.099 max 0.016,0.031,0.108
+ball/classic-white-18-panel      1152 tris  1 fam  size 0.210x0.210x0.210  y[-0.105,0.105]  | atrium: exh1
+    ball/classic-white-18-panel              ball-1964           1152  min -0.105,-0.105,-0.105 max 0.105,0.105,0.105
+ball/tricolour-1998              1152 tris  3 fam  size 0.210x0.210x0.210  y[-0.105,0.105]  | atrium: exh1
+    ball/tricolour-1998                      ball-1998-white      864  min -0.104,-0.104,-0.104 max 0.104,0.104,0.104
+    ball/tricolour-1998__blue                ball-1998-blue       144  min -0.099,-0.099,-0.099 max 0.074,0.070,0.074
+    ball/tricolour-1998__yellow              ball-1998-yellow     144  min -0.105,-0.105,-0.105 max 0.105,0.105,0.105
+ball/eight-panel-2008            1296 tris  2 fam  size 0.208x0.210x0.208  y[-0.105,0.105]  | atrium: exh1
+    ball/eight-panel-2008                    ball-2008-blue      1008  min -0.104,-0.105,-0.104 max 0.104,0.105,0.104
+    ball/eight-panel-2008__yellow            ball-2008-yellow     288  min -0.104,-0.105,-0.104 max 0.104,0.105,0.104
+
+## exhibits-holyoke
+ball/basketball-bladder-1895     1512 tris  1 fam  size 0.225x0.209x0.222  y[-0.103,0.107]  | holyoke: exh1
+    ball/basketball-bladder-1895             leather-worn        1512  min -0.112,-0.103,-0.111 max 0.112,0.107,0.111
+ball/spalding-laced-1900        10136 tris  1 fam  size 0.214x0.214x0.215  y[-0.107,0.107]  | holyoke: exh1
+    ball/spalding-laced-1900                 leather-tan        10136  min -0.107,-0.107,-0.108 max 0.107,0.107,0.107
+net/ymca-1897                    2092 tris  2 fam  size 4.980x2.180x0.180  y[0.000,2.180]  | holyoke: exh1
+    net/ymca-1897__structure                 oak-matte           1480  min -2.490,0.000,-0.090 max 2.490,2.180,0.090
+    net/ymca-1897__cords                     cord-hemp            612  min -2.400,1.360,-0.002 max 2.400,1.980,0.002
+paper/handbook-1897              1848 tris  1 fam  size 0.290x0.052x0.230  y[-0.004,0.048]  | holyoke: exh1
+    paper/handbook-1897                      canvas              1848  min -0.145,-0.004,-0.115 max 0.145,0.048,0.115
+paper/spalding-guide-1916         648 tris  1 fam  size 0.128x0.011x0.193  y[0.000,0.011]  | holyoke: exh1
+    paper/spalding-guide-1916                canvas               648  min -0.064,0.000,-0.097 max 0.064,0.011,0.097
+apparel/gym-suit-1900            2232 tris  2 fam  size 0.380x1.322x0.380  y[0.000,1.322]  | holyoke: exh1
+    apparel/gym-suit-1900__form              plaster-dark        1264  min -0.190,0.000,-0.190 max 0.190,1.322,0.190
+    apparel/gym-suit-1900__garment           leather-worn         968  min -0.157,0.240,-0.157 max 0.157,1.306,0.157
+frame/portrait-small              572 tris  1 fam  size 0.479x0.563x0.064  y[-0.282,0.282]  | holyoke: exh1
+    frame/portrait-small                     oak-varnished        572  min -0.239,-0.282,-0.047 max 0.239,0.282,0.017
+frame/panorama-wide               572 tris  1 fam  size 1.539x0.593x0.064  y[-0.296,0.296]  | holyoke: exh1
+    frame/panorama-wide                      oak-varnished        572  min -0.769,-0.296,-0.047 max 0.769,0.296,0.017

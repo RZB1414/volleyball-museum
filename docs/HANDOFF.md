@@ -516,6 +516,13 @@ em `ca4513c`, com o mesmo hash; não é regressão da abertura.
 
 ## 7. Próximas prioridades
 
+**O plano até o fim do jogo está em `docs/PLANO-ATE-O-FINAL.md`** (2026-10-03): correções do
+átrio e da Holyoke, polimento de assets, o roteiro completo e 24 lotes de execução, com as
+decisões do dono em §0.3. Ele substitui o roteiro de `docs/PLANO-COMPLETO.md` onde divergem
+(Anexo D do plano). As fontes dele estão em `docs/plano-mestre/fontes/`, os scripts de medição em
+`scripts/audit/` e as capturas de referência em `docs/contact-sheets/baseline-2026-10-03/`. A
+lista abaixo é anterior ao plano e vale no que ele não cobrir.
+
 1. **Teste em dispositivos móveis reais.** Num Android médio, valide fullscreen,
    lock landscape, multitouch, fluidez, temperatura e pressão de memória. Num
    iPhone/iPad, teste Safari e o web app pela Tela de Início, inclusive rotação e
