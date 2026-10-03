@@ -39,3 +39,17 @@ export function triggerPrimaryAction() {
   }
   return false
 }
+
+/**
+ * True for an E press that no other system has already acted on.
+ *
+ * Every system listens to E on `window`, and every listener runs for the same
+ * event, each re-reading the store the previous one may just have changed. One
+ * press could light the lamp and then — the radio now live — let the radio take
+ * the same press and leave the desk. The first system that acts calls
+ * `preventDefault`; the rest stand down, which is what `triggerPrimaryAction`
+ * already guarantees on touch.
+ */
+export function isUnclaimedInteractKey(event: Pick<KeyboardEvent, 'code' | 'defaultPrevented'>) {
+  return event.code === 'KeyE' && !event.defaultPrevented
+}

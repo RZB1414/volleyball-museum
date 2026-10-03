@@ -30,7 +30,7 @@ import { INTERACTION_REACH, interactionWinnerOf, PROXY_MINIMUM } from './interac
 import { cloneKitPart, disposeKitPart } from './kitPart'
 import type { MaterialLibrary } from './materials'
 import { isRoomPowered } from './power'
-import { subscribePrimaryAction } from './primaryAction'
+import { isUnclaimedInteractKey, subscribePrimaryAction } from './primaryAction'
 import { buildPowerControlLightRig } from './powerControlLightRig'
 
 const CENTRE = new Vector2(0, 0)
@@ -225,7 +225,7 @@ export function PowerControlTargeting() {
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat || event.code !== 'KeyE') return
+      if (event.repeat || !isUnclaimedInteractKey(event)) return
       if (interact()) event.preventDefault()
     }
 

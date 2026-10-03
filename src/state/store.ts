@@ -559,12 +559,19 @@ export const useMuseum = create<MuseumStore>((set, get) => {
   // of this state rather than the mechanism that drives it.
   let persistHandle: number | null = null
   let persistUsesIdleCallback = false
+  // What this tab last wrote — or loaded. A forced flush on every tab switch
+  // used to let a stale tab, one that had changed nothing, overwrite the newer
+  // save another tab had written since; only a tab with something new writes.
+  let lastWrittenSnapshot = JSON.stringify({ settings: initial.settings, progress: initial.progress })
 
   const writePersisted = () => {
     if (typeof localStorage === 'undefined') return
     try {
       const { settings, progress } = get()
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ settings, progress }))
+      const snapshot = JSON.stringify({ settings, progress })
+      if (snapshot === lastWrittenSnapshot) return
+      localStorage.setItem(STORAGE_KEY, snapshot)
+      lastWrittenSnapshot = snapshot
     } catch {
       // Private browsing, quota, or a locked-down profile. Losing the save is
       // acceptable; throwing during gameplay is not.

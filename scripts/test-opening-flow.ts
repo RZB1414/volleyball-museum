@@ -85,6 +85,7 @@ const {
   shouldCapturePointer,
 } = await import('../src/engine/interactionTarget.ts')
 const { journalUnlocked } = await import('../src/engine/notebook.ts')
+const { isUnclaimedInteractKey } = await import('../src/engine/primaryAction.ts')
 const { progressConditionMet } = await import('../src/engine/progressCondition.ts')
 const {
   bindSaveFlush,
@@ -314,6 +315,31 @@ test('opening a reader, a keypad or an exhibit closes the journal', () => {
   store.setJournalTab(null)
 })
 
+test('one E press lights the lamp without also taking the radio', () => {
+  // The E listeners all run for the same event, each re-reading a store the
+  // previous one may just have changed: the lamp's switch makes the radio live
+  // mid-event. The first listener that acts claims the press.
+  const page = new EventTarget()
+  const acted: string[] = []
+  let radioLive = false
+  page.addEventListener('keydown', (event) => {
+    if (!isUnclaimedInteractKey(event as KeyboardEvent)) return
+    radioLive = true // the lamp restores power...
+    acted.push('lamp')
+    event.preventDefault()
+  })
+  page.addEventListener('keydown', (event) => {
+    if (!isUnclaimedInteractKey(event as KeyboardEvent)) return
+    if (radioLive) acted.push('take radio') // ...and the radio would now answer
+  })
+  const press = Object.assign(new Event('keydown', { cancelable: true }), { code: 'KeyE' })
+  page.dispatchEvent(press)
+  assert.deepEqual(acted, ['lamp'])
+  assert.equal(isUnclaimedInteractKey({ code: 'KeyE', defaultPrevented: false }), true)
+  assert.equal(isUnclaimedInteractKey({ code: 'KeyE', defaultPrevented: true }), false)
+  assert.equal(isUnclaimedInteractKey({ code: 'KeyR', defaultPrevented: false }), false)
+})
+
 test('every E handler asks the shared guard and the shared arbitration', () => {
   for (const file of [
     'engine/Containers.tsx',
@@ -327,6 +353,18 @@ test('every E handler asks the shared guard and the shared arbitration', () => {
   }
   const doors = source('engine/TransitionDoors.tsx')
   assert.equal((doors.match(/isModalOpen\(museum\)/g) ?? []).length, 2, 'door press and door focus')
+  // One press, one action: each E listener stands down once another acted.
+  for (const file of [
+    'engine/Containers.tsx',
+    'engine/PowerControls.tsx',
+    'engine/Devices.tsx',
+    'engine/Interaction.tsx',
+    'engine/TransitionDoors.tsx',
+  ]) {
+    const code = source(file)
+    assert.ok(code.includes('isUnclaimedInteractKey(event)'), `${file} leaves a claimed E alone`)
+    assert.ok(!code.includes("event.code !== 'KeyE'") && !code.includes("event.code === 'KeyE'"), `${file} has no raw E test`)
+  }
   const hud = source('ui/Hud.tsx')
   assert.ok(/\{modal \? null : \(\s*<>\s*<div className="crosshair"/.test(hud), 'no crosshair or prompt under a modal')
   for (const prompt of ['exhibit', 'container', 'power-control', 'device']) {
@@ -787,6 +825,17 @@ test('a new game empties progress and every session field, and writes at once', 
   assert.equal(contributed, 1, 'running systems put their state in first')
   const disk = JSON.parse(storage.get(STORAGE_KEY) ?? '{}')
   assert.deepEqual(disk.progress.catalogued, [], 'a reload cannot bring the old save back')
+})
+
+test('a tab that changed nothing never overwrites a newer save', () => {
+  // Another tab has played on since this one last wrote. Every tab switch
+  // forces a flush now, so a stale tab must not put its old snapshot back.
+  const newer = JSON.stringify({ settings: {}, progress: { ...EMPTY_PROGRESS, catalogued: ['ball-spalding'] } })
+  storage.set(STORAGE_KEY, newer)
+  writes.length = 0
+  useMuseum.getState().resetProgress()
+  assert.deepEqual(writes, [], 'nothing new to write')
+  assert.equal(storage.get(STORAGE_KEY), newer)
 })
 
 // ---------------------------------------------------------------------------

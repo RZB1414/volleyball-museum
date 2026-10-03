@@ -38,6 +38,7 @@ import {
   radioDeliveryStep,
   radioDevices,
   radioLineSeconds,
+  radioWithinEarshot,
   transmissionLapsed,
 } from '../src/engine/deviceRules.ts'
 import {
@@ -459,6 +460,15 @@ test('the director schedules only the first due call and waits for every modal',
   }
   assert.equal(radioDeliveryStep('ready', busyOf(onAir as unknown as typeof idle)), 'wait', 'never over another transmission')
   assert.equal(radioDeliveryStep('ready', busyOf(idle, true)), 'wait', 'never to a hidden tab')
+  assert.equal(radioDeliveryStep('ready', { ...busyOf(idle), away: true }), 'wait', 'never to a radio nobody can hear')
+
+  // A radio left on its charger speaks only to its own room; in the hand it
+  // speaks everywhere; one that is never carried was always heard anywhere.
+  const office = radioDevices(MUSEUM).find((entry) => entry.device.id === RADIO)!.room.id
+  assert.equal(radioWithinEarshot(radio, office, [], office), true, 'on the desk, heard in the office')
+  assert.equal(radioWithinEarshot(radio, office, [], 'atrium'), false, 'on the desk, not from the atrium')
+  assert.equal(radioWithinEarshot(radio, office, [RADIO], 'atrium'), true, 'in the hand, heard anywhere')
+  assert.equal(radioWithinEarshot({ ...radio, carriedOnUse: false }, office, [], 'atrium'), true)
 
   // The director asks those rules; nothing else decides or records a call.
   const devices = source('engine/Devices.tsx')
@@ -467,6 +477,10 @@ test('the director schedules only the first due call and waits for every modal',
   assert.ok(!/dueRadioCalls\(/.test(director), 'never every due call at once')
   assert.ok(director.includes('radioDeliveryStep(radioCallReady(device, call.id, state.progress, MUSEUM)'))
   assert.ok(director.includes("hidden: document.visibilityState === 'hidden'"))
+  assert.ok(
+    director.includes('away: !radioWithinEarshot(device, room.id, state.progress.devicesCarried, state.currentRoom)'),
+    'a call waits for the player to be within earshot',
+  )
   assert.ok(director.includes('callId: call.id'), 'the call travels with its transmission')
   assert.ok(!devices.includes('recordRadioCall('), 'nothing records a call before its end')
 })

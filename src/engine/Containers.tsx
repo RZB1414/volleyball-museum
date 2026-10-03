@@ -30,7 +30,7 @@ import {
   notebookPagesFor,
 } from './notebook'
 import { INTERACTION_REACH, interactionWinnerOf, PROXY_MINIMUM } from './interactionTarget'
-import { subscribePrimaryAction } from './primaryAction'
+import { isUnclaimedInteractKey, subscribePrimaryAction } from './primaryAction'
 import { isModalOpen, useMuseum } from '../state/store'
 import './bvhSetup'
 
@@ -302,7 +302,7 @@ export function ContainerTargeting() {
         return
       }
 
-      if (event.code !== 'KeyE') return
+      if (!isUnclaimedInteractKey(event)) return
       if (interact()) event.preventDefault()
     }
 

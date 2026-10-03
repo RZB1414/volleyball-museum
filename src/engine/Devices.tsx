@@ -38,6 +38,7 @@ import {
   radioCallReady,
   radioDeliveryStep,
   radioDevices,
+  radioWithinEarshot,
   savedClockSeconds,
   type RadioDevice,
 } from './deviceRules'
@@ -54,7 +55,7 @@ import { cloneKitPart, disposeKitPart } from './kitPart'
 import type { MaterialLibrary } from './materials'
 import { isRoomPowered } from './power'
 import { playerPosition } from './playerPosition'
-import { subscribePrimaryAction } from './primaryAction'
+import { isUnclaimedInteractKey, subscribePrimaryAction } from './primaryAction'
 import { placeRadioCall, takeDeskRadio } from './radioCall'
 import { hangUpDelayMs, hangUpStarted, heldRadioId, isRadioCallKey } from './radioPatience'
 
@@ -429,7 +430,7 @@ export function DeviceTargeting() {
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat || event.code !== 'KeyE') return
+      if (event.repeat || !isUnclaimedInteractKey(event)) return
       if (interact()) event.preventDefault()
     }
 
@@ -513,7 +514,7 @@ export function RadioDirector() {
 
   useEffect(() => {
     const timers = timersRef.current
-    for (const { device } of RADIOS) {
+    for (const { device, room } of RADIOS) {
       if (!poweredNow(device.poweredBy)) continue
       const call = nextRadioCall(device, progress, MUSEUM)
       if (!call || timers.has(call.id)) continue
@@ -527,6 +528,7 @@ export function RadioDirector() {
           onAir: state.radio !== null,
           modal: isModalOpen(state),
           hidden: document.visibilityState === 'hidden',
+          away: !radioWithinEarshot(device, room.id, state.progress.devicesCarried, state.currentRoom),
         })
         if (step === 'wait') {
           timers.set(call.id, window.setTimeout(deliver, 1200))

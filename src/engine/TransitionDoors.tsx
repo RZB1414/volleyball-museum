@@ -18,7 +18,7 @@ import { USE_DRACO, USE_MESHOPT } from './bundleCache'
 import type { CollisionWorld } from './collision'
 import { cloneKitPart } from './kitPart'
 import type { MaterialLibrary } from './materials'
-import { subscribePrimaryAction } from './primaryAction'
+import { isUnclaimedInteractKey, subscribePrimaryAction } from './primaryAction'
 import { registerTransitionDoorGate } from './transitionDoorCollision'
 import {
   isInsideTransitionDoorEnvelope,
@@ -399,7 +399,7 @@ export function TransitionDoorLayer({
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.repeat || event.code !== 'KeyE') return
+      if (event.repeat || !isUnclaimedInteractKey(event)) return
       if (interact()) event.preventDefault()
     }
 

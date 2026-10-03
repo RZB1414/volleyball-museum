@@ -26,7 +26,7 @@ import './bvhSetup'
 import type { ExhibitData } from '../content/schema'
 import { isModalOpen, useMuseum } from '../state/store'
 import { INTERACTION_REACH, interactionWinnerOf } from './interactionTarget'
-import { subscribePrimaryAction } from './primaryAction'
+import { isUnclaimedInteractKey, subscribePrimaryAction } from './primaryAction'
 
 const CENTRE = new Vector2(0, 0)
 /** How far the player can reach to examine something. */
@@ -222,7 +222,7 @@ export function ExamineView() {
       if (event.repeat) return
       const state = useMuseum.getState()
 
-      if (event.code === 'KeyE' && interact()) event.preventDefault()
+      if (isUnclaimedInteractKey(event) && interact()) event.preventDefault()
 
       if (event.code === 'Escape' && state.examining) {
         state.setExamining(null)

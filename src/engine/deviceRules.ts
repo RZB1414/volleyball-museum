@@ -127,14 +127,38 @@ export type RadioDelivery = 'drop' | 'wait' | 'play'
  * any modal (the notebook covers the subtitle), and while the tab is hidden:
  * background tabs still run timers, and a first call that played to nobody
  * used to be recorded as heard, its directions to the breaker lost for good.
+ * It also waits while the player is `away` from a radio left on its desk.
  */
 export function radioDeliveryStep(
   readiness: ReturnType<typeof radioCallReady>,
-  busy: { readonly onAir: boolean; readonly modal: boolean; readonly hidden: boolean },
+  busy: {
+    readonly onAir: boolean
+    readonly modal: boolean
+    readonly hidden: boolean
+    readonly away?: boolean
+  },
 ): RadioDelivery {
   if (readiness === 'gone') return 'drop'
-  if (readiness === 'queued' || busy.onAir || busy.modal || busy.hidden) return 'wait'
+  if (readiness === 'queued' || busy.onAir || busy.modal || busy.hidden || busy.away) return 'wait'
   return 'play'
+}
+
+/**
+ * Whether the player can hear this radio speak.
+ *
+ * A radio that is never carried, or one in the player's hand, is heard
+ * anywhere. One still on its charger is heard only in its own room: a reminder
+ * to take the notebook played to a player who already left the office would
+ * come from a radio they cannot hear.
+ */
+export function radioWithinEarshot(
+  device: Pick<RadioDevice, 'id' | 'carriedOnUse'>,
+  radioRoomId: string,
+  devicesCarried: readonly string[],
+  currentRoom: string,
+) {
+  if (!device.carriedOnUse || devicesCarried.includes(device.id)) return true
+  return currentRoom === radioRoomId
 }
 
 /**

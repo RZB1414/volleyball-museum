@@ -58,8 +58,8 @@ de §9 ainda não foi publicada).
 Bake atual:
 
 - **2.946 KB** de GLBs;
-- **151.928 triângulos assados**;
-- kit `public/models/kit.ef79ecc7.glb`: 2.189 KB, 105.216 triângulos, 195 nós;
+- **151.976 triângulos assados**;
+- kit `public/models/kit.aeabcf76.glb`: 2.189 KB, 105.264 triângulos, 195 nós;
 - salas: `room-atrium.b214394f.glb`, `room-holyoke.aa0b5458.glb` e
   `room-office.a2144060.glb`;
 - texturas: **43,875 MiB** de VRAM (teto duro de 45).
@@ -831,15 +831,15 @@ lanterna, as estantes A e B da parede leste) e `office-books-lit.jpg` (spawn a
 
 ### 9.5 Balanço da rodada (`4bd4f09..`, 2026-10-02)
 
-Quatro commits locais, ainda sem push nem deploy: `17113fa` (fluxo da abertura,
-§9.1), `e6010b4` (rádio, §9.2), `a9ab7b7` (tecidos e mesa, §9.3) e o das estantes
-(§9.4).
+Commits `17113fa` (fluxo da abertura, §9.1), `e6010b4` (rádio, §9.2), `a9ab7b7`
+(tecidos e mesa, §9.3), `e7a208f` (estantes, §9.4), `6b39e91` (revisão, §9.6) e o
+da revisão antes do push (§9.7).
 
 | | antes | depois |
 |---|---|---|
 | GLBs | 2.801 KB | 2.946 KB |
-| triângulos assados | 146.376 | 151.928 |
-| kit | 2.045 KB, 99.664 triângulos, 182 nós | 2.189 KB, 105.216 triângulos, 195 nós |
+| triângulos assados | 146.376 | 151.976 |
+| kit | 2.045 KB, 99.664 triângulos, 182 nós | 2.189 KB, 105.264 triângulos, 195 nós |
 | VRAM de textura | 45,000 MiB (folga zero) | 43,875 MiB |
 | ponto de leitura (medido desde o início de §9.3) | 47 draws, 31.032 triângulos | 58 draws, 36.038 triângulos |
 
@@ -886,3 +886,19 @@ Suítes novas: `test:opening-flow` (38), `test:radio` (22), `test:materials` (8)
   every five minutes".
 - Capturas: `docs/contact-sheets/office-review-reading-lit.jpg`,
   `office-review-shelves-torch-1m.jpg` e `office-review-spawn-torch.jpg`.
+
+### 9.7 Revisão antes do push (2026-10-03)
+
+- **Um E, uma ação.** Cada sistema ouve o E no `window`, e todos rodam no mesmo
+  evento relendo o store que o anterior acabou de mudar: um E na luminária, com o
+  rádio sem carga na mesma mira, acendia a sala e em seguida deixava o rádio, agora
+  com carga, pegar a mesma tecla. Todo handler de E passa por
+  `isUnclaimedInteractKey` (`primaryAction.ts`): quem age chama `preventDefault`,
+  os outros desistem — o que o `triggerPrimaryAction` já garantia no toque.
+- **Aba velha não sobrescreve o save.** O flush em todo `visibilitychange` gravava
+  o retrato da memória mesmo sem mudança; uma aba parada desde o título apagava o
+  que outra aba tinha jogado. `writePersisted` só grava quando o retrato difere do
+  último que esta aba gravou (ou carregou).
+- **Rádio na mesa só fala na própria sala.** Uma chamada de conteúdo espera
+  (`radioWithinEarshot`) enquanto o jogador está longe de um rádio que ficou no
+  carregador; na mão, ele é ouvido em qualquer sala.
