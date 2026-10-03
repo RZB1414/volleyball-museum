@@ -317,38 +317,65 @@ export function buildCuratorDesk({ width = 1.75, depth = 0.90, height = 0.74 } =
     finished.translate(0, -halfRule, 0)
     return finished
   }
-  // A blotting pad with leather corners, on the curator's side. At 0.02 m a
-  // tile the rules shrink below a pixel: blotting paper is not ruled.
+  /**
+   * A blotting pad with brass corners, on the curator's side. At 0.02 m a
+   * tile the rules shrink below a pixel: blotting paper is not ruled.
+   *
+   * The corners were the inset's own green leather, a 1.2 mm skin laid on the
+   * paper, and they vanished into the leather round them: from the reading
+   * point the pad read as a white octagon. A corner has to differ from what
+   * surrounds it, and on this desk the brass is the only other finish the
+   * recipe already draws — a leather of another colour would be one more draw
+   * in the office, which is at its ceiling. Brass caps, folded over the pad's
+   * edge like the ledgers' corners, standing from the inset to 1.5 mm over
+   * the paper.
+   */
   const PAD = { width: 0.26, depth: 0.32, thickness: 0.002, x: -0.1, z: -0.12, rotation: 0.035 }
+  const CORNER = { leg: 0.045, rise: 0.0015, wrap: 0.0006 }
   const padPieces = [[paperPiece(plainBox(PAD.width, PAD.thickness, PAD.depth, 0, PAD.thickness / 2, 0), 0.02), paper]]
+  const cornerHeight = PAD.thickness + CORNER.rise
   for (const [cx, cz, turn] of [[-1, -1, 0], [1, -1, -Math.PI / 2], [1, 1, Math.PI], [-1, 1, Math.PI / 2]]) {
-    // A right-angled leather pocket folded over each corner of the pad.
-    const size = 0.045
+    // Authored for the (-, -) corner, its right angle just outside the pad's.
+    const out = -CORNER.wrap
     const corner = sweepProfile(
       [
-        [0, 0],
-        [size, 0],
-        [0, size],
+        [out, out],
+        [CORNER.leg, out],
+        [out, CORNER.leg],
       ],
-      0.0012,
+      cornerHeight,
       { bevel: 0 },
     )
     corner.rotateX(Math.PI / 2)
+    corner.translate(0, cornerHeight / 2, 0)
     corner.rotateY(turn)
-    corner.translate((cx * PAD.width) / 2, PAD.thickness + 0.0006, (cz * PAD.depth) / 2)
-    padPieces.push([corner, leather])
+    corner.translate((cx * PAD.width) / 2, 0, (cz * PAD.depth) / 2)
+    padPieces.push([corner, brass])
   }
   const padTop = placeItem('blotting-pad', padPieces, { x: PAD.x, z: PAD.z, rotation: PAD.rotation })
 
   // Four loose sheets on the pad, portrait to the curator so the paper's
   // feint rules run across them. A millimetre each: three-millimetre slabs
-  // stacked into a 12 mm brick is what they used to be.
+  // stacked into a 12 mm brick is what they used to be. Turned and slid
+  // well out of true with each other, as sheets put down one at a time lie:
+  // squared up, white on white, the four read as one, and the pad as bare.
+  // Every corner of every sheet stays clear of the brass caps (`test-desk-top.ts`).
+  const SHEETS = [
+    { rotation: -0.06, x: -0.008, z: 0.006 },
+    { rotation: 0.035, x: 0.01, z: -0.005 },
+    { rotation: -0.03, x: -0.004, z: 0.012 },
+    { rotation: 0.075, x: 0.004, z: -0.012 },
+  ]
   const sheetPieces = []
-  for (let index = 0; index < 4; index += 1) {
-    const sheet = paperPiece(new BoxGeometry(0.172 - index * 0.005, 0.001, 0.232 - index * 0.007), 0.25)
-    sheet.rotateY(-0.03 + index * 0.02)
-    sheet.translate(index * 0.002, 0.0005 + index * 0.0011, index * 0.003)
+  const sheets = []
+  for (const [index, placement] of SHEETS.entries()) {
+    const width = 0.172 - index * 0.005
+    const length = 0.232 - index * 0.007
+    const sheet = paperPiece(new BoxGeometry(width, 0.001, length), 0.25)
+    sheet.rotateY(placement.rotation)
+    sheet.translate(placement.x, 0.0005 + index * 0.0011, placement.z)
     sheetPieces.push([sheet, paper])
+    sheets.push({ centre: [placement.x, placement.z], halfSize: [width / 2, length / 2], rotation: placement.rotation })
   }
   placeItem('loose-sheets', sheetPieces, { x: PAD.x, z: PAD.z, rotation: PAD.rotation, on: padTop, restsOn: 'blotting-pad' })
 
@@ -448,6 +475,8 @@ export function buildCuratorDesk({ width = 1.75, depth = 0.90, height = 0.74 } =
         top: blotterTop,
       },
       items,
+      // In the pad's own frame, before it is turned onto the desk.
+      pad: { halfSize: [PAD.width / 2, PAD.depth / 2], cornerLeg: CORNER.leg, cornerHeight, sheets },
     },
   }
 }
@@ -672,14 +701,31 @@ export function buildOfficeChair({ seatHeight = 0.45 } = {}) {
     geometry.translate(0, backCentreY, backCentreZ)
     return geometry
   }
-  leather.push(placeBack(bevelledBox(BACK.width, BACK.height, BACK.depth, BACK.radius, 1)))
+  /** The +Z extent of an upright piece, measured before it is leaned. */
+  const frontOf = (geometry) => {
+    geometry.computeBoundingBox()
+    return geometry.boundingBox.max.z
+  }
 
   /**
    * Deep diamond tufting on the face the sitter leans on: eight buttons on
    * grid vertices, each pulling the crowned face 18 mm in. A flat slab with
    * buttons glued on was the old back, and it read as a pin board; shallower
    * dimples read as stains.
+   *
+   * The slab behind the face is set back by `BOXING`, deeper than the deepest
+   * dimple. With its front flush under the face's edges, six of the eight
+   * buttons and every pit bottom fell behind the slab's flat front, and the
+   * tufting showed as flat green patches with no button in them. A boxing
+   * strip — the cushion's border — closes the step, and the welt covers the
+   * seam where it meets the face, as on a real upholstered back.
    */
+  const BOXING = 0.012
+  const slab = bevelledBox(BACK.width, BACK.height, BACK.depth - BOXING, BACK.radius, 1)
+  slab.translate(0, 0, -BOXING / 2)
+  const slabFront = frontOf(slab)
+  leather.push(placeBack(slab))
+
   const panelWidth = BACK.width - BACK.radius * 2
   const panelHeight = BACK.height - BACK.radius * 2
   const TUFT = { columns: 8, rows: 10, crown: 0.016, dimple: 0.018, spread: 0.022 }
@@ -694,28 +740,49 @@ export function buildOfficeChair({ seatHeight = 0.45 } = {}) {
   const faceZ = BACK.depth / 2 + 0.0008
   const tufted = quiltedPanel(panelWidth, panelHeight, tuft)
   tufted.translate(0, 0, faceZ)
+  const facePosition = tufted.attributes.position
+  let faceLowest = Infinity
+  for (let index = 0; index < facePosition.count; index += 1) {
+    faceLowest = Math.min(faceLowest, facePosition.getZ(index))
+  }
   leatherSmooth.push(placeBack(tufted))
+  const buttonTops = []
   for (const [x, y] of buttons) {
     const button = domeStud(0.0105, 0.0065)
     // Dome along +Y → along +Z, out of the face, sunk 2 mm into its dimple.
     button.rotateX(Math.PI / 2)
     button.translate(x, y, faceZ + quiltedHeight(panelWidth, panelHeight, x, y, tuft) - 0.002)
+    buttonTops.push(frontOf(button))
     leatherSmooth.push(placeBack(button))
   }
+  const weltZ = BACK.depth / 2 + 0.0012
   const backWelt = roundedRectPoints(panelWidth, panelHeight, 0.02, 2).map(
-    ([x, y]) => new Vector3(x, y, BACK.depth / 2 + 0.0012),
+    ([x, y]) => new Vector3(x, y, weltZ),
   )
   leatherSmooth.push(placeBack(piping(backWelt, 0.004, { segments: 28, radial: 3, closed: true })))
 
+  // The boxing: four thin strips standing on the slab's front, flush with
+  // the face's edges and reaching up to the welt. A millimetre into the slab,
+  // so no grazing light finds a crack along their foot.
+  const boxingWall = 0.003
+  const boxingRun = weltZ - slabFront + 0.001
+  const boxingZ = slabFront - 0.001 + boxingRun / 2
+  for (const side of [-1, 1]) {
+    leather.push(
+      placeBack(plainBox(boxingWall, panelHeight, boxingRun, side * (panelWidth - boxingWall) / 2, 0, boxingZ)),
+      placeBack(plainBox(panelWidth, boxingWall, boxingRun, 0, side * (panelHeight - boxingWall) / 2, boxingZ)),
+    )
+  }
+
   // Sparse brass nail heads close the leather along the back's two long
   // sides, where the lamp grazes them, without turning the chair into a
-  // dotted outline.
+  // dotted outline. Centred on the slab's side face, which the boxing moved.
   for (const side of [-1, 1]) {
     for (let index = 0; index < 6; index += 1) {
       const stud = domeStud(0.0055, 0.0032)
       // Dome along +Y → along ±X, out of the side face.
       stud.rotateZ((-side * Math.PI) / 2)
-      stud.translate(side * (BACK.width / 2 - 0.0004), -0.155 + index * 0.062, 0)
+      stud.translate(side * (BACK.width / 2 - 0.0004), -0.155 + index * 0.062, -BOXING / 2)
       brass.push(placeBack(stud))
     }
   }
@@ -737,6 +804,11 @@ export function buildOfficeChair({ seatHeight = 0.45 } = {}) {
     // Wide enough to round the eight-sided shoes and six-sided domes, still
     // short of the shoes' 90-degree rims.
     brass: finalize(merge(brass), { crease: Math.PI / 2.2, metresPerTile: 0.18 }),
+    // Measured on the pieces themselves, upright, so a test can prove the
+    // tufting is the outermost layer of the back (`test-desk-top.ts`).
+    layout: {
+      back: { slabFront, faceEdge: faceZ, faceLowest, buttonTops, boxingFront: slabFront - 0.001 + boxingRun },
+    },
   }
 }
 

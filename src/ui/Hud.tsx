@@ -8,9 +8,10 @@
  * lives in 3D; text that belongs to the PLAYER lives here.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { formatCreditLine } from '../content/credit'
+import { PRE_OPENING_SAVE } from '../content/legacySave'
 import { MUSEUM } from '../content/museum'
 import type { ExhibitData } from '../content/schema'
 import type { TranslationKey } from '../content/i18n/pt-BR'
@@ -23,7 +24,7 @@ import {
 } from '../engine/interactionTarget'
 import { containerById, isNotebook, journalUnlocked } from '../engine/notebook'
 import { isRoomPowered } from '../engine/power'
-import { placeRadioCall } from '../engine/radioCall'
+import { placeRadioCall, releaseHeldRadio } from '../engine/radioCall'
 import { heldRadioId } from '../engine/radioPatience'
 import { useTranslate } from '../i18n'
 import {
@@ -31,6 +32,7 @@ import {
   closeLabel,
   listGrew,
   lookHintVisible,
+  radioHeld,
   radioLineDelayMs,
   radioLineMark,
   radioToolState,
@@ -41,6 +43,7 @@ import { LockPanel } from './LockPanel'
 import { MobileControls } from './MobileControls'
 import { NotebookPanel } from './Notebook'
 import { useCoarsePointer } from './useCoarsePointer'
+import { useDocumentHidden } from './useDocumentHidden'
 import { isModalOpen, useMuseum } from '../state/store'
 
 const radiosById = new Map(radioDevices(MUSEUM).map((entry) => [entry.device.id, entry.device]))
@@ -208,16 +211,28 @@ function DevicePrompt() {
  * There is no recorded voice, so the subtitle IS the transmission and is shown
  * regardless of the subtitle setting. Each line stays up for a reading pace
  * derived from its length; the skip control, R and E on the radio move it on.
- * Under any modal the line is held and hidden — the same modals the director
- * waits for — and starts its full time again when the modal closes.
+ * Under any modal, and while the tab is hidden, the line is held and hidden —
+ * the same holds the director waits for — and starts its full time again when
+ * the hold ends, unless what it says has lapsed meanwhile.
  */
 function RadioSubtitles() {
   const radio = useMuseum((state) => state.radio)
-  const held = useMuseum(isModalOpen)
+  const modal = useMuseum(isModalOpen)
+  const hidden = useDocumentHidden()
+  const held = radioHeld({ modal, hidden })
   const advance = useMuseum((state) => state.advanceRadio)
   const t = useTranslate()
   const line = radio ? t(radio.lineKeys[radio.index] as never) : ''
   const crackledRef = useRef<string | null>(null)
+  const heldRef = useRef(held)
+
+  // Before paint, so a lapsed line never shows for a frame as the notebook
+  // that answered it closes.
+  useLayoutEffect(() => {
+    const released = heldRef.current && !held
+    heldRef.current = held
+    if (released) releaseHeldRadio()
+  }, [held])
 
   // Its own effect, keyed on the line itself: a modal opening and closing
   // re-arms the timer below, and must not crackle the same line again.
@@ -515,7 +530,7 @@ function JournalTakenToast() {
     <TakenToast
       taken={unlocked}
       waiting={reading}
-      hintId="journal-taken"
+      hintId={PRE_OPENING_SAVE.journalHintId}
       titleKey="journal.taken"
       keyboardKey="journal.taken.keyboard"
       touchKey="journal.taken.touch"

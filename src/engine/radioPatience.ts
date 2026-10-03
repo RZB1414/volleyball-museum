@@ -13,7 +13,7 @@
  * (`RadioPatience` in `museum.ts`), not code.
  */
 
-import type { MuseumContent, RadioPatience, RadioReply } from '../content/schema'
+import type { MuseumContent, ProgressCondition, RadioPatience, RadioReply } from '../content/schema'
 import { isModalOpen, type MuseumStore, type RadioMemory } from '../state/store.ts'
 import { radioDevices, radioHintIndex, type RadioDevice } from './deviceRules.ts'
 import { isTextEntryTarget } from './flashlightRig.ts'
@@ -89,6 +89,12 @@ export type PorterAnswer = {
   readonly outburst: boolean
   /** Seconds he stays off the air afterwards; 0 when he does not hang up. */
   readonly hangUpSeconds: number
+  /**
+   * When the hint in this answer applies, or null for an answer without one
+   * (a tantrum): the rest of the answer is dropped if this stops holding
+   * while the answer is held (`transmissionLapsed`).
+   */
+  readonly hintWhen: ProgressCondition | null
   /** What he remembers after this call. */
   readonly memory: RadioMemory
 }
@@ -122,6 +128,7 @@ export function porterAnswer(
       tier: 0,
       outburst: false,
       hangUpSeconds: 0,
+      hintWhen: hint?.when ?? null,
       memory: { ...memory, calls: memory.calls + 1, lastCallAt: now, lastHint: hintIndex },
     }
   }
@@ -154,6 +161,7 @@ export function porterAnswer(
       tier: tierIndex,
       outburst: true,
       hangUpSeconds: outburst.hangsUp ? patience.hangUpSeconds : 0,
+      hintWhen: null,
       memory: remember(outburst.id, outburst.id),
     }
   }
@@ -173,6 +181,7 @@ export function porterAnswer(
     tier: tierIndex,
     outburst: false,
     hangUpSeconds: 0,
+    hintWhen: hint?.when ?? null,
     memory: remember(opener.id, null),
   }
 }
@@ -184,6 +193,20 @@ export function deadAirFor(
   lastId: string | null,
 ): RadioReply | null {
   return patience.deadAir.length > 0 ? pickFresh(patience.deadAir, random, lastId) : null
+}
+
+/**
+ * Whether the porter has just hung up: the moment for the click of his
+ * handset going down. Only the edge, so a store write that leaves the dead
+ * air running — or ends it — never clicks again.
+ */
+export function hangUpStarted(previous: number | null, next: number | null) {
+  return next !== null && previous === null
+}
+
+/** How long the dead air has left; an end already past runs out at once. */
+export function hangUpDelayMs(until: number, now: number) {
+  return Math.max(0, until - now)
 }
 
 /**

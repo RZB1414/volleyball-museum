@@ -18,4 +18,10 @@ export const PRE_OPENING_SAVE = {
   /** The porter's first call, which is old news once this room has power. */
   firstCallId: 'porter-first-call',
   firstCallOverOncePowered: 'atrium',
+  /**
+   * The lesson the journal-taken toast teaches, already learnt by anyone the
+   * migration hands the notebook to — or who took it in a build that kept no
+   * record of the lesson. The toast reads the same id, so the two cannot drift.
+   */
+  journalHintId: 'journal-taken',
 } as const

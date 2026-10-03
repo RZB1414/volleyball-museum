@@ -5,7 +5,7 @@
  * `Devices.tsx` only feeds these the save, the clock and the elapsed time.
  */
 
-import type { DeviceData, MuseumContent, RadioCall } from '../content/schema'
+import type { DeviceData, MuseumContent, ProgressCondition, RadioCall } from '../content/schema'
 import { progressConditionMet, type ConditionProgress } from './progressCondition.ts'
 
 export type RadioDevice = Extract<DeviceData, { kind: 'radio' }>
@@ -115,6 +115,57 @@ export function radioCallReady(
   const index = dueRadioCalls(device, progress, content).findIndex((call) => call.id === callId)
   if (index < 0) return 'gone'
   return index === 0 ? 'ready' : 'queued'
+}
+
+export type RadioDelivery = 'drop' | 'wait' | 'play'
+
+/**
+ * What the director does with a scheduled call when its timer fires.
+ *
+ * Dropped once it is gone. Otherwise it waits — and retries — while an
+ * earlier call is still owed, while another transmission is on air, under
+ * any modal (the notebook covers the subtitle), and while the tab is hidden:
+ * background tabs still run timers, and a first call that played to nobody
+ * used to be recorded as heard, its directions to the breaker lost for good.
+ */
+export function radioDeliveryStep(
+  readiness: ReturnType<typeof radioCallReady>,
+  busy: { readonly onAir: boolean; readonly modal: boolean; readonly hidden: boolean },
+): RadioDelivery {
+  if (readiness === 'gone') return 'drop'
+  if (readiness === 'queued' || busy.onAir || busy.modal || busy.hidden) return 'wait'
+  return 'play'
+}
+
+/**
+ * Whether a held transmission — under a modal, or in a hidden tab — has
+ * outlived its moment.
+ *
+ * A held line starts its full time again when the hold ends. That is right
+ * for a call the player simply had not read yet and wrong for one the modal
+ * answered: the porter asks for the notebook, the player opens it mid-line,
+ * and on closing it the same line tells them to take what they now hold. A
+ * content call lapses when its own `when` stops holding — its own, not
+ * `radioCallReady`, which also counts content order — and an answer when
+ * the hint it carries does. Static and calls no longer in the content never
+ * lapse: there is nothing left to ask them.
+ */
+export function transmissionLapsed(
+  transmission: {
+    readonly deviceId: string
+    readonly callId?: string
+    readonly validWhile?: ProgressCondition
+  } | null,
+  progress: ConditionProgress,
+  content: Pick<MuseumContent, 'rooms' | 'exhibits'>,
+): boolean {
+  if (!transmission) return false
+  const condition = transmission.callId
+    ? radioDevices(content)
+        .find((entry) => entry.device.id === transmission.deviceId)
+        ?.device.calls.find((call) => call.id === transmission.callId)?.when
+    : transmission.validWhile
+  return condition ? !progressConditionMet(condition, progress, content) : false
 }
 
 /**

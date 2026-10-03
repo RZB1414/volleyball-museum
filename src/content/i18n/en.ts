@@ -157,9 +157,9 @@ export const en = {
   'radio.call.first.4':
     "And don't go down to the basement: it flooded. Anything at all, take the radio off the desk and call me. Over and out.",
   'radio.call.notebook.1':
-    'Oh, and Helena left you a notebook there on the desk. Take it before you go — it explains everything. Over.',
+    'Oh, and Helena, the director, left you a notebook there on the desk. Take it before you go — it explains everything. Over.',
   'radio.hint.notebook':
-    'Notebook first, curator: Helena left you one on the office desk. It explains everything.',
+    'Notebook first, curator: Helena, the director, left you one on the office desk. It explains everything.',
   'radio.hint.atrium':
     'The atrium breaker is on the west wall, near the Wing 1 entrance. The little red light shows you where.',
   'radio.hint.holyoke':
@@ -173,7 +173,7 @@ export const en = {
   'radio.call.taken.1':
     'Got the radio? Good, keep it on you. From the front desk I can reach the whole building.',
   'radio.call.taken.2':
-    'Just press the side button and call me. Only not every five minutes, eh? Over.',
+    'Just press the side button and call me. Just not every five minutes, eh? Over.',
   'radio.hint.notebook.curt': 'Notebook. On the desk. Pick it up and read it. Over.',
   'radio.hint.atrium.curt': 'Atrium. West wall. Little red light. Over.',
   'radio.hint.holyoke.curt': "Wing 1. Panel's inside. Torch in hand. Go.",
@@ -185,7 +185,7 @@ export const en = {
   'radio.patience.t2.again': 'Again, curator? All right, all right.',
   'radio.patience.t2.coffee': "Go ahead. My coffee's gone cold anyway.",
   'radio.patience.t2.reception':
-    "For the record, this is the porter's desk. Reception is that empty counter in the atrium.",
+    "For the record, I'm the night porter, not customer service. Go on.",
   'radio.patience.t2.repeat': "I'll say it again. Repeating's free:",
   'radio.patience.t2.chat': "I'm starting to think you just like talking to me.",
   'radio.patience.t3.hotline': 'Curator, this is the front desk, not a helpline.',
@@ -224,7 +224,7 @@ export const en = {
   'radio.patience.t5.soap.1': "Curator, I'm switching off to watch my soap.",
   'radio.patience.t5.soap.2':
     "…Which I can't, because the power's out. All I've got left is you. Over and out.",
-  'radio.patience.t5.song.1': "(humming) Oh curator, dear curator, won't you let me be…",
+  'radio.patience.t5.song.1': "(singing softly) Oh curator, dear curator, won't you let me be…",
   'radio.patience.t5.song.2': "Like it? It's brand new. Now let me rest my voice.",
   'radio.patience.praise.went': 'Well, look at that — you got somewhere. Nice.',
   'radio.patience.praise.knack': "Now we're talking, curator. You're getting the hang of it.",

@@ -76,12 +76,23 @@ export function shouldAnnounceJournal(input: {
 type LineOnAir = { readonly serial: number; readonly index: number }
 
 /**
+ * Whether the radio's current line is held: under any modal, and while the
+ * tab is hidden. A background tab still runs timers, slowly but surely, so a
+ * player who looked away for half a minute came back to find the porter's
+ * introduction over, recorded as heard and never to be repeated.
+ */
+export function radioHeld(input: { readonly modal: boolean; readonly hidden: boolean }) {
+  return input.modal || input.hidden
+}
+
+/**
  * How long the current radio line stays up, or null for "do not count".
  *
- * Under a modal the line is held and hidden: the notebook and the journal
- * cover the subtitle, and a call that ran out its timers under them used to
- * be over — and recorded as heard — by the time the player looked up. When
- * the modal closes the held line starts its full time again.
+ * A held line (`radioHeld`) is hidden and not counted: the notebook and the
+ * journal cover the subtitle, and a call that ran out its timers under them
+ * used to be over — and recorded as heard — by the time the player looked
+ * up. When the hold ends the line starts its full time again, unless what it
+ * says has lapsed meanwhile (`releaseHeldRadio`).
  */
 export function radioLineDelayMs(radio: LineOnAir | null, held: boolean, lineSeconds: number) {
   if (!radio || held) return null

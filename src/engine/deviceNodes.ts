@@ -42,3 +42,49 @@ export function prepareHandset(instance: Object3D, part: string): Group | null {
   for (const node of nodes) handset.add(node)
   return handset
 }
+
+/** The node name the device layer gives each device's wrapper group. */
+export const DEVICE_NODE_PREFIX = 'device:'
+
+/**
+ * The device a scanned node is the wrapper of, if the crosshair may aim at
+ * it: a radio still on its desk. A radio in the player's hand has left its
+ * desk — and scanning it would switch its hidden proxy back on for the ray.
+ */
+export function aimableDeviceId(
+  name: string,
+  radioIds: { has(id: string): boolean },
+  carried: readonly string[],
+): string | null {
+  if (!name.startsWith(DEVICE_NODE_PREFIX)) return null
+  const id = name.slice(DEVICE_NODE_PREFIX.length)
+  return radioIds.has(id) && !carried.includes(id) ? id : null
+}
+
+/** The device a hit belongs to: the nearest wrapper above it, if any. */
+export function deviceIdFor(object: Object3D | null): string | null {
+  let node = object
+  while (node) {
+    if (node.name.startsWith(DEVICE_NODE_PREFIX)) return node.name.slice(DEVICE_NODE_PREFIX.length)
+    node = node.parent
+  }
+  return null
+}
+
+/**
+ * Whether a hit is on something the player cannot see. Targeting switches
+ * invisible meshes on for its ray layer, so the mesh's own flag is not the
+ * answer: its ancestors are, such as a taken handset's group or the wrapper
+ * that hides a carried radio's proxy.
+ */
+export function hiddenInScene(object: Object3D | null) {
+  for (let node = object; node; node = node.parent) {
+    if (!node.visible) return true
+  }
+  return false
+}
+
+/** The handset is on the desk until it is taken, and then it is not. */
+export function placeHandset(handset: Object3D | null, carried: boolean) {
+  if (handset) handset.visible = !carried
+}

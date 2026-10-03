@@ -14,7 +14,7 @@
 
 import { create } from 'zustand'
 
-import type { UnlockEffect } from '../content/schema'
+import type { ProgressCondition, UnlockEffect } from '../content/schema'
 // The spawn and legacy-save modules have no runtime imports, so naming the
 // start room and the migration ids here does not pull the content set into
 // the title screen's bundle.
@@ -267,6 +267,16 @@ export function migrateProgress(raw: unknown): Progress {
       progress.documentsRead = withValue(progress.documentsRead, PRE_OPENING_SAVE.journalDocumentId)
     }
   }
+  // A save without the flag list predates it, so its notebook — taken in an
+  // earlier session, or just granted above — was never announced through it.
+  // Announcing it on this Continue would tell the player they took something
+  // just now, before they have touched anything.
+  if (
+    stringList(saved.hintsShown) === null &&
+    progress.documentsRead.includes(PRE_OPENING_SAVE.journalDocumentId)
+  ) {
+    progress.hintsShown = withValue(progress.hintsShown, PRE_OPENING_SAVE.journalHintId)
+  }
   return progress
 }
 
@@ -343,6 +353,12 @@ export type RadioTransmission = {
   readonly callId?: string
   /** Seconds of dead air once this ends: he hung up on the player. */
   readonly hangsUpFor?: number
+  /**
+   * What must still hold for the rest of an answer to make sense: the
+   * condition of the hint it carries. A content call needs none here, it
+   * is checked against its own `when` (`transmissionLapsed`).
+   */
+  readonly validWhile?: ProgressCondition
 }
 
 export type MuseumStore = {
@@ -428,6 +444,13 @@ export type MuseumStore = {
    * it can never be handed a click event by an `onClick={advanceRadio}`.
    */
   advanceRadio: () => void
+  /**
+   * Ends a transmission without its remaining lines, because what it says
+   * stopped being true while a modal held it. A content call still counts as
+   * heard, so nothing schedules it again; a hang-up does not start, since the
+   * line it would have ended on was never said.
+   */
+  dropRadio: () => void
   stopRadio: () => void
   clearRadioHangUp: () => void
 
@@ -601,6 +624,20 @@ export const useMuseum = create<MuseumStore>((set, get) => {
     persist()
   }
 
+  // One write for the end and what it means, so a retry waiting on the radio
+  // to fall silent already sees the call as heard.
+  const endRadio = (radio: RadioTransmission, hangUp: boolean) => {
+    const callId = radio.callId
+    set((state) => ({
+      radio: null,
+      ...(hangUp && radio.hangsUpFor ? { radioHungUpUntil: Date.now() + radio.hangsUpFor * 1000 } : {}),
+      ...(callId
+        ? { progress: { ...state.progress, radioCalls: withValue(state.progress.radioCalls, callId) } }
+        : {}),
+    }))
+    if (callId) persist()
+  }
+
   return {
     settings: initial.settings,
     setSetting: (key, value) => {
@@ -726,17 +763,11 @@ export const useMuseum = create<MuseumStore>((set, get) => {
         set({ radio: { ...radio, index: radio.index + 1 } })
         return
       }
-      // One write for the end and what it means, so a retry waiting on the
-      // radio to fall silent already sees the call as heard.
-      const callId = radio.callId
-      set((state) => ({
-        radio: null,
-        ...(radio.hangsUpFor ? { radioHungUpUntil: Date.now() + radio.hangsUpFor * 1000 } : {}),
-        ...(callId
-          ? { progress: { ...state.progress, radioCalls: withValue(state.progress.radioCalls, callId) } }
-          : {}),
-      }))
-      if (callId) persist()
+      endRadio(radio, true)
+    },
+    dropRadio: () => {
+      const radio = get().radio
+      if (radio) endRadio(radio, false)
     },
     stopRadio: () => set({ radio: null }),
     clearRadioHangUp: () => {

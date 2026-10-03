@@ -35,15 +35,26 @@ import {
   dueRadioCalls,
   nextRadioCall,
   radioCallReady,
+  radioDeliveryStep,
   radioDevices,
   radioLineSeconds,
+  transmissionLapsed,
 } from '../src/engine/deviceRules.ts'
-import { isLensNode, prepareHandset } from '../src/engine/deviceNodes.ts'
+import {
+  aimableDeviceId,
+  deviceIdFor,
+  hiddenInScene,
+  isLensNode,
+  placeHandset,
+  prepareHandset,
+} from '../src/engine/deviceNodes.ts'
 import { progressConditionMet } from '../src/engine/progressCondition.ts'
-import { placeRadioCall, takeDeskRadio } from '../src/engine/radioCall.ts'
+import { placeRadioCall, releaseHeldRadio, takeDeskRadio } from '../src/engine/radioCall.ts'
 import {
   calmedTemper,
   deadAirFor,
+  hangUpDelayMs,
+  hangUpStarted,
   heldRadioId,
   isRadioCallKey,
   patienceTierFor,
@@ -53,6 +64,7 @@ import {
 import {
   FRESH_RADIO_MEMORY,
   hasSavedProgress,
+  isModalOpen,
   migrateProgress,
   SAVE_VERSION,
   useMuseum,
@@ -60,6 +72,7 @@ import {
   type RadioMemory,
 } from '../src/state/store.ts'
 import {
+  radioHeld,
   radioLineDelayMs,
   radioLineMark,
   radioToolState,
@@ -241,11 +254,60 @@ test('the handset leaves its cradle without moving a node', () => {
   }
   assert.equal(prepareHandset(new Group(), 'desk-radio'), null, 'no handset, nothing to hide')
 
+  // Taken: the group hides, and a ray that hits a handset mesh the scan
+  // switched back on is still rejected by its hidden ancestor.
+  placeHandset(handset, true)
+  assert.equal(handset.visible, false)
+  const grip = assembly.getObjectByName('desk-radio__handset') as Mesh
+  grip.visible = true
+  assert.equal(hiddenInScene(grip), true, 'a taken handset is never aimed at')
+  assert.equal(hiddenInScene(assembly.getObjectByName('desk-radio') ?? null), false, 'the cradle stays')
+  placeHandset(handset, false)
+  assert.equal(hiddenInScene(grip), false)
+  placeHandset(null, true)
+  assert.equal(hiddenInScene(null), false)
+
   // Both lenses read the same charger.
   assert.equal(isLensNode('desk-radio__led', 'desk-radio'), true)
   assert.equal(isLensNode('desk-radio__handset-led', 'desk-radio'), true)
   assert.equal(isLensNode('desk-radio__handset', 'desk-radio'), false)
   assert.equal(isLensNode('door-access-panel__led', 'desk-radio'), false)
+})
+
+test('the scan aims at desk radios only, never at one in hand', () => {
+  const radios = new Set([RADIO])
+  assert.equal(aimableDeviceId(`device:${RADIO}`, radios, []), RADIO)
+  assert.equal(aimableDeviceId(`device:${RADIO}`, radios, [RADIO]), null, 'its proxy stays off the ray layer')
+  assert.equal(aimableDeviceId('device:office-clock', radios, []), null, 'a clock is not operated')
+  assert.equal(aimableDeviceId(RADIO, radios, []), null, 'only the wrapper names a device')
+
+  const wrapper = new Group()
+  wrapper.name = `device:${RADIO}`
+  const proxy = new Mesh()
+  const hidden = new Group()
+  hidden.add(proxy)
+  wrapper.add(hidden)
+  assert.equal(deviceIdFor(proxy), RADIO)
+  assert.equal(deviceIdFor(new Mesh()), null)
+  hidden.visible = false
+  assert.equal(hiddenInScene(proxy), true, 'a carried radio\'s proxy is rejected even if hit')
+
+  const devices = source('engine/Devices.tsx')
+  for (const helper of ['aimableDeviceId(object.name, RADIOS_BY_ID, carried)', 'hiddenInScene(hit.object)', 'placeHandset(handset, carried)']) {
+    assert.ok(devices.includes(helper), `Devices.tsx asks ${helper}`)
+  }
+})
+
+test('the handset clicks once as he hangs up, and the dead air runs out on time', () => {
+  assert.equal(hangUpStarted(null, START), true)
+  assert.equal(hangUpStarted(START, START + SECOND), false, 'a later write is not a second hang-up')
+  assert.equal(hangUpStarted(START, null), false, 'the line coming back is not a click')
+  assert.equal(hangUpStarted(null, null), false)
+  assert.equal(hangUpDelayMs(START + 12 * SECOND, START), 12 * SECOND)
+  assert.equal(hangUpDelayMs(START, START + SECOND), 0, 'an end already past runs out at once')
+  const devices = source('engine/Devices.tsx')
+  assert.ok(devices.includes('hangUpStarted(previous.radioHungUpUntil, state.radioHungUpUntil)'))
+  assert.ok(devices.includes('hangUpDelayMs(hungUpUntil, Date.now())'))
 })
 
 test('the bake splits the handset and the gate requires it', () => {
@@ -372,13 +434,139 @@ test('the director schedules only the first due call and waits for every modal',
   )
   assert.equal(nextRadioCall(radio, { ...skipped, radioCalls: ALL_CALLS }, MUSEUM), null)
 
+  // What the director does when a call's timer fires, from real store states.
+  const idle = { ...useMuseum.getState(), radio: null, examining: null, openedContainer: null, activeLock: null, journalTab: null }
+  const busyOf = (state: typeof idle, hidden = false) => ({
+    onAir: state.radio !== null,
+    modal: isModalOpen(state),
+    hidden,
+  })
+  assert.equal(radioDeliveryStep('ready', busyOf(idle)), 'play')
+  assert.equal(radioDeliveryStep('gone', busyOf(idle)), 'drop', 'heard meanwhile, or its moment passed')
+  assert.equal(radioDeliveryStep('gone', busyOf({ ...idle, journalTab: 'map' }, true)), 'drop', 'gone wins over busy')
+  assert.equal(radioDeliveryStep('queued', busyOf(idle)), 'wait', 'an earlier call is still owed')
+  for (const modal of [
+    { examining: 'ball-spalding' },
+    { openedContainer: 'office-notebook' },
+    { activeLock: 'office-drawer' },
+    { journalTab: 'catalogue' as const },
+  ]) {
+    assert.equal(radioDeliveryStep('ready', busyOf({ ...idle, ...modal })), 'wait', `waits for ${Object.keys(modal)[0]}`)
+  }
+  const onAir = {
+    ...idle,
+    radio: { serial: 1, index: 0, deviceId: RADIO, speakerKey: radio.speakerKey, lineKeys: ['radio.hint.vault'] },
+  }
+  assert.equal(radioDeliveryStep('ready', busyOf(onAir as unknown as typeof idle)), 'wait', 'never over another transmission')
+  assert.equal(radioDeliveryStep('ready', busyOf(idle, true)), 'wait', 'never to a hidden tab')
+
+  // The director asks those rules; nothing else decides or records a call.
   const devices = source('engine/Devices.tsx')
   const director = devices.slice(devices.indexOf('export function RadioDirector'), devices.indexOf('export function RadioHandset'))
   assert.ok(director.includes('nextRadioCall(device, progress, MUSEUM)'), 'one call at a time')
   assert.ok(!/dueRadioCalls\(/.test(director), 'never every due call at once')
-  assert.ok(director.includes('isModalOpen(state)'), 'holding an exhibit counts as busy too')
+  assert.ok(director.includes('radioDeliveryStep(radioCallReady(device, call.id, state.progress, MUSEUM)'))
+  assert.ok(director.includes("hidden: document.visibilityState === 'hidden'"))
   assert.ok(director.includes('callId: call.id'), 'the call travels with its transmission')
   assert.ok(!devices.includes('recordRadioCall('), 'nothing records a call before its end')
+})
+
+test('a held call the player answered under the modal is dropped, not replayed', () => {
+  // The lamp first, the notebook skipped: after his introduction the porter
+  // asks for the notebook, and the player does as told, mid-line.
+  newGame({ roomsPowered: ['office'], documentsRead: [], radioCalls: ['porter-first-call'] })
+  assert.equal(nextRadioCall(radio, useMuseum.getState().progress, MUSEUM)?.id, 'porter-notebook-reminder')
+  useMuseum.getState().startRadio({
+    deviceId: RADIO,
+    speakerKey: radio.speakerKey,
+    lineKeys: ['radio.call.notebook.1'],
+    callId: 'porter-notebook-reminder',
+  })
+  assert.equal(releaseHeldRadio(), false, 'nothing has changed yet')
+  useMuseum.getState().recordDocument('doc-welcome')
+  useMuseum.getState().setOpenedContainer('office-notebook')
+  assert.equal(transmissionLapsed(useMuseum.getState().radio, useMuseum.getState().progress, MUSEUM), true)
+  useMuseum.getState().setOpenedContainer(null)
+  assert.equal(releaseHeldRadio(), true)
+  assert.equal(useMuseum.getState().radio, null, 'not the same line again for its full time')
+  assert.ok(useMuseum.getState().progress.radioCalls.includes('porter-notebook-reminder'), 'heard, never rescheduled')
+  assert.equal(useMuseum.getState().radioHungUpUntil, null)
+
+  // A call that still holds resumes in full: the introduction under the journal.
+  newGame({ roomsPowered: ['office'], documentsRead: ['doc-welcome'] })
+  useMuseum.getState().startRadio({
+    deviceId: RADIO,
+    speakerKey: radio.speakerKey,
+    lineKeys: radio.calls[0].lineKeys,
+    callId: 'porter-first-call',
+  })
+  useMuseum.getState().advanceRadio()
+  useMuseum.getState().setJournalTab('map')
+  useMuseum.getState().setJournalTab(null)
+  assert.equal(releaseHeldRadio(), false)
+  assert.equal(useMuseum.getState().radio?.index, 1, 'the held line carries on')
+  assert.deepEqual(useMuseum.getState().progress.radioCalls, [])
+  finishTransmission()
+  useMuseum.getState().resetProgress()
+})
+
+test('a held hint the player answered under the modal is dropped too, recording nothing', () => {
+  newGame({ roomsPowered: ['office'], documentsRead: [], radioCalls: ALL_CALLS, devicesCarried: [RADIO] })
+  assert.equal(placeRadioCall(RADIO, START, fixed(0)), true)
+  const answer = useMuseum.getState().radio
+  assert.equal(answer?.lineKeys.at(-1), 'radio.hint.notebook')
+  assert.deepEqual(answer?.validWhile, { documentsUnread: ['doc-welcome'] }, 'the hint travels with its condition')
+  useMuseum.getState().recordDocument('doc-welcome')
+  useMuseum.getState().setOpenedContainer('office-notebook')
+  useMuseum.getState().setOpenedContainer(null)
+  assert.equal(releaseHeldRadio(), true)
+  assert.equal(useMuseum.getState().radio, null)
+  assert.deepEqual(useMuseum.getState().progress.radioCalls, ALL_CALLS, 'a hint records nothing')
+  assert.equal(memoryOf().calls, 1, 'and it still counted as the one call it was')
+
+  // Taking the notebook moves the next answer on to the atrium.
+  assert.equal(placeRadioCall(RADIO, START + SECOND, fixed(0)), true)
+  assert.deepEqual(useMuseum.getState().radio?.validWhile, { unpowered: ['atrium'] })
+  assert.equal(releaseHeldRadio(), false, 'still true: the atrium is still dark')
+  finishTransmission()
+  useMuseum.getState().resetProgress()
+
+  // A tantrum carries no hint, and the last hint holds whatever happens.
+  const tantrum = porterAnswer(
+    radio,
+    progressWith(),
+    { ...FRESH_RADIO_MEMORY, temper: 6, lastHint: 1, lastCallAt: START },
+    START,
+    fixed(0),
+    MUSEUM,
+  )
+  assert.equal(tantrum.outburst, true)
+  assert.equal(tantrum.hintWhen, null)
+  const done = progressWith({ roomsPowered: ['office', 'atrium', 'holyoke'], locksOpened: ['office-drawer'] })
+  assert.deepEqual(porterAnswer(radio, done, FRESH_RADIO_MEMORY, START, fixed(0), MUSEUM).hintWhen, {})
+
+  const lapsed = (transmission: Parameters<typeof transmissionLapsed>[0]) =>
+    transmissionLapsed(transmission, progressWith(), MUSEUM)
+  assert.equal(lapsed(null), false)
+  assert.equal(lapsed({ deviceId: RADIO }), false, 'static never lapses')
+  assert.equal(lapsed({ deviceId: RADIO, validWhile: {} }), false)
+  assert.equal(lapsed({ deviceId: RADIO, callId: 'porter-renamed' }), false, 'nor a call no longer in the content')
+  assert.equal(lapsed({ deviceId: RADIO, validWhile: { documentsUnread: ['doc-welcome'] } }), true)
+  assert.equal(lapsed({ deviceId: RADIO, callId: 'porter-notebook-reminder' }), true)
+  assert.equal(lapsed({ deviceId: RADIO, callId: 'porter-first-call' }), false, 'its own when, not content order')
+
+  // Dropping is not hanging up: the line that would have ended in it was never said.
+  newGame({ roomsPowered: ['office'] })
+  useMuseum.getState().startRadio({ deviceId: RADIO, speakerKey: radio.speakerKey, lineKeys: ['radio.hint.vault'], hangsUpFor: 12 })
+  useMuseum.getState().dropRadio()
+  assert.equal(useMuseum.getState().radio, null)
+  assert.equal(useMuseum.getState().radioHungUpUntil, null)
+  useMuseum.getState().resetProgress()
+
+  const hud = source('ui/Hud.tsx')
+  const subtitles = hud.slice(hud.indexOf('function RadioSubtitles'), hud.indexOf('function DocumentPanel'))
+  assert.ok(subtitles.includes('if (released) releaseHeldRadio()'), 'asked as the hold ends')
+  assert.ok(subtitles.includes('useLayoutEffect('), 'before the lapsed line can paint')
 })
 
 test('a skipped call is still heard; a hint ends without recording anything', () => {
@@ -704,6 +892,17 @@ test('every line of his exists in both languages and fits a subtitle', () => {
   }
   assert.ok(ptBR['radio.call.first.4'].includes('pega o rádio aí na mesa'), 'the first call says to take it')
   assert.ok(/portaria/.test(ptBR['radio.patience.t2.reception']) && /átrio/.test(ptBR['radio.patience.t2.reception']))
+  // In English he calls his post the front desk, which IS reception: the
+  // joke that he is not reception cannot be told there.
+  assert.ok(/front desk/.test(en['radio.call.first.1']))
+  assert.ok(!/reception/i.test(en['radio.patience.t2.reception']), 'no "not reception" from the front desk')
+  // Helena signs the notebook these lines are about, so they say who she is.
+  for (const key of ['radio.call.notebook.1', 'radio.hint.notebook'] as const) {
+    assert.ok(/Helena/.test(ptBR[key]) && /diretora/.test(ptBR[key]), `${key} (pt-BR) introduces her`)
+    assert.ok(/Helena/.test(en[key]) && /director/.test(en[key]), `${key} (en) introduces her`)
+  }
+  assert.ok(!/humming/.test(en['radio.patience.t5.song.1']), 'nobody hums words')
+  assert.ok(!/Only not/.test(en['radio.call.taken.2']))
 })
 
 // ---------------------------------------------------------------------------
@@ -712,6 +911,10 @@ test('every line of his exists in both languages and fits a subtitle', () => {
 
 test('a line holds, hidden, under any modal and crackles once', () => {
   const line = { serial: 4, index: 1 }
+  assert.equal(radioHeld({ modal: false, hidden: false }), false)
+  assert.equal(radioHeld({ modal: true, hidden: false }), true)
+  assert.equal(radioHeld({ modal: false, hidden: true }), true, 'a hidden tab holds it too')
+  assert.equal(radioLineDelayMs(line, radioHeld({ modal: false, hidden: true }), 4), null)
   assert.equal(radioLineDelayMs(null, false, 4), null)
   assert.equal(radioLineDelayMs(line, true, radioLineSeconds('Câmbio.')), null, 'held under a modal')
   assert.equal(radioLineDelayMs(line, false, radioLineSeconds('Câmbio.')), radioLineSeconds('Câmbio.') * 1000)
@@ -725,6 +928,7 @@ test('a line holds, hidden, under any modal and crackles once', () => {
   const hud = source('ui/Hud.tsx')
   const subtitles = hud.slice(hud.indexOf('function RadioSubtitles'), hud.indexOf('function DocumentPanel'))
   assert.ok(subtitles.includes('useMuseum(isModalOpen)'), 'the same modals the director waits for')
+  assert.ok(subtitles.includes('radioHeld({ modal, hidden })') && subtitles.includes('useDocumentHidden()'))
   assert.ok(subtitles.includes('radioLineDelayMs(radio, held, radioLineSeconds(line))'))
   // The title screen imports hudRules: it must stay free of runtime imports.
   assert.ok(!/^import (?!type )/m.test(source('ui/hudRules.ts')), 'hudRules has type imports only')

@@ -845,3 +845,44 @@ Quatro commits locais, ainda sem push nem deploy: `17113fa` (fluxo da abertura,
 
 Suítes novas: `test:opening-flow` (38), `test:radio` (22), `test:materials` (8),
 `test:desk-top` (7) e `test:bookshelf` (20); `test:kit` chegou a 339 checagens.
+
+### 9.6 Correções da revisão (2026-10-02)
+
+- **Saves antigos**: um save sem a lista `hintsShown` que já tem o caderno (de
+  `4bd4f09`, ou porque a migração o concedeu) volta com `journal-taken` marcado
+  (`PRE_OPENING_SAVE.journalHintId`, o mesmo id que o toast lê). O primeiro
+  Continuar não anuncia mais "Você pegou o caderno".
+- **Rádio segurado**: quando o modal fecha ou a aba volta, `releaseHeldRadio`
+  descarta a fala cuja condição caducou (`transmissionLapsed`: o `when` da
+  chamada, ou o `validWhile` da dica, que agora viaja com a resposta). A chamada
+  conta como ouvida e a dica não grava nada. O lembrete do caderno não se repete
+  para quem acabou de pegá-lo.
+- **Aba oculta**: segura a fala como um modal (`radioHeld`, `useDocumentHidden`) e
+  o diretor espera a aba voltar (`radioDeliveryStep`). A primeira chamada não se
+  perde mais numa aba em segundo plano.
+- **Testes de comportamento** no lugar das buscas por texto: entrega do diretor,
+  varredura de alvos (`aimableDeviceId`, `hiddenInScene`), o fone escondido
+  (`placeHandset`) e o fim do "desligou" (`hangUpStarted`, `hangUpDelayMs`).
+- **Áudio no HMR**: o módulo descarta a instância antiga e recarrega a página.
+- **Cadeira do curador**: a placa recua 12 mm atrás do capitonê, e uma faixa de couro
+  na borda fecha o degrau. Os oito botões e os furos ficam à frente da placa
+  (`test:desk-top`). O couro verde ficou mais claro, mais fosco
+  (`roughnessScale` 1,3) e com um verniz mais fraco, e o veludo ficou com menos
+  vermelho. `test:materials` agora soma o lóbulo especular no pico da luminária, e
+  o encosto medido no ponto de leitura dá G/R linear 2,7 (antes, 0,99).
+- **Lanterna**: decaimento 1,4 e intensidade 7,8. A 4 m ilumina como antes; a
+  1 m, recebe menos da metade. `examineScale` passou a 0,4, o que mantém a luz da
+  peça examinada. O facho a 1 m já não deixa o pano vermelho salmão (medido:
+  183,76,86, saturação de 58%). `test:materials` passa o facho pelo ACES.
+  Resolve o primeiro item de "Fica para depois" de §9.4.
+- **Mata-borrão**: as cantoneiras viraram latão, dobradas sobre a borda. Couro
+  de outra cor custaria um draw a mais, e o escritório está no teto de 53. As
+  folhas soltas ficaram fora de esquadro. **Resíduo**: branco sobre branco, as
+  folhas ainda quase não se distinguem do bloco. Um papel de outra cor custaria
+  o mesmo draw.
+- **Textos**: em inglês, o Jorge é "front desk", então a piada da recepção virou
+  "I'm the night porter, not customer service". A Helena agora é apresentada como
+  diretora nas falas do caderno, e foram corrigidos "(singing softly)" e "Just not
+  every five minutes".
+- Capturas: `docs/contact-sheets/office-review-reading-lit.jpg`,
+  `office-review-shelves-torch-1m.jpg` e `office-review-spawn-torch.jpg`.

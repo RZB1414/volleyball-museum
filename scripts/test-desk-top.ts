@@ -22,7 +22,7 @@ import assert from 'node:assert/strict'
 
 import { BAKED_BUNDLES } from '../src/content/bake.generated.ts'
 import { MUSEUM } from '../src/content/museum.ts'
-import { buildCuratorDesk, buildLedgerStack } from './bake/parts/office.mjs'
+import { buildCuratorDesk, buildLedgerStack, buildOfficeChair } from './bake/parts/office.mjs'
 import {
   corners,
   footprintFromBounds,
@@ -86,6 +86,12 @@ const layout = buildCuratorDesk().layout as {
     top: number
     restsOn?: string
   }[]
+  pad: {
+    halfSize: [number, number]
+    cornerLeg: number
+    cornerHeight: number
+    sheets: { centre: [number, number]; halfSize: [number, number]; rotation: number }[]
+  }
 }
 
 const deskTop = placeFootprint(footprintFromBounds('desk-top', nodeBounds('curator-desk')), deskTransform)
@@ -326,6 +332,53 @@ test('the ledgers wear brass corners proud of their boards, and paper in signatu
     planes.add(offset.toFixed(4))
   }
   assert.equal(planes.size, 3, `fore-edge planes ${[...planes]}`)
+})
+
+test('the blotting pad shows its corners, and its loose sheets lie apart', () => {
+  // The corners are not the inset's leather, which they vanished into: the
+  // leather family stays one flat plane, and the corners stand over the paper.
+  const leather = nodeBounds('curator-desk__leather')
+  assert.ok(leather.max[1] <= layout.blotter.top + 1e-4, `leather rises to ${leather.max[1]}`)
+  const pad = layout.items.find((item) => item.id === 'blotting-pad')
+  assert.ok(pad && pad.top - pad.bottom >= layout.pad.cornerHeight - 1e-6, 'the corners stand over the paper')
+  assert.ok(layout.pad.cornerHeight >= 0.0035 - 1e-6)
+
+  const { halfSize: [halfWidth, halfDepth], cornerLeg, sheets } = layout.pad
+  for (const [index, sheet] of sheets.entries()) {
+    for (const [x, z] of corners({ id: `sheet ${index}`, ...sheet })) {
+      assert.ok(Math.abs(x) < halfWidth && Math.abs(z) < halfDepth, `sheet ${index} stays on the pad`)
+      // Outside every corner cap's triangle, with two millimetres of air.
+      for (const [sx, sz] of [[-1, -1], [1, -1], [1, 1], [-1, 1]]) {
+        const fromEdges = halfWidth - sx * x + (halfDepth - sz * z)
+        assert.ok(fromEdges > cornerLeg + 0.002, `sheet ${index} slides under the ${sx},${sz} corner cap`)
+      }
+    }
+  }
+  // Squared up, white on white, four sheets read as one.
+  for (let a = 0; a < sheets.length; a += 1) {
+    for (let b = a + 1; b < sheets.length; b += 1) {
+      const turn = Math.abs(sheets[a].rotation - sheets[b].rotation)
+      const slide = Math.hypot(
+        sheets[a].centre[0] - sheets[b].centre[0],
+        sheets[a].centre[1] - sheets[b].centre[1],
+      )
+      assert.ok(turn >= 0.02 && slide >= 0.005, `sheets ${a} and ${b} lie too true (${turn.toFixed(3)} rad, ${slide.toFixed(4)} m)`)
+    }
+  }
+})
+
+test('the curator chair\'s tufting is the outermost layer of its back', () => {
+  type Back = { slabFront: number; faceEdge: number; faceLowest: number; buttonTops: number[]; boxingFront: number }
+  const { back } = (buildOfficeChair() as unknown as { layout: { back: Back } }).layout
+  // Every pit bottom in front of the slab behind it: with the slab flush
+  // under the face, six of the eight buttons and their dimples sank into it.
+  assert.ok(back.faceLowest > back.slabFront + 0.0005, `deepest dimple ${back.faceLowest} against slab ${back.slabFront}`)
+  assert.equal(back.buttonTops.length, 8)
+  for (const [index, top] of back.buttonTops.entries()) {
+    assert.ok(top > back.slabFront + 0.002, `button ${index} shows: top ${top.toFixed(4)}, slab ${back.slabFront}`)
+  }
+  // And the boxing closes the step between the slab and the face's edge.
+  assert.ok(back.boxingFront >= back.faceEdge, 'no open seam round the face')
 })
 
 console.log(`${passed} desk-top checks passed`)

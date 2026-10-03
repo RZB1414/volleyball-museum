@@ -170,9 +170,9 @@ export const ptBR = {
   'radio.call.first.4':
     'E não desce no subsolo, que alagou. Qualquer coisa, pega o rádio aí na mesa e me chama. Câmbio, desligo.',
   'radio.call.notebook.1':
-    'Ah, e a Helena deixou um caderno pra você aí na mesa. Pega antes de sair, que tá tudo explicado lá. Câmbio.',
+    'Ah, e a Helena, a diretora, deixou um caderno pra você aí na mesa. Pega antes de sair, que tá tudo explicado lá. Câmbio.',
   'radio.hint.notebook':
-    'Primeiro o caderno, curador: a Helena deixou um pra você na mesa do escritório. Tá tudo explicado lá.',
+    'Primeiro o caderno, curador: a diretora, a Helena, deixou um pra você na mesa do escritório. Tá tudo explicado lá.',
   'radio.hint.atrium':
     'O quadro do átrio fica na parede oeste, perto da entrada da Ala 1. A luzinha vermelha mostra onde.',
   'radio.hint.holyoke':

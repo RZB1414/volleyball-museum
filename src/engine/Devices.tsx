@@ -36,11 +36,19 @@ import {
   deskRadioIntent,
   nextRadioCall,
   radioCallReady,
+  radioDeliveryStep,
   radioDevices,
   savedClockSeconds,
   type RadioDevice,
 } from './deviceRules'
-import { isLensNode, prepareHandset } from './deviceNodes'
+import {
+  aimableDeviceId,
+  deviceIdFor,
+  hiddenInScene,
+  isLensNode,
+  placeHandset,
+  prepareHandset,
+} from './deviceNodes'
 import { INTERACTION_REACH, interactionWinnerOf, PROXY_MINIMUM } from './interactionTarget'
 import { cloneKitPart, disposeKitPart } from './kitPart'
 import type { MaterialLibrary } from './materials'
@@ -48,7 +56,7 @@ import { isRoomPowered } from './power'
 import { playerPosition } from './playerPosition'
 import { subscribePrimaryAction } from './primaryAction'
 import { placeRadioCall, takeDeskRadio } from './radioCall'
-import { heldRadioId, isRadioCallKey } from './radioPatience'
+import { hangUpDelayMs, hangUpStarted, heldRadioId, isRadioCallKey } from './radioPatience'
 
 const CENTRE = new Vector2(0, 0)
 const INTERACTION_LAYER = 7
@@ -276,9 +284,7 @@ function RadioDeviceView({
     [device.carriedOnUse, device.part, instance],
   )
   // Before paint, so the handset never flashes on the desk for a frame.
-  useLayoutEffect(() => {
-    if (handset) handset.visible = !carried
-  }, [carried, handset])
+  useLayoutEffect(() => placeHandset(handset, carried), [carried, handset])
 
   const proxy = useMemo(() => {
     instance.updateMatrixWorld(true)
@@ -378,15 +384,6 @@ export function DeviceLayer({
 // Targeting and the radio's voice
 // ---------------------------------------------------------------------------
 
-function deviceIdFor(object: Object3D | null): string | null {
-  let node = object
-  while (node) {
-    if (node.name.startsWith('device:')) return node.name.slice('device:'.length)
-    node = node.parent
-  }
-  return null
-}
-
 /**
  * E on a radio on its desk: pick it up if it is one the player carries away,
  * otherwise the same press as the call button — skip a line, or call him.
@@ -467,10 +464,7 @@ export function DeviceTargeting() {
       const targets: Object3D[] = []
       const carried = state.progress.devicesCarried
       scene.traverseVisible((object) => {
-        if (!object.name.startsWith('device:')) return
-        const id = object.name.slice('device:'.length)
-        // A radio in the player's hand has left its desk: nothing to aim at.
-        if (RADIOS_BY_ID.has(id) && !carried.includes(id)) targets.push(object)
+        if (aimableDeviceId(object.name, RADIOS_BY_ID, carried)) targets.push(object)
       })
       targetsRef.current = targets
       // Same arrangement as the power controls: the proxy stays `visible` for
@@ -493,13 +487,8 @@ export function DeviceTargeting() {
       intersections.length = 0
       raycaster.intersectObjects(targetsRef.current, true, intersections)
       const hit = intersections[0]
-      found = hit ? deviceIdFor(hit.object) : null
+      found = hit && !hiddenInScene(hit.object) ? deviceIdFor(hit.object) : null
       distance = hit?.distance
-      let node: Object3D | null = hit?.object ?? null
-      while (found && node) {
-        if (!node.visible) found = null
-        node = node.parent
-      }
       intersections.length = 0
     }
     state.setFocusedDevice(found, distance)
@@ -530,18 +519,21 @@ export function RadioDirector() {
       if (!call || timers.has(call.id)) continue
       const deliver = () => {
         const state = useMuseum.getState()
-        const readiness = radioCallReady(device, call.id, state.progress, MUSEUM)
-        // Heard meanwhile (the player called first), or its moment passed
-        // while it waited (the notebook was picked up during the first call).
-        if (readiness === 'gone') {
-          timers.delete(call.id)
-          return
-        }
-        if (readiness === 'queued' || state.radio || isModalOpen(state)) {
+        // Gone: heard meanwhile (the player called first), or its moment
+        // passed while it waited (the notebook was picked up during the
+        // first call). Otherwise it waits for its turn, the air, every
+        // modal and a visible tab.
+        const step = radioDeliveryStep(radioCallReady(device, call.id, state.progress, MUSEUM), {
+          onAir: state.radio !== null,
+          modal: isModalOpen(state),
+          hidden: document.visibilityState === 'hidden',
+        })
+        if (step === 'wait') {
           timers.set(call.id, window.setTimeout(deliver, 1200))
           return
         }
         timers.delete(call.id)
+        if (step === 'drop') return
         museumAudio.radioSquelch()
         state.startRadio({
           deviceId: device.id,
@@ -589,9 +581,7 @@ export function RadioHandset() {
   useEffect(
     () =>
       useMuseum.subscribe((state, previous) => {
-        if (state.radioHungUpUntil !== null && previous.radioHungUpUntil === null) {
-          museumAudio.radioHangUp()
-        }
+        if (hangUpStarted(previous.radioHungUpUntil, state.radioHungUpUntil)) museumAudio.radioHangUp()
       }),
     [],
   )
@@ -600,7 +590,7 @@ export function RadioHandset() {
     if (hungUpUntil === null) return undefined
     const timer = window.setTimeout(
       () => useMuseum.getState().clearRadioHangUp(),
-      Math.max(0, hungUpUntil - Date.now()),
+      hangUpDelayMs(hungUpUntil, Date.now()),
     )
     return () => window.clearTimeout(timer)
   }, [hungUpUntil])

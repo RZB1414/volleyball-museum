@@ -32,6 +32,7 @@ import {
   flashlightIntensity,
   flashlightReaches,
   isTextEntryTarget,
+  torchIrradiance,
 } from '../src/engine/flashlightRig.ts'
 import { GALLERY_SPOT_SLOTS } from '../src/engine/galleryLightRig.ts'
 import {
@@ -376,11 +377,30 @@ test('the torch is one permanent spot added to the gallery pool', () => {
   assert.equal(GALLERY_SPOT_SLOTS, 8, 'the permanent pool the torch joins')
   assert.equal(flashlightIntensity(false, 1, false), 0, 'off is intensity zero, never unmounted')
   assert.equal(flashlightIntensity(true, 1, false), FLASHLIGHT.intensity)
-  assert.ok(
-    flashlightIntensity(true, 1, true) < FLASHLIGHT.intensity * 0.2,
-    'dimmed while an object is held to the face',
-  )
   assert.equal(flashlightIntensity(true, 0.5, false), FLASHLIGHT.intensity * 0.5)
+})
+
+test('the beam lights a room as far as it did, without blowing out the near field', () => {
+  // The torch as it was: 18 at the inverse square. A wall four metres off
+  // keeps its light; a shelf at a metre and a door a step away get under
+  // half the hot spot that took a crimson spine to salmon pink.
+  const before = (distance: number) => 18 / distance ** 2
+  assert.ok(Math.abs(torchIrradiance(4) - before(4)) / before(4) < 0.02, `at 4 m: ${torchIrradiance(4).toFixed(2)}`)
+  assert.ok(torchIrradiance(1) < before(1) * 0.5, `at 1 m: ${torchIrradiance(1).toFixed(2)}`)
+  assert.ok(torchIrradiance(0.7) < before(0.7) * 0.4, `a step away: ${torchIrradiance(0.7).toFixed(2)}`)
+  for (const distance of [0.5, 1, 2, 3, 4, 5]) {
+    assert.ok(torchIrradiance(distance) > torchIrradiance(distance + 0.5), 'still falls off with distance')
+  }
+  // Held up to the face (0.42 m ahead of the eye, the lamp low and to the
+  // right of it), an exhibit keeps the light it had, well under the beam's.
+  const hold = Math.hypot(FLASHLIGHT.offset[0], FLASHLIGHT.offset[1], 0.42 + FLASHLIGHT.offset[2])
+  const held = torchIrradiance(hold, true)
+  assert.ok(Math.abs(held - (before(hold) * 0.12)) / (before(hold) * 0.12) < 0.05, `held: ${held.toFixed(2)}`)
+  assert.ok(held < torchIrradiance(hold) * 0.5, 'dimmed while an object is held to the face')
+  assert.ok(
+    readFileSync(new URL('../src/engine/Flashlight.tsx', import.meta.url), 'utf8').includes('decay={FLASHLIGHT.decay}'),
+    'the spot uses the decay these numbers assume',
+  )
 })
 
 test('switching the torch on ends its hint and typing never switches it', () => {

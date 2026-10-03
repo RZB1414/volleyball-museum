@@ -105,11 +105,18 @@ export const MATERIALS = {
    * that carries a sixth of its red in blue. Real bottle green has almost no
    * red, which is what keeps it green under that lamp; its blue stays under
    * half its green for the opposite light, the player's cool LED torch, where
-   * a fuller blue turned every chair teal. A waxed hide has a thin gloss over
-   * the grain, hence the faint clearcoat, which shares the polished walnut's
-   * shader program.
+   * a fuller blue turned every chair teal.
+   *
+   * The highlight is the lamp's own colour, and the curator's chair faces the
+   * reading point with the lamp between them, within ten degrees of its
+   * specular peak. On a hide this dark a waxed gloss outshone the green there
+   * and the back rendered olive, G about R. So the hide is matte-ish
+   * (`roughnessScale` spreads and dims the peak, a uniform), its gloss faint
+   * and broad, and its green as light as bottle green allows; the specular
+   * term is in the check. The faint clearcoat still shares the polished
+   * walnut's shader program.
    */
-  'leather-green': { baseColor: [0.012, 0.078, 0.031, 1], roughness: 0.52, metallic: 0, tint: [0.038, 0.246, 0.098], clearcoat: 0.1, clearcoatRoughness: 0.45 },
+  'leather-green': { baseColor: [0.006, 0.11, 0.044, 1], roughness: 0.52, metallic: 0, tint: [0.0189, 0.3462, 0.1385], roughnessScale: 1.3, clearcoat: 0.05, clearcoatRoughness: 0.6 },
   /**
    * The desk's writing inset: the same hide skived thin and polished, so the
    * same maps with the grain flattened and the surface a shade smoother.
@@ -131,9 +138,10 @@ export const MATERIALS = {
    * brown block under the torch. Now light calf (~0.18) stands against a
    * dark chocolate morocco (~0.058) and a bottle green (~0.055), which part
    * from each other by hue, as the crimson cloth (~0.078) does. Not lighter
-   * than that: at the reading distance the torch's hot spot already takes
-   * the calf to cream and a brighter red to salmon pink. Tints are target /
-   * measured mean linear albedo; `test:materials` checks the hues under the
+   * than that: a metre from a shelf, where `test:materials` checks the
+   * torch's hot spot through the tone mapper, a brighter red goes salmon
+   * pink and the calf cream even under the gentler beam. Tints are target /
+   * measured mean linear albedo; the same test checks the hues under the
    * lamp and the torch.
    */
   'book-brown': { baseColor: [0.105, 0.048, 0.022, 1], roughness: 0.64, metallic: 0, tint: [0.256, 0.24, 0.322] },
@@ -159,9 +167,11 @@ export const MATERIALS = {
    * `sheen` is the cheapest true fabric look available: a grazing-angle
    * lobe tinted by `sheenColor` (linear), one shader define for every sheen
    * material in the building. It is runtime only; the GLB placeholder is a
-   * plain colour.
+   * plain colour. Even this rough, the fibres' white reflection is two thirds
+   * of the red the seats return under the lamp: less red and a little more
+   * green keep them bottle green there, not the yellow-green they were.
    */
-  'velvet-green': { baseColor: [0.008, 0.06, 0.025, 1], roughness: 0.9, metallic: 0, tint: [0.0135, 0.101, 0.042], sheen: 1, sheenColor: [0.08, 0.3, 0.15], sheenRoughness: 0.36 },
+  'velvet-green': { baseColor: [0.006, 0.075, 0.03, 1], roughness: 0.9, metallic: 0, tint: [0.0101, 0.1267, 0.0507], sheen: 1, sheenColor: [0.08, 0.3, 0.15], sheenRoughness: 0.36 },
   // The previous curator's fedora: brown felt on the velvet maps, far finer.
   'felt-brown': { baseColor: [0.054, 0.032, 0.018, 1], roughness: 0.92, metallic: 0, tint: [0.09, 0.053, 0.03], sheen: 0.6, sheenColor: [0.26, 0.17, 0.11], sheenRoughness: 0.75 },
   'rawhide-lace': { baseColor: [0.43, 0.20, 0.075, 1], roughness: 0.82, metallic: 0 },

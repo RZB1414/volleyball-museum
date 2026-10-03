@@ -513,3 +513,13 @@ export class MuseumAudio {
 
 /** One instance for the app. Audio graphs are not something to have two of. */
 export const museumAudio = new MuseumAudio()
+
+// Vite replaces this module in place during local tuning, and every importer
+// accepts the update, so the page survives it. The old instance would keep its
+// gesture listeners resuming a context nobody plays on, one more set per edit,
+// and the new one could never be unlocked: the title screen's click is the only
+// unlock and there is no way back to it. A full load is the honest answer.
+import.meta.hot?.dispose(() => {
+  museumAudio.dispose()
+  location.reload()
+})

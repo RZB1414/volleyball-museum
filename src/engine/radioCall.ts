@@ -11,7 +11,7 @@
 import { MUSEUM } from '../content/museum.ts'
 import { FRESH_RADIO_MEMORY, useMuseum } from '../state/store.ts'
 import { museumAudio } from './audio.ts'
-import { nextRadioCall, radioDevices, radioIsLive } from './deviceRules.ts'
+import { nextRadioCall, radioDevices, radioIsLive, transmissionLapsed } from './deviceRules.ts'
 import { deadAirFor, porterAnswer, radioCallBlocked } from './radioPatience.ts'
 
 const RADIOS_BY_ID = new Map(radioDevices(MUSEUM).map((entry) => [entry.device.id, entry.device]))
@@ -89,6 +89,20 @@ export function placeRadioCall(deviceId: string, now = Date.now(), random: () =>
     speakerKey: device.speakerKey,
     lineKeys: answer.lineKeys,
     ...(answer.hangUpSeconds > 0 ? { hangsUpFor: answer.hangUpSeconds } : {}),
+    ...(answer.hintWhen ? { validWhile: answer.hintWhen } : {}),
   })
+  return true
+}
+
+/**
+ * The hold on a transmission has just ended — a modal closed, the tab came
+ * back — and what it still had to say may no longer be true: the notebook
+ * the porter was asking for is the modal that just closed. Drops it then, as
+ * heard, rather than let the held line start over; otherwise leaves it be.
+ */
+export function releaseHeldRadio() {
+  const state = useMuseum.getState()
+  if (!transmissionLapsed(state.radio, state.progress, MUSEUM)) return false
+  state.dropRadio()
   return true
 }

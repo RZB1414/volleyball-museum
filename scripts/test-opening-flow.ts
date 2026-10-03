@@ -163,6 +163,34 @@ test('a pre-opening save keeps its journal and hears no stale first call', () =>
   assert.deepEqual(progress.catalogued, ['ball-spalding'], 'nothing of the playthrough is lost')
   assert.equal(useMuseum.getState().settings.locale, 'en', 'settings survive')
   assert.equal(progress.version, SAVE_VERSION, 'the version was not bumped to get here')
+  // Granted a notebook they never picked up: no toast says they just did.
+  assert.deepEqual(progress.hintsShown, [PRE_OPENING_SAVE.journalHintId])
+  assert.equal(
+    shouldAnnounceJournal({
+      unlocked: true,
+      reading: false,
+      alreadyShown: progress.hintsShown.includes(PRE_OPENING_SAVE.journalHintId),
+    }),
+    false,
+  )
+})
+
+test('a notebook taken before the lesson was recorded is not announced on Continue', () => {
+  // A save from the first opening build: calls, a read notebook, no flag list.
+  const early = migrateProgress({ version: SAVE_VERSION, radioCalls: [], documentsRead: ['doc-welcome'] })
+  assert.deepEqual(early.hintsShown, [PRE_OPENING_SAVE.journalHintId])
+  // A save that keeps the flag list is trusted: one with the notebook still
+  // open at reload has the lesson still owed, and gets it.
+  const owed = migrateProgress({ version: SAVE_VERSION, radioCalls: [], documentsRead: ['doc-welcome'], hintsShown: [] })
+  assert.deepEqual(owed.hintsShown, [])
+  const unread = migrateProgress({ version: SAVE_VERSION, radioCalls: [] })
+  assert.deepEqual(unread.hintsShown, [], 'no notebook, nothing learnt')
+  const junk = migrateProgress({ version: SAVE_VERSION, radioCalls: [], documentsRead: ['doc-welcome'], hintsShown: 'x' })
+  assert.deepEqual(junk.hintsShown, [PRE_OPENING_SAVE.journalHintId], 'junk is no list either')
+  assert.ok(
+    source('ui/Hud.tsx').includes('hintId={PRE_OPENING_SAVE.journalHintId}'),
+    'the toast reads the id the migration writes',
+  )
 })
 
 test('the migration only touches saves that predate the opening', () => {
@@ -614,7 +642,11 @@ test('the journal lesson is shown once ever, after the notebook closes', () => {
   assert.equal(shouldAnnounceJournal({ unlocked: true, reading: false, alreadyShown: true }), false)
 
   // The flag lives in the save: a reload with the notebook open still owes
-  // the lesson, and one after it never repeats it.
+  // the lesson, and one after it never repeats it. (The legacy save loaded
+  // above was handed the lesson already; this is a current one owing it.)
+  useMuseum.setState((state) => ({ progress: { ...state.progress, hintsShown: [] } }))
+  const owing = migrateProgress(JSON.parse(JSON.stringify(useMuseum.getState().progress)))
+  assert.deepEqual(owing.hintsShown, [], 'still owed after a reload with the notebook open')
   useMuseum.getState().recordHint('journal-taken')
   useMuseum.getState().recordHint('journal-taken')
   assert.deepEqual(useMuseum.getState().progress.hintsShown, ['journal-taken'])
@@ -832,7 +864,15 @@ test('a suspended or interrupted context resumes on the next gesture', () => {
   audio.dispose()
   context.state = 'suspended'
   gestures.dispatchEvent(new Event('pointerup'))
+  visibility.dispatchEvent(new Event('visibilitychange'))
   assert.equal(resumes, 4, 'disposed audio stops listening')
+  assert.equal(context.onstatechange, null, 'and lets go of its context')
+
+  // A module replaced in place during development must not leave its
+  // listeners behind, nor a silent game that nothing can unlock again.
+  const audioSource = source('engine/audio.ts')
+  const hot = audioSource.slice(audioSource.indexOf('import.meta.hot?.dispose('))
+  assert.ok(hot.includes('museumAudio.dispose()') && hot.includes('location.reload()'))
 })
 
 // ---------------------------------------------------------------------------

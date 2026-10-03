@@ -735,8 +735,8 @@ export const BAKED_BUNDLES = [
   },
   {
     "name": "kit",
-    "url": "/models/kit.ef79ecc7.glb",
-    "bytes": 2242044,
+    "url": "/models/kit.aeabcf76.glb",
+    "bytes": 2241880,
     "parts": [
       {
         "name": "plinth-block",
@@ -2106,7 +2106,7 @@ export const BAKED_BUNDLES = [
             0.0683
           ]
         },
-        "triangles": 1084
+        "triangles": 1116
       },
       {
         "name": "curator-desk__leather",
@@ -2119,21 +2119,21 @@ export const BAKED_BUNDLES = [
           ],
           "max": [
             0.705,
-            0.7502,
+            0.747,
             0.355
           ],
           "size": [
             1.41,
-            0.0102,
+            0.007,
             0.68
           ],
           "centre": [
             0,
-            0.7451,
+            0.7435,
             0.015
           ]
         },
-        "triangles": 140
+        "triangles": 108
       },
       {
         "name": "curator-desk__paper",
@@ -2146,17 +2146,17 @@ export const BAKED_BUNDLES = [
           ],
           "max": [
             0.0355,
-            0.7545,
+            0.7548,
             0.0445
           ],
           "size": [
             0.271,
-            0.0075,
+            0.0078,
             0.3289
           ],
           "centre": [
             -0.1,
-            0.7507,
+            0.7509,
             -0.12
           ]
         },
@@ -2321,21 +2321,21 @@ export const BAKED_BUNDLES = [
           ],
           "max": [
             0.2121,
-            0.9023,
+            0.9001,
             0.2046
           ],
           "size": [
             0.4242,
-            0.4943,
+            0.4921,
             0.4671
           ],
           "centre": [
             0,
-            0.6552,
+            0.654,
             -0.029
           ]
         },
-        "triangles": 1012
+        "triangles": 1060
       },
       {
         "name": "office-chair__brass",
@@ -2344,22 +2344,22 @@ export const BAKED_BUNDLES = [
           "min": [
             -0.232,
             0,
-            -0.2295
+            -0.2354
           ],
           "max": [
             0.232,
-            0.8576,
+            0.8565,
             0.202
           ],
           "size": [
             0.464,
-            0.8576,
-            0.4315
+            0.8565,
+            0.4374
           ],
           "centre": [
             0,
-            0.4288,
-            -0.0137
+            0.4282,
+            -0.0167
           ]
         },
         "triangles": 344
@@ -7216,15 +7216,16 @@ export const BAKED_MATERIALS = {
   },
   "leather-green": {
     "baseColor": [
-      0.038,
-      0.246,
-      0.098,
+      0.0189,
+      0.3462,
+      0.1385,
       1
     ],
     "roughness": 0.52,
     "metalness": 0,
-    "clearcoat": 0.1,
-    "clearcoatRoughness": 0.45,
+    "clearcoat": 0.05,
+    "clearcoatRoughness": 0.6,
+    "roughnessScale": 1.3,
     "textures": {
       "albedo": "/textures/materials/leather-upholstery-albedo.589a125f.webp",
       "normal": "/textures/materials/leather-upholstery-normal.f4f82bb0.webp",
@@ -7357,9 +7358,9 @@ export const BAKED_MATERIALS = {
   },
   "velvet-green": {
     "baseColor": [
-      0.0135,
-      0.101,
-      0.042,
+      0.0101,
+      0.1267,
+      0.0507,
       1
     ],
     "roughness": 0.9,
@@ -7759,8 +7760,8 @@ export const BAKED_MATERIALS = {
 } as const satisfies Record<string, BakedMaterial>
 
 export const BAKE_TOTALS = {
-  bytes: 3016420,
-  triangles: 151928,
+  bytes: 3016256,
+  triangles: 151976,
   textureBytes: 1269562,
   /** Uncompressed VRAM with mips. The wire size says nothing about this. */
   textureVramBytes: 46006272,
