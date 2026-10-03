@@ -16,6 +16,7 @@ import {
   Box3,
   BoxGeometry,
   BufferAttribute,
+  BufferGeometry,
   CatmullRomCurve3,
   CylinderGeometry,
   ExtrudeGeometry,
@@ -52,11 +53,22 @@ export const EDGE = 0.006
  *
  * mergeVertices compares every attribute, so vertices whose UVs differ at a
  * projection seam stay split, which is exactly what you want.
+ *
+ * `uv`: 'box' projects at `metresPerTile`, 'sphere' wraps a ball, and 'keep'
+ * (or the older spelling 'none') leaves the UVs the pieces already carry. Use
+ * 'keep' when every piece was laid out on its own before the merge: paper
+ * squared to its own edges, or a book's leather offset so it is not one hide
+ * running across the whole shelf. Projecting after the merge would throw that
+ * layout away.
  */
 export function finalize(geometry, { crease = Math.PI / 3, uv = 'box', metresPerTile = 2 } = {}) {
   let working = geometry
   if (uv === 'box') working = boxProjectUVs(working, metresPerTile)
   else if (uv === 'sphere') working = sphereProjectUVs(working)
+  // Any other value would silently mean "keep", and a part whose pieces
+  // carried no UVs would ship with the zeros merge() synthesises: one flat
+  // texel of leather.
+  else if (uv !== 'keep' && uv !== 'none') throw new Error(`finalize: unknown uv mode "${uv}"`)
 
   const welded = mergeVertices(working, 1e-4)
 
@@ -259,6 +271,44 @@ export function domeStud(radius, height = radius) {
   const dome = new SphereGeometry(radius, 6, 2, 0, Math.PI * 2, 0, Math.PI / 2)
   if (height !== radius) dome.scale(1, height / radius, 1)
   return dome
+}
+
+/**
+ * One flat convex face from its corners ([x, y, z], in order round the
+ * face), fan-triangulated: a quad is two triangles, a triangle one. The
+ * winding follows `normal`, so corners may run either way round. `uvs`, one
+ * [u, v] per corner, is optional (zeros otherwise).
+ *
+ * For geometry that is only ever seen from one side: a book's spine, a label,
+ * a corner piece's top. A BoxGeometry spends half its twelve triangles on
+ * faces against a shelf or a back panel; built face by face, nothing is drawn
+ * that nobody can see.
+ */
+export function flatPolygon(corners, normal, uvs = null) {
+  const [a, b, c] = corners
+  const ab = [b[0] - a[0], b[1] - a[1], b[2] - a[2]]
+  const ac = [c[0] - a[0], c[1] - a[1], c[2] - a[2]]
+  const facing =
+    (ab[1] * ac[2] - ab[2] * ac[1]) * normal[0] +
+    (ab[2] * ac[0] - ab[0] * ac[2]) * normal[1] +
+    (ab[0] * ac[1] - ab[1] * ac[0]) * normal[2]
+  const order = []
+  for (let index = 1; index < corners.length - 1; index += 1) {
+    order.push(...(facing >= 0 ? [0, index, index + 1] : [0, index + 1, index]))
+  }
+  const position = new Float32Array(order.length * 3)
+  const normals = new Float32Array(order.length * 3)
+  const uv = new Float32Array(order.length * 2)
+  order.forEach((corner, index) => {
+    position.set(corners[corner], index * 3)
+    normals.set(normal, index * 3)
+    if (uvs) uv.set(uvs[corner], index * 2)
+  })
+  const geometry = new BufferGeometry()
+  geometry.setAttribute('position', new BufferAttribute(position, 3))
+  geometry.setAttribute('normal', new BufferAttribute(normals, 3))
+  geometry.setAttribute('uv', new BufferAttribute(uv, 2))
+  return geometry
 }
 
 /**

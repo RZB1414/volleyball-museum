@@ -49,8 +49,8 @@ import {
   buildWayfindingPlaque,
 } from './bake/parts/interpretive.mjs'
 import { buildDoorLeaf, buildThreshold } from './bake/parts/openings.mjs'
+import { buildBookshelf } from './bake/parts/bookshelf.mjs'
 import {
-  buildBookshelf,
   buildCuratorDesk,
   buildDeskLamp,
   buildLedgerStack,
@@ -145,10 +145,17 @@ const MATERIAL_TEXTURES = {
   'oak-varnished': 'oak-matte',
   'walnut-polished': 'oak-matte',
   'walnut-matte': 'oak-matte',
+  'walnut-satin': 'oak-matte',
   'holyoke-floor': 'maple-floor',
   'leather-tan': 'leather-tan',
   'leather-worn': 'leather-tan',
   'leather-ledger': 'leather-tan',
+  'book-brown': 'leather-tan',
+  'book-calf': 'leather-tan',
+  'book-green': 'leather-upholstery',
+  'book-pages': 'paper',
+  'book-cloth': 'canvas',
+  'archive-buckram': 'canvas',
   'leather-green': 'leather-upholstery',
   'leather-desk': 'leather-upholstery',
   'velvet-green': 'upholstery-velvet',
@@ -556,6 +563,17 @@ async function main() {
     )
   }
 
+  // A key missing here reads as `undefined`, which the manifest writes as
+  // "untextured": the part ships as a flat placeholder colour, and nothing
+  // else in the pipeline complains. Plain colours are declared as null.
+  for (const key of Object.keys(MATERIALS)) {
+    if (!(key in MATERIAL_TEXTURES)) {
+      problems.push(`material "${key}" has no entry in MATERIAL_TEXTURES (null for a plain colour)`)
+    } else if (MATERIAL_TEXTURES[key] !== null && !textureSets[MATERIAL_TEXTURES[key]]) {
+      problems.push(`material "${key}" names texture set "${MATERIAL_TEXTURES[key]}", which no recipe renders`)
+    }
+  }
+
   await pruneStaleTextures(textureFilenames)
   console.log('')
 
@@ -596,7 +614,8 @@ async function main() {
   const pendant = buildPendant()
   const officeChair = buildOfficeChair()
   const deskLamp = buildDeskLamp()
-  const bookshelf = buildBookshelf()
+  const bookshelf = buildBookshelf({ variant: 'a' })
+  const bookshelfB = buildBookshelf({ variant: 'b' })
   const ledgerStack = buildLedgerStack()
   const officeRug = buildOfficeRug()
   const officeCorkboard = buildOfficeCorkboard()
@@ -756,18 +775,25 @@ async function main() {
       deskLamp,
       { base: 'brass', shade: 'glass-green' },
     ),
-    ...compoundKitParts(
-      'bookshelf',
-      bookshelf,
-      {
-        carcass: 'walnut-polished',
-        books: 'leather-worn',
-        booksGreen: 'leather-green',
-        booksRed: 'rope-velvet',
-        boxes: 'archive-green',
-        brass: 'brass',
-      },
-      'carcass',
+    // Two arrangements of the same case. Each costs one draw per family
+    // for all of its placements; the second stops the three cases on the
+    // east wall from repeating each other.
+    ...['bookshelf', 'bookshelf-b'].flatMap((name) =>
+      compoundKitParts(
+        name,
+        name === 'bookshelf' ? bookshelf : bookshelfB,
+        {
+          carcass: 'walnut-satin',
+          books: 'book-brown',
+          booksGreen: 'book-green',
+          booksCalf: 'book-calf',
+          booksRed: 'book-cloth',
+          pages: 'book-pages',
+          boxes: 'archive-buckram',
+          brass: 'brass',
+        },
+        'carcass',
+      ),
     ),
     ...compoundKitParts(
       'ledger-stack',
@@ -1077,6 +1103,7 @@ async function main() {
     'curator-desk',
     'office-chair__base',
     'bookshelf',
+    'bookshelf-b',
     'office-flatfile',
     'archive-trolley',
     'office-safe',

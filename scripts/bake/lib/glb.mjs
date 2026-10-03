@@ -70,6 +70,12 @@ export const MATERIALS = {
   // texture family: the colour difference comes from stain, not wood species.
   'walnut-polished': { baseColor: [0.20, 0.09, 0.04, 1], roughness: 0.38, metallic: 0, tint: [0.38, 0.24, 0.15], clearcoat: 0.62, clearcoatRoughness: 0.10 },
   'walnut-matte': { baseColor: [0.17, 0.075, 0.035, 1], roughness: 0.74, metallic: 0, tint: [0.27, 0.16, 0.10] },
+  // The bookcases: the desk's walnut with a waxed, not a French-polished,
+  // finish. The torch is held square to a shelf's back panel at the reading
+  // distance, and the desk's sharp clearcoat put a white disc of glare in
+  // the middle of every row. A rougher coat spreads it into a sheen; the
+  // same textured-clearcoat program, so no shader is added.
+  'walnut-satin': { baseColor: [0.20, 0.09, 0.04, 1], roughness: 0.5, metallic: 0, tint: [0.38, 0.24, 0.15], clearcoat: 0.3, clearcoatRoughness: 0.42 },
   // The Holyoke gallery keeps the same strip-floor maps as the atrium, but a
   // century of darker stain and wear pulls it towards the reference's tobacco
   // brown. A separate material factor is far cheaper than another texture set.
@@ -117,6 +123,37 @@ export const MATERIALS = {
    * artefacts that share it.
    */
   'leather-ledger': { baseColor: [0.095, 0.038, 0.02, 1], roughness: 0.62, metallic: 0, tint: [0.232, 0.19, 0.294] },
+  /**
+   * The bookcases' bindings, keys of their own so the shelves can be tuned
+   * without touching the Holyoke leather or the desk. Read in the dark at
+   * 4.5 m, a shelf separates its books by value first: the three families
+   * the shelves used to have sat between luminance 0.076 and 0.136, one
+   * brown block under the torch. Now light calf (~0.18) stands against a
+   * dark chocolate morocco (~0.058) and a bottle green (~0.055), which part
+   * from each other by hue, as the crimson cloth (~0.078) does. Not lighter
+   * than that: at the reading distance the torch's hot spot already takes
+   * the calf to cream and a brighter red to salmon pink. Tints are target /
+   * measured mean linear albedo; `test:materials` checks the hues under the
+   * lamp and the torch.
+   */
+  'book-brown': { baseColor: [0.105, 0.048, 0.022, 1], roughness: 0.64, metallic: 0, tint: [0.256, 0.24, 0.322] },
+  'book-calf': { baseColor: [0.336, 0.154, 0.048, 1], roughness: 0.6, metallic: 0, tint: [0.82, 0.77, 0.7] },
+  // On the neutral upholstery maps: on the tan ones no tint makes green.
+  'book-green': { baseColor: [0.011, 0.07, 0.026, 1], roughness: 0.6, metallic: 0, tint: [0.0346, 0.2205, 0.082] },
+  // The atrium rope's crimson, a shade deeper, on the canvas as book cloth.
+  'book-cloth': { baseColor: [0.25, 0.032, 0.03, 1], roughness: 0.86, metallic: 0, tint: [0.395, 0.0597, 0.0857] },
+  /**
+   * The shelf's archive boxes, covered in green buckram like a library's
+   * solander boxes. They were the office's green enamel, which is right for
+   * the steel safe and wrong for board: untextured it read as plastic, and
+   * its blue (three quarters of its green) went mint under the cool torch.
+   */
+  'archive-buckram': { baseColor: [0.05, 0.095, 0.038, 1], roughness: 0.84, metallic: 0, tint: [0.079, 0.177, 0.1086] },
+  // Page heads and fore-edges: the cream paper greyed by a century of dust.
+  // They face straight up into a torch held above them, so at the writing
+  // paper's cream they read as a row of clean white planks; dust puts them
+  // about level with the calf, a shade greyer.
+  'book-pages': { baseColor: [0.17, 0.145, 0.105, 1], roughness: 0.92, metallic: 0, tint: [0.2485, 0.212, 0.1535] },
   /**
    * Bottle-green velvet on the visitor chairs, on the neutral velvet maps.
    * `sheen` is the cheapest true fabric look available: a grazing-angle

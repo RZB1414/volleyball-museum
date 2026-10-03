@@ -19,8 +19,12 @@
 import { createNoise4D } from 'simplex-noise'
 import sharp from 'sharp'
 
-/** Deterministic PRNG so a re-bake produces byte-identical output. */
-function mulberry32(seed) {
+/**
+ * Deterministic PRNG so a re-bake produces byte-identical output. Exported
+ * for the generators that jitter a layout (the bookcases), which need the
+ * same guarantee: a constant seed per variant, never `Math.random`.
+ */
+export function mulberry32(seed) {
   let state = seed >>> 0
   return () => {
     state = (state + 0x6d2b79f5) >>> 0

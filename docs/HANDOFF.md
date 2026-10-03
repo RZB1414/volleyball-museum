@@ -31,48 +31,56 @@ intencionalmente no commit `5e51e24`. O museu data-driven é a única aplicaçã
 
 O corte vertical está integrado, assado, caminhável e com progressão de energia.
 
-Portão verde em 2026-08-12:
+Portão verde em 2026-10-02 (`npm run check`, depois da rodada da abertura, §9):
 
 - conteúdo: 3 salas válidas;
 - energia: 16/16;
-- colisão: 24/24;
-- kit e posicionamento: 253/253;
-- runtime do kit: 19/19;
-- runtime das salas: 15/15;
-- LOD de salas: 20/20;
+- abertura: 23/23; fluxo da abertura: 38/38; rádio: 22/22;
+- colisão: 28/28;
+- kit e posicionamento: 339/339;
+- materiais: 8; mesa do curador: 7; estantes: 20;
+- runtime do kit: 26/26;
+- runtime das salas: 19/19;
+- LOD de salas: 23/23;
 - aquecimento de GPU: verde;
 - performance de render e projeção: 16/16;
 - sinalização arquitetônica: 26/26;
 - portas de transição: 29/29;
 - controles móveis e modo imersivo: 13/13;
-- navegação: 22/22;
+- navegação: 55/55;
 - `npm run build`: verde.
 
 O único aviso é o preexistente `react(only-export-components)` em `src/main.tsx:17`.
 Deploy de produção: `https://volleyball-museum.renanbuiatti14.workers.dev`, versão
-Cloudflare `a2cd24b2-f045-4644-b798-e7c74575aae7`.
+Cloudflare `a2cd24b2-f045-4644-b798-e7c74575aae7` (anterior à abertura; a rodada
+de §9 ainda não foi publicada).
 
 Bake atual:
 
-- **2.516 KB** de GLBs;
-- **132.944 triângulos assados**;
-- kit `public/models/kit.ed8bca0f.glb`: 1.864 KB, 92.056 triângulos, 152 nós;
+- **2.946 KB** de GLBs;
+- **151.928 triângulos assados**;
+- kit `public/models/kit.ef79ecc7.glb`: 2.189 KB, 105.216 triângulos, 195 nós;
 - salas: `room-atrium.b214394f.glb`, `room-holyoke.aa0b5458.glb` e
-  `room-office.a2144060.glb`.
+  `room-office.a2144060.glb`;
+- texturas: **43,875 MiB** de VRAM (teto duro de 45).
 
-Medição visual local em 1536 × 864, dentro do escritório aceso e vendo também o
-átrio pelo portal:
+Medição visual local em 1536 × 864 (1280 × 720 CSS a 1,2 DPR), escritório aceso,
+depois de reload limpo, em 2026-10-02:
 
-- **55 draw calls**;
-- **52.462 triângulos por frame**;
-- **12 programas de shader**;
-- 69 geometrias e 20 texturas.
+- ponto de leitura (`?qaCamera=11.05,0,2.95,-1.5708,-0.45`, a mesa a ~1,2 m):
+  **58 draw calls**, **36.038 triângulos por frame**;
+- spawn (`10.3,0,2.95,-1.5708,-0.05`, as quatro estantes à vista): **66 draw
+  calls**, **37.858 triângulos**;
+- **29 programas** acumulados com o aquecimento assentado (31 depois de ligar a
+  lanterna uma vez). O número inclui os programas internos do PMREM e os que o
+  aquecimento compila para as salas vizinhas; compare sempre do mesmo jeito.
 
-Isso cumpre o alvo desktop (120 / 350k), o alvo mobile de triângulos (90k), o
-orçamento global de shaders (25) e fica abaixo do teto duro mobile de draw calls
-(100), mas ainda não chega ao alvo mobile de 45 draws. O total assado passou o alvo
-móvel porque inclui bundles que nunca aparecem todos no mesmo frame. Não trate FPS
-do navegador de agente como benchmark de Android.
+Isso cumpre o alvo desktop (120 / 350k) e o alvo mobile de triângulos (90k) e fica
+abaixo do teto duro mobile de draw calls (100), mas não chega ao alvo mobile de 45
+draws: o escritório é a sala mais distante dele. `test:kit-runtime` agora trava o
+kit do escritório em 53 lotes e 36 mil triângulos instanciados. O total assado
+passou o alvo móvel porque inclui bundles que nunca aparecem todos no mesmo frame.
+Não trate FPS do navegador de agente como benchmark de Android.
 
 Medição visual local na Holyoke acesa, vendo também o átrio pelo portal:
 
@@ -381,6 +389,7 @@ npm run test:collision
 npm run test:kit
 npm run test:materials
 npm run test:desk-top
+npm run test:bookshelf
 npm run test:kit-runtime
 npm run test:room-runtime
 npm run test:room-lod
@@ -399,13 +408,21 @@ diminuindo sua cobertura.
 O gate de kit soma a receita inteira (`root` + `root__*`) e limita cada prop a
 2.500 triângulos. Os casos mais próximos do teto são `coat-stand` (2.472, com o
 chapéu e o guarda-chuva), `curator-desk` (2.460), `visitor-chair` (2.430),
-`office-chair` (2.396), `office-flatfile` (2.336), `door-leaf` e
-`door-leaf-right` (2.236 cada). Detalhe novo nessas cinco precisa pagar com
-triângulos da própria receita.
+`bookshelf` (2.396), `office-chair` (2.396), `bookshelf-b` (2.380),
+`office-flatfile` (2.336), `door-leaf` e `door-leaf-right` (2.236 cada). Detalhe
+novo nessas receitas precisa pagar com triângulos da própria receita; nas
+estantes, cada livro com nervos custa ~30 e um de pano ~20 (§9.4).
 
 A VRAM de textura é um portão duro de 45 MiB (`TEXTURE_VRAM_BUDGET` no bake e
 `test:materials`); hoje são 43,875 MiB, folga de 1,125 MiB. A tabela no topo de
-`scripts/bake/materials.mjs` acompanha cada receita.
+`scripts/bake/materials.mjs` acompanha cada receita. Toda chave de `MATERIALS`
+precisa constar em `MATERIAL_TEXTURES` (`null` para cor lisa): o bake reprova a
+chave esquecida, que antes saía sem textura e sem aviso.
+
+Draw calls do kit por sala (`test:kit-runtime`, lotes únicos): átrio até 56,
+escritório até 53 (hoje 53, com 34.182 triângulos instanciados, teto 36 mil).
+Uma família de material nova numa receita custa um lote para todas as suas
+colocações; uma variante nova de receita custa um lote por família.
 
 O aviso do Vite de chunk acima de 700 kB (`playerPosition-*.js`, 725 kB) já existia
 em `ca4513c`, com o mesmo hash; não é regressão da abertura.
@@ -446,6 +463,24 @@ em `ca4513c`, com o mesmo hash; não é regressão da abertura.
 - O papel tem pautas em v = 0. Peça de papel projetada em torno da própria
   meia-espessura ganha uma pauta em cada borda; projete meia pauta acima
   (`paperPiece` em `office.mjs`).
+- Projeção em caixa DEPOIS do merge faz peças vizinhas dividirem uma folha só de
+  textura: uma mancha de couro atravessava três lombadas. Projete peça a peça (com
+  um deslocamento por peça) e feche com `finalize(..., { uv: 'keep' })`; o
+  `finalize` agora reprova um modo de UV desconhecido em vez de tratá-lo como
+  'keep' em silêncio.
+- A lanterna é fria e forte de perto. Verde com azul acima de ~0,45 do verde vira
+  menta no facho (as caixas de arquivo em `archive-green` viravam); a 1,4 m o
+  centro do facho leva um vermelho a salmão e um couro claro a creme, então
+  famílias que precisam se separar no escuro se separam por VALOR, com cores
+  moderadas. Clearcoat afiado (o `walnut-polished`) visto de frente pelo facho
+  pinta um disco branco: interiores de móvel usam `walnut-satin`.
+- Num móvel, a caixa biselada gasta quase todos os triângulos em arestas
+  enterradas (pontas das prateleiras nas laterais, fundo no painel). Uma seção
+  varrida com chanfro só onde a luz bate custa 20 em vez de 108.
+- Objeto inclinado gira em torno da ARESTA de baixo do lado para onde cai, e o
+  ângulo resolve o contato com o apoio (`tan θ = folga / h_apoio` ou
+  `sin θ = folga / h`). Girar em torno do centro afunda um canto e deixa o outro no
+  ar, encostado em nada.
 - `visible = false` também remove objetos do `Raycaster`; proxies de interação usam
   uma layer dedicada.
 - Clones de GLTF compartilham geometry/material com o cache. O cleanup de uma
@@ -708,10 +743,105 @@ escritório aceso) e `office-fabrics-desk-torch.jpg` (spawn, só a lanterna).
 - **Testes**: `test:materials` (7: VRAM, neutralidade, verde sob as duas luzes,
   cores do tapete/feltro/papel, sheen num programa só, montagem do material) e
   `test:desk-top` (6); `test:kit` passou de 324 para 327.
-- **Para a próxima etapa (livros das estantes)**, materiais compartilhados que
-  mudaram: `leather-green` (agora `leather-upholstery`, ~2,7 mm por célula a
-  0,13 m/tile; os livros verdes ainda usam 0,24, ou seja ~5 mm), o albedo do
-  `leather-tan` (afeta `leather-worn` e `leather-ledger`) e as manchas da lona
-  (afeta `rope-velvet`, os livros vermelhos). `leather-ledger` (couro de bezerro
-  marrom-avermelhado) e `paper-writing` a 0,02 m/tile (estria de borda de página)
-  estão prontos para lombadas e miolos. A geometria das estantes não foi tocada.
+- As estantes ficaram para a etapa seguinte (§9.4), que deixou de usar
+  `leather-green`, `leather-worn` e `rope-velvet` nos livros: têm chaves próprias.
+
+### 9.4 Os livros das estantes
+
+Capturas: `docs/contact-sheets/office-books-torch.jpg` (meio da sala, só a
+lanterna, as estantes A e B da parede leste) e `office-books-lit.jpg` (spawn a
+4,5 m, escritório aceso, as quatro estantes).
+
+- **Módulo próprio**, `scripts/bake/parts/bookshelf.mjs` (saiu de `office.mjs`).
+  A arrumação é DADO (`LAYOUTS`, fileira por fileira): coleção (`set`) de uma
+  altura, com um volume faltando (`missing`); livro inclinado (`lean`, para a
+  esquerda no item anterior ou para a direita na lateral); pilha deitada
+  (`stack`); livros deitados sobre as cabeças de uma coleção (`over`); caixas
+  (`boxes`, lado a lado ou empilhadas); suporte (`bookend`); vão (`gap`). Um motor
+  pequeno espaça as lombadas de 0,6 a 3 mm (PRNG `mulberry32` com semente fixa por
+  variante, agora exportado de `texture.mjs`), alinha as frentes 2 cm atrás da
+  borda com ±2 mm e alguns volumes puxados, e resolve o ângulo do inclinado para
+  tocar o apoio, girando na aresta de baixo.
+- **Alturas por fileira**: fólios embaixo (0,38 a 0,44 m), quartos no meio (0,26 a
+  0,34) e oitavos e folhetos em cima (0,19 a 0,25). Antes a fileira de cima tinha
+  os maiores e os mais numerosos.
+- **Lombadas**:
+  - couro: nervos (meio cilindro de dois segmentos, 4 triângulos, normais suaves),
+    filetes dourados na cabeça e no pé, e peça de título de outra família no
+    segundo painel com a barra de título dourada;
+  - pano: filetes duplos e título dourado direto no pano;
+  - etiquetas de papel (um cartão menor que o painel) nas atas do museu;
+  - as duas coleções finas levam cabeça dourada e nervos dourados (os mesmos
+    triângulos, na família `brass`);
+  - cabeças de página (família `pages`) nas fileiras abaixo do olho, tiras de
+    papel saindo de três livros e suportes de latão.
+- **Faces só onde alguém vê**: lombada, laterais e cabeça (só abaixo do olho), sem
+  miolo de trás nem pé: 6 a 8 triângulos por livro em vez de 12. A carcaça caiu de
+  1.080 para 534 triângulos: as prateleiras viraram uma seção varrida com chanfro
+  na frente e o painel de fundo, um quad.
+- **UV por livro**: cada peça projeta as próprias UVs com um deslocamento da
+  sequência R2, e as famílias fecham com `uv: 'keep'` (documentado no
+  `finalize`). Couro a 0,08 m/tile (grão de ~3 mm; era 9), verde a 0,1, pano a 0,06.
+- **Materiais**, com chaves próprias e sem VRAM nem programa novos:
+  - `book-brown` (marroquim chocolate, Y ~0,058), `book-calf` (bezerro claro,
+    ~0,185), `book-green` (verde-garrafa nos mapas neutros, ~0,054) e `book-cloth`
+    (o carmesim da corda, um tom mais fundo, ~0,078);
+  - `book-pages` (papel empoeirado, mais cinza que qualquer encadernação);
+  - `archive-buckram`: as caixas em buckram verde, porque o esmalte `archive-green`
+    virava menta na lanterna;
+  - `walnut-satin` na carcaça: o clearcoat afiado pintava um disco branco no fundo
+    de cada fileira.
+
+  `test:materials` prova ΔE ≥ 15 entre as quatro famílias sob luz branca,
+  luminária e lanterna, o bezerro com o dobro do valor de qualquer escura e as
+  caixas verdes no facho.
+- **`bookshelf-b`**, a segunda arrumação (caixas empilhadas na fileira 0, pilhas e
+  coleções em outros lugares), fica na estante norte e no meio da parede leste, que
+  lê A, B, A. Registrada em `schema.ts` (`KitPartId`), `museum.ts`,
+  `kitColliderParts`, `FLOOR_STANDING` e na lista de montagens do `test:kit`. As
+  carcaças são idênticas e o `dedup()` as junta no GLB.
+- **Custos**: A tem 2.396 triângulos e B 2.380 (teto 2.500; eram 1.728). São oito
+  famílias por variante, contra seis: os lotes do kit no escritório foram de 43
+  para 53; no ponto de leitura, de 48 para 58 draws e de 33.644 para 36.038
+  triângulos; os programas não mudaram (29).
+- **Livros-caixa** (o resto do §5 do mapa dos livros): o miolo de cada volume virou
+  três cadernos fora de esquadro (36 triângulos em vez de 108), com cantoneiras de
+  latão nas quinas da capa de cima e etiqueta de papel na capa do volume de cima.
+  A receita foi de 1.920 para 1.674 triângulos.
+- **Testes**:
+  - `npm run test:bookshelf` (20). O assado bate com o gerador e cabe no orçamento,
+    e a parede lê A, B, A. Em cada variante, tudo fica dentro da estante e 1 cm
+    abaixo da prateleira de cima, apoiado na prateleira ou no que está embaixo
+    (±0,5 mm), sem interpenetração (SAT no contorno frontal). Os inclinados
+    encostam no apoio entre 4,6° e 17°; 85% ou mais das lombadas vizinhas ficam a
+    0,6–3 mm, e o resto são vãos deliberados de 1 cm ou mais. As alturas caem de
+    fileira em fileira, cada família tem entre 12% e 45% dos livros e vizinhos não
+    dividem couro. As duas variantes diferem em todas as fileiras, e as regras
+    reprovam o livro girado no centro e a cerca de 13 mm;
+  - `test:desk-top` (7) ganhou as cantoneiras e os cadernos;
+  - `test:kit-runtime` (26) trava o escritório em 53 lotes e 36 mil triângulos;
+  - o bake reprova chave de material sem entrada em `MATERIAL_TEXTURES`.
+- **Fica para depois**:
+  - a 1,4 m, o centro do facho ainda leva o pano vermelho a salmão e o bezerro a
+    creme (é a intensidade da lanterna, não o material);
+  - o atlas de lombadas com texto (P9/P10 do mapa) segue bloqueado pela VRAM e pela
+    regra de que palavras são dado de runtime;
+  - não foi feito o agrupamento de lotes por geometria em `kitPart.ts`, que
+    juntaria as duas carcaças num draw.
+
+### 9.5 Balanço da rodada (`4bd4f09..`, 2026-10-02)
+
+Quatro commits locais, ainda sem push nem deploy: `17113fa` (fluxo da abertura,
+§9.1), `e6010b4` (rádio, §9.2), `a9ab7b7` (tecidos e mesa, §9.3) e o das estantes
+(§9.4).
+
+| | antes | depois |
+|---|---|---|
+| GLBs | 2.801 KB | 2.946 KB |
+| triângulos assados | 146.376 | 151.928 |
+| kit | 2.045 KB, 99.664 triângulos, 182 nós | 2.189 KB, 105.216 triângulos, 195 nós |
+| VRAM de textura | 45,000 MiB (folga zero) | 43,875 MiB |
+| ponto de leitura (medido desde o início de §9.3) | 47 draws, 31.032 triângulos | 58 draws, 36.038 triângulos |
+
+Suítes novas: `test:opening-flow` (38), `test:radio` (22), `test:materials` (8),
+`test:desk-top` (7) e `test:bookshelf` (20); `test:kit` chegou a 339 checagens.

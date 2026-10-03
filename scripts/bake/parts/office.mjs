@@ -32,6 +32,7 @@ import {
   bevelledBox,
   domeStud,
   finalize,
+  flatPolygon,
   lathe,
   merge,
   piping,
@@ -897,125 +898,7 @@ export function buildDeskLamp() {
 // 4. The working library
 // ---------------------------------------------------------------------------
 
-/**
- * A compact open bookcase for the safe room.
- *
- * The office is deliberately the smallest room in the slice, so a full-height
- * Victorian library would turn it into a corridor. This one is only 1.18 m
- * wide and 0.34 m deep: enough vertical mass to make the north wall feel used,
- * while leaving the archive cabinet and its interaction approach unobstructed.
- *
- * Returns carcass, three binding families, archive boxes and their brass label
- * holders, all sharing one origin. Structural members keep authored normals
- * with `crease: null`; the small contents use plain boxes because a bevel there
- * would be below a pixel and would crowd out useful silhouettes.
- *
- * The bindings are split across brown leather, green leather and crimson cloth.
- * One colour for thirty-odd spines read as a single brown block from the desk;
- * the mix is what makes a shelf look collected over decades rather than
- * ordered by the metre, and it costs two draw calls for every case in the room.
- */
-export function buildBookshelf({ width = 1.18, depth = 0.34, height = 2.72 } = {}) {
-  const carcass = []
-  const books = []
-  const booksGreen = []
-  const booksRed = []
-  const boxes = []
-  const brass = []
-  const side = 0.055
-  const shelf = 0.038
-  const back = 0.022
-  const plinthHeight = 0.09
-
-  // A recessed plinth lets the case meet the floor through a shadow line
-  // instead of looking like a box extruded straight out of it.
-  const plinth = bevelledBox(width - 0.08, plinthHeight, depth - 0.045, 0.006, 1)
-  plinth.translate(0, plinthHeight / 2, -0.008)
-  carcass.push(plinth)
-
-  for (const x of [-width / 2 + side / 2, width / 2 - side / 2]) {
-    const upright = bevelledBox(side, height - plinthHeight, depth, 0.006, 1)
-    upright.translate(x, plinthHeight + (height - plinthHeight) / 2, 0)
-    carcass.push(upright)
-  }
-
-  const backPanel = bevelledBox(width - side * 2, height - plinthHeight, back, 0.004, 1)
-  backPanel.translate(0, plinthHeight + (height - plinthHeight) / 2, -depth / 2 + back / 2)
-  carcass.push(backPanel)
-
-  const shelfLevels = [plinthHeight, 0.60, 1.11, 1.62, 2.13]
-  for (const y of shelfLevels) {
-    const board = bevelledBox(width - side * 2, shelf, depth - back, 0.005, 1)
-    board.translate(0, y + shelf / 2, back / 2)
-    carcass.push(board)
-  }
-
-  // The oversailing cap is the only silhouette visible above eye level. A
-  // wider, thinner board earns more than another row of tiny carved detail.
-  const cap = bevelledBox(width + 0.08, 0.075, depth + 0.035, 0.008, 1)
-  cap.translate(0, height - 0.0375, 0.004)
-  carcass.push(cap)
-
-  // Dense but irregular working shelves. Books are plain boxes because their
-  // 4 mm bevel would be sub-pixel; the saved topology buys thirty distinct
-  // silhouettes plus archival boxes, which is what makes the wall feel used.
-  const bindingWidths = [0.048, 0.062, 0.074, 0.055, 0.082, 0.066, 0.052, 0.071, 0.058, 0.077]
-  const rowCounts = [10, 6, 9, 5, 12]
-  for (let row = 0; row < 5; row += 1) {
-    const floor = shelfLevels[row] + shelf
-    let cursor = -width / 2 + side + 0.030 + row * 0.010
-    for (let index = 0; index < rowCounts[row]; index += 1) {
-      const bookWidth = bindingWidths[(index + row) % bindingWidths.length]
-      const bookHeight =
-        0.315 + ((row * 3 + index * 2) % 5) * 0.024 + (row === 4 ? 0.045 : 0)
-      const bookDepth = depth - 0.095 - ((row + index) % 3) * 0.018
-      const book = new BoxGeometry(bookWidth, bookHeight, bookDepth)
-      book.rotateZ(index === 2 && row % 2 === 0 ? -0.055 : 0)
-      book.translate(cursor + bookWidth / 2, floor + bookHeight / 2, 0.035)
-      // Runs of two or three in a colour, as sets are shelved together, with
-      // the brown majority keeping the wall calm.
-      const binding = (row * 7 + Math.floor(index / 2) * 3) % 5
-      ;(binding === 3 ? booksGreen : binding === 4 ? booksRed : books).push(book)
-      cursor += bookWidth + 0.013
-    }
-  }
-
-  // Two labelled document boxes fill the deliberate gaps on rows two and
-  // four. Separate material families let them read as institutional green
-  // fibreboard with brass label holders instead of more brown books.
-  for (const row of [1, 3]) {
-    const floor = shelfLevels[row] + shelf
-    for (let index = 0; index < 2; index += 1) {
-      const boxWidth = 0.205
-      const boxHeight = 0.145 + index * 0.012
-      const boxDepth = depth - 0.078
-      const x = 0.20 + index * 0.21
-      boxes.push(
-        plainBox(boxWidth, boxHeight, boxDepth, x, floor + boxHeight / 2, 0.025),
-        plainBox(boxWidth + 0.012, 0.018, boxDepth + 0.010, x, floor + boxHeight + 0.009, 0.025),
-      )
-      brass.push(
-        plainBox(
-          0.074,
-          0.032,
-          0.007,
-          x,
-          floor + boxHeight * 0.62,
-          0.025 + boxDepth / 2 + 0.005,
-        ),
-      )
-    }
-  }
-
-  return {
-    carcass: finalize(merge(carcass), { crease: null, metresPerTile: 0.42 }),
-    books: finalize(merge(books), { crease: null, metresPerTile: 0.24 }),
-    booksGreen: finalize(merge(booksGreen), { crease: null, metresPerTile: 0.24 }),
-    booksRed: finalize(merge(booksRed), { crease: null, metresPerTile: 0.24 }),
-    boxes: finalize(merge(boxes), { crease: null, metresPerTile: 0.3 }),
-    brass: finalize(merge(brass), { crease: null, metresPerTile: 0.16 }),
-  }
-}
+// The bookcases have a module of their own: `bookshelf.mjs`.
 
 // ---------------------------------------------------------------------------
 // 5. The active ledgers
@@ -1059,13 +942,62 @@ export function buildLedgerStack({ width = 0.34, depth = 0.245 } = {}) {
     lower.translate(0, coverThickness / 2, 0)
     book.push([lower, covers])
 
-    const block = bevelledBox(localWidth - 0.018, pageHeight, localDepth - 0.016, 0.003, 1)
-    block.translate(0.006, coverThickness + pageHeight / 2, 0)
-    book.push([block, pages])
+    // The text block as three gathered signatures, a millimetre and a half
+    // out of true with each other: one bevelled block was a perfect brick of
+    // paper, and 72 triangles dearer than the three plain ones.
+    const signature = pageHeight / 3
+    for (const [part, [dx, dz]] of [[0, 0], [-0.0015, 0.0015], [0.001, -0.001]].entries()) {
+      book.push([
+        plainBox(
+          localWidth - 0.018,
+          signature,
+          localDepth - 0.016,
+          0.006 + dx,
+          coverThickness + signature * (part + 0.5),
+          dz,
+        ),
+        pages,
+      ])
+    }
 
     const upper = bevelledBox(localWidth, coverThickness, localDepth, 0.003, 1)
     upper.translate(0, layer.thickness - coverThickness / 2, 0)
     book.push([upper, covers])
+
+    // Brass corners on the upper board's fore-edge, where a ledger dragged
+    // across a desk for decades wears through first. Half a millimetre proud
+    // of the board all round; no underside, nobody sees under a board.
+    for (const side of [-1, 1]) {
+      const e = 0.0005
+      const leg = 0.028
+      const x = localWidth / 2 + e
+      const z = side * (localDepth / 2 + e)
+      const y0 = layer.thickness - coverThickness - e
+      const y1 = layer.thickness + e
+      const tip = [x, y1, z]
+      const alongX = [x - leg, y1, z]
+      const alongZ = [x, y1, z - side * leg]
+      book.push([flatPolygon([tip, alongX, alongZ], [0, 1, 0]), brass])
+      book.push([flatPolygon([[x, y0, z], [x - leg, y0, z], alongX, tip], [0, 0, side]), brass])
+      book.push([flatPolygon([[x, y0, z], [x, y0, z - side * leg], alongZ, tip], [1, 0, 0]), brass])
+    }
+
+    // The volume in use, on top, carries the archive's paper label.
+    if (index === layers.length - 1) {
+      const top = layer.thickness + 0.0006
+      book.push([
+        flatPolygon(
+          [
+            [0.02, top, -0.034],
+            [0.11, top, -0.034],
+            [0.11, top, 0.034],
+            [0.02, top, 0.034],
+          ],
+          [0, 1, 0],
+        ),
+        pages,
+      ])
+    }
 
     // A proud spine hides the mathematically perfect page/case seam and gives
     // the stack a readable direction from across the office.

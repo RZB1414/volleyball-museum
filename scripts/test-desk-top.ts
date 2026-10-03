@@ -22,7 +22,7 @@ import assert from 'node:assert/strict'
 
 import { BAKED_BUNDLES } from '../src/content/bake.generated.ts'
 import { MUSEUM } from '../src/content/museum.ts'
-import { buildCuratorDesk } from './bake/parts/office.mjs'
+import { buildCuratorDesk, buildLedgerStack } from './bake/parts/office.mjs'
 import {
   corners,
   footprintFromBounds,
@@ -297,6 +297,35 @@ test('the rules catch the old ledger stack: sunk into the leather and through th
     restProblems([oldLamp]).some((problem) => problem.startsWith('power:lamp (old) sinks 7.0 mm')),
     'the lamp at the walnut height is reported',
   )
+})
+
+test('the ledgers wear brass corners proud of their boards, and paper in signatures', () => {
+  const covers = nodeBounds('ledger-stack')
+  const brass = nodeBounds('ledger-stack__brass')
+  const pages = nodeBounds('ledger-stack__pages')
+  // The corners wrap the fore-edge of each upper board, so they reach past
+  // the leather on that side and stand on the top board of the stack.
+  assert.ok(brass.max[0] > covers.max[0], `brass ${brass.max[0]} against leather ${covers.max[0]}`)
+  assert.ok(brass.max[1] > covers.max[1], 'the corners rise above the top board')
+  // The cover label lies on the top board, just clear of the leather.
+  assert.ok(pages.max[1] > covers.max[1] && pages.max[1] - covers.max[1] < 0.001, `label at ${pages.max[1]}`)
+
+  // Each text block is three signatures out of true with each other: the
+  // bottom volume's fore-edge stands in three planes, where one bevelled
+  // brick of paper had one.
+  type Attribute = { count: number; getX(i: number): number; getY(i: number): number; getZ(i: number): number }
+  const { pages: block } = buildLedgerStack() as unknown as { pages: { attributes: Record<string, Attribute> } }
+  const { position, normal } = block.attributes
+  const planes = new Set<string>()
+  for (let index = 0; index < position.count; index += 1) {
+    if (normal.getX(index) < 0.99 || position.getX(index) < 0 || position.getY(index) > 0.046) continue
+    const offset =
+      normal.getX(index) * position.getX(index) +
+      normal.getY(index) * position.getY(index) +
+      normal.getZ(index) * position.getZ(index)
+    planes.add(offset.toFixed(4))
+  }
+  assert.equal(planes.size, 3, `fore-edge planes ${[...planes]}`)
 })
 
 console.log(`${passed} desk-top checks passed`)

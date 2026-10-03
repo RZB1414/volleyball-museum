@@ -735,8 +735,8 @@ export const BAKED_BUNDLES = [
   },
   {
     "name": "kit",
-    "url": "/models/kit.fcca7c6c.glb",
-    "bytes": 2157260,
+    "url": "/models/kit.ef79ecc7.glb",
+    "bytes": 2242044,
     "parts": [
       {
         "name": "plinth-block",
@@ -2420,7 +2420,7 @@ export const BAKED_BUNDLES = [
       },
       {
         "name": "bookshelf",
-        "material": "walnut-polished",
+        "material": "walnut-satin",
         "bounds": {
           "min": [
             -0.63,
@@ -2443,7 +2443,7 @@ export const BAKED_BUNDLES = [
             0.004
           ]
         },
-        "triangles": 1080,
+        "triangles": 534,
         "collider": {
           "kind": "box",
           "halfExtents": [
@@ -2460,138 +2460,421 @@ export const BAKED_BUNDLES = [
       },
       {
         "name": "bookshelf__books",
-        "material": "leather-worn",
+        "material": "book-brown",
         "bounds": {
           "min": [
-            -0.505,
+            -0.533,
             0.128,
-            -0.0875
+            -0.131
           ],
           "max": [
-            0.297,
-            2.624,
-            0.1575
+            0.535,
+            2.4034,
+            0.154
           ],
           "size": [
-            0.802,
-            2.496,
-            0.245
+            1.068,
+            2.2754,
+            0.285
           ],
           "centre": [
-            -0.104,
-            1.376,
-            0.035
+            0.001,
+            1.2657,
+            0.0115
           ]
         },
-        "triangles": 288
+        "triangles": 480
       },
       {
         "name": "bookshelf__booksGreen",
-        "material": "leather-green",
+        "material": "book-green",
         "bounds": {
           "min": [
-            -0.465,
-            0.1263,
-            -0.0875
+            -0.533,
+            0.128,
+            -0.1407
           ],
           "max": [
-            0.471,
-            2.624,
-            0.1575
+            0.533,
+            2.4165,
+            0.1701
           ],
           "size": [
-            0.936,
-            2.4977,
-            0.245
+            1.066,
+            2.2885,
+            0.3108
           ],
           "centre": [
-            0.003,
-            1.3751,
-            0.035
+            0,
+            1.2723,
+            0.0147
           ]
         },
-        "triangles": 120
+        "triangles": 178
+      },
+      {
+        "name": "bookshelf__booksCalf",
+        "material": "book-calf",
+        "bounds": {
+          "min": [
+            -0.533,
+            0.128,
+            -0.1184
+          ],
+          "max": [
+            0.5326,
+            2.443,
+            0.1693
+          ],
+          "size": [
+            1.0656,
+            2.315,
+            0.2877
+          ],
+          "centre": [
+            -0.0002,
+            1.2855,
+            0.0254
+          ]
+        },
+        "triangles": 296
       },
       {
         "name": "bookshelf__booksRed",
-        "material": "rope-velvet",
+        "material": "book-cloth",
         "bounds": {
           "min": [
-            -0.485,
+            -0.533,
             0.128,
-            -0.0875
+            -0.1353
           ],
           "max": [
-            0.096,
-            2.576,
-            0.1575
+            0.5274,
+            2.4205,
+            0.1685
           ],
           "size": [
-            0.581,
-            2.448,
-            0.245
+            1.0604,
+            2.2925,
+            0.3038
           ],
           "centre": [
-            -0.1945,
-            1.352,
-            0.035
+            -0.0028,
+            1.2743,
+            0.0166
           ]
         },
-        "triangles": 96
+        "triangles": 160
+      },
+      {
+        "name": "bookshelf__pages",
+        "material": "book-pages",
+        "bounds": {
+          "min": [
+            -0.533,
+            0.128,
+            -0.1353
+          ],
+          "max": [
+            0.533,
+            2.443,
+            0.1679
+          ],
+          "size": [
+            1.066,
+            2.315,
+            0.3032
+          ],
+          "centre": [
+            0,
+            1.2855,
+            0.0163
+          ]
+        },
+        "triangles": 122
       },
       {
         "name": "bookshelf__boxes",
-        "material": "archive-green",
+        "material": "archive-buckram",
         "bounds": {
           "min": [
-            0.0915,
+            0.095,
             0.638,
             -0.111
           ],
           "max": [
-            0.5185,
+            0.533,
             1.833,
             0.161
           ],
           "size": [
-            0.427,
+            0.438,
             1.195,
             0.272
           ],
           "centre": [
-            0.305,
+            0.314,
             1.2355,
             0.025
           ]
         },
-        "triangles": 96
+        "triangles": 56
       },
       {
         "name": "bookshelf__brass",
         "material": "brass",
         "bounds": {
           "min": [
-            0.163,
-            0.7119,
-            0.1575
+            -0.533,
+            0.13,
+            -0.1407
           ],
           "max": [
-            0.447,
-            1.7713,
-            0.1645
+            0.5317,
+            2.441,
+            0.1691
           ],
           "size": [
-            0.284,
-            1.0594,
-            0.007
+            1.0647,
+            2.311,
+            0.3098
           ],
           "centre": [
-            0.305,
-            1.2416,
-            0.161
+            -0.0007,
+            1.2855,
+            0.0142
           ]
         },
-        "triangles": 48
+        "triangles": 570
+      },
+      {
+        "name": "bookshelf-b",
+        "material": "walnut-satin",
+        "bounds": {
+          "min": [
+            -0.63,
+            0,
+            -0.1835
+          ],
+          "max": [
+            0.63,
+            2.72,
+            0.1915
+          ],
+          "size": [
+            1.26,
+            2.72,
+            0.375
+          ],
+          "centre": [
+            0,
+            1.36,
+            0.004
+          ]
+        },
+        "triangles": 534,
+        "collider": {
+          "kind": "box",
+          "halfExtents": [
+            0.63,
+            1.36,
+            0.1875
+          ],
+          "centre": [
+            0,
+            1.36,
+            0.004
+          ]
+        }
+      },
+      {
+        "name": "bookshelf-b__books",
+        "material": "book-brown",
+        "bounds": {
+          "min": [
+            -0.5294,
+            0.128,
+            -0.1319
+          ],
+          "max": [
+            0.535,
+            2.3925,
+            0.1701
+          ],
+          "size": [
+            1.0644,
+            2.2645,
+            0.302
+          ],
+          "centre": [
+            0.0028,
+            1.2603,
+            0.0191
+          ]
+        },
+        "triangles": 448
+      },
+      {
+        "name": "bookshelf-b__booksGreen",
+        "material": "book-green",
+        "bounds": {
+          "min": [
+            -0.533,
+            0.128,
+            -0.1317
+          ],
+          "max": [
+            0.533,
+            2.41,
+            0.154
+          ],
+          "size": [
+            1.066,
+            2.282,
+            0.2857
+          ],
+          "centre": [
+            0,
+            1.269,
+            0.0112
+          ]
+        },
+        "triangles": 170
+      },
+      {
+        "name": "bookshelf-b__booksCalf",
+        "material": "book-calf",
+        "bounds": {
+          "min": [
+            -0.533,
+            0.128,
+            -0.1288
+          ],
+          "max": [
+            0.517,
+            2.404,
+            0.1686
+          ],
+          "size": [
+            1.05,
+            2.276,
+            0.2975
+          ],
+          "centre": [
+            -0.008,
+            1.266,
+            0.0199
+          ]
+        },
+        "triangles": 312
+      },
+      {
+        "name": "bookshelf-b__booksRed",
+        "material": "book-cloth",
+        "bounds": {
+          "min": [
+            -0.533,
+            0.128,
+            -0.1218
+          ],
+          "max": [
+            0.5267,
+            2.4025,
+            0.1685
+          ],
+          "size": [
+            1.0597,
+            2.2745,
+            0.2903
+          ],
+          "centre": [
+            -0.0031,
+            1.2652,
+            0.0233
+          ]
+        },
+        "triangles": 164
+      },
+      {
+        "name": "bookshelf-b__pages",
+        "material": "book-pages",
+        "bounds": {
+          "min": [
+            -0.533,
+            0.2064,
+            -0.1319
+          ],
+          "max": [
+            0.535,
+            2.4065,
+            0.1679
+          ],
+          "size": [
+            1.068,
+            2.2001,
+            0.2998
+          ],
+          "centre": [
+            0.001,
+            1.3065,
+            0.018
+          ]
+        },
+        "triangles": 136
+      },
+      {
+        "name": "bookshelf-b__boxes",
+        "material": "archive-buckram",
+        "bounds": {
+          "min": [
+            -0.533,
+            0.128,
+            -0.111
+          ],
+          "max": [
+            0.533,
+            1.821,
+            0.161
+          ],
+          "size": [
+            1.066,
+            1.693,
+            0.272
+          ],
+          "centre": [
+            0,
+            0.9745,
+            0.025
+          ]
+        },
+        "triangles": 42
+      },
+      {
+        "name": "bookshelf-b__brass",
+        "material": "brass",
+        "bounds": {
+          "min": [
+            -0.533,
+            0.1355,
+            0.023
+          ],
+          "max": [
+            0.5321,
+            2.4045,
+            0.1691
+          ],
+          "size": [
+            1.0651,
+            2.269,
+            0.1461
+          ],
+          "centre": [
+            -0.0005,
+            1.27,
+            0.096
+          ]
+        },
+        "triangles": 574
       },
       {
         "name": "ledger-stack",
@@ -2627,25 +2910,25 @@ export const BAKED_BUNDLES = [
           "min": [
             -0.1751,
             0.006,
-            -0.1264
+            -0.1275
           ],
           "max": [
-            0.1819,
-            0.1855,
-            0.1381
+            0.183,
+            0.1921,
+            0.1397
           ],
           "size": [
-            0.357,
-            0.1795,
-            0.2645
+            0.3581,
+            0.1861,
+            0.2673
           ],
           "centre": [
-            0.0034,
-            0.0957,
-            0.0059
+            0.0039,
+            0.0991,
+            0.0061
           ]
         },
-        "triangles": 480
+        "triangles": 194
       },
       {
         "name": "ledger-stack__brass",
@@ -2654,25 +2937,25 @@ export const BAKED_BUNDLES = [
           "min": [
             -0.1745,
             0.0158,
-            -0.0468
+            -0.1351
           ],
           "max": [
-            -0.1377,
-            0.1789,
-            0.0489
+            0.1858,
+            0.192,
+            0.147
           ],
           "size": [
-            0.0367,
-            0.1631,
-            0.0957
+            0.3603,
+            0.1762,
+            0.2821
           ],
           "centre": [
-            -0.1561,
-            0.0974,
-            0.001
+            0.0057,
+            0.1039,
+            0.0059
           ]
         },
-        "triangles": 48
+        "triangles": 88
       },
       {
         "name": "office-rug",
@@ -6787,6 +7070,23 @@ export const BAKED_MATERIALS = {
       "orm": "/textures/materials/oak-matte-orm.5b7d5fc7.webp"
     }
   },
+  "walnut-satin": {
+    "baseColor": [
+      0.38,
+      0.24,
+      0.15,
+      1
+    ],
+    "roughness": 0.5,
+    "metalness": 0,
+    "clearcoat": 0.3,
+    "clearcoatRoughness": 0.42,
+    "textures": {
+      "albedo": "/textures/materials/oak-matte-albedo.734d8354.webp",
+      "normal": "/textures/materials/oak-matte-normal.ee263070.webp",
+      "orm": "/textures/materials/oak-matte-orm.5b7d5fc7.webp"
+    }
+  },
   "holyoke-floor": {
     "baseColor": [
       0.17,
@@ -6963,6 +7263,96 @@ export const BAKED_MATERIALS = {
       "albedo": "/textures/materials/leather-tan-albedo.345bf9b6.webp",
       "normal": "/textures/materials/leather-tan-normal.e2bac2d0.webp",
       "orm": "/textures/materials/leather-tan-orm.2b2c18fc.webp"
+    }
+  },
+  "book-brown": {
+    "baseColor": [
+      0.256,
+      0.24,
+      0.322,
+      1
+    ],
+    "roughness": 0.64,
+    "metalness": 0,
+    "textures": {
+      "albedo": "/textures/materials/leather-tan-albedo.345bf9b6.webp",
+      "normal": "/textures/materials/leather-tan-normal.e2bac2d0.webp",
+      "orm": "/textures/materials/leather-tan-orm.2b2c18fc.webp"
+    }
+  },
+  "book-calf": {
+    "baseColor": [
+      0.82,
+      0.77,
+      0.7,
+      1
+    ],
+    "roughness": 0.6,
+    "metalness": 0,
+    "textures": {
+      "albedo": "/textures/materials/leather-tan-albedo.345bf9b6.webp",
+      "normal": "/textures/materials/leather-tan-normal.e2bac2d0.webp",
+      "orm": "/textures/materials/leather-tan-orm.2b2c18fc.webp"
+    }
+  },
+  "book-green": {
+    "baseColor": [
+      0.0346,
+      0.2205,
+      0.082,
+      1
+    ],
+    "roughness": 0.6,
+    "metalness": 0,
+    "textures": {
+      "albedo": "/textures/materials/leather-upholstery-albedo.589a125f.webp",
+      "normal": "/textures/materials/leather-upholstery-normal.f4f82bb0.webp",
+      "orm": "/textures/materials/leather-upholstery-orm.7fb9dfd6.webp"
+    }
+  },
+  "book-cloth": {
+    "baseColor": [
+      0.395,
+      0.0597,
+      0.0857,
+      1
+    ],
+    "roughness": 0.86,
+    "metalness": 0,
+    "textures": {
+      "albedo": "/textures/materials/canvas-albedo.60a42fce.webp",
+      "normal": "/textures/materials/canvas-normal.1433bde5.webp",
+      "orm": "/textures/materials/canvas-orm.217982cf.webp"
+    }
+  },
+  "archive-buckram": {
+    "baseColor": [
+      0.079,
+      0.177,
+      0.1086,
+      1
+    ],
+    "roughness": 0.84,
+    "metalness": 0,
+    "textures": {
+      "albedo": "/textures/materials/canvas-albedo.60a42fce.webp",
+      "normal": "/textures/materials/canvas-normal.1433bde5.webp",
+      "orm": "/textures/materials/canvas-orm.217982cf.webp"
+    }
+  },
+  "book-pages": {
+    "baseColor": [
+      0.2485,
+      0.212,
+      0.1535,
+      1
+    ],
+    "roughness": 0.92,
+    "metalness": 0,
+    "textures": {
+      "albedo": "/textures/materials/paper-albedo.2f718b8d.webp",
+      "normal": "/textures/materials/paper-normal.b583df75.webp",
+      "orm": "/textures/materials/paper-orm.056d3252.webp"
     }
   },
   "velvet-green": {
@@ -7369,8 +7759,8 @@ export const BAKED_MATERIALS = {
 } as const satisfies Record<string, BakedMaterial>
 
 export const BAKE_TOTALS = {
-  bytes: 2931636,
-  triangles: 149126,
+  bytes: 3016420,
+  triangles: 151928,
   textureBytes: 1269562,
   /** Uncompressed VRAM with mips. The wire size says nothing about this. */
   textureVramBytes: 46006272,

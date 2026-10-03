@@ -1422,9 +1422,11 @@ const ROOMS = [
       { part: 'office-corkboard', position: [-0.9, 1.35, -3.34] },
       { part: 'archive-trolley', position: [-0.55, 0, -2.96] },
       { part: 'office-flatfile', position: [-2.55, 0, -2.05], rotationY: Math.PI / 2 },
-      { part: 'bookshelf', position: [1.55, 0, -3.18] },
+      // Two arrangements of books, A and B: the east wall reads A, B, A from
+      // the spawn, so no two neighbours repeat; the north case is a B.
+      { part: 'bookshelf-b', position: [1.55, 0, -3.18] },
       { part: 'bookshelf', position: [2.68, 0, -2.28], rotationY: -Math.PI / 2 },
-      { part: 'bookshelf', position: [2.68, 0, -0.96], rotationY: -Math.PI / 2 },
+      { part: 'bookshelf-b', position: [2.68, 0, -0.96], rotationY: -Math.PI / 2 },
       { part: 'bookshelf', position: [2.68, 0, 0.36], rotationY: -Math.PI / 2 },
       { part: 'office-safe', position: [2.55, 0, 2.45], rotationY: -Math.PI / 2 },
       { part: 'coat-stand', position: [-2.55, 0, -1.2] },

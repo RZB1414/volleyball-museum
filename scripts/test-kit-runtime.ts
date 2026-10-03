@@ -280,5 +280,27 @@ check(
     : 'atrium metrics missing',
 )
 
+/**
+ * The office is the first room anyone sees, and its frame is the one furthest
+ * from the mobile draw target (HANDOFF §2). The second bookcase arrangement
+ * and the shelves' calf and page heads took its kit from 43 to 53 batches;
+ * these ceilings make the next addition a decision rather than drift.
+ */
+const officeMetrics = roomMetrics.get('office')
+check(
+  'office kit uses at most 53 unique draw batches',
+  Boolean(officeMetrics && officeMetrics.uniqueBatches <= 53),
+  officeMetrics
+    ? `${officeMetrics.uniqueBatches} unique batches`
+    : 'office metrics missing',
+)
+check(
+  'office kit stays within 36,000 instantiated triangles',
+  Boolean(officeMetrics && officeMetrics.instantiatedTriangles <= 36_000),
+  officeMetrics
+    ? `${officeMetrics.instantiatedTriangles} instantiated triangles`
+    : 'office metrics missing',
+)
+
 console.log(`\n${passed} passed, ${failed} failed`)
 if (failed > 0) process.exitCode = 1

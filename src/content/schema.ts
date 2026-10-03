@@ -407,6 +407,7 @@ export type KitPartId =
   | 'office-chair'
   | 'desk-lamp'
   | 'bookshelf'
+  | 'bookshelf-b'
   | 'ledger-stack'
   | 'office-rug'
   | 'office-corkboard'
