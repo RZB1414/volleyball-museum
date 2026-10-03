@@ -25,9 +25,12 @@ import {
 
 import {
   bevelledBox,
+  domeStud,
   finalize,
   lathe,
   merge,
+  piping,
+  quiltedPanel,
 } from '../lib/geometry.mjs'
 
 function finishBoxes(parts, metresPerTile) {
@@ -127,10 +130,15 @@ export function buildOfficeRug({ width = 3.25, depth = 4.15 } = {}) {
     }
   }
 
+  // Pile on the velvet maps at 0.4 m a tile: knots of about 4 mm, tufts of
+  // under two centimetres and crushed patches 15 cm across, the scale of the
+  // tonal bands a hand-knotted rug shows from across a room. On the canvas at
+  // the old 0.52 m every thread was 12 mm and the rug read as sacking. The
+  // fringe stays cotton canvas, at a millimetre a thread.
   return {
-    field: finishBoxes(field, 0.52),
-    border: finishBoxes(border, 0.28),
-    fringe: finishBoxes(fringe, 0.16),
+    field: finishBoxes(field, 0.4),
+    border: finishBoxes(border, 0.4),
+    fringe: finishBoxes(fringe, 0.05),
   }
 }
 
@@ -186,7 +194,9 @@ export function buildOfficeCorkboard({ width = 2.25, height = 1.32 } = {}) {
   ]
 
   for (const note of notes) {
-    const paper = new BoxGeometry(note.w, note.h, 0.003)
+    // UVs in the sheet's own frame, before it is tilted, so the paper's feint
+    // rules run parallel to its edges instead of across them.
+    const paper = finalize(new BoxGeometry(note.w, note.h, 0.003), { crease: null, metresPerTile: 0.25 })
     paper.rotateZ(note.r)
     paper.translate(note.x, note.y, 0.031)
     papers.push(paper)
@@ -202,7 +212,7 @@ export function buildOfficeCorkboard({ width = 2.25, height = 1.32 } = {}) {
   return {
     frame: finishBoxes(frame, 0.44),
     cork: finishBoxes(cork, 0.55),
-    papers: finishBoxes(papers, 0.32),
+    papers: finalize(merge(papers), { uv: 'none', crease: null }),
     pins: finishMixed(pins, 0.12),
   }
 }
@@ -452,10 +462,12 @@ function chairArmCurve(side) {
 }
 
 /**
- * A non-swivelling leather visitor chair with raked back and bowed arm rails.
+ * A non-swivelling velvet visitor chair with raked back and bowed arm rails.
  * It is deliberately distinct from the captain's desk chair already in office:
  * lower arms, four timber legs and a broad upholstered back read immediately as
- * the pair intended for guests in the concept image.
+ * the pair intended for guests in the concept image. Velvet rather than the
+ * desk chair's leather is the other half of that distinction: the curator sits
+ * in hide, his visitors in cloth.
  */
 export function buildVisitorChair({ seatHeight = 0.44 } = {}) {
   const frame = []
@@ -516,32 +528,97 @@ export function buildVisitorChair({ seatHeight = 0.44 } = {}) {
     frame.push(backPost)
   }
 
-  const seat = bevelledBox(0.55, 0.095, 0.49, 0.032, 2)
-  seat.translate(0, seatHeight, 0.012)
+  /**
+   * The cushions. A bevelled slab is a slab however well it is textured, so
+   * each upholstered face carries a crowned panel that bulges 12 to 14 mm
+   * between its seams, and the seat has piping along the three seams the
+   * player can see, which is also what hides the step where the panel meets
+   * the slab's rounded border.
+   */
+  const SEAT = { width: 0.55, height: 0.095, depth: 0.49, radius: 0.032, z: 0.012 }
+  const seat = bevelledBox(SEAT.width, SEAT.height, SEAT.depth, SEAT.radius, 2)
+  seat.translate(0, seatHeight, SEAT.z)
   upholstery.push(seat)
 
-  const back = bevelledBox(0.52, 0.48, 0.075, 0.032, 2)
-  back.rotateX(-0.10)
-  back.translate(0, 0.73, -0.255)
-  upholstery.push(back)
+  const seatTop = seatHeight + SEAT.height / 2
+  const seatFlatX = SEAT.width / 2 - SEAT.radius
+  const seatFlatZ = SEAT.depth / 2 - SEAT.radius
+  const seatCrown = quiltedPanel(seatFlatX * 2, seatFlatZ * 2, { columns: 6, rows: 5, crown: 0.014 })
+  // Face up, a hair above the slab's top so the two never z-fight.
+  seatCrown.rotateX(-Math.PI / 2)
+  seatCrown.translate(0, seatTop + 0.0008, SEAT.z)
+  upholstery.push(seatCrown)
 
-  // Eight broad studs are enough to indicate nailhead trim without spending a
-  // sphere at every centimetre. The leather's own normal map supplies the rest.
+  // Front and both sides; the back seam runs under the backrest.
+  const pipeY = seatTop + 0.0012
+  const pipeBack = SEAT.z - seatFlatZ + 0.05
+  const pipeFront = SEAT.z + seatFlatZ
+  upholstery.push(
+    piping(
+      [
+        new Vector3(-seatFlatX, pipeY, pipeBack),
+        new Vector3(-seatFlatX, pipeY, pipeFront - 0.03),
+        new Vector3(-seatFlatX + 0.012, pipeY, pipeFront - 0.006),
+        new Vector3(-seatFlatX + 0.04, pipeY, pipeFront),
+        new Vector3(seatFlatX - 0.04, pipeY, pipeFront),
+        new Vector3(seatFlatX - 0.012, pipeY, pipeFront - 0.006),
+        new Vector3(seatFlatX, pipeY, pipeFront - 0.03),
+        new Vector3(seatFlatX, pipeY, pipeBack),
+      ],
+      0.0045,
+      { segments: 18, radial: 3 },
+    ),
+  )
+
+  /**
+   * The back, authored upright at its own centre and leaned as one body, so
+   * the crown, the nail heads and the slab can never drift apart.
+   */
+  const BACK = { width: 0.52, height: 0.48, depth: 0.075, radius: 0.032 }
+  const placeBack = (geometry) => {
+    geometry.rotateX(-0.10)
+    geometry.translate(0, 0.73, -0.255)
+    return geometry
+  }
+  upholstery.push(placeBack(bevelledBox(BACK.width, BACK.height, BACK.depth, BACK.radius, 2)))
+
+  const backFlatX = BACK.width / 2 - BACK.radius
+  const backFlatY = BACK.height / 2 - BACK.radius
+  const backCrown = quiltedPanel(backFlatX * 2, backFlatY * 2, { columns: 5, rows: 5, crown: 0.012 })
+  backCrown.translate(0, 0, BACK.depth / 2 + 0.0008)
+  upholstery.push(placeBack(backCrown))
+
+  /**
+   * Nail heads on the BACK face. The player wakes up behind these two chairs,
+   * so the back is the side of them seen first and longest; the old studs on
+   * the front face were hidden from the spawn by the chairs themselves. A
+   * border of sixteen domes reads as close nailing without spending a stud
+   * every centimetre.
+   */
+  const nailAt = (x, y) => {
+    const stud = domeStud(0.0085, 0.0052)
+    // Dome along +Y → along -Z, out of the rear face.
+    stud.rotateX(-Math.PI / 2)
+    stud.translate(x, y, -BACK.depth / 2 + 0.0004)
+    studs.push(placeBack(stud))
+  }
+  const nailX = backFlatX - 0.014
   for (const side of [-1, 1]) {
-    for (const y of [0.58, 0.70, 0.82, 0.94]) {
-      const stud = new SphereGeometry(0.011, 6, 4)
-      stud.translate(side * 0.247, y, -0.207 - (y - 0.58) * 0.10)
-      studs.push(stud)
+    for (let index = 0; index < 6; index += 1) {
+      nailAt(side * nailX, -backFlatY + 0.018 + index * ((backFlatY * 2 - 0.036) / 5))
     }
   }
+  for (const x of [-0.129, -0.043, 0.043, 0.129]) nailAt(x, backFlatY - 0.012)
 
   return {
     frame: finalize(floorSeat(merge(frame)), {
       crease: Math.PI / 5,
       metresPerTile: 0.36,
     }),
-    upholstery: finishBoxes(upholstery, 0.38),
-    studs: finishMixed(studs, 0.10),
+    // Bevelled slabs, crowned panels and piping all carry their own exact
+    // normals, so no crease pass.
+    upholstery: finishBoxes(upholstery, 0.18),
+    studs: finalize(merge(studs), { crease: Math.PI / 2.2, metresPerTile: 0.1 }),
   }
 }
 
@@ -649,33 +726,56 @@ export function buildCoatStand({ height = 1.86 } = {}) {
 
   // A brown felt fedora hung by its crown on the +X upper hook: tilted so the
   // opening faces the stem and the hook disappears inside it.
+  // Twenty sides: the brim is the hat's whole silhouette and at fourteen its
+  // polygon showed against the wall. Three profile points that only restated
+  // near-straight lines (crown top, crown wall, brim underside) pay for them;
+  // the centre dent shapes the crown top anyway.
   const fedora = lathe(
     [
-      [0, 0.112],
-      [0.05, 0.116],
+      [0, 0.114],
       [0.078, 0.107],
       [0.088, 0.09],
-      [0.092, 0.035],
       [0.097, 0.018],
       [0.15, 0.012],
       [0.172, 0.019],
       [0.174, 0.012],
-      [0.15, 0.004],
       [0.096, 0.008],
       [0, 0.01],
     ],
-    14,
+    20,
   )
-  fedora.scale(1, 1, 0.88)
-  fedora.rotateZ(-1.25)
-  fedora.translate(0.155, height - 0.19, 0)
+  /**
+   * The centre dent. A fedora's crown is creased front to back by the hand
+   * that puts it on; without it the lathe is a bowler. Dropped along the
+   * lathe's x = 0 meridian, which falls on two of its twenty seams.
+   */
+  const crownPosition = fedora.attributes.position
+  for (let index = 0; index < crownPosition.count; index += 1) {
+    const y = crownPosition.getY(index)
+    if (y <= 0.09) continue
+    const x = crownPosition.getX(index)
+    crownPosition.setY(index, y - 0.018 * Math.exp(-((x / 0.03) ** 2)) * ((y - 0.09) / 0.026))
+  }
+
+  // A grosgrain band round the base of the crown, two millimetres proud of
+  // the felt and tapering with it. It is what makes the hat read as a hat
+  // from across the room.
+  const hatBand = new CylinderGeometry(0.0967, 0.0988, 0.016, 20, 1, true)
+  hatBand.translate(0, 0.027, 0)
+
+  for (const piece of [fedora, hatBand]) {
+    piece.scale(1, 1, 0.88)
+    piece.rotateZ(-1.25)
+    piece.translate(0.155, height - 0.19, 0)
+  }
   hat.push(fedora)
+  umbrella.push(hatBand)
 
   // A furled umbrella hooked over the -Z lower hook by a walnut crook. The
   // crook belongs to the stand's timber family; the canopy is black nylon.
   const crookZ = -0.15
   const crookY = height - 0.275
-  const crook = new TorusGeometry(0.03, 0.0075, 5, 10, Math.PI)
+  const crook = new TorusGeometry(0.03, 0.0075, 5, 8, Math.PI)
   crook.rotateY(Math.PI / 2)
   crook.translate(0, crookY, crookZ)
   wood.push(crook)
@@ -709,8 +809,11 @@ export function buildCoatStand({ height = 1.86 } = {}) {
 
   return {
     wood: finishMixed(wood, 0.34),
-    hardware: finishMixed(hardware, 0.10),
-    hat: finishMixed(hat, 0.22),
+    // A 6 × 4 sphere has 60 degrees between neighbouring faces, so the old
+    // 36-degree crease cut every brass finial into a faceted gem.
+    hardware: finalize(merge(hardware), { crease: Math.PI / 2.2, metresPerTile: 0.10 }),
+    // Felt: the velvet maps at a fibre under a millimetre.
+    hat: finishMixed(hat, 0.06),
     umbrella: finishMixed(umbrella, 0.2),
   }
 }

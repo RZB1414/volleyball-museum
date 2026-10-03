@@ -59,6 +59,15 @@ export type BakedMaterial = {
   readonly emissive?: readonly [number, number, number]
   readonly emissiveIntensity?: number
   readonly alphaMode?: string
+  /** Fabric lobe. Its presence makes the material physical. */
+  readonly sheen?: number
+  /** Linear RGB. */
+  readonly sheenColor?: readonly [number, number, number]
+  readonly sheenRoughness?: number
+  /** Scales the normal map: one set of maps, a smoother or deeper grain. */
+  readonly normalScale?: number
+  /** Scales the ORM roughness channel, which otherwise multiplies 1. */
+  readonly roughnessScale?: number
   readonly textures?: BakedTextureSet
 }
 
@@ -726,8 +735,8 @@ export const BAKED_BUNDLES = [
   },
   {
     "name": "kit",
-    "url": "/models/kit.da3f5536.glb",
-    "bytes": 2102592,
+    "url": "/models/kit.fcca7c6c.glb",
+    "bytes": 2157260,
     "parts": [
       {
         "name": "plinth-block",
@@ -2077,31 +2086,31 @@ export const BAKED_BUNDLES = [
         "material": "brass",
         "bounds": {
           "min": [
-            -0.704,
+            -0.7021,
             0.167,
-            -0.0165
+            -0.3045
           ],
           "max": [
-            0.704,
-            0.89,
+            0.7021,
+            0.896,
             0.441
           ],
           "size": [
-            1.408,
-            0.723,
-            0.4575
+            1.4042,
+            0.729,
+            0.7455
           ],
           "centre": [
             0,
-            0.5285,
-            0.2123
+            0.5315,
+            0.0683
           ]
         },
-        "triangles": 736
+        "triangles": 1084
       },
       {
         "name": "curator-desk__leather",
-        "material": "leather-green",
+        "material": "leather-desk",
         "bounds": {
           "min": [
             -0.705,
@@ -2110,75 +2119,48 @@ export const BAKED_BUNDLES = [
           ],
           "max": [
             0.705,
-            0.747,
+            0.7502,
             0.355
           ],
           "size": [
             1.41,
-            0.007,
+            0.0102,
             0.68
           ],
           "centre": [
             0,
-            0.7435,
+            0.7451,
             0.015
           ]
         },
-        "triangles": 108
+        "triangles": 140
       },
       {
         "name": "curator-desk__paper",
-        "material": "paper-aged",
+        "material": "paper-writing",
         "bounds": {
           "min": [
-            -0.2209,
-            0.7475,
-            -0.2198
-          ],
-          "max": [
-            0.0319,
-            0.7595,
-            -0.0122
-          ],
-          "size": [
-            0.2528,
-            0.012,
-            0.2076
-          ],
-          "centre": [
-            -0.0945,
-            0.7535,
-            -0.116
-          ]
-        },
-        "triangles": 48
-      },
-      {
-        "name": "curator-desk__phone",
-        "material": "iron-cast",
-        "bounds": {
-          "min": [
-            0.371,
+            -0.2355,
             0.747,
-            0.0475
+            -0.2845
           ],
           "max": [
-            0.609,
-            0.8834,
-            0.2125
+            0.0355,
+            0.7545,
+            0.0445
           ],
           "size": [
-            0.238,
-            0.1364,
-            0.165
+            0.271,
+            0.0075,
+            0.3289
           ],
           "centre": [
-            0.49,
-            0.8152,
-            0.13
+            -0.1,
+            0.7507,
+            -0.12
           ]
         },
-        "triangles": 340
+        "triangles": 60
       },
       {
         "name": "curator-desk__props",
@@ -2187,25 +2169,79 @@ export const BAKED_BUNDLES = [
           "min": [
             -0.5575,
             0.747,
-            -0.2325
+            -0.2682
           ],
           "max": [
-            -0.2825,
+            0.2627,
             0.912,
             -0.0175
           ],
           "size": [
-            0.275,
+            0.8202,
             0.165,
-            0.215
+            0.2507
           ],
           "centre": [
-            -0.42,
+            -0.1474,
             0.8295,
-            -0.125
+            -0.1428
           ]
         },
-        "triangles": 144
+        "triangles": 252
+      },
+      {
+        "name": "desk-telephone",
+        "material": "bakelite-black",
+        "bounds": {
+          "min": [
+            -0.13,
+            0,
+            -0.1227
+          ],
+          "max": [
+            0.13,
+            0.1376,
+            0.1038
+          ],
+          "size": [
+            0.26,
+            0.1376,
+            0.2266
+          ],
+          "centre": [
+            0,
+            0.0688,
+            -0.0094
+          ]
+        },
+        "triangles": 1476
+      },
+      {
+        "name": "desk-telephone__card",
+        "material": "enamel-cream",
+        "bounds": {
+          "min": [
+            -0.0272,
+            0.0371,
+            0.0395
+          ],
+          "max": [
+            0.0272,
+            0.0687,
+            0.0838
+          ],
+          "size": [
+            0.0544,
+            0.0316,
+            0.0443
+          ],
+          "centre": [
+            0,
+            0.0529,
+            0.0617
+          ]
+        },
+        "triangles": 32
       },
       {
         "name": "office-chair__frame",
@@ -2279,27 +2315,27 @@ export const BAKED_BUNDLES = [
         "material": "leather-green",
         "bounds": {
           "min": [
-            -0.2086,
+            -0.2121,
             0.408,
             -0.2625
           ],
           "max": [
-            0.2086,
+            0.2121,
             0.9023,
-            0.2041
+            0.2046
           ],
           "size": [
-            0.4173,
+            0.4242,
             0.4943,
-            0.4666
+            0.4671
           ],
           "centre": [
             0,
             0.6552,
-            -0.0292
+            -0.029
           ]
         },
-        "triangles": 540
+        "triangles": 1012
       },
       {
         "name": "office-chair__brass",
@@ -2308,25 +2344,25 @@ export const BAKED_BUNDLES = [
           "min": [
             -0.232,
             0,
-            -0.202
+            -0.2295
           ],
           "max": [
             0.232,
-            0.8605,
+            0.8576,
             0.202
           ],
           "size": [
             0.464,
-            0.8605,
-            0.404
+            0.8576,
+            0.4315
           ],
           "centre": [
             0,
-            0.4302,
-            0
+            0.4288,
+            -0.0137
           ]
         },
-        "triangles": 416
+        "triangles": 344
       },
       {
         "name": "desk-lamp__base",
@@ -2559,80 +2595,80 @@ export const BAKED_BUNDLES = [
       },
       {
         "name": "ledger-stack",
-        "material": "leather-worn",
+        "material": "leather-ledger",
         "bounds": {
           "min": [
-            -0.1741,
+            -0.174,
             0,
             -0.1345
           ],
           "max": [
             0.1852,
-            0.208,
+            0.1915,
             0.1463
           ],
           "size": [
-            0.3593,
-            0.208,
+            0.3592,
+            0.1915,
             0.2808
           ],
           "centre": [
-            0.0055,
-            0.104,
+            0.0056,
+            0.0957,
             0.0059
           ]
         },
-        "triangles": 1296
+        "triangles": 1392
       },
       {
         "name": "ledger-stack__pages",
-        "material": "paper-aged",
+        "material": "paper-writing",
         "bounds": {
           "min": [
-            -0.1586,
+            -0.1751,
             0.006,
-            -0.1262
+            -0.1264
           ],
           "max": [
             0.1819,
-            0.202,
-            0.1378
+            0.1855,
+            0.1381
           ],
           "size": [
-            0.3405,
-            0.196,
-            0.264
+            0.357,
+            0.1795,
+            0.2645
           ],
           "centre": [
-            0.0117,
-            0.104,
-            0.0058
+            0.0034,
+            0.0957,
+            0.0059
           ]
         },
-        "triangles": 432
+        "triangles": 480
       },
       {
         "name": "ledger-stack__brass",
         "material": "brass",
         "bounds": {
           "min": [
-            -0.1775,
-            0.0172,
+            -0.1745,
+            0.0158,
             -0.0468
           ],
           "max": [
             -0.1377,
-            0.1969,
+            0.1789,
             0.0489
           ],
           "size": [
-            0.0397,
-            0.1797,
+            0.0367,
+            0.1631,
             0.0957
           ],
           "centre": [
-            -0.1576,
-            0.107,
+            -0.1561,
+            0.0974,
             0.001
           ]
         },
@@ -2667,7 +2703,7 @@ export const BAKED_BUNDLES = [
       },
       {
         "name": "office-rug__border",
-        "material": "paper-aged",
+        "material": "rug-ivory",
         "bounds": {
           "min": [
             -1.57,
@@ -2775,7 +2811,7 @@ export const BAKED_BUNDLES = [
       },
       {
         "name": "office-corkboard__papers",
-        "material": "paper-aged",
+        "material": "paper-writing",
         "bounds": {
           "min": [
             -0.9655,
@@ -3124,7 +3160,7 @@ export const BAKED_BUNDLES = [
       },
       {
         "name": "visitor-chair__upholstery",
-        "material": "leather-green",
+        "material": "velvet-green",
         "bounds": {
           "min": [
             -0.275,
@@ -3147,31 +3183,31 @@ export const BAKED_BUNDLES = [
             -0.028
           ]
         },
-        "triangles": 600
+        "triangles": 818
       },
       {
         "name": "visitor-chair__studs",
         "material": "brass",
         "bounds": {
           "min": [
-            -0.258,
-            0.569,
-            -0.2525
+            -0.2225,
+            0.5299,
+            -0.3167
           ],
           "max": [
-            0.258,
-            0.951,
-            -0.1975
+            0.2225,
+            0.9286,
+            -0.2722
           ],
           "size": [
-            0.516,
-            0.382,
-            0.0551
+            0.445,
+            0.3987,
+            0.0444
           ],
           "centre": [
             0,
-            0.76,
-            -0.225
+            0.7293,
+            -0.2944
           ]
         },
         "triangles": 288
@@ -3201,7 +3237,7 @@ export const BAKED_BUNDLES = [
             0
           ]
         },
-        "triangles": 1676
+        "triangles": 1656
       },
       {
         "name": "coat-stand__hardware",
@@ -3232,30 +3268,30 @@ export const BAKED_BUNDLES = [
       },
       {
         "name": "coat-stand__hat",
-        "material": "leather-worn",
+        "material": "felt-brown",
         "bounds": {
           "min": [
-            0.1127,
-            1.5128,
+            0.1115,
+            1.5087,
             -0.1531
           ],
           "max": [
-            0.2805,
-            1.8351,
+            0.2811,
+            1.8392,
             0.1531
           ],
           "size": [
-            0.1678,
-            0.3223,
+            0.1696,
+            0.3306,
             0.3062
           ],
           "centre": [
-            0.1966,
-            1.674,
+            0.1963,
+            1.6739,
             0
           ]
         },
-        "triangles": 308
+        "triangles": 320
       },
       {
         "name": "coat-stand__umbrella",
@@ -3267,22 +3303,22 @@ export const BAKED_BUNDLES = [
             -0.22
           ],
           "max": [
-            0.038,
-            1.585,
-            -0.14
+            0.2187,
+            1.7728,
+            0.0869
           ],
           "size": [
-            0.0761,
-            0.795,
-            0.08
+            0.2567,
+            0.9828,
+            0.3069
           ],
           "centre": [
-            0,
-            1.1875,
-            -0.18
+            0.0903,
+            1.2814,
+            -0.0665
           ]
         },
-        "triangles": 168
+        "triangles": 208
       },
       {
         "name": "curator-notebook",
@@ -3309,11 +3345,11 @@ export const BAKED_BUNDLES = [
             0
           ]
         },
-        "triangles": 324
+        "triangles": 228
       },
       {
         "name": "curator-notebook__pages",
-        "material": "paper-aged",
+        "material": "paper-writing",
         "bounds": {
           "min": [
             -0.072,
@@ -3343,54 +3379,54 @@ export const BAKED_BUNDLES = [
         "material": "plastic-black",
         "bounds": {
           "min": [
-            -0.0247,
+            -0.066,
             0,
             -0.1072
           ],
           "max": [
-            0.054,
+            0.1157,
             0.0272,
             0.1596
           ],
           "size": [
-            0.0787,
+            0.1817,
             0.0272,
             0.2668
           ],
           "centre": [
-            0.0146,
+            0.0248,
             0.0136,
             0.0262
           ]
         },
-        "triangles": 48
+        "triangles": 168
       },
       {
         "name": "curator-notebook__pen",
         "material": "brass",
         "bounds": {
           "min": [
-            0.0873,
+            -0.029,
             0,
             -0.0821
           ],
           "max": [
             0.1157,
-            0.0124,
-            0.0852
+            0.0264,
+            0.0771
           ],
           "size": [
-            0.0283,
-            0.0124,
-            0.1673
+            0.1447,
+            0.0264,
+            0.1593
           ],
           "centre": [
-            0.1015,
-            0.0062,
-            0.0015
+            0.0433,
+            0.0132,
+            -0.0025
           ]
         },
-        "triangles": 148
+        "triangles": 88
       },
       {
         "name": "desk-radio",
@@ -3583,7 +3619,7 @@ export const BAKED_BUNDLES = [
       },
       {
         "name": "office-wall-clock__dial",
-        "material": "paper-aged",
+        "material": "enamel-cream",
         "bounds": {
           "min": [
             -0.165,
@@ -6843,7 +6879,7 @@ export const BAKED_MATERIALS = {
     "roughness": 0.78,
     "metalness": 0,
     "textures": {
-      "albedo": "/textures/materials/canvas-albedo.98cc316f.webp",
+      "albedo": "/textures/materials/canvas-albedo.60a42fce.webp",
       "normal": "/textures/materials/canvas-normal.1433bde5.webp",
       "orm": "/textures/materials/canvas-orm.217982cf.webp"
     }
@@ -6858,7 +6894,7 @@ export const BAKED_MATERIALS = {
     "roughness": 0.58,
     "metalness": 0,
     "textures": {
-      "albedo": "/textures/materials/leather-tan-albedo.e8cc6805.webp",
+      "albedo": "/textures/materials/leather-tan-albedo.345bf9b6.webp",
       "normal": "/textures/materials/leather-tan-normal.e2bac2d0.webp",
       "orm": "/textures/materials/leather-tan-orm.2b2c18fc.webp"
     }
@@ -6873,24 +6909,104 @@ export const BAKED_MATERIALS = {
     "roughness": 0.68,
     "metalness": 0,
     "textures": {
-      "albedo": "/textures/materials/leather-tan-albedo.e8cc6805.webp",
+      "albedo": "/textures/materials/leather-tan-albedo.345bf9b6.webp",
       "normal": "/textures/materials/leather-tan-normal.e2bac2d0.webp",
       "orm": "/textures/materials/leather-tan-orm.2b2c18fc.webp"
     }
   },
   "leather-green": {
     "baseColor": [
-      0.2,
-      0.4,
-      0.27,
+      0.038,
+      0.246,
+      0.098,
       1
     ],
     "roughness": 0.52,
     "metalness": 0,
+    "clearcoat": 0.1,
+    "clearcoatRoughness": 0.45,
     "textures": {
-      "albedo": "/textures/materials/leather-tan-albedo.e8cc6805.webp",
+      "albedo": "/textures/materials/leather-upholstery-albedo.589a125f.webp",
+      "normal": "/textures/materials/leather-upholstery-normal.f4f82bb0.webp",
+      "orm": "/textures/materials/leather-upholstery-orm.7fb9dfd6.webp"
+    }
+  },
+  "leather-desk": {
+    "baseColor": [
+      0.0315,
+      0.208,
+      0.082,
+      1
+    ],
+    "roughness": 0.5,
+    "metalness": 0,
+    "clearcoat": 0.26,
+    "clearcoatRoughness": 0.3,
+    "normalScale": 0.6,
+    "roughnessScale": 0.8,
+    "textures": {
+      "albedo": "/textures/materials/leather-upholstery-albedo.589a125f.webp",
+      "normal": "/textures/materials/leather-upholstery-normal.f4f82bb0.webp",
+      "orm": "/textures/materials/leather-upholstery-orm.7fb9dfd6.webp"
+    }
+  },
+  "leather-ledger": {
+    "baseColor": [
+      0.232,
+      0.19,
+      0.294,
+      1
+    ],
+    "roughness": 0.62,
+    "metalness": 0,
+    "textures": {
+      "albedo": "/textures/materials/leather-tan-albedo.345bf9b6.webp",
       "normal": "/textures/materials/leather-tan-normal.e2bac2d0.webp",
       "orm": "/textures/materials/leather-tan-orm.2b2c18fc.webp"
+    }
+  },
+  "velvet-green": {
+    "baseColor": [
+      0.0135,
+      0.101,
+      0.042,
+      1
+    ],
+    "roughness": 0.9,
+    "metalness": 0,
+    "sheen": 1,
+    "sheenColor": [
+      0.08,
+      0.3,
+      0.15
+    ],
+    "sheenRoughness": 0.36,
+    "textures": {
+      "albedo": "/textures/materials/upholstery-velvet-albedo.e45bd932.webp",
+      "normal": "/textures/materials/upholstery-velvet-normal.da9d86d7.webp",
+      "orm": "/textures/materials/upholstery-velvet-orm.5eee1687.webp"
+    }
+  },
+  "felt-brown": {
+    "baseColor": [
+      0.09,
+      0.053,
+      0.03,
+      1
+    ],
+    "roughness": 0.92,
+    "metalness": 0,
+    "sheen": 0.6,
+    "sheenColor": [
+      0.26,
+      0.17,
+      0.11
+    ],
+    "sheenRoughness": 0.75,
+    "textures": {
+      "albedo": "/textures/materials/upholstery-velvet-albedo.e45bd932.webp",
+      "normal": "/textures/materials/upholstery-velvet-normal.da9d86d7.webp",
+      "orm": "/textures/materials/upholstery-velvet-orm.5eee1687.webp"
     }
   },
   "rawhide-lace": {
@@ -6913,9 +7029,9 @@ export const BAKED_MATERIALS = {
     "roughness": 0.72,
     "metalness": 0,
     "textures": {
-      "albedo": "/textures/materials/ball-1964-albedo.1b37d218.webp",
+      "albedo": "/textures/materials/ball-1964-albedo.5d6fdcb0.webp",
       "normal": "/textures/materials/ball-1964-normal.d866d017.webp",
-      "orm": "/textures/materials/ball-1964-orm.454ad913.webp"
+      "orm": "/textures/materials/ball-1964-orm.6ee90a56.webp"
     }
   },
   "ball-1964": {
@@ -6928,9 +7044,9 @@ export const BAKED_MATERIALS = {
     "roughness": 0.66,
     "metalness": 0,
     "textures": {
-      "albedo": "/textures/materials/ball-1964-albedo.1b37d218.webp",
+      "albedo": "/textures/materials/ball-1964-albedo.5d6fdcb0.webp",
       "normal": "/textures/materials/ball-1964-normal.d866d017.webp",
-      "orm": "/textures/materials/ball-1964-orm.454ad913.webp"
+      "orm": "/textures/materials/ball-1964-orm.6ee90a56.webp"
     }
   },
   "ball-1998-white": {
@@ -6945,9 +7061,9 @@ export const BAKED_MATERIALS = {
     "clearcoat": 0.1,
     "clearcoatRoughness": 0.3,
     "textures": {
-      "albedo": "/textures/materials/ball-1998-albedo.af618a3e.webp",
+      "albedo": "/textures/materials/ball-1998-albedo.60ae2c1e.webp",
       "normal": "/textures/materials/ball-1998-normal.e79ca535.webp",
-      "orm": "/textures/materials/ball-1998-orm.a2d01d02.webp"
+      "orm": "/textures/materials/ball-1998-orm.e96827c3.webp"
     }
   },
   "ball-1998-yellow": {
@@ -6962,9 +7078,9 @@ export const BAKED_MATERIALS = {
     "clearcoat": 0.1,
     "clearcoatRoughness": 0.3,
     "textures": {
-      "albedo": "/textures/materials/ball-1998-albedo.af618a3e.webp",
+      "albedo": "/textures/materials/ball-1998-albedo.60ae2c1e.webp",
       "normal": "/textures/materials/ball-1998-normal.e79ca535.webp",
-      "orm": "/textures/materials/ball-1998-orm.a2d01d02.webp"
+      "orm": "/textures/materials/ball-1998-orm.e96827c3.webp"
     }
   },
   "ball-1998-blue": {
@@ -6979,9 +7095,9 @@ export const BAKED_MATERIALS = {
     "clearcoat": 0.1,
     "clearcoatRoughness": 0.3,
     "textures": {
-      "albedo": "/textures/materials/ball-1998-albedo.af618a3e.webp",
+      "albedo": "/textures/materials/ball-1998-albedo.60ae2c1e.webp",
       "normal": "/textures/materials/ball-1998-normal.e79ca535.webp",
-      "orm": "/textures/materials/ball-1998-orm.a2d01d02.webp"
+      "orm": "/textures/materials/ball-1998-orm.e96827c3.webp"
     }
   },
   "ball-2008-yellow": {
@@ -6996,9 +7112,9 @@ export const BAKED_MATERIALS = {
     "clearcoat": 0.06,
     "clearcoatRoughness": 0.38,
     "textures": {
-      "albedo": "/textures/materials/ball-2008-albedo.887aaa40.webp",
+      "albedo": "/textures/materials/ball-2008-albedo.60ae2c1e.webp",
       "normal": "/textures/materials/ball-2008-normal.58bf2f0a.webp",
-      "orm": "/textures/materials/ball-2008-orm.1a2d8d1e.webp"
+      "orm": "/textures/materials/ball-2008-orm.378fbcc4.webp"
     }
   },
   "ball-2008-blue": {
@@ -7013,9 +7129,9 @@ export const BAKED_MATERIALS = {
     "clearcoat": 0.06,
     "clearcoatRoughness": 0.38,
     "textures": {
-      "albedo": "/textures/materials/ball-2008-albedo.887aaa40.webp",
+      "albedo": "/textures/materials/ball-2008-albedo.60ae2c1e.webp",
       "normal": "/textures/materials/ball-2008-normal.58bf2f0a.webp",
-      "orm": "/textures/materials/ball-2008-orm.1a2d8d1e.webp"
+      "orm": "/textures/materials/ball-2008-orm.378fbcc4.webp"
     }
   },
   "canvas": {
@@ -7028,7 +7144,7 @@ export const BAKED_MATERIALS = {
     "roughness": 0.88,
     "metalness": 0,
     "textures": {
-      "albedo": "/textures/materials/canvas-albedo.98cc316f.webp",
+      "albedo": "/textures/materials/canvas-albedo.60a42fce.webp",
       "normal": "/textures/materials/canvas-normal.1433bde5.webp",
       "orm": "/textures/materials/canvas-orm.217982cf.webp"
     }
@@ -7043,9 +7159,24 @@ export const BAKED_MATERIALS = {
     "roughness": 0.92,
     "metalness": 0,
     "textures": {
-      "albedo": "/textures/materials/canvas-albedo.98cc316f.webp",
+      "albedo": "/textures/materials/canvas-albedo.60a42fce.webp",
       "normal": "/textures/materials/canvas-normal.1433bde5.webp",
       "orm": "/textures/materials/canvas-orm.217982cf.webp"
+    }
+  },
+  "paper-writing": {
+    "baseColor": [
+      0.92,
+      0.85,
+      0.7,
+      1
+    ],
+    "roughness": 0.9,
+    "metalness": 0,
+    "textures": {
+      "albedo": "/textures/materials/paper-albedo.2f718b8d.webp",
+      "normal": "/textures/materials/paper-normal.b583df75.webp",
+      "orm": "/textures/materials/paper-orm.056d3252.webp"
     }
   },
   "cork": {
@@ -7058,24 +7189,53 @@ export const BAKED_MATERIALS = {
     "roughness": 0.96,
     "metalness": 0,
     "textures": {
-      "albedo": "/textures/materials/canvas-albedo.98cc316f.webp",
+      "albedo": "/textures/materials/canvas-albedo.60a42fce.webp",
       "normal": "/textures/materials/canvas-normal.1433bde5.webp",
       "orm": "/textures/materials/canvas-orm.217982cf.webp"
     }
   },
   "rug-burgundy": {
     "baseColor": [
-      0.36,
-      0.09,
-      0.11,
+      0.155,
+      0.018,
+      0.032,
       1
     ],
     "roughness": 0.96,
     "metalness": 0,
+    "sheen": 0.45,
+    "sheenColor": [
+      0.26,
+      0.06,
+      0.08
+    ],
+    "sheenRoughness": 0.7,
     "textures": {
-      "albedo": "/textures/materials/canvas-albedo.98cc316f.webp",
-      "normal": "/textures/materials/canvas-normal.1433bde5.webp",
-      "orm": "/textures/materials/canvas-orm.217982cf.webp"
+      "albedo": "/textures/materials/upholstery-velvet-albedo.e45bd932.webp",
+      "normal": "/textures/materials/upholstery-velvet-normal.da9d86d7.webp",
+      "orm": "/textures/materials/upholstery-velvet-orm.5eee1687.webp"
+    }
+  },
+  "rug-ivory": {
+    "baseColor": [
+      0.746,
+      0.59,
+      0.334,
+      1
+    ],
+    "roughness": 0.96,
+    "metalness": 0,
+    "sheen": 0.45,
+    "sheenColor": [
+      0.4,
+      0.34,
+      0.24
+    ],
+    "sheenRoughness": 0.7,
+    "textures": {
+      "albedo": "/textures/materials/upholstery-velvet-albedo.e45bd932.webp",
+      "normal": "/textures/materials/upholstery-velvet-normal.da9d86d7.webp",
+      "orm": "/textures/materials/upholstery-velvet-orm.5eee1687.webp"
     }
   },
   "cord-hemp": {
@@ -7088,7 +7248,7 @@ export const BAKED_MATERIALS = {
     "roughness": 0.9,
     "metalness": 0,
     "textures": {
-      "albedo": "/textures/materials/canvas-albedo.98cc316f.webp",
+      "albedo": "/textures/materials/canvas-albedo.60a42fce.webp",
       "normal": "/textures/materials/canvas-normal.1433bde5.webp",
       "orm": "/textures/materials/canvas-orm.217982cf.webp"
     }
@@ -7103,7 +7263,7 @@ export const BAKED_MATERIALS = {
     "roughness": 0.86,
     "metalness": 0,
     "textures": {
-      "albedo": "/textures/materials/canvas-albedo.98cc316f.webp",
+      "albedo": "/textures/materials/canvas-albedo.60a42fce.webp",
       "normal": "/textures/materials/canvas-normal.1433bde5.webp",
       "orm": "/textures/materials/canvas-orm.217982cf.webp"
     }
@@ -7139,6 +7299,30 @@ export const BAKED_MATERIALS = {
     ],
     "roughness": 0.52,
     "metalness": 0
+  },
+  "bakelite-black": {
+    "baseColor": [
+      0.012,
+      0.01,
+      0.009,
+      1
+    ],
+    "roughness": 0.3,
+    "metalness": 0,
+    "clearcoat": 0.85,
+    "clearcoatRoughness": 0.08
+  },
+  "enamel-cream": {
+    "baseColor": [
+      0.8,
+      0.74,
+      0.6,
+      1
+    ],
+    "roughness": 0.35,
+    "metalness": 0,
+    "clearcoat": 0.3,
+    "clearcoatRoughness": 0.1
   },
   "led-off": {
     "baseColor": [
@@ -7185,9 +7369,9 @@ export const BAKED_MATERIALS = {
 } as const satisfies Record<string, BakedMaterial>
 
 export const BAKE_TOTALS = {
-  bytes: 2876968,
-  triangles: 146700,
-  textureBytes: 1075092,
+  bytes: 2931636,
+  triangles: 149126,
+  textureBytes: 1269562,
   /** Uncompressed VRAM with mips. The wire size says nothing about this. */
-  textureVramBytes: 47185920,
+  textureVramBytes: 46006272,
 } as const

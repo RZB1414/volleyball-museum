@@ -27,7 +27,9 @@
     "test:opening": "node --experimental-strip-types scripts/test-opening.ts",
     "test:opening-flow": "node --experimental-strip-types scripts/test-opening-flow.ts",
     "test:radio": "node --experimental-strip-types scripts/test-radio.ts",
-    "check": "tsc -b && oxlint && npm run validate:content && npm run test:power && npm run test:opening && npm run test:opening-flow && npm run test:radio && npm run test:collision && npm run test:kit && npm run test:kit-runtime && npm run test:room-runtime && npm run test:room-lod && npm run test:gpu-warmup && npm run test:render-performance && npm run test:signage && npm run test:transition-door && npm run test:mobile-controls && npm run test:navigation",
+    "test:materials": "node --experimental-strip-types scripts/test-materials.ts",
+    "test:desk-top": "node --experimental-strip-types scripts/test-desk-top.ts",
+    "check": "tsc -b && oxlint && npm run validate:content && npm run test:power && npm run test:opening && npm run test:opening-flow && npm run test:radio && npm run test:collision && npm run test:kit && npm run test:materials && npm run test:desk-top && npm run test:kit-runtime && npm run test:room-runtime && npm run test:room-lod && npm run test:gpu-warmup && npm run test:render-performance && npm run test:signage && npm run test:transition-door && npm run test:mobile-controls && npm run test:navigation",
     "test:kit": "node scripts/test-kit-placement.mjs",
     "test:navigation": "node --experimental-strip-types scripts/test-navigation.ts"
   },

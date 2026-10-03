@@ -20,6 +20,7 @@
  */
 
 import {
+  Box3,
   BoxGeometry,
   CatmullRomCurve3,
   CylinderGeometry,
@@ -29,9 +30,15 @@ import {
 
 import {
   bevelledBox,
+  domeStud,
   finalize,
   lathe,
   merge,
+  piping,
+  quiltedGridPoint,
+  quiltedHeight,
+  quiltedPanel,
+  roundedRectPoints,
   sweepProfile,
 } from '../lib/geometry.mjs'
 
@@ -45,7 +52,9 @@ function plainBox(width, height, depth, x, y, z) {
 /** A restrained rectangular campaign-furniture pull in square brass stock. */
 function campaignPull(parts, x, y, z, width = 0.14) {
   for (const side of [-1, 1]) {
-    const plate = new CylinderGeometry(0.014, 0.014, 0.006, 8)
+    // Six sides, smoothed by the brass crease: a round rosette for 24
+    // triangles instead of 32, across fourteen of them on the desk.
+    const plate = new CylinderGeometry(0.014, 0.014, 0.006, 6)
     plate.rotateX(Math.PI / 2)
     plate.translate(x + side * width / 2, y, z)
     parts.push(plate)
@@ -89,14 +98,16 @@ const TOP_EDGE_PROFILE = [
  * The broad 1.75 by 0.90 metre footprint is what lets the desk anchor the room
  * in the reference instead of reading as a side table. Graduated drawers and a
  * single central frieze keep the symmetry from becoming a featureless grid;
- * paper, a card file and a period phone break the top plane.
+ * paper, a card file, an inkstand and a letter opener break the top plane.
  */
 export function buildCuratorDesk({ width = 1.75, depth = 0.90, height = 0.74 } = {}) {
   const timber = []
   const brass = []
+  // Turned brass small enough for the crease pass's centimetre hash to fold
+  // both sides of it into one cell: it keeps the lathe's own smooth normals.
+  const brassTurned = []
   const leather = []
   const paper = []
-  const phone = []
   const props = []
 
   const coreWidth = width - TOP_PROUD * 2
@@ -231,93 +242,212 @@ export function buildCuratorDesk({ width = 1.75, depth = 0.90, height = 0.74 } =
   // ---- the working surface -------------------------------------------------
   // The green leather inset is the large calm plane in the reference. It sits
   // inside the walnut border instead of masking the moulded top edge.
-  const blotter = bevelledBox(width - 0.34, 0.007, depth - 0.22, 0.006, 1)
-  blotter.translate(0, height + 0.0035, 0.015)
+  const blotterWidth = width - 0.34
+  const blotterDepth = depth - 0.22
+  const blotterThickness = 0.007
+  const blotterZ = 0.015
+  const blotterTop = height + blotterThickness
+  const blotter = bevelledBox(blotterWidth, blotterThickness, blotterDepth, 0.006, 1)
+  blotter.translate(0, height + blotterThickness / 2, blotterZ)
   leather.push(blotter)
 
-  // Broken paper edges sell use more efficiently than embossing or text that
-  // would never survive the baked prop's texel density.
-  for (let index = 0; index < 4; index += 1) {
-    const sheet = plainBox(
-      0.245 - index * 0.008,
-      0.003,
-      0.18,
-      -0.10 + index * 0.006,
-      height + 0.009 + index * 0.003,
-      -0.12 + index * 0.004,
-    )
-    sheet.rotateY(-0.045 + index * 0.025)
-    paper.push(sheet)
+  /**
+   * Gilt tooling: a broad fillet and a hairline inside it, the border every
+   * leather desk inset is finished with. Gold leaf is pressed INTO the
+   * leather, so these stand only 0.4 mm proud: enough to catch the lamp as a
+   * line, nothing a ledger would rock on.
+   */
+  for (const [inset, line] of [[0.022, 0.003], [0.030, 0.0012]]) {
+    const runX = blotterWidth - inset * 2
+    const runZ = blotterDepth - inset * 2
+    for (const side of [-1, 1]) {
+      brass.push(plainBox(runX + line, 0.0006, line, 0, blotterTop + 0.0001, blotterZ + (side * runZ) / 2))
+      brass.push(plainBox(line, 0.0006, runZ - line, (side * runX) / 2, blotterTop + 0.0001, blotterZ))
+    }
   }
+
+  /**
+   * Every object standing on the desk is authored about its own footprint,
+   * from y = 0, and set down by `placeItem`, which records the footprint it
+   * actually occupies. `layout` hands those to the desk-top test, which proves
+   * that nothing sinks into the leather, floats over it or stands inside its
+   * neighbour — all three of which the old desk did.
+   */
+  const items = []
+  const placeItem = (id, pieces, { x, z, rotation = 0, on = blotterTop, restsOn } = {}) => {
+    const box = new Box3()
+    for (const [geometry] of pieces) {
+      geometry.computeBoundingBox()
+      box.union(geometry.boundingBox)
+    }
+    for (const [geometry, family] of pieces) {
+      geometry.rotateY(rotation)
+      geometry.translate(x, on, z)
+      family.push(geometry)
+    }
+    const centreX = (box.min.x + box.max.x) / 2
+    const centreZ = (box.min.z + box.max.z) / 2
+    const cos = Math.cos(rotation)
+    const sin = Math.sin(rotation)
+    items.push({
+      id,
+      // rotateY maps (x, z) to (x cos + z sin, -x sin + z cos).
+      centre: [x + centreX * cos + centreZ * sin, z - centreX * sin + centreZ * cos],
+      halfSize: [(box.max.x - box.min.x) / 2, (box.max.z - box.min.z) / 2],
+      rotation,
+      bottom: on + box.min.y,
+      top: on + box.max.y,
+      ...(restsOn ? { restsOn } : {}),
+    })
+    return on + box.max.y
+  }
+
+  /**
+   * Paper pieces carry their own UVs, laid out before the piece is turned, so
+   * the paper's grain and feint rules stay square to its edges. The rules fall
+   * on v = 0, so a sheet projected about its own mid-thickness wore a rule on
+   * every edge, a grey line round each sheet; half a rule up, the edges land
+   * between two rules and stay paper-white.
+   */
+  const paperPiece = (geometry, metresPerTile) => {
+    const halfRule = metresPerTile / 64
+    geometry.translate(0, halfRule, 0)
+    const finished = finalize(geometry, { crease: null, metresPerTile })
+    finished.translate(0, -halfRule, 0)
+    return finished
+  }
+  // A blotting pad with leather corners, on the curator's side. At 0.02 m a
+  // tile the rules shrink below a pixel: blotting paper is not ruled.
+  const PAD = { width: 0.26, depth: 0.32, thickness: 0.002, x: -0.1, z: -0.12, rotation: 0.035 }
+  const padPieces = [[paperPiece(plainBox(PAD.width, PAD.thickness, PAD.depth, 0, PAD.thickness / 2, 0), 0.02), paper]]
+  for (const [cx, cz, turn] of [[-1, -1, 0], [1, -1, -Math.PI / 2], [1, 1, Math.PI], [-1, 1, Math.PI / 2]]) {
+    // A right-angled leather pocket folded over each corner of the pad.
+    const size = 0.045
+    const corner = sweepProfile(
+      [
+        [0, 0],
+        [size, 0],
+        [0, size],
+      ],
+      0.0012,
+      { bevel: 0 },
+    )
+    corner.rotateX(Math.PI / 2)
+    corner.rotateY(turn)
+    corner.translate((cx * PAD.width) / 2, PAD.thickness + 0.0006, (cz * PAD.depth) / 2)
+    padPieces.push([corner, leather])
+  }
+  const padTop = placeItem('blotting-pad', padPieces, { x: PAD.x, z: PAD.z, rotation: PAD.rotation })
+
+  // Four loose sheets on the pad, portrait to the curator so the paper's
+  // feint rules run across them. A millimetre each: three-millimetre slabs
+  // stacked into a 12 mm brick is what they used to be.
+  const sheetPieces = []
+  for (let index = 0; index < 4; index += 1) {
+    const sheet = paperPiece(new BoxGeometry(0.172 - index * 0.005, 0.001, 0.232 - index * 0.007), 0.25)
+    sheet.rotateY(-0.03 + index * 0.02)
+    sheet.translate(index * 0.002, 0.0005 + index * 0.0011, index * 0.003)
+    sheetPieces.push([sheet, paper])
+  }
+  placeItem('loose-sheets', sheetPieces, { x: PAD.x, z: PAD.z, rotation: PAD.rotation, on: padTop, restsOn: 'blotting-pad' })
 
   // A compact three-drawer card file. It occupies the back-left corner, clear
   // of both the interactive lamp and the separately placed ledger stack.
-  const fileX = -0.42
-  const fileZ = -0.13
   const fileWidth = 0.275
   const fileDepth = 0.205
   const fileHeight = 0.165
+  const filePieces = []
   const fileCase = bevelledBox(fileWidth, fileHeight, fileDepth, 0.005, 1)
-  fileCase.translate(fileX, height + fileHeight / 2 + 0.007, fileZ)
-  props.push(fileCase)
+  fileCase.translate(0, fileHeight / 2, 0)
+  filePieces.push([fileCase, props])
   for (let index = 0; index < 3; index += 1) {
-    const drawerY = height + 0.041 + index * 0.050
-    props.push(
-      plainBox(
-        fileWidth - 0.025,
-        0.040,
-        0.012,
-        fileX,
-        drawerY,
-        fileZ + fileDepth / 2 + 0.004,
-      ),
+    const drawerY = 0.034 + index * 0.05
+    filePieces.push(
+      [plainBox(fileWidth - 0.025, 0.04, 0.012, 0, drawerY, fileDepth / 2 + 0.004), props],
+      [plainBox(0.052, 0.018, 0.008, 0, drawerY + 0.006, fileDepth / 2 + 0.015), brass],
     )
-    brass.push(
-      plainBox(
-        0.052,
-        0.018,
-        0.008,
-        fileX,
-        drawerY,
-        fileZ + fileDepth / 2 + 0.015,
-      ),
-    )
+    // A small turned knob under each label holder: a drawer nobody can pull
+    // is a block of wood with lines on it.
+    const knob = new CylinderGeometry(0.0055, 0.0065, 0.009, 6)
+    knob.rotateX(Math.PI / 2)
+    knob.translate(0, drawerY - 0.009, fileDepth / 2 + 0.0145)
+    filePieces.push([knob, brass])
   }
+  placeItem('card-file', filePieces, { x: -0.42, z: -0.13 })
 
-  // A 1930s desk telephone. The handset's curved silhouette matters much more
-  // than rotary-dial holes that would be sub-pixel in play.
-  const phoneX = 0.49
-  const phoneZ = 0.13
-  const phoneBody = bevelledBox(0.215, 0.075, 0.165, 0.012, 1)
-  phoneBody.translate(phoneX, height + 0.0445, phoneZ)
-  phone.push(phoneBody)
-
-  const dial = new CylinderGeometry(0.043, 0.047, 0.012, 12)
-  dial.translate(phoneX, height + 0.088, phoneZ + 0.014)
-  phone.push(dial)
-
-  const handsetCurve = new CatmullRomCurve3([
-    new Vector3(phoneX - 0.096, height + 0.113, phoneZ),
-    new Vector3(phoneX - 0.058, height + 0.132, phoneZ),
-    new Vector3(phoneX, height + 0.124, phoneZ),
-    new Vector3(phoneX + 0.058, height + 0.132, phoneZ),
-    new Vector3(phoneX + 0.096, height + 0.113, phoneZ),
-  ])
-  phone.push(new TubeGeometry(handsetCurve, 10, 0.014, 6, false))
+  /**
+   * The inkstand: a walnut tray with a pen groove and two brass-capped wells,
+   * between the blotting pad and the ledgers, within the curator's reach. It
+   * and the letter opener are what say somebody wrote at this desk, by hand.
+   */
+  const inkPieces = []
+  const tray = bevelledBox(0.2, 0.016, 0.105, 0.004, 1)
+  tray.translate(0, 0.008, 0)
+  inkPieces.push([tray, props])
   for (const side of [-1, 1]) {
-    const receiver = new CylinderGeometry(0.025, 0.020, 0.042, 8)
-    receiver.rotateZ(Math.PI / 2)
-    receiver.translate(phoneX + side * 0.098, height + 0.112, phoneZ)
-    phone.push(receiver)
+    const well = lathe(
+      [
+        [0, 0],
+        [0.022, 0],
+        [0.023, 0.026],
+        [0.015, 0.032],
+        [0, 0.033],
+      ],
+      8,
+    )
+    well.translate(side * 0.048, 0.016, 0.014)
+    inkPieces.push([well, brassTurned])
+    const cap = lathe(
+      [
+        [0, 0],
+        [0.0135, 0],
+        [0.0135, 0.007],
+        [0, 0.012],
+      ],
+      8,
+    )
+    cap.translate(side * 0.048, 0.016 + 0.032, 0.014)
+    inkPieces.push([cap, brassTurned])
   }
+  const dipPen = new CylinderGeometry(0.0038, 0.0032, 0.16, 8)
+  dipPen.rotateZ(Math.PI / 2)
+  dipPen.translate(0, 0.016 + 0.0038, -0.034)
+  inkPieces.push([dipPen, brassTurned])
+  placeItem('inkstand', inkPieces, { x: 0.16, z: -0.21, rotation: 0.06 })
 
+  // A brass letter opener left beside the post, blade and turned handle.
+  const blade = plainBox(0.13, 0.0016, 0.016, 0.0575, 0.0008, 0)
+  const handle = new CylinderGeometry(0.0052, 0.0056, 0.075, 6)
+  handle.rotateZ(Math.PI / 2)
+  handle.translate(-0.045, 0.0056, 0)
+  placeItem('letter-opener', [[blade, brass], [handle, brass]], { x: 0.09, z: 0.075, rotation: 0.15 })
+
+  // The telephone is its own recipe now (`desk-telephone`), placed beside
+  // the blotter like the ledgers: it needs bakelite, not this desk's metal.
   return {
     timber: finalize(merge(timber), { crease: Math.PI / 5, metresPerTile: 0.7 }),
-    brass: finalize(merge(brass), { crease: Math.PI / 5, metresPerTile: 0.22 }),
-    leather: finalize(merge(leather), { crease: null, metresPerTile: 0.55 }),
-    paper: finalize(merge(paper), { crease: null, metresPerTile: 0.2 }),
-    phone: finalize(merge(phone), { crease: Math.PI / 5, metresPerTile: 0.25 }),
+    // 63 degrees: hexagonal rosettes and the opener's handle turn smooth,
+    // while every box edge (90 degrees) stays a crisp arris.
+    brass: finalize(
+      merge([
+        finalize(merge(brass), { crease: 1.1, metresPerTile: 0.22 }),
+        finalize(merge(brassTurned), { crease: null, metresPerTile: 0.22 }),
+      ]),
+      { uv: 'none', crease: null },
+    ),
+    leather: finalize(merge(leather), { crease: null, metresPerTile: 0.12 }),
+    // Every paper piece carries its own UVs, laid out before it was turned.
+    paper: finalize(merge(paper), { uv: 'none', crease: null }),
     props: finalize(merge(props), { crease: null, metresPerTile: 0.35 }),
+    layout: {
+      top: height,
+      blotter: {
+        centre: [0, blotterZ],
+        halfSize: [blotterWidth / 2, blotterDepth / 2],
+        top: blotterTop,
+      },
+      items,
+    },
   }
 }
 
@@ -367,6 +497,7 @@ export function buildOfficeChair({ seatHeight = 0.45 } = {}) {
   const frame = []
   const base = []
   const leather = []
+  const leatherSmooth = []
   const brass = []
 
   // ---- base: square walnut frame ------------------------------------------
@@ -391,12 +522,15 @@ export function buildOfficeChair({ seatHeight = 0.45 } = {}) {
 
   // ---- seat ----------------------------------------------------------------
   /**
-   * The saddle. A lathe gives a round seat; the scale afterwards makes it
+   * The cushion. A lathe gives a round seat; the scale afterwards makes it
    * 424 mm across and 384 deep, which is the proportion of a real captain's
    * chair and the cheapest asymmetry in the whole part — one line, no extra
-   * triangles. The profile dishes 17 mm from rim to centre, which is what makes
-   * it a saddle rather than a disc with a bevel.
+   * triangles. It used to dish 17 mm from rim to centre like a timber saddle;
+   * a stuffed leather seat does the opposite and crowns 18 mm above its
+   * welt, with the same nine profile points.
    */
+  const SEAT_SCALE = [1.07, 0.97]
+  const SEAT_FORWARD = 0.012
   const seat = lathe(
     [
       [0, 0],
@@ -404,18 +538,32 @@ export function buildOfficeChair({ seatHeight = 0.45 } = {}) {
       [0.176, 0.005],
       [0.196, 0.017],
       [0.198, 0.030],
-      [0.188, 0.041],
-      [0.115, 0.034],
-      [0.055, 0.026],
-      [0, 0.024],
+      [0.190, 0.041],
+      [0.150, 0.050],
+      [0.080, 0.055],
+      [0, 0.056],
     ],
     18,
   )
-  seat.scale(1.07, 1, 0.97)
+  seat.scale(SEAT_SCALE[0], 1, SEAT_SCALE[1])
   // Shifted forward, because a swivel seat is not centred on its column — the
   // sitter's weight is in front of the post.
-  seat.translate(0, seatBase, 0.012)
+  seat.translate(0, seatBase, SEAT_FORWARD)
   leather.push(seat)
+
+  // The welt where the crown meets the drum of the cushion.
+  const seatWelt = []
+  for (let index = 0; index < 24; index += 1) {
+    const phi = (index / 24) * Math.PI * 2
+    seatWelt.push(
+      new Vector3(
+        0.195 * SEAT_SCALE[0] * Math.sin(phi),
+        seatBase + 0.038,
+        0.195 * SEAT_SCALE[1] * Math.cos(phi) + SEAT_FORWARD,
+      ),
+    )
+  }
+  leatherSmooth.push(piping(seatWelt, 0.004, { segments: 24, radial: 3, closed: true }))
 
   // ---- back: sticks, arm bow, crest ---------------------------------------
   const stickBase = seatHeight - 0.025
@@ -511,47 +659,83 @@ export function buildOfficeChair({ seatHeight = 0.45 } = {}) {
   // One broad, raked cushion changes the chair from a bentwood prop into the
   // green leather curator's chair in the concept. The five remaining sticks
   // are still visible around it and read as a proper supporting frame.
+  //
+  // Authored upright about its own centre and leaned as one body, so the
+  // slab, the tufted face, its buttons, the welt and the nail heads can never
+  // drift apart.
   const backCentreY = stickBase + 0.275
   const backCentreZ = -0.195
-  const back = bevelledBox(0.365, 0.405, 0.065, 0.014, 1)
-  back.rotateX(-BACK_RAKE)
-  back.translate(0, backCentreY, backCentreZ)
-  leather.push(back)
-
-  for (const y of [backCentreY - 0.105, backCentreY + 0.015, backCentreY + 0.135]) {
-    for (const x of [-0.086, 0.086]) {
-      const button = new CylinderGeometry(0.009, 0.009, 0.007, 6)
-      button.rotateX(Math.PI / 2 - BACK_RAKE)
-      button.translate(
-        x,
-        y,
-        backCentreZ + 0.034 - (y - backCentreY) * Math.tan(BACK_RAKE),
-      )
-      leather.push(button)
-    }
+  const BACK = { width: 0.365, height: 0.405, depth: 0.065, radius: 0.014 }
+  const placeBack = (geometry) => {
+    geometry.rotateX(-BACK_RAKE)
+    geometry.translate(0, backCentreY, backCentreZ)
+    return geometry
   }
+  leather.push(placeBack(bevelledBox(BACK.width, BACK.height, BACK.depth, BACK.radius, 1)))
 
-  // Sparse brass nailheads catch the banker's lamp without turning the chair
-  // into a dotted outline. They sit only on the two long upholstered edges.
+  /**
+   * Deep diamond tufting on the face the sitter leans on: eight buttons on
+   * grid vertices, each pulling the crowned face 18 mm in. A flat slab with
+   * buttons glued on was the old back, and it read as a pin board; shallower
+   * dimples read as stains.
+   */
+  const panelWidth = BACK.width - BACK.radius * 2
+  const panelHeight = BACK.height - BACK.radius * 2
+  const TUFT = { columns: 8, rows: 10, crown: 0.016, dimple: 0.018, spread: 0.022 }
+  const buttons = [
+    [2, 2], [4, 2], [6, 2],
+    [3, 5], [5, 5],
+    [2, 8], [4, 8], [6, 8],
+  ].map(([column, row]) =>
+    quiltedGridPoint(panelWidth, panelHeight, TUFT.columns, TUFT.rows, column, row),
+  )
+  const tuft = { ...TUFT, buttons }
+  const faceZ = BACK.depth / 2 + 0.0008
+  const tufted = quiltedPanel(panelWidth, panelHeight, tuft)
+  tufted.translate(0, 0, faceZ)
+  leatherSmooth.push(placeBack(tufted))
+  for (const [x, y] of buttons) {
+    const button = domeStud(0.0105, 0.0065)
+    // Dome along +Y → along +Z, out of the face, sunk 2 mm into its dimple.
+    button.rotateX(Math.PI / 2)
+    button.translate(x, y, faceZ + quiltedHeight(panelWidth, panelHeight, x, y, tuft) - 0.002)
+    leatherSmooth.push(placeBack(button))
+  }
+  const backWelt = roundedRectPoints(panelWidth, panelHeight, 0.02, 2).map(
+    ([x, y]) => new Vector3(x, y, BACK.depth / 2 + 0.0012),
+  )
+  leatherSmooth.push(placeBack(piping(backWelt, 0.004, { segments: 28, radial: 3, closed: true })))
+
+  // Sparse brass nail heads close the leather along the back's two long
+  // sides, where the lamp grazes them, without turning the chair into a
+  // dotted outline.
   for (const side of [-1, 1]) {
     for (let index = 0; index < 6; index += 1) {
-      const y = backCentreY - 0.155 + index * 0.062
-      const stud = new CylinderGeometry(0.005, 0.005, 0.006, 6)
-      stud.rotateX(Math.PI / 2 - BACK_RAKE)
-      stud.translate(
-        side * 0.178,
-        y,
-        backCentreZ + 0.036 - (y - backCentreY) * Math.tan(BACK_RAKE),
-      )
-      brass.push(stud)
+      const stud = domeStud(0.0055, 0.0032)
+      // Dome along +Y → along ±X, out of the side face.
+      stud.rotateZ((-side * Math.PI) / 2)
+      stud.translate(side * (BACK.width / 2 - 0.0004), -0.155 + index * 0.062, 0)
+      brass.push(placeBack(stud))
     }
   }
 
+  // The lathe and the slab need a crease to keep their arrises; the tufted
+  // face, the welts and the buttons carry exact normals of their own, which
+  // the crease pass's centimetre hash would smear across the dimples.
+  const leatherUv = { metresPerTile: 0.13 }
   return {
     frame: finalize(merge(frame), { crease: Math.PI / 5, metresPerTile: 0.5 }),
     base: finalize(merge(base), { crease: null, metresPerTile: 0.35 }),
-    leather: finalize(merge(leather), { crease: Math.PI / 5, metresPerTile: 0.35 }),
-    brass: finalize(merge(brass), { crease: Math.PI / 5, metresPerTile: 0.18 }),
+    leather: finalize(
+      merge([
+        finalize(merge(leather), { crease: Math.PI / 5, ...leatherUv }),
+        finalize(merge(leatherSmooth), { crease: null, ...leatherUv }),
+      ]),
+      { uv: 'none', crease: null },
+    ),
+    // Wide enough to round the eight-sided shoes and six-sided domes, still
+    // short of the shoes' 90-degree rims.
+    brass: finalize(merge(brass), { crease: Math.PI / 2.2, metresPerTile: 0.18 }),
   }
 }
 
@@ -844,6 +1028,12 @@ export function buildBookshelf({ width = 1.18, depth = 0.34, height = 2.72 } = {
  * moving only its wrapper group. Covers, page blocks and brass title holders
  * are separate material families, but share an origin and must always be cloned
  * as one recipe.
+ *
+ * Each ledger is built in its own frame, flat and square to the axes, and then
+ * turned and set down on the one below as a rigid body. The spine and its
+ * title plate used to be turned about the stack's centre instead of the
+ * book's, which slid them up to 8 mm off the boards they belong to, and every
+ * volume floated 6 mm above the next.
  */
 export function buildLedgerStack({ width = 0.34, depth = 0.245 } = {}) {
   const covers = []
@@ -862,44 +1052,54 @@ export function buildLedgerStack({ width = 0.34, depth = 0.245 } = {}) {
     const localDepth = depth - (index % 2) * 0.012
     const coverThickness = 0.006
     const pageHeight = layer.thickness - coverThickness * 2
+    const spineX = -localWidth / 2
+    const book = []
 
     const lower = bevelledBox(localWidth, coverThickness, localDepth, 0.003, 1)
-    lower.rotateY(layer.rotation)
-    lower.translate(layer.x, y + coverThickness / 2, layer.z)
-    covers.push(lower)
+    lower.translate(0, coverThickness / 2, 0)
+    book.push([lower, covers])
 
     const block = bevelledBox(localWidth - 0.018, pageHeight, localDepth - 0.016, 0.003, 1)
-    block.rotateY(layer.rotation)
-    block.translate(layer.x + 0.006, y + coverThickness + pageHeight / 2, layer.z)
-    pages.push(block)
+    block.translate(0.006, coverThickness + pageHeight / 2, 0)
+    book.push([block, pages])
 
     const upper = bevelledBox(localWidth, coverThickness, localDepth, 0.003, 1)
-    upper.rotateY(layer.rotation)
-    upper.translate(layer.x, y + layer.thickness - coverThickness / 2, layer.z)
-    covers.push(upper)
+    upper.translate(0, layer.thickness - coverThickness / 2, 0)
+    book.push([upper, covers])
 
     // A proud spine hides the mathematically perfect page/case seam and gives
     // the stack a readable direction from across the office.
     const spine = bevelledBox(0.018, layer.thickness, localDepth, 0.004, 1)
-    spine.rotateY(layer.rotation)
-    spine.translate(layer.x - localWidth / 2 + 0.009, y + layer.thickness / 2, layer.z)
-    covers.push(spine)
+    spine.translate(spineX + 0.009, layer.thickness / 2, 0)
+    book.push([spine, covers])
 
-    // A recessed title holder gives every anonymous volume an archival role.
-    // It is placed in book-local space before the ledger's small rotation, so
-    // the plate remains seated on the spine instead of orbiting around it.
-    const titleHolder = new BoxGeometry(0.007, 0.019, 0.082)
-    titleHolder.translate(-localWidth / 2 - 0.003, y + layer.thickness * 0.58, 0)
-    titleHolder.rotateY(layer.rotation)
-    titleHolder.translate(layer.x, 0, layer.z)
-    brass.push(titleHolder)
+    // Two raised bands across the spine, the cords a ledger is sewn on. They
+    // break its one long highlight into panels, which is what reads as bound.
+    for (const z of [-localDepth * 0.24, localDepth * 0.24]) {
+      book.push([plainBox(0.003, layer.thickness - 0.01, 0.006, spineX - 0.001, layer.thickness / 2, z), covers])
+    }
 
-    y += layer.thickness + 0.006
+    // A recessed title holder gives every anonymous volume an archival role,
+    // and the card slipped into it carries the hand-written year.
+    const holderY = layer.thickness * 0.55
+    book.push([plainBox(0.004, 0.019, 0.082, spineX - 0.0015, holderY, 0), brass])
+    book.push([plainBox(0.0008, 0.013, 0.07, spineX - 0.0039, holderY, 0), pages])
+
+    for (const [geometry, family] of book) {
+      geometry.rotateY(layer.rotation)
+      geometry.translate(layer.x, y, layer.z)
+      family.push(geometry)
+    }
+
+    // Half a millimetre of air: closer and the boards would z-fight.
+    y += layer.thickness + 0.0005
   }
 
   return {
-    covers: finalize(merge(covers), { crease: null, metresPerTile: 0.22 }),
-    pages: finalize(merge(pages), { crease: null, metresPerTile: 0.18 }),
+    // 3.5 mm grain on calf, and on the page blocks the paper's rules become
+    // the fine striation of stacked page edges.
+    covers: finalize(merge(covers), { crease: null, metresPerTile: 0.09 }),
+    pages: finalize(merge(pages), { crease: null, metresPerTile: 0.02 }),
     brass: finalize(merge(brass), { crease: null, metresPerTile: 0.14 }),
   }
 }

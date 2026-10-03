@@ -68,6 +68,7 @@ import {
 import {
   buildCuratorNotebook,
   buildDeskRadio,
+  buildDeskTelephone,
   buildDoorAccessPanel,
   buildWallClock,
 } from './bake/parts/officeProps.mjs'
@@ -147,7 +148,13 @@ const MATERIAL_TEXTURES = {
   'holyoke-floor': 'maple-floor',
   'leather-tan': 'leather-tan',
   'leather-worn': 'leather-tan',
-  'leather-green': 'leather-tan',
+  'leather-ledger': 'leather-tan',
+  'leather-green': 'leather-upholstery',
+  'leather-desk': 'leather-upholstery',
+  'velvet-green': 'upholstery-velvet',
+  'felt-brown': 'upholstery-velvet',
+  'rug-burgundy': 'upholstery-velvet',
+  'rug-ivory': 'upholstery-velvet',
   'rawhide-lace': null,
   'ball-leather-aged': 'ball-1964',
   'ball-1964': 'ball-1964',
@@ -158,8 +165,8 @@ const MATERIAL_TEXTURES = {
   'ball-2008-blue': 'ball-2008',
   'canvas': 'canvas',
   'paper-aged': 'canvas',
+  'paper-writing': 'paper',
   'cork': 'canvas',
-  'rug-burgundy': 'canvas',
   'cord-hemp': 'canvas',
   'rope-velvet': 'canvas',
   // Brass, cast iron and both kinds of glass stay untextured: they are small,
@@ -173,6 +180,8 @@ const MATERIAL_TEXTURES = {
   'glass-vitrine': null,
   'glass-green': null,
   'plastic-black': null,
+  'bakelite-black': null,
+  'enamel-cream': null,
   'led-off': null,
   'led-red': null,
   'led-green': null,
@@ -723,12 +732,19 @@ async function main() {
       {
         timber: 'walnut-polished',
         brass: 'brass',
-        leather: 'leather-green',
-        paper: 'paper-aged',
-        phone: 'iron-cast',
+        leather: 'leather-desk',
+        paper: 'paper-writing',
         props: 'walnut-polished',
       },
       'timber',
+    ),
+    // Its own recipe since it became bakelite: placed on the blotter like
+    // the ledgers, it no longer costs the desk a cast-iron family.
+    ...compoundKitParts(
+      'desk-telephone',
+      buildDeskTelephone(),
+      { body: 'bakelite-black', card: 'enamel-cream' },
+      'body',
     ),
     ...compoundKitParts(
       'office-chair',
@@ -756,19 +772,19 @@ async function main() {
     ...compoundKitParts(
       'ledger-stack',
       ledgerStack,
-      { covers: 'leather-worn', pages: 'paper-aged', brass: 'brass' },
+      { covers: 'leather-ledger', pages: 'paper-writing', brass: 'brass' },
       'covers',
     ),
     ...compoundKitParts(
       'office-rug',
       officeRug,
-      { field: 'rug-burgundy', border: 'paper-aged', fringe: 'canvas' },
+      { field: 'rug-burgundy', border: 'rug-ivory', fringe: 'canvas' },
       'field',
     ),
     ...compoundKitParts(
       'office-corkboard',
       officeCorkboard,
-      { frame: 'walnut-polished', cork: 'cork', papers: 'paper-aged', pins: 'brass' },
+      { frame: 'walnut-polished', cork: 'cork', papers: 'paper-writing', pins: 'brass' },
       'frame',
     ),
     ...compoundKitParts(
@@ -792,13 +808,13 @@ async function main() {
     ...compoundKitParts(
       'visitor-chair',
       visitorChair,
-      { frame: 'walnut-polished', upholstery: 'leather-green', studs: 'brass' },
+      { frame: 'walnut-polished', upholstery: 'velvet-green', studs: 'brass' },
       'frame',
     ),
     ...compoundKitParts(
       'coat-stand',
       coatStand,
-      { wood: 'walnut-polished', hardware: 'brass', hat: 'leather-worn', umbrella: 'plastic-black' },
+      { wood: 'walnut-polished', hardware: 'brass', hat: 'felt-brown', umbrella: 'plastic-black' },
       'wood',
     ),
 
@@ -808,7 +824,7 @@ async function main() {
     ...compoundKitParts(
       'curator-notebook',
       buildCuratorNotebook(),
-      { cover: 'rope-velvet', pages: 'paper-aged', band: 'plastic-black', pen: 'brass' },
+      { cover: 'rope-velvet', pages: 'paper-writing', band: 'plastic-black', pen: 'brass' },
       'cover',
     ),
     // The cradle is the root; the handset's families leave with the player.
@@ -830,7 +846,7 @@ async function main() {
       {
         casing: 'walnut-polished',
         bezel: 'brass',
-        dial: 'paper-aged',
+        dial: 'enamel-cream',
         'hand-hour': 'iron-cast',
         'hand-minute': 'iron-cast',
         'hand-second': 'rope-velvet',
@@ -1251,6 +1267,15 @@ export type BakedMaterial = {
   readonly emissive?: readonly [number, number, number]
   readonly emissiveIntensity?: number
   readonly alphaMode?: string
+  /** Fabric lobe. Its presence makes the material physical. */
+  readonly sheen?: number
+  /** Linear RGB. */
+  readonly sheenColor?: readonly [number, number, number]
+  readonly sheenRoughness?: number
+  /** Scales the normal map: one set of maps, a smoother or deeper grain. */
+  readonly normalScale?: number
+  /** Scales the ORM roughness channel, which otherwise multiplies 1. */
+  readonly roughnessScale?: number
   readonly textures?: BakedTextureSet
 }
 
@@ -1287,6 +1312,11 @@ export const BAKED_MATERIALS = ${JSON.stringify(
             ...(spec.emissive ? { emissive: spec.emissive } : {}),
             ...(spec.emissiveIntensity ? { emissiveIntensity: spec.emissiveIntensity } : {}),
             ...(spec.alphaMode ? { alphaMode: spec.alphaMode } : {}),
+            ...(spec.sheen ? { sheen: spec.sheen } : {}),
+            ...(spec.sheen && spec.sheenColor ? { sheenColor: spec.sheenColor } : {}),
+            ...(spec.sheen && spec.sheenRoughness != null ? { sheenRoughness: spec.sheenRoughness } : {}),
+            ...(set && spec.normalScale != null ? { normalScale: spec.normalScale } : {}),
+            ...(set && spec.roughnessScale != null ? { roughnessScale: spec.roughnessScale } : {}),
             ...(set
               ? {
                   textures: {

@@ -1,6 +1,7 @@
 /**
  * The working props of the opening scene: the curator's notebook, the
- * porter's radio, the stopped electric clock and the door's access panel.
+ * porter's radio, the stopped electric clock, the door's access panel and the
+ * desk telephone.
  *
  * They follow the office conventions. Desk props stand on y = 0, their support
  * datum. Wall props sit on the wall plane z = 0, project into the room along
@@ -14,9 +15,25 @@
  * shipping a clock that never moves.
  */
 
-import { BoxGeometry, CylinderGeometry, TorusGeometry } from 'three'
+import {
+  BoxGeometry,
+  CatmullRomCurve3,
+  CircleGeometry,
+  CylinderGeometry,
+  ExtrudeGeometry,
+  TorusGeometry,
+  TubeGeometry,
+  Vector3,
+} from 'three'
 
-import { bevelledBox, finalize, lathe, merge } from '../lib/geometry.mjs'
+import {
+  bevelledBox,
+  finalize,
+  lathe,
+  merge,
+  profileShape,
+  roundedSlab,
+} from '../lib/geometry.mjs'
 
 function plainBox(width, height, depth, x, y, z) {
   const geometry = new BoxGeometry(width, height, depth)
@@ -54,17 +71,21 @@ function seat(geometry, axis, edge, value = 0) {
  */
 export function buildCuratorNotebook({ width = 0.15, depth = 0.212, thickness = 0.026 } = {}) {
   const cover = []
+  const coverBoards = []
   const pages = []
   const band = []
+  const bandRound = []
   const pen = []
 
   const board = 0.0035
   const blockHeight = thickness - board * 2
 
+  // Boards with 4 mm rounded corners: a cloth case is turned over its board
+  // and never has a square corner, and a chamfered box always does.
   for (const y of [board / 2, thickness - board / 2]) {
-    const plate = bevelledBox(width, board, depth, 0.0012, 1)
+    const plate = roundedSlab(width, depth, board, 0.004, 3)
     plate.translate(0, y, 0)
-    cover.push(plate)
+    coverBoards.push(plate)
   }
 
   // The rounded spine wraps both boards, so the boards never show a raw edge
@@ -78,6 +99,11 @@ export function buildCuratorNotebook({ width = 0.15, depth = 0.212, thickness = 
   const block = bevelledBox(width - 0.01, blockHeight, depth - 0.006, 0.0015, 1)
   block.translate(-0.002, board + blockHeight / 2, 0)
   pages.push(block)
+
+  // Headbands at both ends of the block, against the spine.
+  for (const side of [-1, 1]) {
+    band.push(plainBox(0.006, blockHeight - 0.001, 0.0015, -width / 2 + 0.012, board + blockHeight / 2, side * (depth / 2 - 0.0035)))
+  }
 
   // The elastic closure runs over the top board and down both ends. Its run
   // under the lower board is never visible and would break the y = 0 datum.
@@ -100,30 +126,59 @@ export function buildCuratorNotebook({ width = 0.15, depth = 0.212, thickness = 
   ribbon.rotateY(0.08)
   band.push(ribbon)
 
-  // A brass fountain pen, lying on the blotter along the fore-edge.
-  const penX = width / 2 + 0.026
+  // A gilt-stamped title panel on the front board.
+  pen.push(plainBox(0.05, 0.0004, 0.018, -0.004, thickness + 0.0002, -0.052))
+
+  /**
+   * A black fountain pen with gold furniture, lying on the blotter along the
+   * fore-edge. It used to be brass from end to end, which read as a rod. The
+   * barrel and cap join the elastic's black family, so the change costs no
+   * draw call; nib, clip and cap band stay brass.
+   */
+  const penPieces = []
   const barrel = new CylinderGeometry(0.0058, 0.0058, 0.096, 12)
   barrel.rotateX(Math.PI / 2)
   barrel.translate(0, 0.0058, -0.012)
-  pen.push(barrel)
+  penPieces.push([barrel, bandRound])
   const capPiece = new CylinderGeometry(0.0062, 0.0062, 0.05, 12)
   capPiece.rotateX(Math.PI / 2)
   capPiece.translate(0, 0.0062, 0.06)
-  pen.push(capPiece)
+  penPieces.push([capPiece, bandRound])
+  const capBand = new CylinderGeometry(0.0065, 0.0065, 0.003, 12, 1, true)
+  capBand.rotateX(Math.PI / 2)
+  // Its centre lifted with its radius, so the ring stands on the blotter
+  // rather than 0.3 mm into it.
+  capBand.translate(0, 0.0065, 0.0375)
+  penPieces.push([capBand, pen])
   const nib = new CylinderGeometry(0.0058, 0.0012, 0.022, 10)
   nib.rotateX(-Math.PI / 2)
   nib.translate(0, 0.0058, -0.071)
-  pen.push(nib)
-  pen.push(plainBox(0.0022, 0.0028, 0.04, 0.0058, 0.0092, 0.058))
-  for (const geometry of pen) {
+  penPieces.push([nib, pen])
+  penPieces.push([plainBox(0.0022, 0.0028, 0.04, 0.0058, 0.0092, 0.058), pen])
+  const penX = width / 2 + 0.026
+  for (const [geometry, family] of penPieces) {
     geometry.rotateY(0.1)
     geometry.translate(penX, 0, 0)
+    family.push(geometry)
   }
 
+  // Round and flat pieces keep different normals: the crease pass rounds the
+  // cylinders and the boards' corners and must not touch a bevelled box.
+  const blend = (creased, exact, metresPerTile) =>
+    finalize(
+      merge([
+        creased.length > 0 ? finalize(merge(creased), { crease: Math.PI / 5, metresPerTile }) : null,
+        exact.length > 0 ? finalize(merge(exact), { crease: null, metresPerTile }) : null,
+      ]),
+      { uv: 'none', crease: null },
+    )
+
   return {
-    cover: finalize(merge(cover), { crease: null, metresPerTile: 0.16 }),
-    pages: finalize(merge(pages), { crease: null, metresPerTile: 0.12 }),
-    band: finalize(merge(band), { crease: null, metresPerTile: 0.1 }),
+    // Book cloth: the canvas weave at about a millimetre a thread.
+    cover: blend(coverBoards, cover, 0.05),
+    // Paper striation on the fore-edge, 0.6 mm a page.
+    pages: finalize(merge(pages), { crease: null, metresPerTile: 0.02 }),
+    band: blend(bandRound, band, 0.1),
     pen: finalize(merge(pen), { crease: Math.PI / 5, metresPerTile: 0.08 }),
   }
 }
@@ -386,4 +441,258 @@ export function buildDoorAccessPanel({ width = 0.086, height = 0.142, depth = 0.
     trim: finalize(merge(trim), { crease: null, metresPerTile: 0.06 }),
     led: finalize(merge(led), { crease: Math.PI / 5, metresPerTile: 0.04 }),
   }
+}
+
+// ---------------------------------------------------------------------------
+// 5. The desk telephone
+// Recipe id: desk-telephone
+// ---------------------------------------------------------------------------
+
+/**
+ * A 1930s bakelite desk set: moulded base, rotary dial, cradle horns, the
+ * handset lying across them and its cord. Front (the dial) is +Z, the handset
+ * runs along X, and it stands on y = 0 like every desk prop.
+ *
+ * It used to be four primitives in the desk's cast-iron family: a matte grey
+ * metal block, half of it buried in the ledgers. Phenolic resin is near black
+ * and glossy, so the object reads by its highlights, and highlights need real
+ * curvature: a moulded profile, a dial ring, rounded cups. The finger wheel is
+ * the one detail worth its triangles, since ten pale holes in a black wheel is
+ * the shape everybody knows as a telephone. Holes cannot be cut without CSG,
+ * so the wheel is drawn the other way round: black webs over the cream card.
+ */
+export function buildDeskTelephone() {
+  const bakelite = []
+  const bakeliteSmooth = []
+  const card = []
+
+  // ---- the base: one side profile extruded across the width ---------------
+  // Profile in (depth, height) with the dial slope at -x; convex, so the
+  // extrusion's bevel can inflate it without folding. The bevel rounds both
+  // side ends and the crease pass rounds the profile's own turns.
+  const PROFILE = [
+    [0.085, 0],
+    [0.088, 0.01],
+    [0.08, 0.038],
+    [0.068, 0.048],
+    [0.035, 0.053],
+    [0, 0.0525],
+    [-0.026, 0.05],
+    [-0.082, 0.01],
+    [-0.088, 0.004],
+    [-0.085, 0],
+  ]
+  const BEVEL = 0.012
+  const body = new ExtrudeGeometry(profileShape(PROFILE), {
+    depth: 0.12,
+    steps: 1,
+    bevelEnabled: true,
+    bevelSegments: 2,
+    bevelThickness: BEVEL,
+    bevelSize: BEVEL,
+    bevelOffset: 0,
+    curveSegments: 4,
+  })
+  body.translate(0, 0, -0.06)
+  // Width onto X and the slope towards +Z: rotateY maps profile -x to +z.
+  body.rotateY(Math.PI / 2)
+  body.computeBoundingBox()
+  // The bevel inflates the outline, its foot included, by BEVEL.
+  const lift = -body.boundingBox.min.y
+  body.translate(0, lift, 0)
+  bakelite.push(body)
+  const toObject = ([x, y]) => [-x, y + lift] // profile → object (z, y)
+  const baseTop = PROFILE[4][1] + BEVEL + lift
+
+  // ---- cradle: two horns, and the plungers between them -------------------
+  const hornZ = -0.035
+  const hornHeight = 0.036
+  for (const side of [-1, 1]) {
+    const horn = lathe(
+      [
+        [0, 0],
+        [0.011, 0],
+        [0.01, 0.022],
+        [0.0075, 0.034],
+        [0, hornHeight],
+      ],
+      8,
+    )
+    horn.translate(side * 0.055, baseTop - 0.004, hornZ)
+    bakelite.push(horn)
+    bakelite.push(plainBox(0.016, 0.008, 0.012, side * 0.022, baseTop + 0.002, hornZ))
+  }
+
+  // ---- the dial, square to the middle of the front slope ------------------
+  const [ax, ay] = PROFILE[6]
+  const [bx, by] = PROFILE[7]
+  const slopeLength = Math.hypot(bx - ax, by - ay)
+  // The outline runs anticlockwise, so (dy, -dx) is its outward normal.
+  const normal = [(by - ay) / slopeLength, -(bx - ax) / slopeLength]
+  const [dialZ, dialY] = toObject([(ax + bx) / 2 + normal[0] * BEVEL, (ay + by) / 2 + normal[1] * BEVEL])
+  // Turns the dial's +Z onto the slope's outward normal, (0, ny, -nx).
+  const tilt = -Math.atan2(normal[1], -normal[0])
+
+  const RADIUS = { ring: 0.034, card: 0.0272, rim: 0.0245, hub: 0.011, holes: 0.018 }
+  const dialPieces = []
+  const ring = lathe(
+    [
+      [RADIUS.card - 0.0002, 0],
+      [RADIUS.ring - 0.001, 0],
+      [RADIUS.ring, 0.0035],
+      [RADIUS.ring - 0.005, 0.006],
+      [RADIUS.card - 0.0005, 0.0042],
+    ],
+    20,
+  )
+  ring.rotateX(Math.PI / 2)
+  dialPieces.push([ring, bakelite])
+  // The number card, recessed inside the ring.
+  const numberCard = new CircleGeometry(RADIUS.card, 20)
+  numberCard.translate(0, 0, 0.0012)
+  dialPieces.push([numberCard, card])
+
+  // The finger wheel above it: hub, rim, nine webs between ten holes, and the
+  // solid sector at the finger stop. "1" is at two o'clock, the holes run
+  // anticlockwise to "0" at five, and the stop sits at four.
+  const WHEEL_Z = 0.0042
+  const hub = new CylinderGeometry(RADIUS.hub, RADIUS.hub, 0.003, 12)
+  hub.rotateX(Math.PI / 2)
+  hub.translate(0, 0, WHEEL_Z)
+  dialPieces.push([hub, bakelite])
+  const rim = lathe(
+    [
+      [RADIUS.rim, WHEEL_Z - 0.0015],
+      [RADIUS.card, WHEEL_Z - 0.0015],
+      [RADIUS.card, WHEEL_Z + 0.0015],
+      [RADIUS.rim, WHEEL_Z + 0.0015],
+      [RADIUS.rim, WHEEL_Z - 0.0015],
+    ],
+    20,
+  )
+  rim.rotateX(Math.PI / 2)
+  dialPieces.push([rim, bakelite])
+  const HOLE_STEP = Math.PI / 6
+  const FIRST_HOLE = Math.PI / 6
+  const webLength = RADIUS.rim - RADIUS.hub + 0.001
+  for (let index = 0; index < 9; index += 1) {
+    const web = new BoxGeometry(webLength, 0.0028, 0.003)
+    web.translate((RADIUS.rim + RADIUS.hub) / 2, 0, WHEEL_Z)
+    web.rotateZ(FIRST_HOLE + (index + 0.5) * HOLE_STEP)
+    dialPieces.push([web, bakelite])
+  }
+  // A cylinder's theta runs from +Z towards +X; laid on +Z by rotateX(PI/2)
+  // it starts at -Y, so a polar angle phi is theta = phi + PI/2.
+  const sectorStart = FIRST_HOLE + 9.5 * HOLE_STEP
+  const sector = new CylinderGeometry(
+    RADIUS.rim + 0.0005,
+    RADIUS.rim + 0.0005,
+    0.003,
+    4,
+    1,
+    false,
+    sectorStart + Math.PI / 2,
+    Math.PI * 2 - 10 * HOLE_STEP,
+  )
+  sector.rotateX(Math.PI / 2)
+  sector.translate(0, 0, WHEEL_Z)
+  dialPieces.push([sector, bakelite])
+  const fingerStop = new BoxGeometry(0.0035, 0.01, 0.005)
+  fingerStop.translate(RADIUS.card + 0.002, 0, 0.0058)
+  fingerStop.rotateZ(-Math.PI / 6)
+  dialPieces.push([fingerStop, bakelite])
+  const label = new CircleGeometry(0.0075, 12)
+  label.translate(0, 0, WHEEL_Z + 0.0018)
+  dialPieces.push([label, card])
+  for (const [geometry, family] of dialPieces) {
+    geometry.rotateX(tilt)
+    geometry.translate(0, dialY, dialZ)
+    family.push(geometry)
+  }
+
+  // ---- handset, resting across the horns ----------------------------------
+  const hornTip = baseTop - 0.004 + hornHeight
+  const GRIP = 0.012
+  const handsetBow = [
+    [-0.1, -0.012],
+    [-0.06, 0.004],
+    [0, 0.01],
+    [0.06, 0.004],
+    [0.1, -0.012],
+  ]
+  // The bow is 4.5 mm up at the horns (x = ±0.055): sit the grip on the tips.
+  const handsetY = hornTip + GRIP - 0.0045 - 0.001
+  bakeliteSmooth.push(
+    new TubeGeometry(
+      new CatmullRomCurve3(handsetBow.map(([x, y]) => new Vector3(x, handsetY + y, hornZ))),
+      16,
+      GRIP,
+      8,
+      false,
+    ),
+  )
+  // Ear and mouth cups, open side down as they hang on the cradle, their tops
+  // sunk into the ends of the grip.
+  const cupBase = handsetY - 0.012 - 0.026
+  for (const side of [-1, 1]) {
+    const cup = lathe(
+      [
+        [0, 0.004],
+        [0.02, 0.002],
+        [0.029, 0],
+        [0.03, 0.006],
+        [0.026, 0.018],
+        [0.016, 0.028],
+        [0, 0.03],
+      ],
+      12,
+    )
+    cup.translate(side * 0.1, cupBase, hornZ)
+    bakelite.push(cup)
+  }
+
+  // ---- the cord, from the mouthpiece down to the desk and into the back ---
+  // A uniform Catmull-Rom with soft tension: the default centripetal spline
+  // swung 2.4 mm below the two points that lay the cord on the desk, and put
+  // the whole telephone through the leather.
+  const CORD = 0.0035
+  bakeliteSmooth.push(
+    new TubeGeometry(
+      new CatmullRomCurve3(
+        [
+          new Vector3(0.1, cupBase + 0.012, hornZ - 0.018),
+          new Vector3(0.113, cupBase - 0.02, hornZ - 0.045),
+          new Vector3(0.108, CORD + 0.0015, -0.085),
+          new Vector3(0.07, CORD + 0.0015, -0.122),
+          new Vector3(0.035, 0.012, -0.094),
+        ],
+        false,
+        'catmullrom',
+        0.3,
+      ),
+      20,
+      CORD,
+      4,
+      false,
+    ),
+  )
+
+  // Lathes and the extrusion need a crease: 52 degrees rounds the eight-sided
+  // horns and keeps the base's square foot. The tubes bring exact normals.
+  const moulding = finalize(
+    merge([
+      finalize(merge(bakelite), { crease: 0.9, metresPerTile: 0.2 }),
+      finalize(merge(bakeliteSmooth), { crease: null, metresPerTile: 0.2 }),
+    ]),
+    { uv: 'none', crease: null },
+  )
+  const numbers = finalize(merge(card), { crease: null, metresPerTile: 0.1 })
+  // Both families stand on the lowest point of either, measured: a datum
+  // asserted from the profile is exactly what the cord broke.
+  const floor = Math.min(moulding.boundingBox.min.y, numbers.boundingBox.min.y)
+  for (const family of [moulding, numbers]) {
+    family.translate(0, -floor, 0)
+    family.computeBoundingBox()
+  }
+  return { body: moulding, card: numbers }
 }

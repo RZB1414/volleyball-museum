@@ -632,7 +632,9 @@ const OFFICE_CONTAINERS = [
   {
     id: 'office-notebook',
     part: 'curator-notebook',
-    position: [0.38, 0.747, -0.22],
+    // Wholly on the leather: a centimetre further west, its lower board hung
+    // 2 mm over the blotter's edge.
+    position: [0.39, 0.747, -0.22],
     rotationY: 0.12,
     titleKey: 'container.office-notebook.title',
     presentation: 'notebook',
@@ -1376,7 +1378,9 @@ const ROOMS = [
       // rendered here instead of in `kit` so geometry and interaction cannot
       // drift into two copies of the same object.
       part: 'desk-lamp',
-      position: [0.46, 0.74, -0.62],
+      // On the leather, which stands 7 mm proud of the walnut: at 0.74 the
+      // foot's 8 mm rim was buried to the brim.
+      position: [0.46, 0.747, -0.62],
       rotationY: -Math.PI / 2,
       titleKey: 'power.office.title',
       pilotPosition: [0, 0.18, 0.18],
@@ -1408,7 +1412,13 @@ const ROOMS = [
       { part: 'office-chair', position: [1.55, 0, -0.15], rotationY: -Math.PI / 2 },
       { part: 'visitor-chair', position: [-0.35, 0, -0.55], rotationY: Math.PI / 2 },
       { part: 'visitor-chair', position: [-0.35, 0, 0.45], rotationY: Math.PI / 2 },
-      { part: 'ledger-stack', position: [0.48, 0.74, 0.18], rotationY: -1.67 },
+      // The ledgers and the telephone both stand on the blotter (0.747), side
+      // by side: the stack used to sit 7 mm into the leather and straight
+      // through the telephone. `npm run test:desk-top` keeps every desk-top
+      // object on its support and out of its neighbours.
+      { part: 'ledger-stack', position: [0.81, 0.747, 0.32], rotationY: -1.67 },
+      // Dial turned towards the visitors' side, where the player stands.
+      { part: 'desk-telephone', position: [0.52, 0.747, 0.34], rotationY: -1.75 },
       { part: 'office-corkboard', position: [-0.9, 1.35, -3.34] },
       { part: 'archive-trolley', position: [-0.55, 0, -2.96] },
       { part: 'office-flatfile', position: [-2.55, 0, -2.05], rotationY: Math.PI / 2 },

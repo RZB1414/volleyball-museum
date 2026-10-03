@@ -72,6 +72,7 @@ declare global {
     }[]
     __museumStep?: (frames?: number) => void
     __museumCollision?: (probeAt?: [number, number, number]) => Record<string, unknown>
+    __museumPrograms?: () => { name: string; usedTimes: number; key: string }[]
   }
 }
 
@@ -181,6 +182,18 @@ export function PerfHud() {
       }
     }
 
+    /**
+     * Every compiled shader program: its shader name, how many materials use
+     * it and its full cache key. `info.programs.length` only gives the
+     * count, and when a material change pushes that count up the question is
+     * always which combination of features it was.
+     */
+    window.__museumPrograms = () =>
+      (gl.info.programs ?? []).map((program) => {
+        const entry = program as unknown as { name: string; usedTimes: number; cacheKey: string }
+        return { name: entry.name, usedTimes: entry.usedTimes, key: entry.cacheKey }
+      })
+
     const onVisibilityChange = () => {
       if (document.visibilityState === 'visible') skipNextFrameRef.current = true
     }
@@ -267,6 +280,7 @@ export function PerfHud() {
       delete window.__museumRender
       delete window.__museumScene
       delete window.__museumStep
+      delete window.__museumPrograms
       document.removeEventListener('visibilitychange', onVisibilityChange)
       overlayRef.current?.remove()
       overlayRef.current = null

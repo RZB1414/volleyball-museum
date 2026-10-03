@@ -34,8 +34,14 @@ import { boundsOf, triangleCount } from './geometry.mjs'
  */
 
 /**
- * The shared material library. Fourteen materials for the whole building —
- * every extra one is another shader program, and the budget is 25 total.
+ * The shared material library.
+ *
+ * A key is not a shader program. three compiles one program per combination
+ * of features — textured or not, clearcoat, sheen, transparency, instanced or
+ * not — so a new key that repeats an existing combination costs no program at
+ * all, and a new feature costs one or two however many keys use it. The
+ * budget is 25 programs on screen; measure `renderer.info.programs` after a
+ * clean reload when a key adds a feature.
  *
  * Clearcoat is the cheapest "expensive" look available and is used sparingly on
  * varnished wood and brass. Transmission is deliberately absent: three renders
@@ -82,7 +88,45 @@ export const MATERIALS = {
   'holyoke-navy': { baseColor: [0.025, 0.045, 0.085, 1], roughness: 0.78, metallic: 0, tint: [0.10, 0.16, 0.28] },
   'leather-tan': { baseColor: [0.788, 0.627, 0.416, 1], roughness: 0.58, metallic: 0 },
   'leather-worn': { baseColor: [0.545, 0.353, 0.173, 1], roughness: 0.68, metallic: 0, tint: [0.62, 0.55, 0.44] },
-  'leather-green': { baseColor: [0.065, 0.165, 0.105, 1], roughness: 0.52, metallic: 0, tint: [0.20, 0.40, 0.27] },
+  /**
+   * Bottle-green upholstery leather, on the neutral `leather-upholstery` maps.
+   *
+   * Every tint below that sits on a neutral recipe is the target linear
+   * colour divided by that recipe's measured mean linear albedo (the
+   * neutrality and the hue under both lights are checked by
+   * `npm run test:materials`). On the old tan maps this same key averaged
+   * sRGB (81, 80, 37): olive by daylight, and brown under a tungsten lamp
+   * that carries a sixth of its red in blue. Real bottle green has almost no
+   * red, which is what keeps it green under that lamp; its blue stays under
+   * half its green for the opposite light, the player's cool LED torch, where
+   * a fuller blue turned every chair teal. A waxed hide has a thin gloss over
+   * the grain, hence the faint clearcoat, which shares the polished walnut's
+   * shader program.
+   */
+  'leather-green': { baseColor: [0.012, 0.078, 0.031, 1], roughness: 0.52, metallic: 0, tint: [0.038, 0.246, 0.098], clearcoat: 0.1, clearcoatRoughness: 0.45 },
+  /**
+   * The desk's writing inset: the same hide skived thin and polished, so the
+   * same maps with the grain flattened and the surface a shade smoother.
+   * `normalScale` and `roughnessScale` are runtime uniforms: zero VRAM and
+   * zero shader programs for a second leather.
+   */
+  'leather-desk': { baseColor: [0.01, 0.066, 0.026, 1], roughness: 0.5, metallic: 0, tint: [0.0315, 0.208, 0.082], normalScale: 0.6, roughnessScale: 0.8, clearcoat: 0.26, clearcoatRoughness: 0.3 },
+  /**
+   * Working ledgers: reddish-brown calf on the tan maps. Their own key, so
+   * the stack can be darker than `leather-worn` without dimming the Holyoke
+   * artefacts that share it.
+   */
+  'leather-ledger': { baseColor: [0.095, 0.038, 0.02, 1], roughness: 0.62, metallic: 0, tint: [0.232, 0.19, 0.294] },
+  /**
+   * Bottle-green velvet on the visitor chairs, on the neutral velvet maps.
+   * `sheen` is the cheapest true fabric look available: a grazing-angle
+   * lobe tinted by `sheenColor` (linear), one shader define for every sheen
+   * material in the building. It is runtime only; the GLB placeholder is a
+   * plain colour.
+   */
+  'velvet-green': { baseColor: [0.008, 0.06, 0.025, 1], roughness: 0.9, metallic: 0, tint: [0.0135, 0.101, 0.042], sheen: 1, sheenColor: [0.08, 0.3, 0.15], sheenRoughness: 0.36 },
+  // The previous curator's fedora: brown felt on the velvet maps, far finer.
+  'felt-brown': { baseColor: [0.054, 0.032, 0.018, 1], roughness: 0.92, metallic: 0, tint: [0.09, 0.053, 0.03], sheen: 0.6, sheenColor: [0.26, 0.17, 0.11], sheenRoughness: 0.75 },
   'rawhide-lace': { baseColor: [0.43, 0.20, 0.075, 1], roughness: 0.82, metallic: 0 },
   // The laced cover shares the fine 1964 leather maps instead of inheriting the
   // furniture leather's centimetre-scale grain. The tint is linear RGB.
@@ -97,8 +141,17 @@ export const MATERIALS = {
   'ball-2008-blue': { baseColor: [0.010, 0.024, 0.223, 1], roughness: 0.58, metallic: 0, tint: [0.011, 0.027, 0.265], clearcoat: 0.06, clearcoatRoughness: 0.38 },
   'canvas': { baseColor: [0.851, 0.796, 0.678, 1], roughness: 0.88, metallic: 0 },
   'paper-aged': { baseColor: [0.80, 0.70, 0.52, 1], roughness: 0.92, metallic: 0, tint: [0.94, 0.84, 0.68] },
+  // Cream writing paper on the neutral `paper` maps: the office's sheets,
+  // page blocks and pinned notes. `paper-aged` stays on the canvas for the
+  // court lines and gallery graphics, which must not come out ruled.
+  'paper-writing': { baseColor: [0.74, 0.67, 0.53, 1], roughness: 0.9, metallic: 0, tint: [0.92, 0.85, 0.7] },
   'cork': { baseColor: [0.43, 0.25, 0.12, 1], roughness: 0.96, metallic: 0, tint: [0.56, 0.38, 0.23] },
-  'rug-burgundy': { baseColor: [0.25, 0.035, 0.045, 1], roughness: 0.96, metallic: 0, tint: [0.36, 0.09, 0.11] },
+  // Wool pile on the velvet maps: knots, tufts and the crushed patches of a
+  // rug walked on for decades, where the canvas could only make it woven. The
+  // pile catches the lamp along its tips, which is a sheen lobe, not a
+  // specular one; both colours share the velvet chairs' program.
+  'rug-burgundy': { baseColor: [0.092, 0.011, 0.019, 1], roughness: 0.96, metallic: 0, tint: [0.155, 0.018, 0.032], sheen: 0.45, sheenColor: [0.26, 0.06, 0.08], sheenRoughness: 0.7 },
+  'rug-ivory': { baseColor: [0.42, 0.33, 0.19, 1], roughness: 0.96, metallic: 0, tint: [0.746, 0.59, 0.334], sheen: 0.45, sheenColor: [0.4, 0.34, 0.24], sheenRoughness: 0.7 },
   'cord-hemp': { baseColor: [0.741, 0.678, 0.541, 1], roughness: 0.9, metallic: 0, tint: [0.84, 0.80, 0.70] },
   // Barrier rope. Deep crimson because it is the only saturated colour in a
   // building of plaster, oak and brass, and the eye goes straight to it —
@@ -113,6 +166,13 @@ export const MATERIALS = {
   // Untextured and dielectric, so it shares its shader program with the
   // painted materials rather than adding one.
   'plastic-black': { baseColor: [0.026, 0.026, 0.03, 1], roughness: 0.52, metallic: 0 },
+  // Phenolic moulding: near-black, hard and glossy, so the desk telephone
+  // reads by its highlights. Untextured with a clearcoat, it shares the
+  // brass's shader program; it used to be cast iron, a matte grey metal.
+  'bakelite-black': { baseColor: [0.012, 0.01, 0.009, 1], roughness: 0.3, metallic: 0, clearcoat: 0.85, clearcoatRoughness: 0.08 },
+  // Vitreous enamel: the clock dial and the telephone's number card. It was
+  // the canvas, which put a weave on a painted metal dial.
+  'enamel-cream': { baseColor: [0.80, 0.74, 0.60, 1], roughness: 0.35, metallic: 0, clearcoat: 0.3, clearcoatRoughness: 0.1 },
   // Indicator lenses. Emission is a uniform, not a shader define, so the three
   // states are one program; the runtime swaps a lens between them as power
   // returns instead of animating a shared material.

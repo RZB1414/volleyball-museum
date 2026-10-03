@@ -243,6 +243,7 @@ for (const recipe of [
   'ledger-stack',
   'curator-notebook',
   'desk-radio',
+  'desk-telephone',
   'door-leaf',
   'door-leaf-right',
   'threshold',
@@ -331,6 +332,7 @@ for (const recipe of [
   'atrium-display-console',
   'curator-notebook',
   'desk-radio',
+  'desk-telephone',
   'office-wall-clock',
   'door-access-panel',
 ]) {
@@ -370,6 +372,46 @@ for (const recipe of [
       body.bounds.min[1] < cradle.bounds.max[1] &&
       body.bounds.max[1] > cradle.bounds.max[1] + 0.1,
     body && cradle ? `handset ${body.bounds.min[1]}–${body.bounds.max[1]}, cradle top ${cradle.bounds.max[1]}` : 'not baked',
+  )
+}
+
+/**
+ * Upholstery detail is only worth its triangles where it is seen. The player
+ * wakes up behind the two visitor chairs, so their nail heads belong on the
+ * back of the backrest, proud of it; the first ones sat on the front face,
+ * hidden from the spawn by the chairs themselves.
+ */
+{
+  const parts = new Map(recipeParts('visitor-chair').map((part) => [part.name, part]))
+  const upholstery = parts.get('visitor-chair__upholstery')
+  const studs = parts.get('visitor-chair__studs')
+  check(
+    'visitor-chair nail heads stand proud of the back face of the backrest',
+    upholstery != null &&
+      studs != null &&
+      studs.bounds.max[2] < -0.26 &&
+      studs.bounds.min[2] < upholstery.bounds.min[2],
+    studs && upholstery
+      ? `studs z ${studs.bounds.min[2]}–${studs.bounds.max[2]}, cushion back ${upholstery.bounds.min[2]}`
+      : 'not baked',
+  )
+}
+
+/**
+ * The telephone left the desk for its own bakelite recipe: a desk family with
+ * the old name would be a second telephone in the same place.
+ */
+check(
+  'curator-desk carries no telephone family of its own',
+  !kit?.parts.some((part) => part.name === 'curator-desk__phone'),
+)
+{
+  const phone = recipeParts('desk-telephone')
+  check(
+    'desk-telephone is bakelite with an enamel number card',
+    phone.some((part) => part.name === 'desk-telephone' && part.material === 'bakelite-black') &&
+      phone.some((part) => part.name === 'desk-telephone__card' && part.material === 'enamel-cream'),
+    phone.map((part) => `${part.name}:${part.material}`).join(', '),
   )
 }
 

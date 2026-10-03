@@ -379,6 +379,8 @@ npm run test:opening-flow
 npm run test:radio
 npm run test:collision
 npm run test:kit
+npm run test:materials
+npm run test:desk-top
 npm run test:kit-runtime
 npm run test:room-runtime
 npm run test:room-lod
@@ -395,9 +397,15 @@ materiais ou colliders, rode `npm run bake` antes do check. Nunca corrija um tes
 diminuindo sua cobertura.
 
 O gate de kit soma a receita inteira (`root` + `root__*`) e limita cada prop a
-2.500 triângulos. Os casos mais próximos do teto são `coat-stand` (2.440, com o
-chapéu e o guarda-chuva), `office-flatfile` (2.336), `curator-desk` (2.300),
-`door-leaf` e `door-leaf-right` (2.236 cada).
+2.500 triângulos. Os casos mais próximos do teto são `coat-stand` (2.472, com o
+chapéu e o guarda-chuva), `curator-desk` (2.460), `visitor-chair` (2.430),
+`office-chair` (2.396), `office-flatfile` (2.336), `door-leaf` e
+`door-leaf-right` (2.236 cada). Detalhe novo nessas cinco precisa pagar com
+triângulos da própria receita.
+
+A VRAM de textura é um portão duro de 45 MiB (`TEXTURE_VRAM_BUDGET` no bake e
+`test:materials`); hoje são 43,875 MiB, folga de 1,125 MiB. A tabela no topo de
+`scripts/bake/materials.mjs` acompanha cada receita.
 
 O aviso do Vite de chunk acima de 700 kB (`playerPosition-*.js`, 725 kB) já existia
 em `ca4513c`, com o mesmo hash; não é regressão da abertura.
@@ -420,6 +428,24 @@ em `ca4513c`, com o mesmo hash; não é regressão da abertura.
   periódica. Escale o raio do toro em vez da coordenada.
 - Materiais texturizados usam `baseColor` como placeholder e `tint` branco por
   padrão; tingir nas duas pontas escurece o albedo duas vezes.
+- O tint só escala canais: não muda matiz. Albedo cor de couro cru vezes um tint
+  verde deu oliva, e oliva sob a luminária de tungstênio vira marrom. Receita que
+  precisa de outra cor nasce neutra (canais iguais) e o tint é alvo ÷ média
+  linear do albedo. Confira a cor sob as DUAS luzes da abertura: a luminária é
+  quente (`#ffb45f`) e a lanterna é fria (`#dfe7ff`), e um verde com azul demais
+  vira azul-petróleo no facho. `test:materials` mede isso decodificando os WebP.
+- O hash de 1 cm do `toCreasedNormals` trunca para zero, então a célula em
+  volta do eixo tem 2 cm: peças torneadas pequenas (tampas de tinteiro, botões)
+  saem facetadas como pedras lapidadas. Finalize-as com `crease: null` (normais
+  do próprio lathe) e junte à família com `finalize(merge([...]), { uv: 'none',
+  crease: null })`.
+- Catmull-Rom centrípeto (o padrão do three) passa dos pontos de controle: o fio
+  do telefone afundou 2,4 mm na mesa entre dois pontos apoiados nela. Use
+  `'catmullrom'` com tensão baixa e assente a receita pelo mínimo medido de
+  todas as famílias juntas.
+- O papel tem pautas em v = 0. Peça de papel projetada em torno da própria
+  meia-espessura ganha uma pauta em cada borda; projete meia pauta acima
+  (`paperPiece` em `office.mjs`).
 - `visible = false` também remove objetos do `Raycaster`; proxies de interação usam
   uma layer dedicada.
 - Clones de GLTF compartilham geometry/material com o cache. O cleanup de uma
@@ -622,3 +648,70 @@ Regras que valem para qualquer sistema novo que responda ao `E`:
   tela de toque a coluna é rádio, caderno, lanterna, com a lanterna junto do polegar.
 - **Testes**: `npm run test:radio` (22 checagens com relógio e dado fixos, pelo
   caminho real de chamada).
+
+### 9.3 Tecidos, couro e a mesa do curador
+
+Capturas: `docs/contact-sheets/office-fabrics-desk-lit.jpg` (ponto de leitura,
+escritório aceso) e `office-fabrics-desk-torch.jpg` (spawn, só a lanterna).
+
+- **VRAM.** 45,000 → 43,875 MiB. Albedo e ORM das três bolas foram para 64 px
+  (eram constantes: desvio < 1,5/255), o albedo do `leather-tan` para 512 (a
+  normal fica em 1024 pela Spalding). Com isso entraram três receitas neutras:
+  `leather-upholstery` (granulado arredondado de ~2,7 mm a 0,13 m/tile, vincos
+  finos, polimento de uso), `upholstery-velvet` (pelo, tufos e manchas de pelo
+  amassado) e `paper` (fibra, ondulação e 32 pautas por tile). A pátina do couro
+  e as manchas da lona agora são periódicas (sem costura no tile).
+- **Chaves novas** (`glb.mjs`): `leather-desk` (mesmos mapas do couro com
+  `normalScale` 0,6 e `roughnessScale` 0,8), `leather-ledger`, `velvet-green`,
+  `felt-brown`, `rug-ivory`, `paper-writing`, `bakelite-black` e `enamel-cream`.
+  `leather-green` saiu dos mapas tan e ganhou tint de verde-garrafa real
+  (quase sem vermelho) e clearcoat 0,1; `rug-burgundy` foi para os mapas de
+  veludo. Os tints valem alvo ÷ média linear medida do albedo.
+- **Runtime.** `src/engine/materialSpec.ts` monta o material a partir do spec
+  (puro, testado): `sheen`/`sheenColor`/`sheenRoughness` (veludo, feltro e tapete),
+  `normalScale` e `roughnessScale` (uniforms, zero programa). Toda chave com
+  sheen é texturizada e sem clearcoat, então custa **um** programa por
+  configuração de luz; no ponto de leitura a contagem acumulada foi de 27 para
+  29 e `__museumPrograms()` (novo no PerfHud) mostra o programa do sheen
+  compartilhado por quatro materiais. Draw calls no ponto de leitura: 47 → 48
+  (a cartela do disco do telefone). Triângulos: 31.032 → 33.644.
+- **Geometria** (helpers novos em `geometry.mjs`: `quiltedPanel`,
+  `quiltedGridPoint`, `quiltedHeight`, `piping`, `roundedSlab`,
+  `roundedRectPoints`, `domeStud`):
+  - poltronas de visita: veludo verde, assento e encosto com coroa, vivo no
+    assento e 16 tachas em cúpula na face de TRÁS do encosto, que é o que o
+    spawn vê;
+  - cadeira do curador: assento abaulado com vivo, encosto com capitonê em
+    diamante (8 botões em covas de 18 mm) e vivo, tachas nas laterais, latões
+    lisos;
+  - mesa: blotter `leather-desk` com dois filetes dourados; mata-borrão com
+    cantoneiras de couro e quatro folhas de 1 mm em retrato por cima; puxadores no
+    fichário; tinteiro de nogueira com dois poços e caneta de molhar; abridor de
+    cartas. O telefone virou a receita `desk-telephone` (baquelite com disco
+    perfurado, garfos, fone, fio e a cartela `__card` em esmalte);
+  - livros-caixa autorados no próprio quadro (a lombada não escorrega mais),
+    0,5 mm entre volumes, nervuras e etiquetas na lombada; luminária e livros a
+    0,747 (em cima do couro), livros em `[0.81, 0.747, 0.32]`, caderno 1 cm para
+    dentro do couro;
+  - caderno com cantos arredondados, cabeceados, painel dourado e caneta preta
+    com pena e anel de latão;
+  - chapéu de feltro com 20 lados, vinco central e fita; remates do cabideiro
+    lisos; tapete de pelo a 0,4 m/tile; mostrador do relógio em esmalte; papéis do
+    quadro de cortiça pautados.
+- **`buildCuratorDesk().layout`** registra a pegada de cada objeto embutido da
+  mesa e o blotter; `npm run test:desk-top` junta isso a tudo o que o conteúdo
+  põe em cima da mesa (kit, container, dispositivo ou controle de energia) e
+  prova que cada um está inteiro no couro ou inteiro na nogueira, apoiado na
+  altura certa (±0,5 mm), e a 2 mm ou mais do vizinho (SAT em OBB). O teste
+  reprova a posição antiga dos livros-caixa e da luminária, e pegou o fio do
+  telefone afundado.
+- **Testes**: `test:materials` (7: VRAM, neutralidade, verde sob as duas luzes,
+  cores do tapete/feltro/papel, sheen num programa só, montagem do material) e
+  `test:desk-top` (6); `test:kit` passou de 324 para 327.
+- **Para a próxima etapa (livros das estantes)**, materiais compartilhados que
+  mudaram: `leather-green` (agora `leather-upholstery`, ~2,7 mm por célula a
+  0,13 m/tile; os livros verdes ainda usam 0,24, ou seja ~5 mm), o albedo do
+  `leather-tan` (afeta `leather-worn` e `leather-ledger`) e as manchas da lona
+  (afeta `rope-velvet`, os livros vermelhos). `leather-ledger` (couro de bezerro
+  marrom-avermelhado) e `paper-writing` a 0,02 m/tile (estria de borda de página)
+  estão prontos para lombadas e miolos. A geometria das estantes não foi tocada.

@@ -1,5 +1,5 @@
 /**
- * Material recipes for the Holyoke wing.
+ * Material recipes for the Holyoke wing and the curator's office.
  *
  * Palette taken from the era research: gaslit amber and tanned leather. Honey
  * maple #B5793C, russet harness leather #C9A06A ageing to walnut #8B5A2B, ecru
@@ -8,22 +8,39 @@
  * a pigment, a dye or an oxide.
  *
  * Texture budget. WebP is only the wire format; the GPU holds RGBA8 either way,
- * so what matters is resolution. Uncompressed VRAM with mips, at these sizes:
+ * so what matters is resolution. Uncompressed VRAM with mips (MiB), at these
+ * sizes:
  *
- *   maple-floor    1024 + 512 + 512  =  8.0 MB
- *   plaster        1024 + 512 + 512  =  8.0 MB
- *   oak-matte       512 + 512 + 512  =  4.0 MB
- *   leather-tan    1024 + 1024 + 512 = 12.0 MB
- *   canvas          512 + 512 + 512  =  4.0 MB
- *   ball-1964       512 + 512 + 256  =  3.0 MB
- *   ball-1998       512 + 512 + 256  =  3.0 MB
- *   ball-2008       512 + 512 + 256  =  3.0 MB
- *                                     -------
- *                                      45.0 MB   (mobile ceiling: 45 MB)
+ *   maple-floor          1024 + 512 + 512  =  8.000
+ *   plaster              1024 + 512 + 512  =  8.000
+ *   oak-matte             512 + 512 + 512  =  4.000
+ *   leather-tan           512 + 1024 + 512 =  8.000
+ *   canvas                512 + 512 + 512  =  4.000
+ *   ball-1964              64 + 512 +  64  =  1.375
+ *   ball-1998              64 + 512 +  64  =  1.375
+ *   ball-2008              64 + 512 +  64  =  1.375
+ *   leather-upholstery    512 + 512 + 256  =  3.000
+ *   upholstery-velvet     512 + 512 + 256  =  3.000
+ *   paper                 512 + 256 + 128  =  1.750
+ *                                           -------
+ *                                            43.875   (mobile ceiling: 45)
  *
- * That fits, but with little headroom for five more wings. KTX2/ETC1S would cut
- * it roughly 8x; it is deferred because the Basis transcoder is a fixed ~260 KB
- * gzip and needs the KTX-Software binary in the build environment.
+ * The three ball albedo and ORM maps are 64 px because they are constant: the
+ * panel colour is geometry and runtime tint, and measured across the old
+ * 512 px maps no channel varied by more than 1.5/255. They were 4.9 MiB of
+ * flat colour. Their normals carry the grain and stay at 512. The tan leather
+ * albedo dropped to 512 for the same budget; its normal stays at 1024 for the
+ * 1900 Spalding ball, which the examine view holds at arm's length.
+ *
+ * KTX2/ETC1S would cut all of this roughly 8x; it is deferred because the Basis
+ * transcoder is a fixed ~260 KB gzip and needs the KTX-Software binary in the
+ * build environment.
+ *
+ * THE OFFICE RECIPES ARE NEUTRAL GREY ON PURPOSE. A runtime tint only scales
+ * channels, so it can darken or bias a colour but never change its hue: the
+ * tan leather times a green tint came out olive, and olive under the
+ * tungsten desk lamp is brown. Upholstery, velvet and paper are authored with
+ * equal channels and get every bit of their colour from the tint in glb.mjs.
  */
 
 import { clamp01, fbm, makeWorley, mix, mixColor, smoothstep, tileableNoise } from './lib/texture.mjs'
@@ -335,14 +352,17 @@ export function buildMaterialRecipes() {
 
     recipes.push({
       id: 'leather-tan',
-      albedoSize: 1024,
+      albedoSize: 512,
       normalSize: 1024,
       ormSize: 512,
       normalStrength: 2.9,
       height: heightAt,
       albedo: (u, v, h) => {
         // Handling darkens the high points; a century in a case fades the rest.
-        const patina = fbm(noise, u * 0.7, v * 0.7, { octaves: 3, frequency: 2.2 }) * 0.5 + 0.5
+        // The frequency carries the old `u * 0.7` stretch: scaling the
+        // coordinate walked 70% of the torus and left a seam three times the
+        // interior variation at every tile edge, on the ball's meridian too.
+        const patina = fbm(noise, u, v, { octaves: 3, frequency: 1.54 }) * 0.5 + 0.5
         const base = mixColor(LEATHER_DARK, LEATHER_LIGHT, 0.3 + patina * 0.55)
         return mixColor(base, LEATHER_DARK, (1 - h) * 0.45)
       },
@@ -380,7 +400,8 @@ export function buildMaterialRecipes() {
       normalStrength: 2.0,
       height: heightAt,
       albedo: (u, v, h) => {
-        const foxing = fbm(noise, u * 0.5, v * 0.5, { octaves: 3, frequency: 1.6 }) * 0.5 + 0.5
+        // Same broad spotting as the old `u * 0.5` stretch, without its seam.
+        const foxing = fbm(noise, u, v, { octaves: 3, frequency: 0.8 }) * 0.5 + 0.5
         const base = mixColor(CANVAS_SHADE, CANVAS_LIGHT, 0.4 + h * 0.6)
         // Age spotting, sparse and warm.
         return mixColor(base, [0.55, 0.44, 0.30], smoothstep(0.72, 1.0, foxing) * 0.35)
@@ -407,9 +428,9 @@ export function buildMaterialRecipes() {
 
     recipes.push({
       id: 'ball-1964',
-      albedoSize: 512,
+      albedoSize: 64,
       normalSize: 512,
-      ormSize: 256,
+      ormSize: 64,
       normalStrength: 1.05,
       height: heightAt,
       albedo: (u, v, h) => {
@@ -443,9 +464,9 @@ export function buildMaterialRecipes() {
 
     recipes.push({
       id: 'ball-1998',
-      albedoSize: 512,
+      albedoSize: 64,
       normalSize: 512,
-      ormSize: 256,
+      ormSize: 64,
       normalStrength: 1.30,
       height: heightAt,
       albedo: (u, v, h) => {
@@ -490,9 +511,9 @@ export function buildMaterialRecipes() {
 
     recipes.push({
       id: 'ball-2008',
-      albedoSize: 512,
+      albedoSize: 64,
       normalSize: 512,
-      ormSize: 256,
+      ormSize: 64,
       normalStrength: 2.20,
       height: heightAt,
       albedo: (u, v, h) => {
@@ -506,6 +527,138 @@ export function buildMaterialRecipes() {
       },
       roughness: (u, v) => 0.57 + dimpleAt(u, v) * 0.025,
       ao: (u, v) => 0.97 - dimpleAt(u, v) * 0.07,
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // Upholstery leather — the curator's chair and the desk's writing inset.
+  // Milled, rounded pebble instead of the ball leather's ridged cells, at
+  // about 2.7 mm a cell where the furniture puts 0.13 m on a tile: the ball
+  // leather's 26 cells a tile came out as 14 to 21 mm crocodile on a chair.
+  // -------------------------------------------------------------------------
+  {
+    const noise = tileableNoise(6006)
+    const grain = makeWorley(6006, 48)
+    // Where hands and shoulders have polished the grain flatter and glossier.
+    const rubAt = (u, v) =>
+      smoothstep(0.55, 0.9, fbm(noise, u, v, { octaves: 3, frequency: 2 }) * 0.5 + 0.5)
+
+    const heightAt = (u, v) => {
+      const cell = grain(u, v)
+      // A dome over each feature point is the pebble; the groove where two
+      // cells meet keeps neighbouring pebbles apart instead of merging them
+      // into one crinkled sheet.
+      const bump = 1 - smoothstep(0, 0.6, cell.nearest)
+      const valley = smoothstep(0, 0.12, cell.second - cell.nearest)
+      // Fine creases are a ridged line where stretched noise crosses zero.
+      const crease =
+        1 - smoothstep(0, 0.07, Math.abs(fbm(noise, u, v, { octaves: 3, frequency: 3, aspect: 2.5 })))
+      const swell = fbm(noise, u, v, { octaves: 2, frequency: 1.6 }) * 0.5 + 0.5
+      const pebble = bump * valley * mix(0.4, 0.22, rubAt(u, v))
+      return clamp01(0.25 + pebble + swell * 0.3 - crease * 0.2)
+    }
+
+    recipes.push({
+      id: 'leather-upholstery',
+      albedoSize: 512,
+      normalSize: 512,
+      ormSize: 256,
+      normalStrength: 1.6,
+      height: heightAt,
+      // Equal channels: see the note at the top of this file.
+      albedo: (u, v, h) => {
+        const mottle = fbm(noise, u, v, { octaves: 2, frequency: 4 }) * 0.5 + 0.5
+        // Faint: at 0.13 m a tile any stronger and the hide went camouflage
+        // under the lamp.
+        const value = mix(0.54, 0.66, h) + rubAt(u, v) * 0.035 + (mottle - 0.5) * 0.03
+        return [value, value, value]
+      },
+      roughness: (u, v, h) => mix(0.66, 0.46, h) - rubAt(u, v) * 0.12,
+      ao: (_u, _v, h) => 0.62 + h * 0.38,
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // Upholstery velvet — the visitor chairs, and at a finer scale the felt of
+  // the old curator's hat. Pile has no weave to show from above. What reads
+  // as velvet is the sheen at grazing angles, which is a runtime lobe
+  // (`sheen` in glb.mjs), and the patches where the pile has been crushed one
+  // way and holds the light differently. The fibre noise only stops it
+  // reading as paint up close.
+  // -------------------------------------------------------------------------
+  {
+    const noise = tileableNoise(7007)
+    // Crushed pile runs in long patches, so the field is stretched along V.
+    const crushAt = (u, v) =>
+      fbm(noise, u, v, { octaves: 3, frequency: 2.4, aspect: 0.55 }) * 0.5 + 0.5
+
+    const heightAt = (u, v) => {
+      const fibre = fbm(noise, u, v, { octaves: 2, frequency: 88, gain: 0.55 }) * 0.5 + 0.5
+      const tuft = fbm(noise, u, v, { octaves: 2, frequency: 23 }) * 0.5 + 0.5
+      return clamp01(0.3 + fibre * 0.32 + tuft * 0.18 + crushAt(u, v) * 0.2)
+    }
+
+    recipes.push({
+      id: 'upholstery-velvet',
+      albedoSize: 512,
+      normalSize: 512,
+      ormSize: 256,
+      normalStrength: 1.3,
+      height: heightAt,
+      albedo: (u, v, h) => {
+        const crushed = smoothstep(0.3, 0.75, crushAt(u, v))
+        // Pale, so the palest tint it carries (the rug's ivory) stays under 1.
+        // The crushed patches have to show from across the room, or a pile
+        // reads as paint; a sixth darker is about what lamplight shows on
+        // old velvet and on a rug's abrash.
+        const value = mix(0.76, 0.92, h) - crushed * 0.16
+        return [value, value, value]
+      },
+      // Pile is rough everywhere; crushed patches lie flatter and a shade
+      // smoother, which is what makes them visible at all.
+      roughness: (u, v, h) => 0.9 - h * 0.06 - (crushAt(u, v) - 0.5) * 0.06,
+      ao: (_u, _v, h) => 0.7 + h * 0.3,
+    })
+  }
+
+  // -------------------------------------------------------------------------
+  // Writing paper — the desk's sheets, the ledgers' and the notebook's page
+  // blocks, the notes on the corkboard. They used to share the canvas, so
+  // every sheet in the office was woven. This is laid fibre, a slight cockle
+  // and 32 feint rules a tile: at 0.25 m a tile that is 7.8 mm ruled paper,
+  // and at 0.02 m on the side of a page block it is the fine striation of
+  // stacked page edges.
+  // -------------------------------------------------------------------------
+  {
+    const noise = tileableNoise(8008)
+    const RULES = 32
+    const ruleAt = (v) => {
+      const t = (((v * RULES) % 1) + 1) % 1
+      return 1 - smoothstep(0.015, 0.045, Math.min(t, 1 - t))
+    }
+
+    const heightAt = (u, v) => {
+      const cockle = fbm(noise, u, v, { octaves: 2, frequency: 2 }) * 0.5 + 0.5
+      const fibre = fbm(noise, u, v, { octaves: 3, frequency: 56, aspect: 0.6 }) * 0.5 + 0.5
+      return clamp01(0.3 + cockle * 0.35 + fibre * 0.25 - ruleAt(v) * 0.08)
+    }
+
+    recipes.push({
+      id: 'paper',
+      albedoSize: 512,
+      normalSize: 256,
+      ormSize: 128,
+      normalStrength: 0.9,
+      height: heightAt,
+      albedo: (u, v, h) => {
+        const foxing = smoothstep(0.7, 0.95, fbm(noise, u, v, { octaves: 3, frequency: 5 }) * 0.5 + 0.5)
+        const value = mix(0.8, 0.88, h) - foxing * 0.08
+        // The feint rules are the one deliberate hue: a pale blue-grey that
+        // the cream tint turns into the grey of an old ledger line.
+        return mixColor([value, value, value], [0.55, 0.6, 0.68], ruleAt(v) * 0.22)
+      },
+      roughness: (_u, _v, h) => 0.9 - h * 0.06,
+      ao: (_u, _v, h) => 0.82 + h * 0.18,
     })
   }
 

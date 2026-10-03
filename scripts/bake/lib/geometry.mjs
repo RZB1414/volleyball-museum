@@ -16,11 +16,14 @@ import {
   Box3,
   BoxGeometry,
   BufferAttribute,
+  CatmullRomCurve3,
   CylinderGeometry,
   ExtrudeGeometry,
   LatheGeometry,
+  PlaneGeometry,
   Shape,
   SphereGeometry,
+  TubeGeometry,
   Vector2,
   Vector3,
 } from 'three'
@@ -146,6 +149,117 @@ export function lathe(points, segments = 48) {
 }
 
 export { BoxGeometry, CylinderGeometry, SphereGeometry, Vector2, Vector3 }
+
+/**
+ * The outline of a rounded rectangle centred on the origin, as [x, y] pairs
+ * running anticlockwise. `steps` segments per quarter-circle corner.
+ */
+export function roundedRectPoints(width, height, radius, steps = 3) {
+  const r = Math.min(radius, width / 2 - 1e-4, height / 2 - 1e-4)
+  const corners = [
+    [width / 2 - r, height / 2 - r, 0],
+    [-width / 2 + r, height / 2 - r, Math.PI / 2],
+    [-width / 2 + r, -height / 2 + r, Math.PI],
+    [width / 2 - r, -height / 2 + r, (3 * Math.PI) / 2],
+  ]
+  const points = []
+  for (const [cx, cy, start] of corners) {
+    for (let index = 0; index <= steps; index += 1) {
+      const angle = start + (index / steps) * (Math.PI / 2)
+      points.push([cx + Math.cos(angle) * r, cy + Math.sin(angle) * r])
+    }
+  }
+  return points
+}
+
+/**
+ * A flat board with rounded corners, `thickness` along Y and centred on the
+ * origin: a book board, a tray, a plaque. Sixty triangles at three steps a
+ * corner, against 108 for a chamfered bevelled box that still has square
+ * corners in plan. Needs a real crease angle (the arcs smooth, the faces stay
+ * flat).
+ */
+export function roundedSlab(width, depth, thickness, radius, steps = 3) {
+  const slab = sweepProfile(roundedRectPoints(width, depth, radius, steps), thickness, { bevel: 0 })
+  // The outline was drawn in XY and extruded along Z; lay it flat.
+  slab.rotateX(-Math.PI / 2)
+  return slab
+}
+
+/**
+ * A crowned, optionally buttoned upholstery face in the XY plane, facing +Z,
+ * with its edges at z = 0 and the crown rising to `crown` at the centre.
+ *
+ * A slab with a bevel reads as a slab however it is shaded; a cushion is a
+ * surface that bulges between its seams and is pulled in at every button.
+ * Buttons dimple the face with a Gaussian of radius `spread`; put them on grid
+ * vertices (see `quiltedGridPoint`) or the dimple falls between vertices and
+ * vanishes. Normals are computed here, smooth, so finish the panel with
+ * `crease: null`. Triangles: columns × rows × 2.
+ */
+export function quiltedPanel(width, height, options = {}) {
+  const { columns = 6, rows = 6 } = options
+  const panel = new PlaneGeometry(width, height, columns, rows)
+  const position = panel.attributes.position
+  for (let index = 0; index < position.count; index += 1) {
+    position.setZ(index, quiltedHeight(width, height, position.getX(index), position.getY(index), options))
+  }
+  panel.computeVertexNormals()
+  return panel
+}
+
+/** The panel-space position of grid vertex (column, row), for buttons. */
+export function quiltedGridPoint(width, height, columns, rows, column, row) {
+  return [-width / 2 + (column / columns) * width, -height / 2 + (row / rows) * height]
+}
+
+/** Height of a `quiltedPanel` surface at (x, y), for seating buttons in it. */
+export function quiltedHeight(
+  width,
+  height,
+  x,
+  y,
+  { crown = 0.01, buttons = [], dimple = 0.012, spread = 0.03 } = {},
+) {
+  const across = (2 * x) / width
+  const up = (2 * y) / height
+  let z = crown * (1 - across * across) * (1 - up * up)
+  for (const [bx, by] of buttons) {
+    z -= dimple * Math.exp(-((x - bx) ** 2 + (y - by) ** 2) / (spread * spread))
+  }
+  return z
+}
+
+/**
+ * Piping: the corded welt sewn into an upholstery seam. It is what hides the
+ * line where a crowned panel meets the cushion's border, and the highlight
+ * running along it is most of what tells a stitched cushion from a moulded
+ * one. Smooth generator normals: finish with `crease: null`.
+ * Triangles: segments × radial × 2.
+ */
+export function piping(points, radius, { segments = 24, radial = 3, closed = false } = {}) {
+  return new TubeGeometry(
+    new CatmullRomCurve3(points, closed, 'catmullrom', 0.5),
+    segments,
+    radius,
+    radial,
+    closed,
+  )
+}
+
+/**
+ * A domed upholstery nail head rising along +Y from y = 0: a 6 × 2
+ * hemisphere, 18 triangles, against 36 for a full low sphere whose lower half
+ * is buried in the leather anyway. `height` flattens the dome; real nail
+ * heads stand proud by about a third of their diameter. Finish with a crease
+ * wide enough to keep it round (Math.PI / 2.2), or it renders as a faceted
+ * gem.
+ */
+export function domeStud(radius, height = radius) {
+  const dome = new SphereGeometry(radius, 6, 2, 0, Math.PI * 2, 0, Math.PI / 2)
+  if (height !== radius) dome.scale(1, height / radius, 1)
+  return dome
+}
 
 /**
  * Slices a wall run of `length` into the solid segments left over once the

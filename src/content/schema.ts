@@ -439,6 +439,7 @@ export type KitPartId =
   | 'atrium-display-console'
   | 'curator-notebook'
   | 'desk-radio'
+  | 'desk-telephone'
   | 'office-wall-clock'
   | 'door-access-panel'
 
