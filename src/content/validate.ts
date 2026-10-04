@@ -11,6 +11,7 @@
  * broken content edit fails loudly instead of at runtime.
  */
 
+import { MOUNT_PARTS, mountPartNames, transitionDoorPartNames } from '../engine/runtimePlacedParts.ts'
 import { buildRoomSignageLayout } from '../engine/signageLayout.ts'
 import { validateFactCaptures, type FactCaptureSet } from './factCapture.ts'
 import { settleKnownDebt, type KnownDebt } from './knownDebt.ts'
@@ -18,6 +19,7 @@ import { PRE_OPENING_SAVE } from './legacySave.ts'
 import type {
   Credential,
   DeviceData,
+  ExhibitMount,
   Fact,
   Lock,
   MuseumContent,
@@ -1156,37 +1158,20 @@ type BakedPartLike = {
 type BakedBundleLike = { readonly name: string; readonly parts: readonly BakedPartLike[] }
 
 /**
- * Which baked part sits under each mount type, and therefore how high its top
- * surface is. Must mirror the MOUNTS table the scene uses.
+ * The baked part an exhibit on this mount RESTS on, and therefore how high
+ * its top surface is: the base the scene draws for the mount
+ * (`runtimePlacedParts.ts`), except where that base is not what the object
+ * stands on.
  */
-const MOUNT_BASE_PART: Record<string, string | null> = {
-  plinth: 'plinth-block',
-  'vitrine-table': 'vitrine-table',
+function mountBasePart(mount: ExhibitMount): string | null {
   // Tower cases and built-in shelves expose an internal deck, not their top.
   // Those exhibits declare supportY from the procedural recipe's datum.
-  'vitrine-tower': null,
-  wall: null,
-  floor: null,
+  if (mount === 'vitrine-tower') return null
+  return MOUNT_PARTS[mount]?.part ?? null
 }
 
 /** Objects may sit this far off their mount before it reads as a mistake. */
 const MOUNT_TOLERANCE = 0.015
-
-/**
- * Every kit recipe a mount type puts in the scene: the scene's own `MOUNTS`
- * table, as a list. Unlike `MOUNT_BASE_PART` it is about what is DRAWN, so
- * the tower counts here though it gives no height there.
- */
-const MOUNT_PARTS: Record<string, readonly string[]> = {
-  plinth: ['plinth-block'],
-  'vitrine-table': ['vitrine-table', 'vitrine-glass'],
-  'vitrine-tower': ['vitrine-tower'],
-}
-
-/** The leaves `TransitionDoors` hangs in a doorway, by door style. */
-const TRANSITION_DOOR_PARTS: Record<string, readonly string[]> = {
-  'double-panel': ['door-leaf', 'door-leaf-right'],
-}
 
 /** A thing this close to the plaster, or closer, is on that wall. */
 const WALL_REACH = 0.35
@@ -1445,7 +1430,7 @@ export function validateBake(
   for (const exhibit of content.exhibits) {
     if (exhibit.mount === 'wall' || exhibit.mount === 'case-wall') continue
 
-    const basePart = MOUNT_BASE_PART[exhibit.mount] ?? null
+    const basePart = mountBasePart(exhibit.mount)
     const mountTop = exhibit.supportY ?? topOf(basePart)
     if (mountTop === null) continue
 
@@ -1634,13 +1619,16 @@ export function validateBake(
       if (room.powerControl) used.add(room.powerControl.part)
       for (const placement of buildRoomSignageLayout(room, roomsById).placements) used.add(placement.part)
       for (const portal of room.portals) {
-        for (const part of portal.transitionDoor ? TRANSITION_DOOR_PARTS[portal.transitionDoor.style] : []) {
+        // The leaves `TransitionDoors` hangs there: the table it reads itself.
+        for (const part of portal.transitionDoor ? transitionDoorPartNames(portal.transitionDoor.style) : []) {
           used.add(part)
         }
       }
     }
     for (const exhibit of content.exhibits) {
-      for (const part of MOUNT_PARTS[exhibit.mount] ?? []) used.add(part)
+      // What the scene draws under it, tower included: this is about what
+      // is drawn, where `mountBasePart` is about what gives a height.
+      for (const part of mountPartNames(exhibit.mount)) used.add(part)
     }
 
     const trianglesByRecipe = new Map<string, number>()

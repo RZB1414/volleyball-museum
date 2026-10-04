@@ -22,18 +22,29 @@
  */
 
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import { NodeIO } from '@gltf-transform/core'
 import { ALL_EXTENSIONS } from '@gltf-transform/extensions'
 import { MeshoptDecoder } from 'meshoptimizer'
 
-import { BAKED_BUNDLES } from '../src/content/bake.generated.ts'
+import { BAKED_BUNDLES, BAKED_MATERIALS } from '../src/content/bake.generated.ts'
+import { formatCreditLine, type CreditLocale } from '../src/content/credit.ts'
 import { MUSEUM } from '../src/content/museum.ts'
 import type { ExhibitData } from '../src/content/schema.ts'
-import { framedMediaBlock, PRINT_NUDGE } from '../src/engine/framedMediaLayout.ts'
+import {
+  CREDIT_COLOUR,
+  CREDIT_SIZE,
+  framedMediaBlock,
+  framedPrintWidth,
+  MOUNT_BORDER,
+  PRINT_NUDGE,
+} from '../src/engine/framedMediaLayout.ts'
 // @ts-expect-error - the bake is plain JS with no type declarations.
 import { buildHistoryCaseRun } from './bake/parts/holyokeDecor.mjs'
+import { readFontMetrics, wrapLines } from './lib/creditWrap.ts'
+import { squeezed } from './lib/runtimeWiring.ts'
 
 let passed = 0
 let failed = 0
@@ -67,12 +78,10 @@ const FRAME_BACK_MAX = 0.005
 const BOOK_HEADROOM = 0.25
 /** Air between a caption's last line and the shelf below it. */
 const CAPTION_CLEARANCE = 0.01
-/**
- * Lines the credit under a frame is measured at. The Morgan portrait's wraps
- * to four in both languages at the mount's width; the panorama's fits in
- * fewer and is given the same allowance.
- */
-const CAPTION_LINES = 4
+/** The languages the game ships, and so the credits a frame may carry. */
+const LOCALES: readonly CreditLocale[] = ['pt-BR', 'en']
+/** Least contrast (WCAG ratio) between a credit and what it is drawn over. */
+const CREDIT_CONTRAST = 3
 
 type Box = { readonly min: readonly number[]; readonly max: readonly number[] }
 type Shelf = { id: string; top: number; bottom: number; back: number; front: number; halfWidth: number }
@@ -282,11 +291,42 @@ function printPlane(piece: Piece) {
   ])[2]
 }
 
-/** What `FramedMedia` adds round a frame: the mount board and the credit lines. */
-function captionBlock(piece: Piece): Box {
+/**
+ * The font the credit is drawn in: the regular face `RoomText` imports, read
+ * from the same package, so the lines are measured with the file the player
+ * downloads.
+ */
+const roomText = readFileSync(new URL('../src/engine/RoomText.tsx', import.meta.url), 'utf8')
+const fontImport = /from '(@ibm\/plex-sans-condensed\/[^'?]+-Regular\.woff)\?url'/.exec(roomText)?.[1]
+assert.ok(fontImport, 'RoomText imports the regular face of the museum font')
+const creditFont = readFontMetrics(fileURLToPath(new URL(`../node_modules/${fontImport}`, import.meta.url)))
+
+const mediaOf = (piece: Piece) => {
   const asset = MUSEUM.media.find((candidate) => candidate.id === piece.exhibit.mediaId)
   assert.ok(asset, `${piece.exhibit.id} names its photograph`)
-  const block = framedMediaBlock(asset.aspect, CAPTION_LINES)
+  return asset
+}
+
+/** The credit under a frame as `FramedMedia` sets it, line by line, in one language. */
+function creditLines(piece: Piece, locale: CreditLocale): string[] {
+  const asset = mediaOf(piece)
+  return wrapLines(
+    formatCreditLine(asset.credit, locale),
+    creditFont,
+    CREDIT_SIZE,
+    framedPrintWidth(asset.aspect) + MOUNT_BORDER * 2,
+  )
+}
+
+/**
+ * What `FramedMedia` adds round a frame: the mount board and the credit
+ * lines, as many as the longer of the two languages takes. Measured, not
+ * typed: the Morgan portrait clears its shelf by less than one line.
+ */
+function captionBlock(piece: Piece): Box {
+  const asset = mediaOf(piece)
+  const lines = Math.max(...LOCALES.map((locale) => creditLines(piece, locale).length))
+  const block = framedMediaBlock(asset.aspect, lines)
   return {
     min: [piece.origin[0] - block.halfWidth, piece.origin[1] + block.bottom, piece.box.min[2]],
     max: [piece.origin[0] + block.halfWidth, piece.origin[1] + block.top, Math.max(piece.box.max[2], printPlane(piece))],
@@ -562,6 +602,92 @@ test('every piece stops short of the glass, with nothing between it and the visi
     for (const solid of intersecting(corridor)) problems.push(`${id} is behind the ${solid}`)
   }
   assert.deepEqual(problems, [])
+})
+
+// ---------------------------------------------------------------------------
+// 8. The credit: measured with the game's font, and legible where it hangs
+// ---------------------------------------------------------------------------
+
+test('the credit is measured with the font the game draws it in', () => {
+  // The same four lines, with the same breaks, as the frame the browser drew
+  // (docs/contact-sheets/l1, the portrait in its bay): the measure is held to
+  // what was seen, so a change to it that sets the text differently fails.
+  // If the credit itself changes, look at the frame again and write here the
+  // lines the browser draws.
+  const portrait = pieces.find((piece) => piece.exhibit.id === 'portrait-morgan')
+  assert.ok(portrait, 'the Morgan portrait hangs in the case')
+  assert.deepEqual(creditLines(portrait, 'pt-BR'), [
+    'William G Morgan, as physical',
+    "director of Holyoke's YMCA ·",
+    'Holyoke YMCA for the Transcript ·',
+    '1897 · Domínio público',
+  ])
+
+  // A credit that grows takes more lines, and the block grows with it.
+  const width = 0.46
+  const longer = wrapLines(
+    `${formatCreditLine(mediaOf(portrait).credit, 'pt-BR')} · reprodução fotográfica do original`,
+    creditFont,
+    CREDIT_SIZE,
+    width,
+  )
+  assert.ok(longer.length > 4, `a longer credit takes ${longer.length} lines`)
+  assert.ok(framedMediaBlock(0.6611, longer.length).bottom < framedMediaBlock(0.6611, 4).bottom)
+  // A line ends after a space or a dash, never inside a word; a word wider
+  // than the column stays whole.
+  assert.deepEqual(wrapLines('aaaa bbbb–cccc', creditFont, CREDIT_SIZE, 0.09), ['aaaa', 'bbbb–', 'cccc'])
+  assert.deepEqual(wrapLines('Springfield', creditFont, CREDIT_SIZE, 0.05), ['Springfield'])
+  // A character the font cannot draw would be a blank in the game.
+  assert.throws(() => wrapLines('排球', creditFont, CREDIT_SIZE, width), /no glyph/)
+})
+
+/** Relative luminance of a linear RGB triple (the weights of sRGB's primaries). */
+const luminance = ([red, green, blue]: readonly number[]) => 0.2126 * red + 0.7152 * green + 0.0722 * blue
+/** A `#rrggbb` colour as linear RGB. */
+function linearOf(hex: string): number[] {
+  const match = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(hex)
+  assert.ok(match, `"${hex}" is a #rrggbb colour`)
+  return match.slice(1).map((pair) => {
+    const channel = Number.parseInt(pair, 16) / 255
+    return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
+  })
+}
+const contrast = (a: number, b: number) => (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05)
+
+test('the credit under every frame reads against the lining, in a lit bay and in a dark one', () => {
+  // The credit is unlit: one brightness on the screen, whatever the light on
+  // the lining behind it. So it has to hold at both ends of what the lining
+  // can be: its own colour under full light, and black, in a bay no spot
+  // reaches or with the power cut.
+  const lining = kit.parts.find((part) => part.name === `${RECIPE}__lining`)
+  assert.ok(lining, 'the run has a lining')
+  const material = (BAKED_MATERIALS as Record<string, { baseColor: readonly number[] }>)[lining.material]
+  assert.ok(material, `material "${lining.material}" is in the bake`)
+  const lit = luminance(material.baseColor)
+  const problems: string[] = []
+  const frames = pieces.filter((piece) => piece.kind === 'frame')
+  assert.ok(frames.length >= 2, 'the case holds its two frames')
+  for (const piece of frames) {
+    const colour = CREDIT_COLOUR[piece.exhibit.mount as keyof typeof CREDIT_COLOUR]
+    assert.ok(colour, `a frame mounted "${piece.exhibit.mount}" has a credit colour`)
+    const credit = luminance(linearOf(colour))
+    for (const [where, behind] of [[`the lit ${lining.material} lining`, lit], ['an unlit bay', 0]] as const) {
+      const ratio = contrast(credit, behind)
+      if (ratio < CREDIT_CONTRAST) {
+        problems.push(`${piece.exhibit.id}: its credit (${colour}) is ${ratio.toFixed(2)}:1 against ${where}, under ${CREDIT_CONTRAST}:1`)
+      }
+    }
+  }
+  assert.deepEqual(problems, [])
+
+  // And the colour proven here is the one drawn: the scene hands it to the
+  // frame by its mount, and the frame sets the credit in it.
+  const source = (path: string) => squeezed(readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8'))
+  assert.ok(
+    source('scenes/MuseumScene.tsx').includes('creditColour={CREDIT_COLOUR[exhibit.mount]}'),
+    'MuseumScene passes the credit colour of the mount to FramedMedia',
+  )
+  assert.ok(source('engine/FramedMedia.tsx').includes('color={creditColour}'), 'FramedMedia draws the credit in it')
 })
 
 console.log(`${passed}/${passed + failed} case-run checks passed`)

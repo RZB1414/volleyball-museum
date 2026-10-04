@@ -19,6 +19,7 @@ import type { CollisionWorld } from './collision'
 import { cloneKitPart } from './kitPart'
 import type { MaterialLibrary } from './materials'
 import { isUnclaimedInteractKey, subscribePrimaryAction } from './primaryAction'
+import { TRANSITION_DOOR_LEAVES } from './runtimePlacedParts'
 import { registerTransitionDoorGate } from './transitionDoorCollision'
 import {
   isInsideTransitionDoorEnvelope,
@@ -117,7 +118,9 @@ function DoorLeafModel({
 }) {
   const { scene } = useGLTF(kitBundle.url, USE_DRACO, USE_MESHOPT)
   const kit = scene as Group
-  const recipe = side === 'left' ? 'door-leaf' : 'door-leaf-right'
+  // The topology accepts one door style; which leaf it hangs on each side is
+  // the table the content gate also reads (`runtimePlacedParts.ts`).
+  const recipe = TRANSITION_DOOR_LEAVES['double-panel'][side]
   const leaf = useMemo(() => cloneKitPart(kit, recipe, materials), [kit, materials, recipe])
 
   return leaf ? (

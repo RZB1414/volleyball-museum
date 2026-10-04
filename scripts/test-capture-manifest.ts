@@ -147,6 +147,48 @@ test('the P0 set is the twenty frames of 4 October behind the baseline record', 
   assert.equal(p0.captures.filter((capture: { light: string }) => capture.light === 'torch').length, 0)
 })
 
+test('every set names the commit its frames show, and a frozen one names it outright', () => {
+  for (const [setName, set] of Object.entries(CAPTURE_SETS)) {
+    // A short or full hash; a trailing plus is "the working tree on top of
+    // this", for a set that is still open.
+    assert.match(set.commit, /^[0-9a-f]{7,40}\+?$/, `${setName} names a commit`)
+    if (set.frozen) assert.ok(!set.commit.endsWith('+'), `${setName} is frozen on a working tree nobody can check out`)
+    assert.equal(readCaptureManifest(ROOT, setName)?.commit, set.commit, `${setName}: the manifest names the same commit`)
+  }
+})
+
+test('the L1 set is the seventeen frames of the lot, on the commit that holds what they show', () => {
+  const l1 = readCaptureManifest(ROOT, 'l1')
+  assert.ok(l1, `${CAPTURE_ROOT}/l1/${MANIFEST_FILE} is missing`)
+  assert.equal(l1.count, 17)
+  assert.equal(l1.captures.length, 17)
+  // The frames show the Holyoke breaker opposite the door and the four pieces
+  // in their bays. That tree is the lot's second commit; on its first, which
+  // the set used to name, the breaker is still beside the door.
+  assert.equal(l1.commit, '047f3bb')
+  assert.equal(l1.report, 'docs/HANDOFF.md')
+  const count = (room: string, light: string) =>
+    l1.captures.filter((capture: { room: string; light: string }) => capture.room === room && capture.light === light)
+      .length
+  assert.equal(count('atrium', 'lit'), 2)
+  assert.equal(count('atrium', 'dark'), 4)
+  assert.equal(count('holyoke', 'lit'), 8)
+  assert.equal(count('holyoke', 'dark'), 3)
+})
+
+test('the review set is the four frames of the credit, shot on the review commit\'s own tree', () => {
+  const review = readCaptureManifest(ROOT, 'l1-review')
+  assert.ok(review, `${CAPTURE_ROOT}/l1-review/${MANIFEST_FILE} is missing`)
+  assert.equal(review.count, 4)
+  // Open, on a working tree: the plus is replaced by a hash when it is frozen.
+  assert.equal(CAPTURE_SETS['l1-review'].frozen, false)
+  assert.match(review.commit, /^047f3bb\+?$|^[0-9a-f]{7,40}$/)
+  assert.deepEqual(
+    review.captures.map((capture: { id: string; light: string }) => `${capture.id} ${capture.light}`),
+    ['e01 dark', 'e02 torch', 'h01 lit', 'h02 lit'],
+  )
+})
+
 test('a file name is read as id, room, light, view and subject, or refused', () => {
   const set = CAPTURE_SETS[BASELINE]
   assert.deepEqual(describeCaptureFile('wf3-h27-examine-spalding-lit.jpg', set), {

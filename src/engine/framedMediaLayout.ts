@@ -24,6 +24,25 @@ export const CREDIT_LINE_HEIGHT = 1.35
 /** The print stands this far in front of the frame's origin, along its normal. */
 export const PRINT_NUDGE = 0.032
 
+/**
+ * The colour of the credit line, by what the frame hangs on.
+ *
+ * The credit is drawn unlit, so it reaches the screen at one brightness
+ * whatever light falls on the surface behind it. A grey chosen against pale
+ * plaster vanished on the navy lining of the wall case as soon as a spot lit
+ * that bay: the lining came up to the grey's own value, and the panorama's
+ * credit, the attribution a public-domain image is shown with, could not be
+ * read in either language. On the lining the credit is therefore the cream
+ * of the mount board, which holds against the navy at full light and against
+ * a bay left dark. `test:kit` checks both ends.
+ */
+export const CREDIT_COLOUR = {
+  /** On plaster: the warm grey of the wall-art credits. */
+  wall: '#6d6455',
+  /** On the navy lining of a wall case: the cream of the mount board. */
+  'case-wall': '#e8e0cf',
+} as const
+
 /** Above this aspect a photograph is a panorama and takes the wide frame. */
 const PANORAMA_ASPECT = 1.6
 

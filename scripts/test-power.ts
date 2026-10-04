@@ -7,6 +7,7 @@
  */
 
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 import { Box3, BoxGeometry, Group, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
 
@@ -29,6 +30,7 @@ import {
   reachFromWhereTheCapsuleStops,
   recipeParts,
 } from './lib/museumWorld.ts'
+import { powerControlWiringProblems, type SourceReader } from './lib/runtimeWiring.ts'
 
 let checks = 0
 let failed = 0
@@ -304,6 +306,51 @@ for (const part of new Set(wallControls.map(({ control }) => control.part))) {
   const unsettled = errorsOf(settleKnownDebt(accusations, debtOf('test:power'), CONTENT_LOT))
   check('no pilot reaches into another room, beyond what the debt table dates', unsettled.length === 0, unsettled.join('; '))
   for (const line of measured) console.log(`  note  ${line}`)
+}
+
+/**
+ * Everything above is proven on modules and on a world this suite builds for
+ * itself, colliders included. What the player gets depends on one more thing:
+ * that the components still call those modules. A refactor that drops the
+ * collider registration or the lens repaint brings the defect back with every
+ * check above green, so the calls themselves are pinned
+ * (`scripts/lib/runtimeWiring.ts`).
+ */
+{
+  const read: SourceReader = (path) => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8')
+  const problems = powerControlWiringProblems(read)
+  check(
+    'the components call what this suite proves: collider, lens by state, double-sided proxy',
+    problems.length === 0,
+    problems.join('; '),
+  )
+
+  // The check has to bite. Each of these is a refactor it exists to catch,
+  // applied to the real source in memory.
+  const changed =
+    (path: string, from: string | RegExp, to: string): SourceReader =>
+    (asked) =>
+      asked === path ? read(asked).replace(from, to) : read(asked)
+  const refactors: readonly (readonly [string, SourceReader])[] = [
+    [
+      'the collider registration removed',
+      changed('engine/PowerControls.tsx', 'registerKitColliders(kit, control.part, kitBundle, collision,', 'registerNothing('),
+    ],
+    [
+      'the collision world no longer passed down',
+      changed('scenes/MuseumScene.tsx', /(<PowerControlLayer[\s\S]*?)collision=\{collision\}/, '$1'),
+    ],
+    [
+      'the lens no longer repainted',
+      changed('engine/PowerControls.tsx', 'paintLenses(instance, control.part, material)', 'void material'),
+    ],
+    [
+      'a proxy back on a single-sided material',
+      changed('engine/Devices.tsx', '<meshBasicMaterial {...PROXY_MATERIAL_PROPS} />', '<meshBasicMaterial />'),
+    ],
+  ]
+  const uncaught = refactors.filter(([, reader]) => powerControlWiringProblems(reader).length === 0).map(([name]) => name)
+  check('and that check fails when a component stops calling them', uncaught.length === 0, `not caught: ${uncaught.join(', ')}`)
 }
 
 console.log(`${checks - failed}/${checks} checks passed`)

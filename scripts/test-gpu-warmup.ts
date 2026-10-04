@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 
 import {
   BoxGeometry,
@@ -45,6 +46,8 @@ import {
   transitionDoor,
 } from '../src/engine/transitionDoorState.ts'
 import type { Object3D, WebGLRenderer } from 'three'
+
+import { roomReadinessWiringProblems, type SourceReader } from './lib/runtimeWiring.ts'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -698,6 +701,54 @@ await doorTest('a wall image that fails to load becomes a grey card, and one tha
     ImageLoader.prototype.load = realLoad
     console.warn = realWarn
   }
+})
+
+/**
+ * The door test above runs a copy of what `Room` does with the wait, and the
+ * loader test calls the loader itself. Neither notices if `Room` stops
+ * counting, or if one of the three places that load a wall image goes back
+ * to the plain loader: the door would be held shut for good again, or a
+ * missing image would blank the page, with this suite green. So the calls
+ * are pinned in the source (`scripts/lib/runtimeWiring.ts`).
+ */
+await doorTest('the scene counts the wait and every wall image goes through the loader that never rejects', () => {
+  const read: SourceReader = (path) => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8')
+  assert.deepEqual(roomReadinessWiringProblems(read), [])
+
+  // The check has to bite: each refactor it exists to catch, on the real
+  // source in memory.
+  const changed =
+    (path: string, from: string, to: string): SourceReader =>
+    (asked) =>
+      asked === path ? read(asked).replace(from, to) : read(asked)
+  const refactors: readonly (readonly [string, SourceReader])[] = [
+    [
+      'the wait no longer advanced',
+      changed('scenes/MuseumScene.tsx', 'advanceRoomDetailWait(detailWaitRef.current,', 'keepWaiting(detailWaitRef.current,'),
+    ],
+    [
+      'a degraded room never queued',
+      changed(
+        'scenes/MuseumScene.tsx',
+        'roomDetailWarmable({ mounted: detailMounted, boundaryMask, textReady, degraded })',
+        'roomDetailComplete({ boundaryMask, textReady })',
+      ),
+    ],
+    [
+      'the exhibit print on the plain loader',
+      changed('engine/FramedMedia.tsx', 'useLoader(MediaTextureLoader, asset.src)', 'useLoader(TextureLoader, asset.src)'),
+    ],
+    [
+      'the wall art on the plain loader',
+      changed('engine/RoomWallArt.tsx', 'useLoader(MediaTextureLoader, asset.src)', 'useLoader(TextureLoader, asset.src)'),
+    ],
+    [
+      'the preload on the plain loader',
+      changed('engine/bundleCache.ts', 'useLoader.preload(MediaTextureLoader, url)', 'useLoader.preload(TextureLoader, url)'),
+    ],
+  ]
+  const uncaught = refactors.filter(([, reader]) => roomReadinessWiringProblems(reader).length === 0).map(([name]) => name)
+  assert.deepEqual(uncaught, [], 'every one of them is caught')
 })
 
 console.log(`${doorChecks - doorFailures}/${doorChecks} room readiness checks passed`)

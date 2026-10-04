@@ -682,7 +682,9 @@ export function buildBladder({ radius = 0.108 } = {}) {
 /**
  * The 1897-specification net assembly: posts in cast-iron floor sockets, a
  * cotton cord mesh, canvas tape along the top edge. Top of net at 1.98 m —
- * 6 feet 6 inches, roughly half a foot above the average man of the period.
+ * 6 feet 6 inches, just above the head of an average man: Morgan's own
+ * words, as the federation and the Hall of Fame give them. The margin this
+ * comment and the wall label once put a figure on has no source.
  */
 export function buildNet1897({ span = 4.8, netHeight = 0.62, topHeight = 1.98 } = {}) {
   const structure = []

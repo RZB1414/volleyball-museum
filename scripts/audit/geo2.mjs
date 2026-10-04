@@ -4,15 +4,16 @@
  * the shell's trim projects, and what every GLB and chunk weighs on disk, in
  * gzip and in brotli.
  *
- * The size table reads `dist/assets`, so run `npm run build` first; that
- * dependency on a build is one reason these scripts stay out of the gate.
+ * The size table reads `dist/assets`, so run `npm run build` first; without
+ * a build it says so and measures the models alone. That dependency on a
+ * build is one reason the gate never reads what these scripts print.
  * Read-only.
  *
  *   npm run audit:geo2
  */
 
 import { resolve } from 'node:path'
-import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { gzipSync, brotliCompressSync } from 'node:zlib'
 
 import { load, REPO } from './lib/repo.mjs'
@@ -93,7 +94,8 @@ const families = {
   'donation-box pedestal': interp.buildDonationBox().pedestal,
   'wall-sconce': fixtures.buildWallSconce(),
   'vent-grille': fixtures.buildVentGrille(),
-  'breaker handle': fixtures.buildBreakerPanel().handle,
+  'breaker lever': fixtures.buildBreakerPanel().lever,
+  'breaker led': fixtures.buildBreakerPanel().led,
   'breaker case': fixtures.buildBreakerPanel().case,
   'ceiling-spot track': fixtures.buildCeilingSpot().track,
   'ceiling-spot head': fixtures.buildCeilingSpot().head,
@@ -152,6 +154,10 @@ console.log('\n=== SHELL TRIM: how far each moulding stands off the plaster (atr
 
 console.log('\n=== SIZES on disk and gzip/brotli (what a CDN serves) ===')
 for (const dir of ['public/models', 'dist/assets']) {
+  if (!existsSync(resolve(REPO, dir))) {
+    console.log(`  ${dir} is not there: run \`npm run build\` to measure the chunks`)
+    continue
+  }
   for (const name of readdirSync(resolve(REPO, dir))) {
     const file = resolve(REPO, dir, name)
     if (!statSync(file).isFile()) continue

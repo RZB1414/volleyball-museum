@@ -35,10 +35,13 @@
 import { Vector3 } from 'three'
 
 import { BAKED_BUNDLES, type BakedBundle } from '../src/content/bake.generated.ts'
+import { CONTENT_LOT, debtOf, settleKnownDebt } from '../src/content/knownDebt.ts'
 import { MUSEUM } from '../src/content/museum.ts'
-import type { ExhibitMount, RoomData } from '../src/content/schema.ts'
+import type { RoomData } from '../src/content/schema.ts'
+import type { ValidationIssue } from '../src/content/validate.ts'
 import { movePlayer } from '../src/engine/collision.ts'
 import { INTERACTION_REACH } from '../src/engine/interactionTarget.ts'
+import { MOUNT_PARTS } from '../src/engine/runtimePlacedParts.ts'
 // @ts-expect-error - the bake is plain JS with no type declarations.
 import { prepareRoomShells } from './bake/kit.mjs'
 import {
@@ -147,14 +150,6 @@ function footprintsFor(room: RoomData, owner: string, placement: Placement): Foo
   })
 }
 
-const MOUNT_PART: Record<ExhibitMount, string | null> = {
-  plinth: 'plinth-block',
-  'vitrine-table': 'vitrine-table',
-  'vitrine-tower': 'vitrine-tower',
-  wall: null,
-  floor: null,
-}
-
 function collectSolidFootprints() {
   const footprints: Footprint[] = []
   for (const room of MUSEUM.rooms) {
@@ -182,7 +177,8 @@ function collectSolidFootprints() {
     for (const exhibitId of room.exhibitIds) {
       const exhibit = MUSEUM.exhibits.find((candidate) => candidate.id === exhibitId)
       if (!exhibit) continue
-      const part = MOUNT_PART[exhibit.mount]
+      // The base the scene stands under the exhibit, from the table it reads.
+      const part = MOUNT_PARTS[exhibit.mount]?.part
       if (!part) continue
       footprints.push(
         ...footprintsFor(room, `${room.id}/mount:${exhibit.id}`, {
@@ -781,6 +777,12 @@ for (const route of ATRIUM_WALK_ROUTES) {
  * The wing, as it is played: in by the main door, across to the breaker on
  * the far wall in the dark, round the hero case to the run of wall cases,
  * and out by the shortcut that only opens from this side.
+ *
+ * The way to the breaker here is a DETOUR, by waypoints chosen to go round
+ * the kiosk: along the north side of the room and then down the far wall. It
+ * proves the breaker can be reached and E pressed, not that the straight
+ * line a player takes at the red light is clear. That line is walked further
+ * down (the lighthouse walk), and it is not.
  */
 {
   const name = 'Holyoke door to the breaker to the shortcut'
@@ -807,6 +809,63 @@ for (const route of ATRIUM_WALK_ROUTES) {
     `${name} — and from the breaker out by the shortcut`,
     toShortcut.arrived && toShortcut.lowest > FALL_LIMIT,
     `stopped at ${toShortcut.position.toArray().map((value) => value.toFixed(2)).join(',')}`,
+  )
+}
+
+/**
+ * The lighthouse walk. A breaker's pilot is the one thing lit in a dark room,
+ * and what a player does with it is hold forward with the light in the middle
+ * of the screen. The routes above get to each breaker by waypoints somebody
+ * chose; this one has none. From the door the room is entered by, the capsule
+ * steers at the control every step until something stops it, and E has to
+ * reach from there.
+ *
+ * The atrium's podium ring is round and lets the capsule slide past. The
+ * Holyoke kiosk is a 2.5 m counter set square across the line from the door
+ * to the breaker (the line passes four centimetres from its centre): the
+ * capsule comes to rest against its long face, seven metres short. Clearing
+ * it means turning or moving the piece the room's first view is composed
+ * round, which is a decision for the wing's art lot, so the accusation is a
+ * dated debt and the route that IS proven above is a detour.
+ */
+{
+  const LIGHTHOUSE_SECONDS = 20
+  const blocked: ValidationIssue[] = []
+  for (const room of MUSEUM.rooms) {
+    const control = room.powerControl
+    if (room.startsPowered || !control || !isWallControl(room, control)) continue
+    const reach = reachFromWhereTheCapsuleStops(world, room, control, arrivalPoint(room.id), LIGHTHOUSE_SECONDS)
+    const reached =
+      reach.hitDistance !== null && reach.hitDistance <= INTERACTION_REACH.powerControl && !reach.eyeInsideProxy
+    const short = reach.stopped.clone().sub(controlPoint(room, control, [0, 0, 0])).setY(0).length()
+    console.log(
+      `  note  ${control.id}: walking straight at it from the door ` +
+        (reached
+          ? `arrives (${reach.standOff.toFixed(2)} m from the wall plane)`
+          : `stops at ${reach.stopped.toArray().map((value) => value.toFixed(2)).join(',')}, ${short.toFixed(2)} m short`),
+    )
+    if (reached) continue
+    blocked.push({
+      severity: 'error',
+      code: 'lighthouse-walk-blocked',
+      id: control.id,
+      message:
+        `Walking straight at "${control.id}" from the door of "${room.id}", the capsule stops ` +
+        `${short.toFixed(2)} m short of it and E does not reach.`,
+    })
+  }
+  const settled = settleKnownDebt(blocked, debtOf('test:navigation'), CONTENT_LOT)
+  for (const issue of settled) {
+    if (issue.severity !== 'debt') continue
+    console.log(`  debt  ${issue.code} ${issue.id}: until L${issue.debt?.untilLot} — ${issue.debt?.note}`)
+  }
+  const unsettled = settled
+    .filter((issue) => issue.severity === 'error')
+    .map((issue) => `[${issue.code}] ${issue.message}`)
+  check(
+    'walking straight at each breaker from the door gets there, beyond what the debt table dates',
+    unsettled.length === 0,
+    unsettled.join('; '),
   )
 }
 

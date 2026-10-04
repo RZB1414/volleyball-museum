@@ -165,7 +165,7 @@ export const en = {
   'radio.hint.drawer':
     "That locked drawer in your office? Otávio used dates you can find on the labels. Have a look at Morgan's portrait in Wing 1.",
   'radio.hint.vault':
-    'The basement flooded; nobody goes down there tonight. What can be done tonight is the lights and the checking. Over.',
+    "The basement flooded; nobody goes down there tonight. Lights are done; beyond that, it's just checking the collection. Over.",
 
   'radio.speaker.static': 'Radio',
   'radio.call.taken.1':
@@ -176,8 +176,8 @@ export const en = {
   'radio.hint.atrium.curt': 'Atrium. Beside the Wing 1 door. Little red light. Over.',
   'radio.hint.holyoke.curt': 'Wing 1. Breaker on the far wall, to the left. Little red light. Go.',
   'radio.hint.drawer.curt':
-    "Otávio's drawer: a date. Morgan's portrait, Wing 1. The plaque at the foot of the frame.",
-  'radio.hint.vault.curt': "Basement's flooded: nobody goes down tonight. Tonight it's lights and checking.",
+    "Otávio's drawer: a date. Morgan's portrait, Wing 1. Pick the frame up and tilt it: it's on the bottom edge.",
+  'radio.hint.vault.curt': "Basement's flooded: nobody goes down tonight. Lights are done; the rest is just checking.",
   'radio.patience.t1.ready': 'Front desk, go ahead.',
   'radio.patience.t1.listening': "Go on, curator. I'm listening.",
   'radio.patience.t1.jorge': 'Jorge here. Over.',
@@ -260,7 +260,7 @@ export const en = {
   'exhibit.atrium-ball-tokyo-1964.label':
     'Tokyo 1964 hosted the first Olympic volleyball tournament. Surviving official balls show eighteen panels in six groups of three, ivory-white leather and narrow channels between the panels. The collection record does not identify a maker for this reconstruction.',
   'exhibit.atrium-ball-tokyo-1964.catalogue':
-    'Official Tokyo 1964 ball, reconstructed without markings. The unused example held by the Japan Sport Council is ivory, with fine grain, yellowed seams and small ochre stains. The used ball is darkened, creased and deformed — evidence behind this model’s restrained wear.',
+    'Official Tokyo 1964 ball, reconstructed without markings. The unused example held by the Japan Sport Council is ivory, with fine grain, yellowed channels and small ochre stains. The used ball is darkened, creased and deformed — evidence behind this model’s restrained wear.',
   'hotspot.atrium-ball-tokyo-1964.panels.label':
     'Eighteen near-rectangular panels arranged in six groups of three',
   'hotspot.atrium-ball-tokyo-1964.seam.label':
@@ -319,7 +319,7 @@ export const en = {
 
   'exhibit.guide-1916.title': 'Morgan tells the story',
   'exhibit.guide-1916.label':
-    "Two decades after inventing the game, Morgan told its story in Spalding's volleyball guide. In it he credited Dr. Frank Woods and fire chief John Lynch for their contributions to the first rules.",
+    'Dr. Frank Woods and fire chief John Lynch, both of Holyoke, helped Morgan draw up the first rules of the game. This Spalding volleyball guide, the 1916–17 edition, came out two decades after the invention.',
   'exhibit.guide-1916.catalogue':
     'Spalding Athletic Library — Volley Ball Guide, 1916–17 edition. It is here that Morgan credited Dr. Frank Woods and fire chief John Lynch for their contributions to the first rules. From the same decade comes the attack that became known as the Filipino bomb: a high pass, then a downward strike.',
   'hotspot.guide-1916.credit.label': 'Morgan credits Frank Woods and John Lynch',
@@ -328,9 +328,9 @@ export const en = {
 
   'exhibit.gym-suit.title': 'The catalogue gymnasium suit',
   'exhibit.gym-suit.label':
-    'Ribbed wool jersey and knee-length trousers, as in sporting-goods catalogues of c. 1901–1915. The members of 1895, as far as is known, played in shirts and long trousers.',
+    'Ribbed wool jersey and knee-length trousers: a catalogue gymnasium suit, made by the museum. The museum has found no photograph of the members of 1895 and does not know what they wore.',
   'exhibit.gym-suit.catalogue':
-    'A gymnasium suit like those in catalogues of c. 1901–1915. Reproduction. Morgan explained the game by the age and the wind of his members, not by their clothes: it was recreation for middle-aged men who found basketball too strenuous.',
+    "A gymnasium suit like those in period sporting-goods catalogues. Reproduction. Morgan explained the game by his members' age and stamina, not by their clothes: it was recreation for middle-aged men who found basketball too strenuous.",
 
   'exhibit.portrait-morgan.title': 'William G. Morgan',
   'exhibit.portrait-morgan.label':
@@ -342,7 +342,7 @@ export const en = {
 
   'exhibit.photo-gym.title': 'The gymnasium where it happened',
   'exhibit.photo-gym.label':
-    'The Holyoke YMCA gymnasium, in a photograph published in 1897: rings, a pommel horse, pulley weights and, overhead, the suspended running track. This is the space the first match was played in.',
+    'The Holyoke YMCA gymnasium, in a photograph published in 1897: rings, a vaulting horse, pulley weights and, overhead, the suspended running track. This is the space the first match was played in.',
   'exhibit.photo-gym.catalogue':
     'Interior of the old Holyoke YMCA building. Reproduction of a photograph published in 1897 in the Transcript Industrial Edition. The building, from the early 1890s, burned down in 1943. From here came the two five-man teams Morgan took to Springfield to demonstrate the game.',
 
@@ -355,7 +355,7 @@ export const en = {
 
   'document.halstead.title': 'Springfield, 1896',
   'document.halstead.body':
-    "Morgan demonstrated the game in the east gymnasium of the International YMCA Training School, at the physical directors' conference convened by Luther Halsey Gulick. He brought two five-man teams from Holyoke, captained by mayor James J. Curran and fire chief John Lynch. It was Professor Alfred T. Halstead who proposed replacing Mintonette with Volley Ball, and Morgan agreed. The sources disagree on the occasion: the Hall of Fame speaks of a visit early in the year and dates the conference to 7 July; the international federation places the suggestion after the demonstration.",
+    "Morgan demonstrated the game in the east gymnasium of the International YMCA Training School, at the YMCA physical directors' conference, at the invitation of Luther Halsey Gulick. He brought two five-man teams from Holyoke, captained by mayor James J. Curran and fire chief John Lynch. It was Professor Alfred T. Halstead who proposed replacing Mintonette with Volley Ball, and Morgan agreed. The sources disagree on the occasion: the Hall of Fame speaks of a visit early in the year and dates the conference to 7 July; the international federation places the suggestion after the demonstration.",
 
   'document.rule-changes.title': 'The changes that made the modern game',
   'document.rule-changes.body':

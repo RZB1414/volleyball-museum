@@ -1052,6 +1052,15 @@ const HISTORY_RULES: readonly TextRule[] = [
     lacks: [both(/\bWood\b/), both(/bomberino/i), ['forçou', 'forced']],
   },
   {
+    // A wall label carries what two publishers say: that Woods and Lynch
+    // helped with the first rules (the federation and the Hall of Fame). That
+    // Morgan wrote it up in the guide rests on the Hall of Fame alone, so it
+    // is said in the catalogue entry and on the detail, not here.
+    keys: ['exhibit.guide-1916.label'],
+    has: [['ajudaram Morgan', 'helped Morgan']],
+    lacks: [[/contou|creditou|deu crédito/i, /\btold\b|credited/i]],
+  },
+  {
     keys: ['hotspot.guide-1916.census.label'],
     has: [[/estimativa/i, /estimate/i]],
     lacks: [[/censo/i, /census/i]],
@@ -1067,15 +1076,43 @@ const HISTORY_RULES: readonly TextRule[] = [
     lacks: [both('1896')],
   },
   {
+    // The label lists what the photograph shows. The horse in it has no
+    // pommels: the first rewrite named an apparatus that is not in the frame.
     keys: ['exhibit.photo-gym.label'],
-    has: [['publicada em 1897', 'published in 1897']],
-    lacks: [['treliças', 'trusses'], both('High'), both('Appleton'), ['fotografado', 'photographed']],
+    has: [['publicada em 1897', 'published in 1897'], ['cavalo de salto', 'vaulting horse']],
+    lacks: [
+      ['treliças', 'trusses'],
+      both('High'),
+      both('Appleton'),
+      ['fotografado', 'photographed'],
+      ['com alças', 'pommel'],
+    ],
   },
   { keys: ['exhibit.photo-gym.catalogue'], has: [both('1943')], lacks: [both('1886'), both('1896')] },
   {
+    // No catalogue has been opened and captured, so the suit carries no date
+    // on either card (7.7 holds the date until one is).
     keys: ['exhibit.gym-suit.label', 'exhibit.gym-suit.catalogue'],
-    has: [both('1901–1915')],
-    lacks: [[/\bsolas?\b/i, /\bsoles?\b/i], [/óxido/i, /oxide/i], [/vitoriano/i, /victorian/i], ['suor', 'sweat']],
+    lacks: [
+      both('1901'),
+      [/\bsolas?\b/i, /\bsoles?\b/i],
+      [/óxido/i, /oxide/i],
+      [/vitoriano/i, /victorian/i],
+      ['suor', 'sweat'],
+    ],
+  },
+  {
+    // What the members of 1895 wore is an inference of the research, with no
+    // photograph behind it: the label says the museum does not know.
+    keys: ['exhibit.gym-suit.label'],
+    has: [['não sabe', 'does not know']],
+    lacks: [['jogavam', 'played in'], ['pelo que se sabe', 'as far as is known']],
+  },
+  {
+    // "The wind of his members" was a calque of «fôlego».
+    keys: ['exhibit.gym-suit.catalogue'],
+    has: [['fôlego', 'stamina']],
+    lacks: [both(/\bwind\b/)],
   },
   {
     keys: ['exhibit.ball-improvised.label', 'exhibit.ball-improvised.catalogue'],
@@ -1103,7 +1140,13 @@ const HISTORY_RULES: readonly TextRule[] = [
     has: [['Hall da Fama', "Hall of Fame's reckoning"]],
     lacks: [['situa', 'places the invention']],
   },
-  { keys: ['document.halstead.body'], has: [['divergem', 'disagree']], lacks: [both('1896')] },
+  {
+    // Both sources have Gulick INVITE Morgan to demonstrate; neither says who
+    // called the conference.
+    keys: ['document.halstead.body'],
+    has: [['divergem', 'disagree'], ['a convite de', 'at the invitation of']],
+    lacks: [both('1896'), ['convocada', 'convened']],
+  },
   { keys: ['sign.atrium.eyebrow'], has: [['O JOGO DESDE 1895', 'THE GAME SINCE 1895']] },
   {
     keys: ['exhibit.atrium-ball-colour-1998.label', 'hotspot.atrium-ball-colour-1998.seam.label'],
@@ -1118,6 +1161,18 @@ const HISTORY_RULES: readonly TextRule[] = [
     keys: ['hotspot.atrium-ball-tokyo-1964.seam.label'],
     has: [[/canal/i, /channel/i]],
     lacks: [[/costura/i, /seam/i]],
+  },
+  {
+    // Whether the 1964 and 1998 balls were stitched or glued is an open
+    // source question (7.7): none of their cards may presume a seam. The
+    // catalogue entry of the Tokyo ball was left saying «costuras amareladas»
+    // when its label and its detail were corrected.
+    keys: [
+      'exhibit.atrium-ball-tokyo-1964.label',
+      'exhibit.atrium-ball-tokyo-1964.catalogue',
+      'exhibit.atrium-ball-colour-1998.catalogue',
+    ],
+    lacks: [[/costura/i, /\bseams?\b/i]],
   },
   { keys: ['exhibit.atrium-ball-laced.label'], lacks: [both('1918'), both('1925')] },
   {
@@ -1152,6 +1207,10 @@ test('every correction of the fact check is on the wall, in both languages', () 
   for (const [key, text] of Object.entries(ptBR)) {
     if (/dimples/i.test(text)) wrong.push(`${key} (pt-BR) still says dimples`)
   }
+  // The generator of the net explained its height by the claim the label
+  // dropped; whoever remodels the net reads that comment first.
+  const netGenerator = readFileSync(new URL('../scripts/bake/kit.mjs', import.meta.url), 'utf8')
+  if (/half a foot/i.test(netGenerator)) wrong.push('scripts/bake/kit.mjs still explains the net by "half a foot"')
   assert.deepEqual(wrong, [])
 })
 
@@ -1232,6 +1291,46 @@ test('the porter sends nobody to what is not there, in lines short enough to rea
         if (promise.test(dictionary[key])) wrong.push(`${key} (${locale}) still says ${promise}`)
       }
     }
+  }
+
+  // The fallback is heard only when no hint above it applies, and every room
+  // that starts dark has one of those (the office is the radio's own supply):
+  // by the time the porter says it, the lights are all back. So it may not
+  // offer «luz» as something still to do; it says the light is done.
+  assert.deepEqual(lastHint.when, {}, 'the last hint is the fallback')
+  const litByThen = new Set<string>([
+    radio.poweredBy,
+    ...radio.hints.slice(0, -1).flatMap((hint) => ('unpowered' in hint.when ? hint.when.unpowered : [])),
+  ])
+  for (const room of MUSEUM.rooms) {
+    if (!room.startsPowered && !litByThen.has(room.id)) {
+      wrong.push(`the fallback hint can be heard with "${room.id}" still dark`)
+    }
+  }
+  const lightIsDone: Record<string, RegExp> = { 'pt-BR': /luz (tá )?feita/i, en: /lights are done/i }
+  const lightStillOffered: Record<string, RegExp> = { 'pt-BR': /luz e confer/i, en: /lights and (the )?checking/i }
+  for (const key of [...lastHint.lineKeys, ...(lastHint.curtLineKeys ?? [])]) {
+    for (const [locale, dictionary] of LOCALES) {
+      const text = dictionary[key]
+      if (!lightIsDone[locale].test(text)) wrong.push(`${key} (${locale}) does not say the light is done`)
+      if (lightStillOffered[locale].test(text)) wrong.push(`${key} (${locale}) still offers the light as work to do`)
+    }
+  }
+
+  // The curt drawer hint sends the player to the portrait for a date. Nothing
+  // on the modelled frame is a plaque, and the one text at its foot is the
+  // photograph's credit, which carries another year. The hint gives the
+  // gesture that shows the right one.
+  const drawerCurt = radio.hints
+    .flatMap((hint) => hint.curtLineKeys ?? [])
+    .find((key) => key === 'radio.hint.drawer.curt')
+  assert.ok(drawerCurt, 'the drawer hint has a curt form')
+  const gesture: Record<string, RegExp> = { 'pt-BR': /inclina/i, en: /tilt/i }
+  const notModelled: Record<string, RegExp> = { 'pt-BR': /plaqueta/i, en: /plaque/i }
+  for (const [locale, dictionary] of LOCALES) {
+    const text = dictionary[drawerCurt]
+    if (!gesture[locale].test(text)) wrong.push(`${drawerCurt} (${locale}) does not say to tilt the frame`)
+    if (notModelled[locale].test(text)) wrong.push(`${drawerCurt} (${locale}) points at a plaque the frame does not have`)
   }
   assert.deepEqual(wrong, [])
 })

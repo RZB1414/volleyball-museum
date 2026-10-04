@@ -7,10 +7,13 @@ inglês, as receitas tocadas, o delta previsto por sala, as dívidas datadas e a
 no navegador. **Este arquivo não muda código.** As linhas citadas são as de `98c24b3`; o plano
 mestre cita as de `82756c4`, e a preparação deslocou algumas.
 
-**Executado em 2026-10-04.** Este plano fica como foi escrito. O que saiu, as medições do passo 6
-e os pontos em que a execução se afastou dele (uma quinta linha de catraca, o teto do par em 125,
-duas checagens a mais na vitrine corrida, o jogador do teste de alcance que mantém o quadro no
-centro da tela) estão em `docs/HANDOFF.md`, §10.
+**Executado em 2026-10-04.** Este plano fica como foi escrito, com uma exceção: a revisão
+adversarial do lote (passo 5 de §9.1) corrigiu textos e decisões, e as linhas tocadas foram
+atualizadas aqui para o plano não divergir do jogo. Cada uma leva a marca «(revisão)», e a seção
+12 diz o que mudou e por quê. O que saiu, as medições do passo 6 e os pontos em que a execução se
+afastou dele (uma quinta linha de catraca, o teto do par em 125, duas checagens a mais na vitrine
+corrida, o jogador do teste de alcance que mantém o quadro no centro da tela) estão em
+`docs/HANDOFF.md`, §10.
 
 Os números marcados **[medido]** saíram de `docs/lotes/P0-linha-de-base.md` ou de uma simulação em
 Node feita para este plano com o código real (colisão, manifesto do bake, fonte do texto 3D). Os
@@ -75,13 +78,13 @@ Pontos que o plano mestre deixava [a validar] ou em que duas passagens dele dive
 | DL1-6 | tempo-limite da porta | 30 s **de jogo** contados enquanto a sala vizinha está montada e a descoberta (três limites de `Suspense` e texto) não fecha; passa disso, a sala aquece e abre com o que tem | o que trava hoje é a descoberta (P0, #8: «o aquecimento do átrio nem começa»); a fila de GPU já assenta sozinha em falha (`test:gpu-warmup`). O saguão começa a aquecer no spawn (a porta fica a 1 m), então os 30 s correm enquanto o jogador lê o caderno e acende a luminária; e sobra folga para rede lenta, que em menos tempo abriria a sala pela metade sem precisar |
 | DL1-7 | `1896` em quantas chaves | duas, já em L1: `hotspot.portrait-morgan.date.label` e `document.halstead.title` | H-22 pede o texto em L1 e o lint em L2; a asserção de L1 conta as chaves, e o lint de L2 nasce verde |
 | DL1-8 | nome em inglês | «Volleyball Museum» | é o que já dizem o título, a folha de rosto e a gravação da portaria (três de quatro usos), e é o nome do produto; «MUSEUM OF VOLLEYBALL», na dedicatória, tem 3,87 m contra 3,55 de medida e hoje quebra em duas linhas [medido com a fonte] |
-| DL1-9 | título novo do guia sem mexer na etiqueta? | a etiqueta é reescrita junto | «Morgan conta a história» sobre um texto que só fala da bomba filipina seria incoerente, e «bomberino» não apareceu em nenhuma fonte aberta. O ataque fica na ficha, com «ficou conhecido como», até `doc-filipino-bomb` (L8) |
-| DL1-10 | dica curta da gaveta (H-21: «Vira a moldura.») | «Plaqueta de baixo da moldura.» até L4 | em L1 a data ainda está na plaqueta, que só aparece inclinando a moldura; girar de lado nunca a revela (H-18). L4 leva a data ao verso e troca a fala |
+| DL1-9 | título novo do guia sem mexer na etiqueta? | a etiqueta é reescrita junto | «Morgan conta a história» sobre um texto que só fala da bomba filipina seria incoerente, e «bomberino» não apareceu em nenhuma fonte aberta. O ataque fica na ficha, com «ficou conhecido como», até `doc-filipino-bomb` (L8). **(revisão)** A etiqueta reescrita afirmava em placa um fato de um publicador só (F12: que Morgan contou a história e deu o crédito no guia vem só do Hall da Fama). Ela passa a dizer o que tem dois: Woods e Lynch ajudaram a redigir as primeiras regras. O título, que H-44 e B.11 mandam, repousa na mesma fonte única e fica como conflito declarado para o dono (7.3) |
+| DL1-10 | dica curta da gaveta (H-21: «Vira a moldura.») | **(revisão)** «Pega a moldura e inclina: tá na borda de baixo.» até L4 (era «Plaqueta de baixo da moldura.») | em L1 a data ainda está no detalhe da borda de baixo, que só aparece inclinando a moldura; girar de lado nunca a revela (H-18). A moldura modelada não tem plaqueta (H-12), e o único texto ao pé dela é o crédito da fotografia, que diz 1897: a fala «uma data… plaqueta de baixo» mandava ao ano errado. A fala diz o gesto. L4 leva a data ao verso e troca a fala |
 | DL1-11 | `wall-fixture-off-the-wall` em L1 | só para controle de energia montado em parede | 4.4b e o Anexo C contam com o quadro da Holyoke fechado em L1 e o do átrio como dívida até L10; arte, placa e dispositivo entram em L9 (ÁT-A2) |
 | DL1-12 | catraca de bundle dentro do `check` | `npm run test:bundle` constrói (`vite build`, 3,6 s) e mede | uma catraca que lê um `dist/` velho não prova nada; assim o `check` não depende de ordem |
 | DL1-13 | chaves do dicionário sem uso (15) | três saem (`prompt.open`, `prompt.journal`, `lock.holyoke-power.mapLabel`); doze viram dívida datada | as três não têm consumidor previsto (a terceira nomeia uma tranca que não existe); as doze têm lote: ajustes (L16), modo leitura (L24), planta (L2), escada de dicas (L4) |
 | DL1-14 | etiquetas de até 40 palavras | as doze, nas duas línguas, por teste, já em L1 | cinco das que L1 reescreve passavam de 40; depois de L1 nenhuma passa. L8 leva a regra para `validatePacing` e acrescenta fichas e documentos (H-53) |
-| DL1-15 | textos vizinhos da mesma correção, fora das linhas de 3.12 | entram, declarados em T9: `ball-spalding.label` (25 a 27; «reconstrução»), `atrium-ball-tokyo-1964.label` e `atrium-ball-colour-1998.catalogue` (canal, não costura), «covinhas» nas três chaves que ainda diziam «dimples» | deixar a etiqueta ao lado dizendo o contrário da ficha corrigida seria corrigir pela metade |
+| DL1-15 | textos vizinhos da mesma correção, fora das linhas de 3.12 | entram, declarados em T9: `ball-spalding.label` (25 a 27; «reconstrução»), `atrium-ball-tokyo-1964.label` e `atrium-ball-colour-1998.catalogue` (canal, não costura), «covinhas» nas três chaves que ainda diziam «dimples». **(revisão)** Faltou `atrium-ball-tokyo-1964.catalogue`, que seguiu dizendo «costuras amareladas»: entra agora («canais amarelados»), com asserção nas três chaves | deixar a etiqueta ao lado dizendo o contrário da ficha corrigida seria corrigir pela metade |
 
 ## 3. Tarefas
 
@@ -567,14 +570,15 @@ vão transcrever.
 | `radio.hint.atrium.curt` | «Átrio. Do lado da porta da Ala 1. Luzinha vermelha. Câmbio.» | “Atrium. Beside the Wing 1 door. Little red light. Over.” | idem |
 | `radio.hint.holyoke` | «A Ala 1 tem quadro próprio, na parede do outro lado da sala, à esquerda de quem entra. Atravessa no escuro: a lanterna dá conta.» | “Wing 1 has its own breaker, on the far wall, to your left as you walk in. Cross it in the dark — the torch will do.” | `holyoke-breaker` |
 | `radio.hint.holyoke.curt` | «Ala 1. Quadro na parede do fundo, à esquerda. Luzinha vermelha. Vai.» | “Wing 1. Breaker on the far wall, to the left. Little red light. Go.” | idem |
-| `radio.hint.drawer.curt` | «Gaveta do Otávio: uma data. Retrato do Morgan, Ala 1. Plaqueta de baixo da moldura.» | “Otávio's drawer: a date. Morgan's portrait, Wing 1. The plaque at the foot of the frame.” | `office-cabinet`, `portrait-morgan` |
-| `radio.hint.vault` | «O subsolo alagou; hoje ninguém desce. O que dá pra fazer hoje é luz e conferência. Câmbio.» | “The basement flooded; nobody goes down there tonight. What can be done tonight is the lights and the checking. Over.” | nenhum objeto |
-| `radio.hint.vault.curt` | «Subsolo alagado: hoje ninguém desce. Hoje é luz e conferência.» | “Basement's flooded: nobody goes down tonight. Tonight it's lights and checking.” | nenhum objeto |
+| `radio.hint.drawer.curt` **(revisão)** | «Gaveta do Otávio: uma data. Retrato do Morgan, Ala 1. Pega a moldura e inclina: tá na borda de baixo.» | “Otávio's drawer: a date. Morgan's portrait, Wing 1. Pick the frame up and tilt it: it's on the bottom edge.” | `office-cabinet`, `portrait-morgan` (o gesto, não um objeto: DL1-10) |
+| `radio.hint.vault` **(revisão)** | «O subsolo alagou; hoje ninguém desce. A luz tá feita; fora isso, hoje é só conferência. Câmbio.» | “The basement flooded; nobody goes down there tonight. Lights are done; beyond that, it's just checking the collection. Over.” | nenhum objeto. A dica só toca com as três salas acesas (cada sala escura tem dica própria antes dela): não oferece a luz como coisa a fazer |
+| `radio.hint.vault.curt` **(revisão)** | «Subsolo alagado: hoje ninguém desce. Luz feita; fora isso, só conferência.» | “Basement's flooded: nobody goes down tonight. Lights are done; the rest is just checking.” | nenhum objeto |
 | `radio.patience.t3.crossword` | (não muda: «…Faltava “chato”, cinco letras. Fala.») | “I'd nearly finished the crossword. Just missing “pest”, five letters. Go on.” | — |
 
 As direções foram conferidas na planta: quem sai do escritório anda para oeste e tem o quadro do
 átrio 22° à direita; quem entra na Holyoke anda para oeste e tem o quadro 20,8° à esquerda. A fala
-mais longa tem 130 caracteres (inglês de `radio.call.first.3`); em português, 128.
+mais longa tem 130 caracteres (inglês de `radio.call.first.3`); em português, 128. Dica curta tem
+até 110 (`test:radio`): a da gaveta ficou com 101 em português e 107 em inglês.
 
 ### 4.2 Nome (T8)
 
@@ -592,6 +596,7 @@ mais longa tem 130 caracteres (inglês de `radio.call.first.3`); em português, 
 | `sign.atrium.eyebrow` | «O JOGO DESDE 1895 · MEMÓRIA EM MOVIMENTO» | “THE GAME SINCE 1895 · MEMORY IN MOTION” | o jogo é de 1895 (a federação e o Hall da Fama); cabe numa linha: 2,70 m e 2,51 m em 3,55 [medido] |
 | `exhibit.atrium-ball-laced.label` | «Antes da válvula embutida, era preciso abrir a cobertura para alcançar a câmara. Esta reconstrução reúne a forma vista em catálogos de época e em uma bola preservada: couro, costuras salientes e cadarço cruzado.» | “Before the recessed valve, the cover had to open to reach the bladder. This reconstruction combines the form shown in period catalogues with a surviving ball: leather, raised seams and crossed lacing.” | sem as datas até a fonte ser reaberta (7.7) |
 | `exhibit.atrium-ball-tokyo-1964.label` | «Tóquio 1964 recebeu o primeiro torneio olímpico de voleibol. As bolas oficiais preservadas mostram dezoito painéis em seis trios, couro branco-marfim e canais estreitos entre os painéis. A ficha do acervo não identifica o fabricante desta reconstrução.» | “Tokyo 1964 hosted the first Olympic volleyball tournament. Surviving official balls show eighteen panels in six groups of three, ivory-white leather and narrow channels between the panels. The collection record does not identify a maker for this reconstruction.” | não pressupõe costura (07, 2.1) |
+| `exhibit.atrium-ball-tokyo-1964.catalogue` **(revisão)** | «…O exemplar não usado preservado pelo Japan Sport Council é marfim, com grão fino, canais amarelados e pequenas manchas ocres…» (só a palavra) | “…is ivory, with fine grain, yellowed channels and small ochre stains…” | idem: a ficha dizia «costuras amareladas» |
 | `hotspot.atrium-ball-tokyo-1964.seam.label` | «Canal estreito e rebaixado entre os painéis» | “Narrow recessed channel between the panels” | idem |
 | `exhibit.atrium-ball-colour-1998.label` | «No Mundial de 1998, a bola oficial passou a usar branco, amarelo e azul para ganhar leitura em quadra e na transmissão. A MVL200 manteve a construção clássica: dezoito painéis, agora organizados em grandes faixas contrastantes.» | “At the 1998 World Championship, the official ball adopted white, yellow and blue for clearer reading on court and on television. The MVL200 retained the classic construction: eighteen panels, now arranged as broad contrasting bands.” | ano, cores e modelo: a federação, o fabricante, o prêmio de design; sem «costurados à mão» |
 | `exhibit.atrium-ball-colour-1998.catalogue` | «Mikasa MVL200, desenho adotado no Campeonato Mundial de 1998. Reconstrução sem logotipos. Os seis trios alternam branco–amarelo–branco e azul–amarelo–azul; a cobertura tem grão fino, brilho acetinado e canais rebaixados, sem as covinhas da geração seguinte.» | “Mikasa MVL200, the design adopted for the 1998 World Championship. Reconstructed without logos. Its six trios alternate white–yellow–white and blue–yellow–blue; the cover has fine grain, a satin sheen and recessed channels, without the dimples of the next generation.” | idem |
@@ -613,17 +618,17 @@ mais longa tem 130 caracteres (inglês de `radio.call.first.3`); em português, 
 | `exhibit.handbook-1897.label` | «O Official Handbook da Liga Atlética da YMCA, de 1897, é o primeiro manual oficial: quadra de 25 por 50 pés, rede a 6 pés e 6 polegadas, bola de 25 a 27 polegadas. A partida tinha nove innings.» | “The 1897 Official Handbook of the YMCA Athletic League is the first official handbook: a 25 by 50 foot court, a net at 6 feet 6 inches and a ball of 25 to 27 inches. A game ran nine innings.” | `first-rulebook`; medidas do manual |
 | `exhibit.handbook-1897.catalogue` | «Official Handbook of the Athletic League of the Y.M.C.A. of North America, 1897. Fac-símile. As dez regras originais haviam saído um ano antes, em julho, na revista Physical Education. O nome foi grafado em duas palavras — volley ball — até 1952, quando a associação americana adotou a forma em uma palavra.» | “Official Handbook of the Athletic League of the Y.M.C.A. of North America, 1897. Facsimile. The original ten rules had appeared a year earlier, in July, in Physical Education magazine. The name was written as two words — volley ball — until 1952, when the American association adopted the one-word form.” | 1952: a federação (um publicador: fica na ficha, não em placa); o ano da tranca sai desta chave |
 | `exhibit.guide-1916.title` | «Morgan conta a história» | “Morgan tells the story” | — |
-| `exhibit.guide-1916.label` | «Duas décadas depois de inventar o jogo, Morgan contou a história no guia de vôlei da Spalding. Nele deu crédito ao Dr. Frank Woods e ao chefe dos bombeiros John Lynch pelas contribuições às primeiras regras.» | “Two decades after inventing the game, Morgan told its story in Spalding's volleyball guide. In it he credited Dr. Frank Woods and fire chief John Lynch for their contributions to the first rules.” | o artigo e o crédito: a federação e o Hall da Fama (que cita a página 11 do guia); «Woods» |
+| `exhibit.guide-1916.label` **(revisão)** | «O Dr. Frank Woods e o chefe dos bombeiros John Lynch, de Holyoke, ajudaram Morgan a redigir as primeiras regras do jogo. Este guia de vôlei da Spalding, edição de 1916–17, saiu duas décadas depois da invenção.» | “Dr. Frank Woods and fire chief John Lynch, both of Holyoke, helped Morgan draw up the first rules of the game. This Spalding volleyball guide, the 1916–17 edition, came out two decades after the invention.” | que os dois ajudaram a redigir as primeiras regras: a federação e o Hall da Fama (dois publicadores). F12 (o artigo de Morgan e o crédito no guia) é **só** a página de história do Hall da Fama, que cita a página 11 do guia: um publicador, fica na ficha e no detalhe; a federação não sustenta nem o artigo nem o crédito. «Woods» |
 | `exhibit.guide-1916.catalogue` | «Spalding Athletic Library — Volley Ball Guide, edição de 1916–17. Foi nele que Morgan creditou o Dr. Frank Woods e o chefe dos bombeiros John Lynch pelas contribuições às primeiras regras. Da mesma década é o ataque que ficou conhecido como bomba filipina: um passe alto e, em seguida, um golpe para baixo.» | “Spalding Athletic Library — Volley Ball Guide, 1916–17 edition. It is here that Morgan credited Dr. Frank Woods and fire chief John Lynch for their contributions to the first rules. From the same decade comes the attack that became known as the Filipino bomb: a high pass, then a downward strike.” | `filipino-spike` (um publicador: ficha); sem a causalidade, sem «bomberino» |
 | `hotspot.guide-1916.credit.label` | «Morgan credita Frank Woods e John Lynch» | “Morgan credits Frank Woods and John Lynch” | idem |
 | `hotspot.guide-1916.census.label` | «Estimativa de 1916: cerca de 200 mil praticantes nos Estados Unidos» | “An estimate from 1916: roughly 200,000 players in the United States” | é a estimativa de um autor do guia, não um censo |
 | `exhibit.gym-suit.title` | «O traje de ginásio de catálogo» | “The catalogue gymnasium suit” | — |
-| `exhibit.gym-suit.label` | «Malha de lã canelada e calça até o joelho, como nos catálogos de artigos esportivos de c. 1901–1915. Os sócios de 1895, pelo que se sabe, jogavam de camisa e calça comprida.» | “Ribbed wool jersey and knee-length trousers, as in sporting-goods catalogues of c. 1901–1915. The members of 1895, as far as is known, played in shirts and long trousers.” | a pesquisa dá as duas variantes como inferência (não há fotografia dos sócios de 1895): daí «pelo que se sabe» |
-| `exhibit.gym-suit.catalogue` | «Traje de ginásio como os dos catálogos de c. 1901–1915. Reprodução. Morgan explicou o jogo pela idade e pelo fôlego dos sócios, não pela roupa: era recreação para homens de meia-idade que achavam o basquete pesado demais.» | “A gymnasium suit like those in catalogues of c. 1901–1915. Reproduction. Morgan explained the game by the age and the wind of his members, not by their clothes: it was recreation for middle-aged men who found basketball too strenuous.” | sem a causalidade da lã; sem sola de borracha |
+| `exhibit.gym-suit.label` **(revisão)** | «Malha de lã canelada e calça até o joelho: traje de ginásio de catálogo, feito pelo museu. O museu não achou fotografia dos sócios de 1895 e não sabe o que eles vestiam.» | “Ribbed wool jersey and knee-length trousers: a catalogue gymnasium suit, made by the museum. The museum has found no photograph of the members of 1895 and does not know what they wore.” | descrição do objeto e declaração do que não se sabe. A pesquisa dá as duas variantes como inferência (não há fotografia dos sócios de 1895), e «pelo que se sabe» punha inferência em placa como conhecimento; a data «c. 1901–1915» não tem catálogo aberto e capturado (plano, 7.7, item 20) |
+| `exhibit.gym-suit.catalogue` **(revisão)** | «Traje de ginásio como os dos catálogos de artigos esportivos de época. Reprodução. Morgan explicou o jogo pela idade e pelo fôlego dos sócios, não pela roupa: era recreação para homens de meia-idade que achavam o basquete pesado demais.» | “A gymnasium suit like those in period sporting-goods catalogues. Reproduction. Morgan explained the game by his members' age and stamina, not by their clothes: it was recreation for middle-aged men who found basketball too strenuous.” | sem a data (como a bola de cadarço: até a fonte ser aberta); sem a causalidade da lã; sem sola de borracha. O inglês dizia “the wind of his members”, calque de «fôlego» |
 | `exhibit.portrait-morgan.label` | «Diretor de educação física da YMCA de Holyoke. Em 1895, aos 25 anos, criou um jogo sem contato para sócios mais velhos e sedentários. Chamou-o de Mintonette. Havia conhecido James Naismith, o inventor do basquete, no início dos anos 1890.» | “Physical director of the Holyoke YMCA. In 1895, aged 25, he devised a non-contact game for older, sedentary members. He called it Mintonette. He had met James Naismith, the inventor of basketball, in the early 1890s.” | 1891 × 1892 (7.4) |
 | `exhibit.portrait-morgan.catalogue` | «William George Morgan (Lockport, Nova York, 23 de janeiro de 1870 — dezembro de 1942). Formou-se pela International YMCA Training School em 1894 e assumiu Holyoke em 30 de agosto de 1895. No ano seguinte, em Springfield, aceitou trocar o nome Mintonette por Volley Ball; se foi numa visita ou na demonstração da conferência da YMCA, as fontes divergem. Deixou a YMCA em 1897 para trabalhar na indústria.» | “William George Morgan (Lockport, New York, 23 January 1870 — December 1942). He graduated from the International YMCA Training School in 1894 and took up the Holyoke post on 30 August 1895. The following year, in Springfield, he agreed to rename Mintonette Volley Ball; whether on a visit or at the YMCA conference demonstration, the sources disagree. He left the YMCA in 1897 for industry.” | 1897 (H-38); morte sem o dia (27 × 28); a divergência da ocasião declarada; o ano da tranca sai desta chave |
 | `hotspot.portrait-morgan.date.label` | «Plaqueta da moldura: em 1896, em Springfield, o Mintonette passou a se chamar Volley Ball» | “Frame plaque: in 1896, in Springfield, Mintonette was renamed Volley Ball” | `springfield-renaming` (chave autorizada 1 de 2) |
-| `exhibit.photo-gym.label` | «O ginásio da YMCA de Holyoke, em fotografia publicada em 1897: argolas, cavalo com alças, pesos de polia e, no alto, a pista de corrida suspensa. Foi neste espaço que a primeira partida foi jogada.» | “The Holyoke YMCA gymnasium, in a photograph published in 1897: rings, a pommel horse, pulley weights and, overhead, the suspended running track. This is the space the first match was played in.” | «publicada», não «fotografado» (o crédito da imagem); descreve o que a foto mostra; sem esquina, sem treliças |
+| `exhibit.photo-gym.label` **(revisão: «cavalo de salto»)** | «O ginásio da YMCA de Holyoke, em fotografia publicada em 1897: argolas, cavalo de salto, pesos de polia e, no alto, a pista de corrida suspensa. Foi neste espaço que a primeira partida foi jogada.» | “The Holyoke YMCA gymnasium, in a photograph published in 1897: rings, a vaulting horse, pulley weights and, overhead, the suspended running track. This is the space the first match was played in.” | «publicada», não «fotografado» (o crédito da imagem); descreve o que a foto mostra; sem esquina, sem treliças |
 | `exhibit.photo-gym.catalogue` | «Interior do antigo prédio da YMCA de Holyoke. Reprodução de fotografia publicada em 1897 na Transcript Industrial Edition. O prédio, do começo dos anos 1890, queimou em 1943. Daqui saíram os dois times de cinco jogadores que Morgan levou a Springfield para demonstrar o jogo.» | “Interior of the old Holyoke YMCA building. Reproduction of a photograph published in 1897 in the Transcript Industrial Edition. The building, from the early 1890s, burned down in 1943. From here came the two five-man teams Morgan took to Springfield to demonstrate the game.” | o prédio e o incêndio: a descrição do arquivo de imagens (um publicador: ficha); sem 1886; o ano da tranca sai desta chave |
 
 ### 4.5 Documentos e fatos (T9)
@@ -632,16 +637,17 @@ mais longa tem 130 caracteres (inglês de `radio.call.first.3`); em português, 
 |---|---|---|---|
 | `document.invention-date.body` | «A data de 9 de fevereiro de 1895, repetida em quase toda parte, não resiste ao arquivo. O International Volleyball Hall of Fame não encontrou citação verificável para ela e estabeleceu que o posto de Morgan em Auburn, no Maine, só terminou em agosto de 1895, e que ele assumiu Holyoke em 30 de agosto. Pela conta do Hall da Fama, a invenção cai provavelmente em dezembro de 1895. Nesta ala, portanto, as placas dizem apenas 1895.» | “The date of 9 February 1895, repeated almost everywhere, does not survive the archive. The International Volleyball Hall of Fame found no verifiable citation for it and established that Morgan's posting in Auburn, Maine only ended in August 1895, and that he took up Holyoke on 30 August. By the Hall of Fame's reckoning, the invention probably falls in December 1895. The plaques in this wing therefore say only 1895.” | o Hall da Fama infere, não afirma |
 | `document.halstead.title` | «Springfield, 1896» | “Springfield, 1896” | `springfield-renaming` (chave autorizada 2 de 2) |
-| `document.halstead.body` | «Morgan demonstrou o jogo no ginásio leste da International YMCA Training School, na conferência de diretores de educação física convocada por Luther Halsey Gulick. Levou dois times de cinco homens de Holyoke, capitaneados pelo prefeito James J. Curran e pelo chefe dos bombeiros John Lynch. Foi o professor Alfred T. Halstead quem propôs trocar Mintonette por Volley Ball, e Morgan aceitou. As fontes divergem sobre a ocasião: o Hall da Fama fala de uma visita no início do ano e data a conferência de 7 de julho; a federação internacional põe a sugestão depois da demonstração.» | “Morgan demonstrated the game in the east gymnasium of the International YMCA Training School, at the physical directors' conference convened by Luther Halsey Gulick. He brought two five-man teams from Holyoke, captained by mayor James J. Curran and fire chief John Lynch. It was Professor Alfred T. Halstead who proposed replacing Mintonette with Volley Ball, and Morgan agreed. The sources disagree on the occasion: the Hall of Fame speaks of a visit early in the year and dates the conference to 7 July; the international federation places the suggestion after the demonstration.” | a divergência declarada (07, 1.1); o corpo não repete o ano |
+| `document.halstead.body` **(revisão: «a convite de»)** | «Morgan demonstrou o jogo no ginásio leste da International YMCA Training School, na conferência de diretores de educação física da YMCA, a convite de Luther Halsey Gulick. Levou dois times de cinco homens de Holyoke, capitaneados pelo prefeito James J. Curran e pelo chefe dos bombeiros John Lynch. Foi o professor Alfred T. Halstead quem propôs trocar Mintonette por Volley Ball, e Morgan aceitou. As fontes divergem sobre a ocasião: o Hall da Fama fala de uma visita no início do ano e data a conferência de 7 de julho; a federação internacional põe a sugestão depois da demonstração.» | “Morgan demonstrated the game in the east gymnasium of the International YMCA Training School, at the YMCA physical directors' conference, at the invitation of Luther Halsey Gulick. He brought two five-man teams from Holyoke, captained by mayor James J. Curran and fire chief John Lynch. It was Professor Alfred T. Halstead who proposed replacing Mintonette with Volley Ball, and Morgan agreed. The sources disagree on the occasion: the Hall of Fame speaks of a visit early in the year and dates the conference to 7 July; the international federation places the suggestion after the demonstration.” | a divergência declarada (07, 1.1); o corpo não repete o ano |
 | `document.rule-changes.body` | «Em 1917 a partida encurtou de vinte e um para quinze pontos. Em 1918 o número de jogadores foi fixado em seis por lado. Em 1920 vieram duas regras: no máximo três toques por equipe e restrição ao ataque vindo do fundo da quadra. Sobre os três toques as fontes divergem: a federação internacional diz 1922.» | “In 1917 a game was shortened from twenty-one points to fifteen. In 1918 the number of players was fixed at six per side. In 1920 came two rules: a maximum of three contacts per team, and a restriction on attacking from the back row. On the three contacts the sources disagree: the international federation says 1922.” | `six-a-side`; sem «as três respondem ao mesmo problema», sem «até hoje», sem os algarismos 21 e 15 |
 | `fact.first-rulebook.claim` | «Ano do primeiro manual oficial» | “The year of the first official handbook” | `first-rulebook` |
 
 Saem dos dois dicionários (DL1-13): `prompt.open`, `prompt.journal`, `lock.holyoke-power.mapLabel`.
-No total mudam 48 chaves em pt-BR e 45 em inglês.
+No total mudam 49 chaves em pt-BR e 46 em inglês (a revisão somou a ficha da bola de Tóquio).
 
 Contagem de palavras das doze etiquetas, depois de L1 (pt-BR / inglês): cadarço 34 / 32; Tóquio
 37 / 38; três cores 36 / 35; oito gomos 40 / 39; câmara 37 / 39; Spalding 37 / 35; rede 40 / 40;
-manual 39 / 40; guia 36 / 33; traje 32 / 28; retrato 40 / 36; ginásio 35 / 32. Hoje: rede 49 / 44,
+manual 39 / 40; guia 37 / 35; traje 33 / 32; retrato 40 / 36; ginásio 35 / 32 (guia e traje, depois
+da revisão). Hoje: rede 49 / 44,
 manual 51 / 51, guia 42 / 41, traje 41, Spalding 42.
 
 ## 5. Receitas tocadas
@@ -686,6 +692,7 @@ novo no passo 6, do mesmo jeito (seção 0 daquele registro).
 | `i18n-key-unused` | `lock.opened`, `lock.hint.highlight`, `lock.hint.audio`, `lock.hint.reveal` | L4 | escada de dicas (H-19): usa ou apaga |
 | `wall-fixture-off-the-wall` | `atrium-breaker` | L10 | ÁT-A2: 25,5 cm do reboco acima do lambri |
 | `pilot-reaches-neighbour` | `atrium-breaker` | L10 | ÁT-B4: alcance de 2,4 m a 1,06 m da Holyoke |
+| `lighthouse-walk-blocked` **(revisão)** | `holyoke-breaker` | L14 | quem anda reto da porta para o piloto para no quiosque, a 7,6 m do quadro; a rota provada é um desvio (seção 12) |
 | `ratchet-over-budget` | `kit-glb` | L6 | 2.189 KB contra 800 do papel |
 | `ratchet-over-budget` | `programs` | L6 | 35 contra 25 |
 | `ratchet-over-budget` | `resident-texture` | L7 | 107,08 MiB contra 45 (a mídia fora do portão está aqui dentro) |
@@ -712,6 +719,14 @@ novo no passo 6, do mesmo jeito (seção 0 daquele registro).
 - `document.halstead` é `kind: 'letter'` sem ser carta (07, 2.2): L8.
 - As fichas ainda dizem «Reprodução» e «Fac-símile» onde B.11 diz reconstrução: L8 (proveniência).
 - O detalhe `credit` do guia ainda revela `filipino-spike` (H-11, H-44): L4.
+- **(revisão)** O título do guia, «Morgan conta a história» (H-44, B.11), repousa no mesmo
+  publicador único que a frase tirada da etiqueta (F12, «V: guia»). A regra 7.1(3) do plano mestre
+  pede dois para parede; o plano manda o título. Fica para o dono, antes de L8: ou a segunda fonte
+  (o scan do guia de 1916–17, 7.7 itens 2 e 21), ou outro título.
+- **(revisão)** A data do traje («c. 1901–1915») volta à ficha quando um catálogo for aberto e
+  capturado (plano, 7.7, item 20): L14, junto do traje.
+- **(revisão)** A plaqueta do retrato não é modelada (H-12) e a legenda ao pé da moldura mostra
+  1897; a dica curta passou a dizer o gesto. L4 leva a data ao verso (H-18).
 
 ### 7.4 Fechadas por L1
 
@@ -751,16 +766,23 @@ AS-H1, CAP-1 e a parte de L1 de AS-H3; AS-H14 para o quadro da Holyoke; a metade
 | `hotspot.guide-1916.census.label` | Estimativa / estimate | Censo / census |
 | `exhibit.handbook-1897.title`, `fact.first-rulebook.claim` | «manual oficial» / “official handbook” | regulamento / rulebook |
 | `exhibit.handbook-1897.catalogue` | 1952; «associação americana» / “American association” | 1896 |
-| `exhibit.photo-gym.label` | «publicada em 1897» / “published in 1897” | treliças / trusses; High; Appleton; fotografado / photographed |
+| `exhibit.photo-gym.label` | «publicada em 1897» / “published in 1897”; **(revisão)** «cavalo de salto» / “vaulting horse” | treliças / trusses; High; Appleton; fotografado / photographed; **(revisão)** «com alças» / pommel |
 | `exhibit.photo-gym.catalogue` | 1943 | 1886; 1896 |
-| `exhibit.gym-suit.label`, `.catalogue` | 1901–1915 | sola / sole; óxido / oxide; vitoriano / Victorian; suor / sweat |
+| `exhibit.gym-suit.label`, `.catalogue` **(revisão)** | — (a data saiu) | 1901; sola / sole; óxido / oxide; vitoriano / Victorian; suor / sweat |
+| `exhibit.gym-suit.label` **(revisão)** | «não sabe» / “does not know” | jogavam / “played in”; «pelo que se sabe» / “as far as is known” |
+| `exhibit.gym-suit.catalogue` **(revisão)** | fôlego / stamina | “wind” |
+| `exhibit.guide-1916.label` **(revisão)** | «ajudaram Morgan» / “helped Morgan” | contou, creditou, «deu crédito» / told, credited |
+| `exhibit.atrium-ball-tokyo-1964.label`, `.catalogue`, `exhibit.atrium-ball-colour-1998.catalogue` **(revisão)** | — | costura / seam |
+| `radio.hint.vault`, `.curt` **(revisão)** | «luz (tá) feita» / “lights are done” | «luz e conferência» / “lights and (the) checking” |
+| `radio.hint.drawer.curt` **(revisão)** | inclina / tilt | plaqueta / plaque |
+| `scripts/bake/kit.mjs` (comentário da rede) **(revisão)** | — | “half a foot” |
 | `exhibit.ball-improvised.label`, `.catalogue` | «leve e lenta demais» / “too light and too slow” | boiava / floated; «mole demais» / “too soft”; «primeiro objeto» / “first object” |
 | `exhibit.ball-spalding.label` | «25 a 27» / “25 to 27” | «Cerca de 25» / “Roughly 25” |
 | `exhibit.ball-spalding.catalogue` | «anos 1920» / “1920s” | «anos 1930» / “1930s”; «c. 1900–1920» |
 | `document.rule-changes.body` | 1922 | os algarismos 21 e 15; «até hoje» / “to this day”; «As três» / “All three” |
 | `document.invention-date.body` | «Hall da Fama» / “Hall of Fame's reckoning” | situa / “places the invention” |
 | `document.halstead.title` | igual a «Springfield, 1896» | — |
-| `document.halstead.body` | divergem / disagree | 1896 |
+| `document.halstead.body` | divergem / disagree; **(revisão)** «a convite de» / “at the invitation of” | 1896; **(revisão)** convocada / convened |
 | `sign.atrium.eyebrow` | «O JOGO DESDE 1895» / “THE GAME SINCE 1895” | — |
 | `exhibit.atrium-ball-colour-1998.label`, `hotspot….seam.label` | — | «costurados à mão» / “hand-stitched” |
 | `exhibit.atrium-ball-eight-panel-2008.title` | covinhas / dimpled | milhares / thousands |
@@ -786,8 +808,9 @@ continua, o quadro continua desenhado, `E` religa, a lente fica verde. Dedicató
 **B. `?qaSave=production-radio-on-desk`** (escritório e átrio acesos, Holyoke escura, rádio na
 mesa: é a volta sem rádio). Entrar na Holyoke: **o piloto visto da porta, no escuro** (comparar com
 `p0-e01-holyoke-entry-pilot-out-of-view-dark-notorch` e
-`p0-e04-breaker-site-recommended-z22-from-entry-dark-notorch`). Atravessar em diagonal, encostar no
-quadro, religar, sair pelo atalho.
+`p0-e04-breaker-site-recommended-z22-from-entry-dark-notorch`). Atravessar contornando o quiosque
+(a reta da porta ao piloto passa pelo meio dele: seção 12), encostar no quadro, religar, sair pelo
+atalho.
 
 **C. `?qaSave=production-drawer-closed`** (três salas acesas). **Os quatro vãos**, com as câmeras
 de P0 #3 levadas ao centro de cada vão: retrato `-13.21,0,6.45,3.1416,0.25`, panorama
@@ -835,3 +858,30 @@ Nunca editar `bake.generated.ts`, `public/models/*` ou `public/textures/material
 | o retrato 4 cm mais alto | centro a 1,96 m, 34 cm acima do olho | a folha de contato decide; a faixa que passa no teste vai de 1,94 a 2,21 m |
 | vãos de quadro com a prateleira de baixo vazia | os vãos 0 e 1 ficam só com o quadro em cima | é o estado honesto até L14 (carcaça por vão, recheio como dado) |
 | `short_name` de 17 caracteres | cortado sob o ícone | conferir no aparelho real (L6); se cortar, o dono decide |
+| **(revisão)** o manual de 1897, centrado no vão 3, saiu do cone do foco oeste da vitrine | 19,8° do eixo → 34,1°: fator 0,65 → 0; fica só com a lavagem da sala, e o foco ilumina o vão que não hospeda nada | fica para L10 (H-24, chaves K2 e K3), que reaponta os focos com aceite visual; registrado no HANDOFF §10.8 |
+| **(revisão)** a reta da porta da Holyoke ao piloto cruza o quiosque | a cápsula para na face comprida dele, a 7,6 m do quadro | dívida datada `lighthouse-walk-blocked` até L14; a rota provada contorna (seção 12) |
+
+## 12. Revisão adversarial (2026-10-04): o que mudou neste plano
+
+O passo 5 de §9.1 rodou sobre os dois commits do lote, em cinco lentes, e devolveu 27 achados (19
+distintos). O registro completo, com o que cada um virou e onde está provado, está em
+`docs/HANDOFF.md`, §10.11. Aqui fica só o que alterou linhas deste plano (marcadas «(revisão)»
+acima) ou mudou como uma tarefa dele se lê.
+
+| Onde | Dizia | Diz | Por quê |
+|---|---|---|---|
+| DL1-9; 4.4, `exhibit.guide-1916.label` | Morgan contou a história no guia e nele deu o crédito; `claims`: «a federação e o Hall da Fama» | Woods e Lynch ajudaram a redigir as primeiras regras; o crédito no guia fica na ficha | o artigo e o crédito no guia são F12, um publicador (o Hall da Fama, página 11): a regra 7.1(3) não deixa ir para placa. O título fica para o dono (7.3) |
+| DL1-10; 4.1, `radio.hint.drawer.curt` | «Plaqueta de baixo da moldura.» | «Pega a moldura e inclina: tá na borda de baixo.» | a moldura modelada não tem plaqueta; o texto ao pé dela é o crédito da foto, com 1897 |
+| 4.1, `radio.hint.vault` e `.curt` | «O que dá pra fazer hoje é luz e conferência» | «A luz tá feita; fora isso, hoje é só conferência» | a dica só toca com as três salas acesas; e o inglês “the lights and the checking” não era inglês |
+| DL1-15; 4.3 | três chaves vizinhas | mais `atrium-ball-tokyo-1964.catalogue` | a ficha ainda dizia «costuras amareladas» |
+| 4.4, `exhibit.gym-suit.label`, `.catalogue` | «c. 1901–1915»; «os sócios de 1895, pelo que se sabe, jogavam de camisa e calça comprida» | sem data; «o museu… não sabe o que eles vestiam» | nenhum catálogo aberto e capturado; a roupa dos sócios é inferência da pesquisa |
+| 4.4, `exhibit.photo-gym.label` | «cavalo com alças» / “a pommel horse” | «cavalo de salto» / “a vaulting horse” | o aparelho da foto não tem alças |
+| 4.5, `document.halstead.body` | «convocada por Luther Halsey Gulick» | «a convite de Luther Halsey Gulick» | as duas fontes dizem que ele convidou Morgan; nenhuma diz quem convocou |
+| T9 | o comentário de `kit.mjs` «passa a…» | passou, na revisão | o item tinha caído em silêncio |
+| T6, item 4; ÁT-H3 | «em cada ponto final diante de um quadro» | igual, e declarado como redução | a linha do plano mestre pede «cada interativo»; o resto é de M15, em L2 (HANDOFF, 10.7) |
+| 9, rota B | «Atravessar em diagonal» | contornar o quiosque | a reta da porta ao piloto cruza o `history-info-kiosk`; dívida `lighthouse-walk-blocked` até L14 |
+| 7.1, 7.3, 8.2, 11 | — | as linhas novas de dívida, de registro, de asserção e de risco | idem |
+
+O que a revisão **não** mudou neste plano: a tabela de receitas (5) e o delta por sala (6). Nenhuma
+geometria, material ou programa foi tocado; só a cor do crédito sob os quadros (`CREDIT_COLOUR`,
+que T4 não previa) e duas tabelas que saíram de componentes para `src/engine/runtimePlacedParts.ts`.

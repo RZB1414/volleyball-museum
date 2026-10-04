@@ -2,52 +2,27 @@
  * Walks the real player capsule (`movePlayer`) along 25 routes of the atrium
  * and reports where it arrives, where it stops and how low it sinks.
  *
- * The same collision code and the same room shells as the game, with no
- * browser: it is how the audit proved the capsule ends up inside the breaker
- * panel (ÁT-A1) and walks through the queue ropes (ÁT-H1). Read-only.
+ * The same collision code and the same world as the game and as the gate,
+ * with no browser. It is how the audit proved the capsule ended up inside
+ * the breaker panel (ÁT-A1) and walks through the queue ropes (ÁT-H1). The
+ * first of those was closed in L1: the breaker is solid now, and the first
+ * route shows the capsule stopping short of it. Read-only.
+ *
+ * The world is `buildMuseumWorld`, the one `test:navigation` and
+ * `test:power` walk: shells, kit, containers and the power controls. This
+ * script used to build its own, which is how it went on reporting a breaker
+ * the capsule could walk into after the game had made it solid.
  *
  *   npm run audit:walk
  */
 
 import { load } from './lib/repo.mjs'
 
-const THREE = await import('three')
-const { BoxGeometry, Mesh, MeshBasicMaterial, Vector3 } = THREE
-const { BAKED_BUNDLES } = await load('src/content/bake.generated.ts')
-const { MUSEUM } = await load('src/content/museum.ts')
-const { movePlayer, worldFromMeshes } = await load('src/engine/collision.ts')
-const { buildRoomShell, prepareRoomShells } = await load('scripts/bake/kit.mjs')
+const { Vector3 } = await import('three')
+const { movePlayer } = await load('src/engine/collision.ts')
+const { buildMuseumWorld, CAPSULE } = await load('scripts/lib/museumWorld.ts')
 
-const CAPSULE = { radius: 0.3, height: 1.75 }
-const kit = BAKED_BUNDLES.find((b) => b.name === 'kit')
-const shells = prepareRoomShells(MUSEUM.rooms)
-const byId = new Map(shells.map((r) => [r.id, r]))
-const meshes = []
-const partsFor = (name) => kit.parts.filter((p) => p.collider && (p.name === name || p.name.startsWith(name + '__')))
-for (const room of MUSEUM.rooms) {
-  for (const part of buildRoomShell(byId.get(room.id))) {
-    const m = new Mesh(part.geometry, new MeshBasicMaterial())
-    m.name = part.name
-    m.position.set(...room.origin)
-    meshes.push(m)
-  }
-  const add = (pl) => {
-    for (const part of partsFor(pl.part)) {
-      const [hx, hy, hz] = part.collider.halfExtents
-      const g = new BoxGeometry(hx * 2, hy * 2, hz * 2)
-      g.translate(...part.collider.centre)
-      const m = new Mesh(g, new MeshBasicMaterial())
-      m.name = `${room.id}__${part.name}__collider`
-      m.position.set(room.origin[0] + pl.position[0], room.origin[1] + pl.position[1], room.origin[2] + pl.position[2])
-      m.rotation.y = pl.rotationY ?? 0
-      m.scale.setScalar(pl.scale ?? 1)
-      meshes.push(m)
-    }
-  }
-  for (const pl of room.kit) add(pl)
-  for (const c of room.containers ?? []) add({ ...c, scale: 1 })
-}
-const world = worldFromMeshes(meshes)
+const world = buildMuseumWorld()
 const STEP = 1 / 60
 function walk(points, speed = 3.4, limit = 40) {
   const pos = new Vector3(points[0][0], 0, points[0][1])

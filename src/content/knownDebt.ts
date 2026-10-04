@@ -29,7 +29,7 @@ import type { ValidationIssue } from './validate.ts'
  * The npm script that raises a code. Each gate settles its own lines and
  * only those: to the content gate, a debt of the power suite would look paid.
  */
-export type DebtGate = 'validate:content' | 'test:power' | 'test:ratchets'
+export type DebtGate = 'validate:content' | 'test:power' | 'test:ratchets' | 'test:navigation'
 
 export type KnownDebt = {
   readonly gate: DebtGate
@@ -112,6 +112,21 @@ export const KNOWN_DEBT: readonly KnownDebt[] = [
     id: 'atrium-breaker',
     untilLot: 10,
     note: 'ÁT-B4: a 2.4 m pilot 1.06 m from the Holyoke wing (the reach comes down to 0.8 m)',
+  },
+
+  // Moving the Holyoke breaker to the far wall made it a lighthouse, and put
+  // the interpretation kiosk square across the straight line to it: a player
+  // who walks at the red light comes to rest against the kiosk's long face,
+  // seven metres short. Getting there is proven by a route that goes round.
+  // Clearing the line turns or moves the piece the wing's first view is
+  // composed round (about 20 degrees, or 1.7 m), so it waits for the lot
+  // that recomposes the wing with the owner looking.
+  {
+    gate: 'test:navigation',
+    code: 'lighthouse-walk-blocked',
+    id: 'holyoke-breaker',
+    untilLot: 14,
+    note: 'the kiosk stands across the straight line from the door to the breaker: re-sited with the wing (L14)',
   },
 
   // Ratchets held at what was measured, above what the plan budgets. Both

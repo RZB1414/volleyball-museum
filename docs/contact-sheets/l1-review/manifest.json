@@ -1,0 +1,36 @@
+{
+  "set": "l1-review",
+  "capturedAt": "2026-10-04",
+  "commit": "047f3bb+",
+  "report": "docs/HANDOFF.md",
+  "filePrefix": "l1r",
+  "viewport": {
+    "cssWidth": 1280,
+    "cssHeight": 720,
+    "pixelRatio": 1.2,
+    "quality": "medium"
+  },
+  "frame": {
+    "width": 1536,
+    "height": 864
+  },
+  "groups": {
+    "h": {
+      "room": "holyoke",
+      "powered": true
+    },
+    "e": {
+      "room": "holyoke",
+      "powered": false
+    }
+  },
+  "frozen": false,
+  "count": 4,
+  "digest": "f29cbd37e1cd571df6cf99d012daefd12bd428969b7f2e6d1d432116fe170394",
+  "captures": [
+    {"id":"e01","file":"l1r-e01-case-run-credits-from-three-metres-dark-notorch.jpg","room":"holyoke","light":"dark","view":"room","subject":"case-run-credits-from-three-metres","width":1536,"height":864,"bytes":81054,"sha256":"568234d4f7de2b9ebf89d62270d7f30d00bee797b9efd786286b66fd494d9fd5"},
+    {"id":"e02","file":"l1r-e02-case-run-credits-from-three-metres-torch.jpg","room":"holyoke","light":"torch","view":"room","subject":"case-run-credits-from-three-metres","width":1536,"height":864,"bytes":105033,"sha256":"2499544c7acd146dfd2a6bdcafb22930c3a3453d3476899d96d0941dc3e3e595"},
+    {"id":"h01","file":"l1r-h01-case-run-photo-gym-credit-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"case-run-photo-gym-credit","width":1536,"height":864,"bytes":257010,"sha256":"c307dc99a507d72a2ff60a732665684cebdfd5b8c1cd4480e67ee6a6fd52fe19"},
+    {"id":"h02","file":"l1r-h02-case-run-portrait-morgan-credit-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"case-run-portrait-morgan-credit","width":1536,"height":864,"bytes":103367,"sha256":"a64b2930d56ac08346e465f2a89da47728cf5405f910060a328f50617f3fb264"}
+  ]
+}

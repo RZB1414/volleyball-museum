@@ -12,19 +12,26 @@
  * follow — and nothing else in the gate would ever notice a markdown file
  * that names a script which was left behind in a scratch directory.
  *
- * It also pins the two promises the preparation lot made about the tools: the
+ * It also pins the promises the preparation lot made about the tools: the
  * measurement scripts run from any clone (no checkout path inside them, an
- * `npm run audit:*` entry each, none of them in the gate), and the August plan
- * says, where it was superseded, that it was.
+ * `npm run audit:*` entry each, none of them judging in the gate) and they
+ * still RUN on today's tree; and the August plan says, where it was
+ * superseded, that it was.
+ *
+ * And it holds the one hand-moved number the dated debts hang on,
+ * `CONTENT_LOT`, to what the plan says is done.
  *
  * Every check reports all it finds before the suite fails: a documentation
  * test that stops at the first dangling id makes fixing ten of them ten runs.
  */
 
 import assert from 'node:assert/strict'
+import { spawnSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+
+import { CONTENT_LOT } from '../src/content/knownDebt.ts'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const inRepo = (...segments: string[]) => resolve(ROOT, ...segments)
@@ -220,7 +227,34 @@ test('every measurement script has an npm entry, and the plan\'s entries exist',
 test('the measurement scripts stay out of the gate', () => {
   // They measure; they do not judge. A script that prints a table has no
   // pass or fail, and one that needs `dist/` would make the gate order-dependent.
+  // The gate never reads what they print; it only checks, below, that they run.
   assert.ok(!/audit:/.test(packageJson.scripts.check), '`npm run check` runs an audit:* entry')
+})
+
+test('every measurement script still runs on this tree', () => {
+  // "Tools that travel" was promised of scripts nothing ever ran again. The
+  // next lot renamed two families of the breaker and gave the wall case a
+  // `layout`, and two of the sixteen stopped on a TypeError in their first
+  // section, with the gate green. Each entry is run as `npm run` would run
+  // it, and has to end well and say something. None of them needs a build:
+  // the one that reads `dist/` says so when it is missing and goes on.
+  const problems: string[] = []
+  for (const [name, command] of auditEntries) {
+    const [runner, ...args] = command.split(/\s+/)
+    if (runner !== 'node') {
+      problems.push(`npm run ${name} is not a node script: "${command}"`)
+      continue
+    }
+    const result = spawnSync(process.execPath, args, { cwd: ROOT, encoding: 'utf8', timeout: 120_000 })
+    if (result.status !== 0) {
+      const last = (result.stderr || result.error?.message || '').trim().split('\n').filter((line) => /Error/.test(line))[0]
+      problems.push(`npm run ${name} exits ${result.status ?? result.signal}${last ? `: ${last.trim()}` : ''}`)
+    } else if (result.stdout.trim().length === 0) {
+      problems.push(`npm run ${name} prints nothing`)
+    }
+  }
+  assert.ok(auditEntries.length >= 16, 'the audit entries are still listed in package.json')
+  expectNone(problems, 'measurement scripts that no longer run')
 })
 
 test('no measurement script carries the path of one checkout', () => {
@@ -412,6 +446,68 @@ test('the preparation lot points to its baseline record', () => {
   const preparation = plan.slice(plan.indexOf('### P0 —'), plan.indexOf('### L1 —'))
   assert.ok(preparation.includes(P0_RECORD), `P0 in the plan does not point to ${P0_RECORD}`)
   assert.ok(read('docs/HANDOFF.md').includes(P0_RECORD), `docs/HANDOFF.md does not point to ${P0_RECORD}`)
+})
+
+// ---------------------------------------------------------------------------
+// The lot the content stands at
+// ---------------------------------------------------------------------------
+
+/**
+ * The highest lot whose section of the plan carries a dated «Feito em», or 0.
+ *
+ * A heading may cover a range (`### L18 a L22 —`); the range counts as done,
+ * up to its last lot, when its section says so.
+ */
+function lastLotDone(planText: string): number {
+  const headings = [...planText.matchAll(/^### L(\d+)(?: a L(\d+))? — /gm)]
+  let done = 0
+  headings.forEach((heading, index) => {
+    const start = heading.index ?? 0
+    const next = planText.indexOf('\n### ', start + 1)
+    const end = index + 1 < headings.length ? (headings[index + 1].index ?? planText.length) : planText.length
+    const section = planText.slice(start, next < 0 ? end : Math.min(end, next))
+    if (/Feito em \d{4}-\d{2}-\d{2}/.test(section)) done = Math.max(done, Number(heading[2] ?? heading[1]))
+  })
+  return done
+}
+
+/** Why `CONTENT_LOT` and the plan disagree, or null when they do not. */
+function contentLotProblem(planText: string, contentLot: number): string | null {
+  const done = lastLotDone(planText)
+  if (contentLot < done) {
+    return (
+      `the plan says L${done} is done and CONTENT_LOT is ${contentLot}: no debt dated for L${contentLot + 1} to L${done} ` +
+      `has fallen due. Move CONTENT_LOT in src/content/knownDebt.ts and pay what it accuses.`
+    )
+  }
+  // One ahead is the lot in progress: the constant moves in the commit that
+  // pays the debt, before the lot is written up as done.
+  if (contentLot > done + 1) {
+    return `CONTENT_LOT is ${contentLot} and the last lot the plan says is done is L${done}: the plan was not written up.`
+  }
+  return null
+}
+
+test('the lot the dated debts are judged at is the lot the plan says is done', () => {
+  // Every dated debt, and the age of the browser record, is judged against
+  // `CONTENT_LOT`, a constant somebody moves by hand. A lot closed in the
+  // plan with the constant left behind would keep every debt it was to pay
+  // "not yet due", and the gate green, for as long as nobody noticed.
+  assert.equal(contentLotProblem(plan, CONTENT_LOT), null)
+  assert.ok(lastLotDone(plan) >= 1, 'the plan no longer marks L1 as done: the pattern has gone stale')
+
+  // The rule itself, on plans made for the purpose.
+  const made = (...done: readonly number[]) =>
+    Array.from({ length: 4 }, (_, index) => index + 1)
+      .map((lot) => `### L${lot} — Um lote\n\n- **Objetivo.** …\n${done.includes(lot) ? '- **Feito em 2026-11-02, publicado.**\n' : ''}`)
+      .join('\n')
+  assert.equal(lastLotDone(made()), 0)
+  assert.equal(lastLotDone(made(1, 2)), 2)
+  assert.equal(lastLotDone('### L18 a L22 — As cinco alas\n\n- **Feito em 2027-03-01.**\n'), 22)
+  assert.equal(contentLotProblem(made(1), 1), null, 'the lot that is done')
+  assert.equal(contentLotProblem(made(1), 2), null, 'the next lot, in progress')
+  assert.match(contentLotProblem(made(1, 2), 1) ?? '', /L2 is done and CONTENT_LOT is 1/, 'a lot closed with the constant left behind')
+  assert.match(contentLotProblem(made(1), 3) ?? '', /was not written up/, 'a constant two lots ahead of the plan')
 })
 
 // ---------------------------------------------------------------------------

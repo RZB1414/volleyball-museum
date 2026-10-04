@@ -23,9 +23,17 @@ const fixtures = await load('scripts/bake/parts/fixtures.mjs')
 const interp = await load('scripts/bake/parts/interpretive.mjs')
 const balls = await load('scripts/bake/parts/historicalVolleyballs.mjs')
 const { MUSEUM } = await load('src/content/museum.ts')
+const { nearestWallFace } = await load('src/content/validate.ts')
 
 const f = (v, d = 3) => (typeof v === 'number' ? v.toFixed(d) : String(v))
 const P = (g) => g.attributes.position
+/**
+ * The material families of a recipe: its geometries, and nothing else. A
+ * generator may return data beside them (`anchors` on the breaker, `layout`
+ * on the wall case), and measuring that as a mesh is what stopped this
+ * script the first time a generator grew one.
+ */
+const families = (recipe) => Object.entries(recipe).filter(([, g]) => g?.isBufferGeometry)
 function bounds(g, pred = null) {
   const p = P(g)
   const min = [Infinity, Infinity, Infinity]
@@ -132,11 +140,13 @@ section('ATRIUM: breaker panel against the west wall')
   const room = rooms.atrium
   const pc = room.powerControl
   const bp = fixtures.buildBreakerPanel()
-  for (const [k, g] of Object.entries(bp)) {
+  for (const [k, g] of families(bp)) {
     const wb = worldBounds(g, pc, room.origin)
     console.log(`  breaker ${k}: local ${show(bounds(g))} | world x[${f(wb.min[0])},${f(wb.max[0])}] y[${f(wb.min[1])},${f(wb.max[1])}] z[${f(wb.min[2])},${f(wb.max[2])}]`)
   }
-  console.log('  west wall face x=-8.875; wall-bay slat face x=-8.760; bay cap face x=-8.725 (cap y 1.425..1.480)')
+  console.log(`  anchors (recipe frame): lens [${bp.anchors.lens.map((v) => f(v))}], lever pivot [${bp.anchors.leverPivot.map((v) => f(v))}]`)
+  const face = nearestWallFace(room, pc.position)
+  console.log(`  nearest wall face at ${face.axis === 0 ? 'x' : 'z'}=${f(face.at)}: the back of the case stands ${f(face.gap * 1000, 0)} mm off the plaster; wall-bay slat face x=-8.760; bay cap face x=-8.725 (cap y 1.425..1.480)`)
 }
 
 section('ATRIUM: banner hardware vs the flat prints')
@@ -211,7 +221,7 @@ section('ATRIUM: wall bays (3.2 m modules, cap 3.24) along each wall')
 section('ATRIUM: reception desk internals')
 {
   const d = atriumDecor.buildAtriumReceptionDesk()
-  for (const [k, g] of Object.entries(d)) console.log(`  ${k}: ${tri(g)} tris ${show(bounds(g))}`)
+  for (const [k, g] of families(d)) console.log(`  ${k}: ${tri(g)} tris ${show(bounds(g))}`)
   const props = d.props
   const chairFeet = bounds(props, (v) => v[1] < 0.2 && v[2] < -0.2)
   console.log(`  staff chairs: lowest vertex y=${f(chairFeet.min[1], 4)} => five-star bases hover ${f(chairFeet.min[1] * 1000, 1)} mm above the floor`)
@@ -224,7 +234,7 @@ section('ATRIUM: reception desk internals')
 section('ATRIUM: display tower artefacts')
 {
   const t = atriumDecor.buildAtriumDisplayTower()
-  for (const [k, g] of Object.entries(t)) console.log(`  ${k}: ${tri(g)} tris ${show(bounds(g))}`)
+  for (const [k, g] of families(t)) console.log(`  ${k}: ${tri(g)} tris ${show(bounds(g))}`)
   const a = t.artefacts
   const stand = bounds(a, (v) => Math.abs(v[0] + 0.18) < 0.1 && v[1] < 1.1)
   const medal = bounds(a, (v) => Math.abs(v[0] + 0.18) < 0.075 && v[1] > 1.1 && v[1] < 1.262 && Math.abs(v[2] - 0.025) < 0.009)
@@ -238,7 +248,7 @@ section('ATRIUM: display tower artefacts')
 section('ATRIUM: lounge set')
 {
   const l = atriumFurn.buildAtriumLoungeSet()
-  for (const [k, g] of Object.entries(l)) console.log(`  ${k}: ${tri(g)} tris ${show(bounds(g))}`)
+  for (const [k, g] of families(l)) console.log(`  ${k}: ${tri(g)} tris ${show(bounds(g))}`)
   const sideX = 1.66, sideZ = -0.18
   const near = (v, r) => Math.hypot(v[0] - sideX, v[2] - sideZ) < r
   const top = bounds(l.timber, (v) => near(v, 0.33))
@@ -263,7 +273,7 @@ section('ATRIUM: sofa, console, podium, lectern, barrier, divider, inlay, coffer
     inlay: atriumDecor.buildAtriumFloorInlay(), coffer: atriumDecor.buildAtriumCeilingCoffer(), pendant: atriumDecor.buildAtriumPinPendant(),
     aerial: atriumDecor.buildAtriumAerialInstallation(),
   }
-  for (const [name, fams] of Object.entries(parts)) for (const [k, g] of Object.entries(fams)) {
+  for (const [name, fams] of Object.entries(parts)) for (const [k, g] of families(fams)) {
     console.log(`  ${name}.${k}: ${tri(g)} tris, flat-shaded area ${(flatShare(g) * 100).toFixed(0)}%, ${show(bounds(g))}`)
   }
   const room = rooms.atrium
@@ -333,46 +343,43 @@ section('ATRIUM: exhibits on the console risers')
 }
 
 // ---------------------------------------------------------------- holyoke
-section('HOLYOKE: history-case-run internals (recipe-local, wall plane z=0, deck top y=0.76)')
+section("HOLYOKE: history-case-run internals (recipe-local, wall plane z=0), read from the generator's own layout")
+// Nothing about the joinery or the dressing is typed here: the generator
+// returns `layout`, written from the variables that build the geometry, and a
+// bay that changes what it hosts changes these lines with it.
 const run = holyoke.buildHistoryCaseRun()
-const width = 10.2, bays = 5, bayW = width / bays, depth = 0.64
-const shelfYs = (bay) => [1.32 + (bay % 2) * 0.05, 1.91 - (bay % 3) * 0.04]
-const shelfDepth = (bay) => depth - 0.14 - (bay % 2) * 0.035
-const stiles = Array.from({ length: bays + 1 }, (_, i) => -width / 2 + bayW * i)
+const caseLayout = run.layout
+const bayW = caseLayout.width / caseLayout.bays.length
+const overlap1 = (a0, a1, b0, b1) => Math.min(a1, b1) - Math.max(a0, b0)
 {
-  for (const [k, g] of Object.entries(run)) console.log(`  ${k}: ${tri(g)} tris, flat-shaded ${(flatShare(g) * 100).toFixed(0)}%, ${show(bounds(g))}`)
-  for (let b = 0; b < bays; b += 1) {
-    const cx = -width / 2 + bayW * (b + 0.5)
-    const ys = shelfYs(b)
-    console.log(`  bay ${b} (local x ${f(cx - bayW / 2, 2)}..${f(cx + bayW / 2, 2)}, world x ${f(-(cx + bayW / 2), 2)}..${f(-(cx - bayW / 2), 2)}): shelves span y ${ys.map((y) => `${f(y - 0.0135)}..${f(y + 0.0135)}`).join(' and ')}, x ${f(cx - (bayW - 0.15) / 2, 3)}..${f(cx + (bayW - 0.15) / 2, 3)}, z 0.055..${f(0.055 + shelfDepth(b))}`)
+  for (const [k, g] of families(run)) console.log(`  ${k}: ${tri(g)} tris, flat-shaded ${(flatShare(g) * 100).toFixed(0)}%, ${show(bounds(g))}`)
+  console.log(`  deck top y=${f(caseLayout.deckTop)}, head underside y=${f(caseLayout.headBottom)}, lining face z=${f(caseLayout.liningFront)}, glass z=${f(caseLayout.glassBack)}`)
+  for (const bay of caseLayout.bays) {
+    const shelves = bay.shelves.map((s) => `${s.id} y ${f(s.bottom)}..${f(s.top)}, x ${f(bay.centreX - s.halfWidth)}..${f(bay.centreX + s.halfWidth)}, z ${f(s.back)}..${f(s.front)}`)
+    console.log(`  bay ${bay.index} (hosts ${bay.hosts ?? 'nothing'}; local x ${f(bay.centreX - bayW / 2, 2)}..${f(bay.centreX + bayW / 2, 2)}, room x ${f(-(bay.centreX + bayW / 2), 2)}..${f(-(bay.centreX - bayW / 2), 2)}): ${shelves.join(' | ')}`)
   }
-  // decoys: measure by family, per bay, objects sitting between deck and lower shelf
-  const DECK = 0.76
-  const report = (label, g, pred, support) => {
-    const bb = bounds(g, pred)
-    if (!bb.n) return
-    const d = bb.min[1] - support
-    console.log(`    ${label}: y[${f(bb.min[1])},${f(bb.max[1])}] z[${f(bb.min[2])},${f(bb.max[2])}] => ${Math.abs(d) < 0.0006 ? 'seated' : d > 0 ? `floats ${f(d * 1000, 1)} mm above` : `sunk ${f(-d * 1000, 1)} mm into`} support y=${f(support)}`)
+  // Each piece of baked dressing against what is under it: the deck, a shelf
+  // of its bay, or another piece it is stacked on.
+  console.log('  baked dressing (layout.filler), each against the surface under it:')
+  for (const item of caseLayout.filler) {
+    const bay = caseLayout.bays[item.bay]
+    const over = (x0, x1, z0, z1) => overlap1(item.min[0], item.max[0], x0, x1) > 0 && overlap1(item.min[2], item.max[2], z0, z1) > 0
+    const shelves = bay.shelves.filter((s) => over(bay.centreX - s.halfWidth, bay.centreX + s.halfWidth, s.back, s.front))
+    const through = shelves.filter((s) => item.min[1] < s.top - 0.0006 && item.max[1] > s.bottom + 0.0006)
+    const surfaces = [
+      caseLayout.deckTop,
+      ...shelves.map((s) => s.top),
+      ...caseLayout.filler.filter((other) => other !== item && other.bay === item.bay && over(other.min[0], other.max[0], other.min[2], other.max[2])).map((other) => other.max[1]),
+    ].filter((y) => y <= item.min[1] + 0.02)
+    const support = Math.max(...surfaces)
+    const d = item.min[1] - support
+    const seat = Math.abs(d) < 0.0006 ? 'seated on' : d > 0 ? `floats ${f(d * 1000, 1)} mm above` : `sunk ${f(-d * 1000, 1)} mm into`
+    // A piece that crosses a board rests on nothing: the crossing is the finding.
+    const verdict = through.length > 0
+      ? through.map((s) => `passes ${f((s.top - item.min[1]) * 1000, 0)} mm THROUGH the ${s.id} shelf (y ${f(s.bottom)}..${f(s.top)})`).join('; ')
+      : `${seat} y=${f(support)}`
+    console.log(`    bay ${item.bay} ${item.id}: x[${f(item.min[0])},${f(item.max[0])}] y[${f(item.min[1])},${f(item.max[1])}] z[${f(item.min[2])},${f(item.max[2])}] => ${verdict}`)
   }
-  console.log('  decoys in "artefacts" (leather-worn):')
-  for (const [i, x] of [-0.70, -0.49, -0.28, -0.07, 0.14].entries()) report(`bay0 catalogue ${i}`, run.artefacts, (v) => Math.abs(v[0] - (-4.08 + x)) < 0.075 && v[2] > 0.15 && v[2] < 0.45 && v[1] < 1.25, DECK)
-  report('bay2 leather ball', run.artefacts, (v) => Math.hypot(v[0], v[1] - 1.55, v[2] - 0.34) < 0.19, 1.32 + 0.0135)
-  for (let i = 0; i < 4; i += 1) report(`bay4 ledger ${i}`, run.artefacts, (v) => Math.abs(v[1] - (0.81 + i * 0.07)) < 0.034 && v[0] > 3.3 && v[0] < 4.5 && v[2] < 0.5, i === 0 ? DECK : 0.81 + (i - 1) * 0.07 + 0.0325)
-  report('bay4 small ball', run.artefacts, (v) => Math.hypot(v[0] - 4.70, v[1] - 0.91, v[2] - 0.31) < 0.14, DECK)
-  console.log('  decoys in "paper" (paper-aged):')
-  for (let i = 0; i < 3; i += 1) report(`bay1 roll ${i}`, run.paper, (v) => Math.hypot(v[1] - (0.91 + i * 0.055), v[2] - 0.31) < 0.04 && v[0] > -3.0 && v[0] < -1.1, DECK)
-  for (let i = 0; i < 4; i += 1) report(`bay2 box ${i}`, run.paper, (v) => Math.abs(v[1] - (0.82 + i * 0.07)) < 0.029 && Math.abs(v[0] - (-0.43 + i * 0.27)) < 0.18 && v[2] > 0.1 && v[2] < 0.5, i === 0 ? DECK : 0.82 + (i - 1) * 0.07 + 0.0275)
-  const docs = [[1, -2.04 - 0.38, 1.49, 0.40], [1, -2.04 + 0.28, 1.55, 0.54], [2, -0.58, 1.48, 0.46], [2, 0.58, 1.48, 0.46], [4, 4.08 - 0.42, 1.52, 0.62], [4, 4.08 + 0.30, 1.48, 0.48]]
-  for (const [b, x, y, h] of docs) {
-    const low = y - (h / 2) * Math.cos(0.28)
-    const shelfTop = shelfYs(b)[0] + 0.0135
-    console.log(`    bay${b} leaning document at x=${f(x, 2)}: bottom edge y=${f(low)} vs lower shelf top ${f(shelfTop)} => passes ${f((shelfTop - low) * 1000, 0)} mm THROUGH the shelf`)
-  }
-  for (const [b, , y] of [[0, -4.08 - 0.14, 1.86], [3, 2.04 + 0.10, 1.84]]) {
-    const up = shelfYs(b)[1]
-    console.log(`    bay${b} box garment centred y=${y} (y ${f(y - 0.35)}..${f(y + 0.35)}, z 0.3025..0.3775): upper shelf at y=${f(up)} (z 0.055..${f(0.055 + shelfDepth(b))}) cuts it at chest height`)
-  }
-  console.log('    bay3 medals: four discs r=52 mm at z=0.39, 0.35 m in front of the lining, no stand or pin (trim family, brass)')
 }
 
 section('HOLYOKE: real exhibits inside the case run and elsewhere')
@@ -402,37 +409,38 @@ section('HOLYOKE: real exhibits inside the case run and elsewhere')
     console.log(line)
     // inside the case run?
     const lc = toLocal([(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, (min[2] + max[2]) / 2], runPl)
-    if (lc[2] > 0 && lc[2] < depth && Math.abs(lc[0]) < width / 2 && min[1] > 0.7) {
+    if (lc[2] > 0 && lc[2] < caseLayout.depth && Math.abs(lc[0]) < caseLayout.width / 2 && min[1] > 0.7) {
       const corners = [toLocal([min[0], 0, min[2]], runPl), toLocal([max[0], 0, max[2]], runPl)]
       const lx0 = Math.min(corners[0][0], corners[1][0]), lx1 = Math.max(corners[0][0], corners[1][0])
       const lz0 = Math.min(corners[0][2], corners[1][2]), lz1 = Math.max(corners[0][2], corners[1][2])
-      const bay = Math.floor((lc[0] + width / 2) / bayW)
-      console.log(`     in case-run bay ${bay}: local x[${f(lx0)},${f(lx1)}] z[${f(lz0)},${f(lz1)}]`)
-      for (const sx of stiles) {
-        const o = Math.min(lx1, sx + 0.0325) - Math.max(lx0, sx - 0.0325)
-        if (o > 0) console.log(`     !! overlaps the bay stile at local x=${f(sx, 2)} (65 mm wide, full depth) by ${f(o * 1000, 0)} mm in x`)
+      const bay = caseLayout.bays.find((b) => Math.abs(lc[0] - b.centreX) <= bayW / 2)
+      console.log(`     in case-run bay ${bay.index} (hosts ${bay.hosts ?? 'nothing'}): local x[${f(lx0)},${f(lx1)}] z[${f(lz0)},${f(lz1)}], ${f(Math.abs(lc[0] - bay.centreX) * 1000, 0)} mm off the centre of the bay`)
+      for (const stile of caseLayout.stiles) {
+        const o = overlap1(lx0, lx1, stile.x - stile.halfWidth, stile.x + stile.halfWidth)
+        if (o > 0) console.log(`     !! overlaps the bay stile at local x=${f(stile.x, 2)} (${f(stile.halfWidth * 2000, 0)} mm wide, full depth) by ${f(o * 1000, 0)} mm in x`)
       }
-      for (let b = 0; b < bays; b += 1) {
-        const cx = -width / 2 + bayW * (b + 0.5)
-        const sx0 = cx - (bayW - 0.15) / 2, sx1 = cx + (bayW - 0.15) / 2
-        const ox = Math.min(lx1, sx1) - Math.max(lx0, sx0)
-        if (ox <= 0) continue
-        for (const sy of shelfYs(b)) {
-          const oy = Math.min(max[1], sy + 0.0135) - Math.max(min[1], sy - 0.0135)
-          const oz = Math.min(lz1, 0.055 + shelfDepth(b)) - Math.max(lz0, 0.055)
-          if (oy > 0 && oz > 0) console.log(`     !! intersects the bay-${b} shelf (y ${f(sy - 0.0135)}..${f(sy + 0.0135)}): ${f(ox * 1000, 0)} mm in x, ${f(oy * 1000, 1)} mm in y, ${f(oz * 1000, 0)} mm in z${max[1] <= sy + 0.0135 && min[1] >= sy - 0.0135 ? '  => ENTIRELY INSIDE THE SHELF BOARD in y' : ''}`)
-          else if (ox > 0 && oz > 0 && max[1] < sy - 0.0135 && sy - 0.0135 - max[1] < 0.2) console.log(`     under the bay-${b} shelf: ${f((sy - 0.0135 - max[1]) * 1000, 0)} mm below it`)
+      // The run stands on the floor, so recipe y is room y.
+      for (const b of caseLayout.bays) {
+        const under = b.shelves.filter((s) => overlap1(lx0, lx1, b.centreX - s.halfWidth, b.centreX + s.halfWidth) > 0)
+        if (under.length === 0) continue
+        for (const s of under) {
+          const ox = overlap1(lx0, lx1, b.centreX - s.halfWidth, b.centreX + s.halfWidth)
+          const oy = overlap1(min[1], max[1], s.bottom, s.top)
+          const oz = overlap1(lz0, lz1, s.back, s.front)
+          if (oy > 0.0006 && oz > 0) console.log(`     !! intersects the ${s.id} shelf of bay ${b.index} (y ${f(s.bottom)}..${f(s.top)}): ${f(ox * 1000, 0)} mm in x, ${f(oy * 1000, 1)} mm in y, ${f(oz * 1000, 0)} mm in z${max[1] <= s.top && min[1] >= s.bottom ? '  => ENTIRELY INSIDE THE SHELF BOARD in y' : ''}`)
+          else if (oz > 0 && max[1] <= s.bottom && s.bottom - max[1] < 0.2) console.log(`     under the ${s.id} shelf of bay ${b.index}: ${f((s.bottom - max[1]) * 1000, 0)} mm below it`)
         }
         if (ex.supportY != null) {
-          const tops = [0.76, ...shelfYs(b).map((y) => y + 0.0135)]
+          const tops = [caseLayout.deckTop, ...under.map((s) => s.top)]
           const nearest = tops.reduce((best, t) => (Math.abs(t - ex.supportY) < Math.abs(best - ex.supportY) ? t : best))
-          console.log(`     nearest real surface in bay ${b}: y=${f(nearest, 4)} (supportY ${ex.supportY}: off by ${f((ex.supportY - nearest) * 1000, 1)} mm)`)
+          console.log(`     nearest real surface in bay ${b.index}: y=${f(nearest, 4)} (supportY ${ex.supportY}: off by ${f((ex.supportY - nearest) * 1000, 1)} mm)`)
         }
       }
-      // baked decoys in the same space
-      for (const [fam, g] of Object.entries({ paper: run.paper, artefacts: run.artefacts, lining: run.lining })) {
-        const bb = bounds(g, (v) => v[0] > lx0 && v[0] < lx1 && v[1] > min[1] && v[1] < max[1] && v[2] > lz0 - 0.03 && v[2] < lz1 + 0.03 && !(fam === 'lining' && v[2] < 0.05))
-        if (bb.n) console.log(`     !! shares its volume with ${bb.n} vertices of the baked "${fam}" decoys: ${show(bb)}`)
+      if (ex.mount === 'case-wall') console.log(`     back of the frame ${f((lz0 - caseLayout.liningFront) * 1000, 1)} mm off the lining`)
+      // baked dressing in the same space
+      for (const item of caseLayout.filler) {
+        const shared = overlap1(lx0, lx1, item.min[0], item.max[0]) > 0 && overlap1(min[1], max[1], item.min[1], item.max[1]) > 0 && overlap1(lz0, lz1, item.min[2], item.max[2]) > 0
+        if (shared) console.log(`     !! shares its volume with the baked dressing "${item.id}" of bay ${item.bay}`)
       }
     }
   }
@@ -443,13 +451,13 @@ section('HOLYOKE: entry screen niche, hero case, kiosk, labels, training set, co
 {
   const room = rooms.holyoke
   const es = holyoke.buildHolyokeEntryScreen()
-  for (const [k, g] of Object.entries(es)) console.log(`  entry-screen.${k}: ${tri(g)} tris ${show(bounds(g))}`)
+  for (const [k, g] of families(es)) console.log(`  entry-screen.${k}: ${tri(g)} tris ${show(bounds(g))}`)
   const hero = holyoke.buildHistoryHeroCase()
-  for (const [k, g] of Object.entries(hero)) console.log(`  hero-case.${k}: ${tri(g)} tris, flat ${(flatShare(g) * 100).toFixed(0)}% ${show(bounds(g))}`)
+  for (const [k, g] of families(hero)) console.log(`  hero-case.${k}: ${tri(g)} tris, flat ${(flatShare(g) * 100).toFixed(0)}% ${show(bounds(g))}`)
   const kiosk = holyoke.buildHistoryInfoKiosk()
-  for (const [k, g] of Object.entries(kiosk)) console.log(`  kiosk.${k}: ${tri(g)} tris ${show(bounds(g))}`)
+  for (const [k, g] of families(kiosk)) console.log(`  kiosk.${k}: ${tri(g)} tris ${show(bounds(g))}`)
   const ts = holyoke.buildGymTrainingSet()
-  for (const [k, g] of Object.entries(ts)) console.log(`  training-set.${k}: ${tri(g)} tris, flat ${(flatShare(g) * 100).toFixed(0)}% ${show(bounds(g))}`)
+  for (const [k, g] of families(ts)) console.log(`  training-set.${k}: ${tri(g)} tris, flat ${(flatShare(g) * 100).toFixed(0)}% ${show(bounds(g))}`)
   // UV range of the training ball (sphere projection about the recipe origin, not the ball centre)
   const uv = ts.leather.attributes.uv
   let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity
@@ -461,7 +469,7 @@ section('HOLYOKE: entry screen niche, hero case, kiosk, labels, training set, co
   for (const pl of room.kit.filter((k) => k.part === 'label-angled')) {
     const wb = worldBounds(lab, pl, [0, 0, 0])
     console.log(`  label at [${pl.position}] rot ${f(pl.rotationY ?? 0, 2)}: room-local x[${f(wb.min[0])},${f(wb.max[0])}] z[${f(wb.min[2])},${f(wb.max[2])}]`)
-    for (const [k, g] of Object.entries(ts)) {
+    for (const [k, g] of families(ts)) {
       const bb = worldBounds(g, tsPl, [0, 0, 0], (v) => { const w = toWorld(v, tsPl); return w[0] > wb.min[0] - 0.02 && w[0] < wb.max[0] + 0.02 && w[2] > wb.min[2] - 0.02 && w[2] < wb.max[2] + 0.02 })
       if (Number.isFinite(bb.min[0])) console.log(`     training-set.${k} has geometry inside this label's footprint (+20 mm): x[${f(bb.min[0])},${f(bb.max[0])}] y[${f(bb.min[1])},${f(bb.max[1])}] z[${f(bb.min[2])},${f(bb.max[2])}]`)
     }
@@ -472,7 +480,10 @@ section('HOLYOKE: entry screen niche, hero case, kiosk, labels, training set, co
   const pc = room.powerControl
   const bp = fixtures.buildBreakerPanel()
   const wb = worldBounds(bp.case, pc, [0, 0, 0])
-  console.log(`  holyoke breaker case: room-local x[${f(wb.min[0])},${f(wb.max[0])}] y[${f(wb.min[1])},${f(wb.max[1])}] (east wall face x=5.875; chair rail y 1.02..1.082 proud 34 mm; => back ${f((5.875 - wb.max[0]) * 1000, 0)} mm off the plaster)`)
+  // The wall is read from where the control is, not typed: the breaker has
+  // changed walls once already.
+  const breakerWall = nearestWallFace(room, pc.position)
+  console.log(`  holyoke breaker case: room-local x[${f(wb.min[0])},${f(wb.max[0])}] y[${f(wb.min[1])},${f(wb.max[1])}] z[${f(wb.min[2])},${f(wb.max[2])}] (nearest wall face ${breakerWall.axis === 0 ? 'x' : 'z'}=${f(breakerWall.at)}; chair rail y 1.02..1.082 proud 34 mm; => back ${f(breakerWall.gap * 1000, 0)} mm off the plaster)`)
   const vent = room.kit.find((k) => k.part === 'vent-grille')
   const vb = worldBounds(fixtures.buildVentGrille(), vent, [0, 0, 0])
   console.log(`  vent grille: x[${f(vb.min[0])},${f(vb.max[0])}] => back ${f((5.875 - vb.max[0]) * 1000, 0)} mm off the plaster`)

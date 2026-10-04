@@ -41,6 +41,14 @@ export const MANIFEST_FILE = 'manifest.json'
  * `frozen` marks a set that must never change again, and `digest` pins it: the
  * baseline is the "before" of every before/after sheet for the next 24 lots,
  * and a regenerated manifest would otherwise bless a replaced frame.
+ *
+ * `commit` is the commit whose tree the frames SHOW: check it out, and the
+ * same camera gives the same frame. Frames are usually shot on a working
+ * tree, before the commit that records it exists, and a manifest cannot name
+ * the commit it is part of. So a set shot that way is written `'<base>+'`:
+ * the working tree on top of `<base>`, recorded by the commit that adds the
+ * set. Whoever freezes the set replaces it with that commit's own hash; a
+ * frozen set never carries the plus (`npm run test:captures`).
  */
 export const CAPTURE_SETS = {
   'baseline-2026-10-03': {
@@ -93,14 +101,18 @@ export const CAPTURE_SETS = {
    * reference frames whose counters moved. The "after" of the P0 frames
    * above: `e01` answers `p0-e01`, `h02` to `h05` answer `p0-h01` to `p0-h04`.
    *
-   * `commit` is the one the frames were shot on top of: they show the working
-   * tree of the lot's geometry and engine half, which the next commit records.
-   * Not frozen yet: the lot still has its review and touch passes to run, and
-   * they may add frames. The lot that closes L1 freezes it with a digest.
+   * `commit` is the lot's geometry and engine commit, whose tree these frames
+   * show: the Holyoke breaker on the far wall and the collection in its bays
+   * exist from 047f3bb on. The set used to name ab6625e, the commit the
+   * working tree stood on when they were shot, where the breaker still hangs
+   * beside the door and no frame can be shot again.
+   * Not frozen yet: the lot still has its touch pass to run, and it may add
+   * frames (shot on that same tree, or the set is split). Whoever closes L1
+   * freezes it with a digest.
    */
   l1: {
     capturedAt: '2026-10-04',
-    commit: 'ab6625e',
+    commit: '047f3bb',
     report: 'docs/HANDOFF.md',
     filePrefix: 'l1',
     viewport: { cssWidth: 1280, cssHeight: 720, pixelRatio: 1.2, quality: 'medium' },
@@ -108,6 +120,31 @@ export const CAPTURE_SETS = {
     groups: {
       a: { room: 'atrium', powered: true },
       d: { room: 'atrium', powered: false },
+      h: { room: 'holyoke', powered: true },
+      e: { room: 'holyoke', powered: false },
+    },
+    frozen: false,
+  },
+  /**
+   * The review of L1 (docs/HANDOFF.md, §10.11): the credit under the two
+   * frames of the wall case, in the cream it is drawn in since the review.
+   * `h01` answers `l1-h03`, where the panorama's credit could not be read
+   * against the lit lining; `h02` answers `l1-h02`; `e01` and `e02` are the
+   * same two credits from three metres with the wing dark, without the torch
+   * and with it.
+   *
+   * A set of its own because these four were shot on another tree than the
+   * seventeen of `l1`: the working tree of the review commit, on top of
+   * 047f3bb. Whoever closes L1 writes that commit's hash here and freezes it.
+   */
+  'l1-review': {
+    capturedAt: '2026-10-04',
+    commit: '047f3bb+',
+    report: 'docs/HANDOFF.md',
+    filePrefix: 'l1r',
+    viewport: { cssWidth: 1280, cssHeight: 720, pixelRatio: 1.2, quality: 'medium' },
+    frame: { width: 1536, height: 864 },
+    groups: {
       h: { room: 'holyoke', powered: true },
       e: { room: 'holyoke', powered: false },
     },

@@ -34,7 +34,7 @@ import { ContainerLayer, ContainerTargeting } from '../engine/Containers'
 import { DeviceLayer, DeviceTargeting, RadioDirector, RadioHandset } from '../engine/Devices'
 import { Flashlight } from '../engine/Flashlight'
 import { FramedMedia } from '../engine/FramedMedia'
-import { framedPrintWidth, PRINT_NUDGE } from '../engine/framedMediaLayout'
+import { CREDIT_COLOUR, framedPrintWidth, PRINT_NUDGE } from '../engine/framedMediaLayout'
 import {
   beginGpuWarmupDiscovery,
   cancelGpuWarmupRoot,
@@ -77,6 +77,7 @@ import {
   roomDetailWarmable,
 } from '../engine/roomReadiness'
 import { RoomTextReadinessProvider } from '../engine/RoomText'
+import { MOUNT_PARTS } from '../engine/runtimePlacedParts'
 import {
   openDoorNeighbourRooms,
   roomRenderTier,
@@ -201,25 +202,6 @@ function Exhibit({
   )
 }
 
-/**
- * What each mount type puts UNDER an exhibit, and how tall it is.
- *
- * The content declares `mount: 'plinth'` and the bake produces a plinth, but
- * until this table existed nothing joined them: every object sat at its
- * authored height with nothing beneath it, which read as artefacts floating in
- * an empty room. The heights come from the bake and have to agree with the
- * `position.y` values in the content, since the exhibit sits ON the mount.
- */
-const MOUNTS: Record<string, { part: string; extra?: string } | null> = {
-  plinth: { part: 'plinth-block' },
-  'vitrine-table': { part: 'vitrine-table', extra: 'vitrine-glass' },
-  // The new tower is one authored assembly: carcass plus its namespaced glass.
-  'vitrine-tower': { part: 'vitrine-tower' },
-  wall: null,
-  'case-wall': null,
-  floor: null,
-}
-
 /** Clones a named part out of the shared kit and re-materialises it. */
 function useKitPart(source: Group | null, partName: string | undefined, materials: MaterialLibrary) {
   return useMemo(
@@ -241,7 +223,9 @@ function ExhibitMount({
   collision: CollisionWorld | null
   roomOrigin: readonly [number, number, number]
 }) {
-  const spec = MOUNTS[exhibit.mount] ?? null
+  // Which recipes a mount type draws is one table, shared with the content
+  // gate that counts them as used (`runtimePlacedParts.ts`).
+  const spec = MOUNT_PARTS[exhibit.mount]
   const base = useKitPart(kit, spec?.part, materials)
   const glass = useKitPart(kit, spec?.extra, materials)
 
@@ -388,6 +372,7 @@ function ExhibitBundle({
                   ] as [number, number, number]
                 })()}
                 rotationY={exhibit.rotationY ?? 0}
+                creditColour={CREDIT_COLOUR[exhibit.mount]}
               />
             ) : null}
           </group>

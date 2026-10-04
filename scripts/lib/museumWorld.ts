@@ -349,12 +349,16 @@ export type ControlReach = {
  * start arrives a few degrees oblique, and four seconds of leaning on W then
  * slide the capsule along the face of a 46 cm box and off its far edge: true
  * of any small thing on a wall, and not what is being asked here.
+ *
+ * `seconds` is how long they hold forward: four from a step away, longer
+ * for a walk across a room.
  */
 export function reachFromWhereTheCapsuleStops(
   world: CollisionWorld,
   room: RoomData,
   control: PowerControlData,
   from?: Vector3,
+  seconds = 4,
 ): ControlReach {
   const normal = controlNormal(control)
   const { mesh } = powerControlProxy(room, control)
@@ -365,7 +369,7 @@ export function reachFromWhereTheCapsuleStops(
       .addScaledVector(normal, 1.3)
       .setY(room.origin[1])
   const facing = (position: Vector3) => target.clone().sub(position).setY(0).normalize()
-  const stopped = walkUntilStopped(world, start, facing)
+  const stopped = walkUntilStopped(world, start, facing, seconds)
   const eye = stopped.clone().setY(stopped.y + EYE_HEIGHT)
   const hit = centreRayHit(mesh, eye, facing(stopped))
   const back = controlPoint(room, control, [0, 0, 0])

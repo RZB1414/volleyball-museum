@@ -184,10 +184,12 @@ export const ptBR = {
     'Aquela gaveta trancada do escritório? O Otávio usava datas que estão nas placas. Dá uma olhada no retrato do Morgan, na Ala 1.',
   // The last hint, when nothing is left to point at. Until the night has an
   // ending it says what can be done tonight; it used to send the player to
-  // three medals and a vault that do not exist. The key keeps its name: it
-  // is an id the tests and the content cite.
+  // three medals and a vault that do not exist. It is only heard once every
+  // room is lit (each dark room has a hint above it), so it gives the light
+  // as done and never as work still to do. The key keeps its name: it is an
+  // id the tests and the content cite.
   'radio.hint.vault':
-    'O subsolo alagou; hoje ninguém desce. O que dá pra fazer hoje é luz e conferência. Câmbio.',
+    'O subsolo alagou; hoje ninguém desce. A luz tá feita; fora isso, hoje é só conferência. Câmbio.',
 
   // The radio in the player's pocket, and the porter's patience with it.
   // Jorge teases, he never insults: "curador" and "você", no "o senhor".
@@ -200,10 +202,12 @@ export const ptBR = {
   // Curt is short, never vaguer: each keeps the address the full hint gives.
   'radio.hint.atrium.curt': 'Átrio. Do lado da porta da Ala 1. Luzinha vermelha. Câmbio.',
   'radio.hint.holyoke.curt': 'Ala 1. Quadro na parede do fundo, à esquerda. Luzinha vermelha. Vai.',
-  // The year is on the plaque at the foot of the frame, seen by tilting it.
+  // The year shows when the frame is picked up and tilted. The hint gives the
+  // gesture, not a "plaque": none is modelled on the frame, and the one text
+  // at its foot is the photograph's credit, which carries another year.
   'radio.hint.drawer.curt':
-    'Gaveta do Otávio: uma data. Retrato do Morgan, Ala 1. Plaqueta de baixo da moldura.',
-  'radio.hint.vault.curt': 'Subsolo alagado: hoje ninguém desce. Hoje é luz e conferência.',
+    'Gaveta do Otávio: uma data. Retrato do Morgan, Ala 1. Pega a moldura e inclina: tá na borda de baixo.',
+  'radio.hint.vault.curt': 'Subsolo alagado: hoje ninguém desce. Luz feita; fora isso, só conferência.',
   'radio.patience.t1.ready': 'Portaria, pode falar.',
   'radio.patience.t1.listening': 'Fala, curador. Tô na escuta.',
   'radio.patience.t1.jorge': 'Jorge na escuta. Câmbio.',
@@ -290,7 +294,7 @@ export const ptBR = {
   'exhibit.atrium-ball-tokyo-1964.label':
     'Tóquio 1964 recebeu o primeiro torneio olímpico de voleibol. As bolas oficiais preservadas mostram dezoito painéis em seis trios, couro branco-marfim e canais estreitos entre os painéis. A ficha do acervo não identifica o fabricante desta reconstrução.',
   'exhibit.atrium-ball-tokyo-1964.catalogue':
-    'Bola oficial de Tóquio 1964, reconstrução sem marcas. O exemplar não usado preservado pelo Japan Sport Council é marfim, com grão fino, costuras amareladas e pequenas manchas ocres. O exemplar usado está escurecido, vincado e deformado — sinais que inspiram o desgaste discreto deste modelo.',
+    'Bola oficial de Tóquio 1964, reconstrução sem marcas. O exemplar não usado preservado pelo Japan Sport Council é marfim, com grão fino, canais amarelados e pequenas manchas ocres. O exemplar usado está escurecido, vincado e deformado — sinais que inspiram o desgaste discreto deste modelo.',
   'hotspot.atrium-ball-tokyo-1964.panels.label':
     'Dezoito painéis quase retangulares, organizados em seis grupos de três',
   'hotspot.atrium-ball-tokyo-1964.seam.label':
@@ -354,9 +358,14 @@ export const ptBR = {
   // The Filipino attack rests on one publisher and "bomberino" on none that
   // could be opened: it stays in the catalogue entry, as what it "became
   // known as", until it has a document of its own.
+  // The label says only what two publishers say: that Woods and Lynch helped
+  // with the first rules. That Morgan wrote of it in this guide rests on the
+  // Hall of Fame alone (page 11), so it is told in the catalogue entry and on
+  // the detail. The title still leans on that one source: two lines of the
+  // plan disagree there, and the owner settles it before L8.
   'exhibit.guide-1916.title': 'Morgan conta a história',
   'exhibit.guide-1916.label':
-    'Duas décadas depois de inventar o jogo, Morgan contou a história no guia de vôlei da Spalding. Nele deu crédito ao Dr. Frank Woods e ao chefe dos bombeiros John Lynch pelas contribuições às primeiras regras.',
+    'O Dr. Frank Woods e o chefe dos bombeiros John Lynch, de Holyoke, ajudaram Morgan a redigir as primeiras regras do jogo. Este guia de vôlei da Spalding, edição de 1916–17, saiu duas décadas depois da invenção.',
   'exhibit.guide-1916.catalogue':
     'Spalding Athletic Library — Volley Ball Guide, edição de 1916–17. Foi nele que Morgan creditou o Dr. Frank Woods e o chefe dos bombeiros John Lynch pelas contribuições às primeiras regras. Da mesma década é o ataque que ficou conhecido como bomba filipina: um passe alto e, em seguida, um golpe para baixo.',
   'hotspot.guide-1916.credit.label': 'Morgan credita Frank Woods e John Lynch',
@@ -364,11 +373,14 @@ export const ptBR = {
   'hotspot.guide-1916.census.label':
     'Estimativa de 1916: cerca de 200 mil praticantes nos Estados Unidos',
 
+  // No catalogue has been opened and captured, and nobody photographed the
+  // members of 1895: the cards give no date and say what the museum does not
+  // know, instead of the research's inference dressed as knowledge.
   'exhibit.gym-suit.title': 'O traje de ginásio de catálogo',
   'exhibit.gym-suit.label':
-    'Malha de lã canelada e calça até o joelho, como nos catálogos de artigos esportivos de c. 1901–1915. Os sócios de 1895, pelo que se sabe, jogavam de camisa e calça comprida.',
+    'Malha de lã canelada e calça até o joelho: traje de ginásio de catálogo, feito pelo museu. O museu não achou fotografia dos sócios de 1895 e não sabe o que eles vestiam.',
   'exhibit.gym-suit.catalogue':
-    'Traje de ginásio como os dos catálogos de c. 1901–1915. Reprodução. Morgan explicou o jogo pela idade e pelo fôlego dos sócios, não pela roupa: era recreação para homens de meia-idade que achavam o basquete pesado demais.',
+    'Traje de ginásio como os dos catálogos de artigos esportivos de época. Reprodução. Morgan explicou o jogo pela idade e pelo fôlego dos sócios, não pela roupa: era recreação para homens de meia-idade que achavam o basquete pesado demais.',
 
   'exhibit.portrait-morgan.title': 'William G. Morgan',
   'exhibit.portrait-morgan.label':
@@ -385,7 +397,7 @@ export const ptBR = {
   // The label describes what the photograph shows; 1897 is when it was
   // published, which is all its credit says.
   'exhibit.photo-gym.label':
-    'O ginásio da YMCA de Holyoke, em fotografia publicada em 1897: argolas, cavalo com alças, pesos de polia e, no alto, a pista de corrida suspensa. Foi neste espaço que a primeira partida foi jogada.',
+    'O ginásio da YMCA de Holyoke, em fotografia publicada em 1897: argolas, cavalo de salto, pesos de polia e, no alto, a pista de corrida suspensa. Foi neste espaço que a primeira partida foi jogada.',
   'exhibit.photo-gym.catalogue':
     'Interior do antigo prédio da YMCA de Holyoke. Reprodução de fotografia publicada em 1897 na Transcript Industrial Edition. O prédio, do começo dos anos 1890, queimou em 1943. Daqui saíram os dois times de cinco jogadores que Morgan levou a Springfield para demonstrar o jogo.',
 
@@ -400,7 +412,7 @@ export const ptBR = {
   // body tells what the sources agree on and then says where they do not.
   'document.halstead.title': 'Springfield, 1896',
   'document.halstead.body':
-    'Morgan demonstrou o jogo no ginásio leste da International YMCA Training School, na conferência de diretores de educação física convocada por Luther Halsey Gulick. Levou dois times de cinco homens de Holyoke, capitaneados pelo prefeito James J. Curran e pelo chefe dos bombeiros John Lynch. Foi o professor Alfred T. Halstead quem propôs trocar Mintonette por Volley Ball, e Morgan aceitou. As fontes divergem sobre a ocasião: o Hall da Fama fala de uma visita no início do ano e data a conferência de 7 de julho; a federação internacional põe a sugestão depois da demonstração.',
+    'Morgan demonstrou o jogo no ginásio leste da International YMCA Training School, na conferência de diretores de educação física da YMCA, a convite de Luther Halsey Gulick. Levou dois times de cinco homens de Holyoke, capitaneados pelo prefeito James J. Curran e pelo chefe dos bombeiros John Lynch. Foi o professor Alfred T. Halstead quem propôs trocar Mintonette por Volley Ball, e Morgan aceitou. As fontes divergem sobre a ocasião: o Hall da Fama fala de uma visita no início do ano e data a conferência de 7 de julho; a federação internacional põe a sugestão depois da demonstração.',
 
   // Scores are spelt out: a bare 15 or 21 on a card is a number a later lock
   // may want for itself.

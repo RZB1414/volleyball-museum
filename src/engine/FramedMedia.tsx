@@ -29,6 +29,8 @@ export type FramedMediaProps = {
   position: [number, number, number]
   rotationY?: number
   readinessId: string
+  /** The credit's colour, chosen for what the frame hangs on (`CREDIT_COLOUR`). */
+  creditColour: string
 }
 
 function configureMediaTexture(texture: Texture) {
@@ -50,6 +52,7 @@ export function FramedMedia({
   position,
   rotationY = 0,
   readinessId,
+  creditColour,
 }: FramedMediaProps) {
   const locale = useMuseum((state) => state.settings.locale)
   const texture = useLoader(MediaTextureLoader, asset.src) as Texture
@@ -93,7 +96,9 @@ export function FramedMedia({
         fontSize={CREDIT_SIZE}
         maxWidth={width + MOUNT_BORDER * 2}
         lineHeight={CREDIT_LINE_HEIGHT}
-        color="#6d6455"
+        // Unlit, so one brightness whatever the light behind it: the caller
+        // picks a colour that reads on the surface the frame hangs on.
+        color={creditColour}
         outlineWidth={0}
         // Labels are read head-on but glimpsed from the side; double-sided
         // costs nothing on a quad and avoids a caption vanishing at an angle.

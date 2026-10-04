@@ -9,13 +9,27 @@
  * then the danger is the opposite of a budget: with the ceiling already
  * broken, nothing stops the next lot from adding to it.
  *
- * So each number is held at what was MEASURED. A ratchet has two figures:
+ * So each number that is OVER its budget is held at what was MEASURED. A
+ * ratchet has two figures:
  *
  *   - `budget`, what the plan says the number should be;
- *   - `ceiling`, what it was the last time a lot measured it. The gate fails
- *     above the ceiling. A ceiling above its budget is a dated debt, and has
- *     to have a line in `KNOWN_DEBT` (`ratchet-over-budget`) saying which lot
- *     brings it down.
+ *   - `ceiling`, what the gate fails above. For a number over its budget
+ *     that is what it was the last time a lot measured it, and it is a dated
+ *     debt: it has to have a line in `KNOWN_DEBT` (`ratchet-over-budget`)
+ *     saying which lot brings it down.
+ *
+ * Three ceilings are NOT the measurement, and say so in their `origin`:
+ * `roomDraws` and `frameTriangles` are under their budgets (81 and 100,428
+ * measured) and are held at the plan's hard ceiling, 100 and 150,000, so they
+ * do not ratchet until the budget estimator arrives (L5); and `atriumDraws`
+ * is held at the temporary ceiling the plan declared (ÁT-K1, 102), one above
+ * what was measured.
+ *
+ * What only a browser can count (draw calls, triangles, programs) is not
+ * measured by the gate: it compares the last written record with these
+ * ceilings and checks the record's age in lots. The age is counted from
+ * `CONTENT_LOT`, which `test:docs` holds to the plan, so a lot that closes
+ * without measuring again turns the gate red at the next one.
  *
  * HOW TO MOVE ONE. Down: lower `ceiling` to the new measurement in the commit
  * that earned it, and when it reaches the budget delete its debt line (the
@@ -200,17 +214,28 @@ export const BUNDLE_BUDGETS = {
  * bytes, so that a patch release of zlib does not turn the gate red and
  * anything a person wrote does.
  *
- * These are the figures of L1: 63,236, 28,286 and 388,176 bytes, which is
- * 91.5 kB before the click and 479.7 kB in all. They are not comparable
+ * These are the figures of L1: 63,235, 28,353 and 388,248 bytes, which is
+ * 91.6 kB before the click and 479.8 kB in all. They are not comparable
  * with the P0 baseline's 92.85 and 484.58 kB, which were read off what Vite
  * prints: Vite compresses a little less than level 9. From this lot on the
  * comparison is like with like, measured here both times.
  * To raise one: in the commit that adds the code, with the reason here.
+ *
+ * Raised once, by the review of L1 (they were 28,300 and 388,200, on 28,286
+ * and 388,176 measured):
+ *   - `title` +67 bytes: the dictionaries ship with the title screen, and the
+ *     corrected texts are longer than the ones they replace (the curt drawer
+ *     hint gives the gesture, the suit's label says what the museum does not
+ *     know, the last hint says the light is done);
+ *   - `game` +72 bytes: the credit under a frame takes its colour from the
+ *     mount it hangs on (`CREDIT_COLOUR`), and the leaves of a door and the
+ *     supports of a mount are read from the table the content gate reads
+ *     (`runtimePlacedParts.ts`) instead of being typed in each component.
  */
 export const BUNDLE_PATH_CEILINGS = {
   document: 63_300,
-  title: 28_300,
-  game: 388_200,
+  title: 28_400,
+  game: 388_300,
 } as const
 
 /** Strings that only the content set and the bake manifest contain. */

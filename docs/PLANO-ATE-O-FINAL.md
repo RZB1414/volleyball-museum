@@ -318,7 +318,8 @@ Sem cronômetro. O relógio do escritório, depois de acertado (`E` nele, opcion
 | Átrio | Púlpito: com luz nas três salas, segurar `E` assina o **termo de posse**. Sequência dirigida: cartão «Termo de posse assinado» e o fecho do Jorge | o acervo agora é seu |
 
 **Fecho honesto.** Em L1 e L2 não há termo: o Jorge deixa de mandar às medalhas e diz o que dá para
-fazer hoje (luz e conferência). De L3 a L11, depois da Posse, a única promessa datada no caminho é a
+fazer hoje (conferência: a última dica só toca com as três salas acesas, então ela dá a luz como
+feita). De L3 a L11, depois da Posse, a única promessa datada no caminho é a
 caixa-forte: a linha «Caixa-forte» da lista leva a anotação a lápis «hoje não: o subsolo alagou», o
 pódio diz que está interditado e o Jorge adia em vez de apontar.
 
@@ -820,7 +821,7 @@ não tiver nenhuma das três sai da sala. Validador `placement-without-role` sob
 |---|---|---|---|---|---|---|
 | ÁT-H1 | M | manifesto; `test-navigation.ts:263-265` | a cápsula atravessa cordas e pedestais da fila | colisor fino; uma entrada clara | `test:navigation` | L9 |
 | ÁT-H2 | A | manifesto | o colisor do lounge é menor que o estofado; cadeiras da recepção sem colisor | colisor por família | SAT | L9 |
-| ÁT-H3 | M | `test-navigation.ts:274-278, 710-735` | as rotas de teste partem do spawn antigo | rota porta do escritório → quadro; alcance de cada interativo de onde a cápsula para | `test:navigation` | L1 |
+| ÁT-H3 | M | `test-navigation.ts:274-278, 710-735` | as rotas de teste partem do spawn antigo | rota porta do escritório → quadro; alcance de cada interativo de onde a cápsula para | `test:navigation` | L1 (rotas e os dois quadros); L2 (peças, arquivos e dispositivos, com M15) |
 | H-31 | S3 | `bake.mjs:240-245`; `src/scenes/MuseumScene.tsx:203-211` | o jogador atravessa a rede, o manequim, a bola de treino e os pedestais | `ExhibitData.collider?: 'bounds' \| 'posts' \| false`; a rede ganha lâmina de colisão na faixa: **não se passa por baixo** (a borda de baixo fica a 1,36 m e o olho a 1,62 m) | `test:navigation`; SAT inclui peças de chão | L14 |
 | H-32 | S4 | `holyokeDecor.mjs:129-155` | o nicho da tela sai 24,5 cm além do colisor | colisor do nicho | SAT | L14 |
 
@@ -843,8 +844,8 @@ não tiver nenhuma das três sai da sala. Validador `placement-without-role` sob
 | H-41 | S3 | `exhibit.guide-1916.catalogue`, detalhe `credit` (`:343-344`) | «Dr. Frank Wood» | «Woods» | L1 |
 | H-44 | S3 | `exhibit.guide-1916.title` (`:339-341`) | «O guia que registrou a bomba» | «Morgan conta a história»; a bomba filipina ganha documento próprio, com «ficou conhecido como» | L1 (título), L8 (documento) |
 | H-40 | S3 | `exhibit.handbook-1897.catalogue` (`:335`) | «em duas palavras… até 1952» | fica na ficha, como «até 1952, quando a associação americana adotou a forma em uma palavra» (uma fonte: não vai para placa) | L1 |
-| H-42 | S3 | `exhibit.photo-gym.label`, `.catalogue` (`:363, 365`) | esquina, «treliças de aço rebitado», «serviu de 1886 a 1943», «fotografado em 1897» | «publicada em 1897»; descreve o que a foto mostra (argolas, cavalo com alças, pesos de polia, pista suspensa); «o prédio, do começo dos anos 1890, queimou em 1943» só no detalhe (sem 1886 até abrir uma página que o diga) | L1 |
-| H-43 | S3 | `exhibit.gym-suit.label`, `.catalogue` (`:349, 351`) | nota de direção de arte na etiqueta; «sola de borracha»; a lã explicando a rede baixa | «O traje de ginásio de catálogo»: malha canelada e calça até o joelho, como nos catálogos de c. 1901–1915; os sócios de 1895 jogavam de camisa e calça comprida. Sem sola, sem causalidade inventada | L1 |
+| H-42 | S3 | `exhibit.photo-gym.label`, `.catalogue` (`:363, 365`) | esquina, «treliças de aço rebitado», «serviu de 1886 a 1943», «fotografado em 1897» | «publicada em 1897»; descreve o que a foto mostra (argolas, cavalo de salto, pesos de polia, pista suspensa; o cavalo da foto não tem alças); «o prédio, do começo dos anos 1890, queimou em 1943» só no detalhe (sem 1886 até abrir uma página que o diga) | L1 |
+| H-43 | S3 | `exhibit.gym-suit.label`, `.catalogue` (`:349, 351`) | nota de direção de arte na etiqueta; «sola de borracha»; a lã explicando a rede baixa | «O traje de ginásio de catálogo»: malha canelada e calça até o joelho, traje de catálogo feito pelo museu; o museu não achou fotografia dos sócios de 1895 e não sabe o que vestiam (a pesquisa dá as duas variantes como inferência). Sem data até um catálogo ser aberto e capturado (7.7, item 20). Sem sola, sem causalidade inventada | L1 |
 | H-45 | S4 | `document.rule-changes.body` (`:380`) | «As três respondem ao mesmo problema»; «de 21 para 15 pontos» | sem a frase; «de vinte e um para quinze»; a divergência 1920 × 1922 dos três toques declarada | L1 |
 | H-46 | S4 | `:310, 331, 335, 345` | «leve demais, boiava»; «O primeiro regulamento impresso»; «Censo de 1916» | «leve e lenta demais» (a ordem das palavras do Morgan: a câmara primeiro, a bola inteira depois); «O primeiro manual oficial»; «estimativa de 1916» | L1 |
 | H-48 | S4 | `kit.mjs:687-749`; `pt-BR.ts:325, 327` | a rede modelada (4,8 m, fita em cima e embaixo, esticada) não é a descrita | «trecho reconstruído»; sem fita embaixo; barriga na malha | L14 (`test:kit`: sem fita embaixo, flecha da malha > 0) |
@@ -2284,6 +2285,8 @@ chegada (F81). Regras, conferidas na fatia 0 de cada ala:
 | 17 | segunda fonte (entrevista ou biografia) para F48, F58, F68 | fora do jogo | L20, L21 |
 | 18 | F88 a F93 | a placa descreve o objeto | L19 a L21 |
 | 19 | `docs/PESQUISA-CONTEUDO.md` recebe as nove atualizações de outubro: 1952 com fonte; o manual de 1897 com reprodução acessível; a morte de Morgan no dia 28 segundo o IVHF; o prédio de 1892; a confirmação da quadra em 2002; a fonte primária da bola de 2008; "Coach of the Century" com fonte e período incoerente (continuar sem imprimir); os endereços novos do IVHF; o líbero como teste e regra | — | L1 |
+| 20 | catálogo de artigos esportivos de 1901–1915 (Spalding) aberto e capturado | o traje de ginásio não leva data, na etiqueta nem na ficha | L14 |
+| 21 | segunda fonte para F12 (o artigo de Morgan e o crédito a Woods e Lynch no guia de 1916–17): o scan do item 2 serve | a etiqueta do guia diz só o que tem dois publicadores (Woods e Lynch ajudaram a redigir as primeiras regras); o artigo e o crédito ficam na ficha e no detalhe. O título «Morgan conta a história» (H-44, B.11) repousa nessa fonte única: o dono decide antes de L8 se ele fica | L8 |
 
 ### 7.8 As seis categorias de proveniência (enum fechado, por extenso na ficha)
 
@@ -2635,7 +2638,8 @@ dono e continua pendente. Não trava L1; trava o livro-caixa de L6.
   e a URL morta; as quatro peças da vitrine corrida no centro dos vãos; o quadro da Holyoke na parede
   oeste, com lente emissiva (H-26); ÁT-A1, ÁT-G2, ÁT-H3, ÁT-B4; falas sem pontos cardeais; H-21; a
   última dica do Jorge e a fala do subsolo deixam de apontar para medalhas e cofre («O subsolo
-  alagou; hoje ninguém desce. O que dá pra fazer hoje é luz e conferência.»); a pista de cinco
+  alagou; hoje ninguém desce. A luz tá feita; fora isso, hoje é só conferência.»: a dica só toca com
+  as três salas acesas, e a revisão do lote tirou dela a luz como coisa a fazer); a pista de cinco
   letras em inglês; `PESQUISA-CONTEUDO.md` atualizada.
 - **Aceite (automático).** Asserções históricas verdes nas duas línguas; peça × `layout` sem
   interseção; teste de farol do piloto da Holyoke; do ponto onde a cápsula para, `E` alcança o
@@ -2651,8 +2655,13 @@ dono e continua pendente. Não trava L1; trava o livro-caixa de L6.
   visto da porta no escuro e os quatro vãos; medições, dívidas e o que saiu diferente do plano em
   `docs/HANDOFF.md` §10. **O teto temporário de 58 lotes não foi gasto:** a lente e a alavanca
   renomeiam nós que já existiam, o kit do átrio continua em 56 de 56 e fica a folga inteira para
-  o Livro de L3. Faltam os passos 5 e 8 a 11 de 9.1 (revisão adversarial, revisor, push, deploy,
-  fumaça) e o resto da rota de toque e em inglês.
+  o Livro de L3.
+- **Revisão adversarial (passo 5) feita em 2026-10-04**, num terceiro commit local: 27 achados (19
+  distintos) em cinco lentes (fluxo, fatos, bake, testes, visual), todos fechados ou datados; o registro está em
+  `docs/HANDOFF.md`, §10.11. Faltam os passos 8 a 11 de 9.1 (revisor, push, deploy, fumaça), o
+  resto da rota de toque e em inglês, e o passo 12 está feito só em parte: o registro existe, o
+  corpus de saves de L1 e o congelamento das capturas ficam para quem fechar o lote (HANDOFF,
+  §10.10).
 
 ### L2 — Trilhos
 
@@ -3177,7 +3186,7 @@ Só a chuva.)»); depois da bomba, «(Nada. Parou de chover.)»; turno da noite,
 | caderno não lido **e** o jogador ainda não saiu do escritório | «Primeiro o caderno: a diretora, a Helena, deixou um na mesa.» | «Capa vermelha, do lado da luminária.» | «Aperta E nele e lê até a última página.» | «Caderno da Helena» |
 | átrio sem energia | «O quadro fica do outro lado do saguão.» | «Luzinha vermelha, perto da porta com placa.» | «Caixa cinza na parede. Alavanca. Aperta E.» | «Quadro de serviço» |
 | Ala 1 sem energia | «A Ala 1 tem quadro próprio, na parede do outro lado da sala.» | «Em frente à entrada, mais para a esquerda de quem entra.» | «Atravessa no escuro até o piloto vermelho. A lanterna dá conta.» | «Quadro de serviço» |
-| gaveta fechada | «A gaveta do Otávio abre com um ano. Ele deixou recado na secretária do escritório.» | «O ano tá na Ala 1, no retrato do Morgan.» | L3: «Tá na plaqueta de baixo da moldura, ou na gaveta de cima do arquivo ao lado.» · L4 em diante: «Pega o retrato e vira a moldura.» | «Gaveta do Otávio — trancada (um ano)» |
+| gaveta fechada | «A gaveta do Otávio abre com um ano. Ele deixou recado na secretária do escritório.» | «O ano tá na Ala 1, no retrato do Morgan.» | L3: «Pega a moldura e inclina: tá na borda de baixo. Ou na gaveta de cima do arquivo ao lado.» (não «plaqueta»: a moldura modelada não tem uma, e o texto ao pé dela é o crédito da foto, com 1897; revisão de L1) · L4 em diante: «Pega o retrato e vira a moldura.» | «Gaveta do Otávio — trancada (um ano)» |
 | chave na mão | «Chave do Otávio? É do cofre de ferro.» | «Canto do escritório, do lado das estantes.» | «Encosta e aperta E. A chave fica lá.» | «Cofre de ferro — precisa de chave» |
 | Livro na mão, posse por assinar | «O termo se assina no púlpito do saguão.» | «O púlpito com a lâmpada acesa, perto do plinto.» | «Com luz nas três salas, segura o E até a pena parar.» | «Púlpito — Assinar: Posse» ou «falta luz em: [sala]» |
 | falta a medalha do Curador | «O Otávio andava com a dele no chapéu, desde a obra.» | «O chapéu ficou no cabideiro, aí no escritório.» | «Pega o chapéu e vira: tá por dentro da fita.» | «Chapéu do cargo» |
@@ -3338,10 +3347,10 @@ Acréscimos a B.9:
 | `ball-spalding` | Feita sob encomenda | Sem bola que servisse, Morgan pediu uma à fábrica da Spalding, perto de Chicopee: couro, de 25 a 27 polegadas de volta. | «Nenhum exemplar com carimbo legível foi localizado. — O.» | o carimbo oval do fabricante; o cadarço de couro cru | reconstrução tipológica |
 | `net-1897` | Logo acima da cabeça | A primeira ideia era o tênis; ficou só a rede, posta logo acima da cabeça de um homem médio. | segunda vista (de pé junto ao poste): «Trecho reconstruído. A fita fica onde o manual manda. — O.» | o soquete do poste | reconstrução tipológica |
 | `handbook-1897` | O primeiro manual oficial | Nove innings, como no beisebol; cada um acabava com três "outs" de saque por time. | «Texto composto pelo museu. Falta conferir contra o original. — O.» (revela `first-rulebook`) | a página das duas tentativas de saque (só depois do scan) | reconstrução tipológica (vira reprodução quando houver scan) |
-| `guide-1916` | Morgan conta a história | Vinte anos depois, ele mesmo creditou o Dr. Frank Woods e o chefe dos bombeiros John Lynch. | «Capa e miolo compostos pelo museu. — O.» | a estimativa de 1916: 200 mil praticantes, mas as parcelas somam 155 mil | reconstrução tipológica (idem) |
-| `gym-suit` | O traje de ginásio de catálogo | Malha de lã canelada e calça até o joelho, como nos catálogos de c. 1901–1915. Os sócios de 1895 jogavam de camisa e calça comprida. | segunda vista (as costas): «Feito pelo museu a partir de catálogo. — O.» | a malha canelada | reconstrução tipológica |
+| `guide-1916` | Morgan conta a história | Vinte anos depois, ele mesmo creditou o Dr. Frank Woods e o chefe dos bombeiros John Lynch. (F12 tem um publicador: até a segunda fonte, a etiqueta diz que os dois ajudaram a redigir as primeiras regras e o crédito fica na ficha; 7.7, item 21.) | «Capa e miolo compostos pelo museu. — O.» | a estimativa de 1916: 200 mil praticantes, mas as parcelas somam 155 mil | reconstrução tipológica (idem) |
+| `gym-suit` | O traje de ginásio de catálogo | Malha de lã canelada e calça até o joelho: traje de catálogo, feito pelo museu. O museu não sabe o que os sócios de 1895 vestiam. (A data «c. 1901–1915» só volta com o catálogo capturado: 7.7, item 20.) | segunda vista (as costas): «Feito pelo museu a partir de catálogo. — O.» | a malha canelada | reconstrução tipológica |
 | `portrait-morgan` | William G. Morgan, 25 anos | Diretor de educação física da YMCA de Holyoke, tinha 25 anos quando inventou o jogo. Há uma nota no verso. | «Em 1896, em Springfield, o Mintonette passou a se chamar Volley Ball. — O.» (revela `springfield-renaming`; chave autorizada) | o crédito da fotografia | reprodução (instituição que guarda o original: a capturar) |
-| `photo-gym` | O ginásio da invenção | Publicada em 1897: argolas, cavalo com alças, pesos de polia e a pista de corrida suspensa. | «Reprodução de fotografia publicada em 1897. — O.» | o prédio, do começo dos anos 1890, queimou em 1943 | reprodução (fonte: Commons; reabrir a Digital Commonwealth, 7.7) |
+| `photo-gym` | O ginásio da invenção | Publicada em 1897: argolas, cavalo de salto, pesos de polia e a pista de corrida suspensa. | «Reprodução de fotografia publicada em 1897. — O.» | o prédio, do começo dos anos 1890, queimou em 1943 | reprodução (fonte: Commons; reabrir a Digital Commonwealth, 7.7) |
 
 A folha 2 do quiosque não imprime o ano: «O NOME — Mintonette durou pouco. Quem rebatizou o jogo, e
 quando, está no verso de um retrato desta sala.» É o primeiro degrau da escada, escrito na sala.

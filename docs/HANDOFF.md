@@ -31,25 +31,25 @@ intencionalmente no commit `5e51e24`. O museu data-driven é a única aplicaçã
 
 O corte vertical está integrado, assado, caminhável e com progressão de energia.
 
-Portão verde em 2026-10-04 (`npm run check`, depois de L1, §10; a lista completa das
-suítes e o que cada uma ganhou está em §10.4):
+Portão verde em 2026-10-04 (`npm run check`, depois de L1 e da revisão dele, §10; a lista
+completa das suítes e o que cada uma ganhou está em §10.4):
 
 - conteúdo: 3 salas válidas, com 29 dívidas datadas impressas (`knownDebt.ts`);
-- catracas: 4/4; fontes: 28; documentação: 21/21; capturas: 9/9; saves: 19/19;
-- energia: 28/28;
+- catracas: 4/4; fontes: 28; documentação: 23/23; capturas: 12/12; saves: 19/19;
+- energia: 30/30;
 - abertura: 31/31; fluxo da abertura: 44/44; rádio: 27/27;
 - colisão: 28/28;
-- kit e posicionamento: 339/339; vitrine corrida: 10/10;
+- kit e posicionamento: 339/339; vitrine corrida: 12/12;
 - materiais: 10; mesa do curador: 9; estantes: 20;
 - runtime do kit: 26/26;
 - runtime das salas: 19/19;
 - LOD de salas: 23/23;
-- aquecimento de GPU: verde; prontidão da sala: 5/5;
+- aquecimento de GPU: verde; prontidão da sala: 6/6;
 - performance de render e projeção: 16/16;
 - sinalização arquitetônica: 26/26;
 - portas de transição: 29/29;
 - controles móveis e modo imersivo: 13/13;
-- navegação: 67/67;
+- navegação: 68/68;
 - bundle por caminho: 5/5;
 - `npm run build`: verde.
 
@@ -553,8 +553,9 @@ lista abaixo é anterior ao plano e vale no que ele não cobrir.
 **Decisões.** Em 2026-10-04 o dono mandou seguir os padrões nas 36 decisões de §0.3; o registro é
 `docs/plano-mestre/DECISOES.md`.
 
-**L1 (Correções no ar), estado em 2026-10-04:** implementado em dois commits locais e conferido
-no navegador de desenvolvimento; falta revisão, push, deploy e fumaça. Tudo em §10.
+**L1 (Correções no ar), estado em 2026-10-04:** implementado em três commits locais (o terceiro
+é a revisão adversarial, §10.11) e conferido no navegador de desenvolvimento; falta o revisor,
+push, deploy e fumaça, e o que sobrou do passo 12 (§10.10). Tudo em §10.
 
 **Preparação (P0), estado em 2026-10-04.** Nada mudou no jogo; o build de produção é o mesmo.
 
@@ -1063,16 +1064,18 @@ Suítes novas: `test:opening-flow` (38), `test:radio` (22), `test:materials` (8)
 ## 10. L1 — Correções no ar (2026-10-04)
 
 O primeiro lote do plano (`docs/PLANO-ATE-O-FINAL.md`, L1), executado pelo plano de lote
-`docs/lotes/L1-plano.md`. Saiu em dois commits locais na `main`: `ab6625e` (conteúdo: texto
-histórico, nome, falas do Jorge, validadores de M0 e a tabela de dívidas) e o seguinte
-(geometria e motor: os dois quadros de energia, a vitrine corrida, a porta que não fica presa,
-navegação e catracas).
+`docs/lotes/L1-plano.md`. Saiu em três commits locais na `main`: `ab6625e` (conteúdo: texto
+histórico, nome, falas do Jorge, validadores de M0 e a tabela de dívidas), `047f3bb` (geometria
+e motor: os dois quadros de energia, a vitrine corrida, a porta que não fica presa, navegação e
+catracas) e o da revisão adversarial, que fecha ou data os 27 achados dela (10.11).
 
-**Estado: implementado e conferido no navegador de desenvolvimento; não publicado.** Dos passos
-de §9.1 do plano estão feitos o 1 (plano do lote), o 2 (teste primeiro), o 3, o 4 (portão verde),
-o 6 (rota do lote, com as ressalvas de 10.8) e o 12 (este registro). **Faltam** o 5 (revisão
-adversarial), o 8 (revisor), o 9 e o 10 (push e deploy), o 11 (fumaça em produção) e o 13
-(playtest). A produção continua na versão Cloudflare `0027afaa`, de 3 de outubro.
+**Estado: implementado, revisto e conferido no navegador de desenvolvimento; não publicado.** Dos
+passos de §9.1 do plano estão feitos o 1 (plano do lote), o 2 (teste primeiro), o 3, o 4 (portão
+verde), o 5 (revisão adversarial: 10.11) e o 6 (rota do lote, com as ressalvas de 10.8). O 12
+está feito **em parte**: este registro e os manifestos de capturas existem; o corpus de saves de
+L1 e o congelamento das capturas, não (10.10). **Faltam** o 8 (revisor), o 9 e o 10 (push e
+deploy), o 11 (fumaça em produção) e o 13 (playtest). A produção continua na versão Cloudflare
+`0027afaa`, de 3 de outubro.
 
 ### 10.1 O que mudou para o jogador
 
@@ -1095,7 +1098,13 @@ adversarial), o 8 (revisor), o 9 e o 10 (push e deploy), o 11 (fumaça em produ�
   página.
 - O texto (nome, falas, etiquetas, fichas, documentos) é o do commit `ab6625e`: `1896` só na
   plaqueta do retrato e no título «Springfield, 1896»; «Museu do Voleibol» em tudo; o Jorge sem
-  pontos cardeais e sem mandar a medalhas e cofre; as doze etiquetas em até 40 palavras.
+  pontos cardeais e sem mandar a medalhas e cofre; as doze etiquetas em até 40 palavras. A
+  revisão corrigiu oito chaves dele em cada língua (10.11): a última dica dá a luz como feita, a
+  dica curta da gaveta diz o gesto («Pega a moldura e inclina»), a etiqueta do guia e a do traje
+  dizem só o que têm fonte, «cavalo de salto», «a convite de», «canais amarelados».
+- **O crédito sob os dois quadros da vitrine corrida lê-se.** É desenhado em creme sobre o forro
+  azul (era um cinza que sumia quando o foco acendia o vão): o do panorama, que não se lia em
+  nenhuma das duas línguas, lê-se com o vão aceso, apagado e no escuro.
 
 ### 10.2 Como ficou no código
 
@@ -1130,7 +1139,14 @@ adversarial), o 8 (revisor), o 9 e o 10 (push e deploy), o 11 (fumaça em produ�
   `userData.mediaMissing`, com um aviso por URL. As texturas de material continuam no
   `TextureLoader` comum: sem elas não há jogo.
 - **`framedMediaLayout.ts`**: as medidas do cartão e da legenda de um quadro, que eram
-  constantes de `FramedMedia.tsx`, agora compartilhadas com o teste da vitrine.
+  constantes de `FramedMedia.tsx`, agora compartilhadas com o teste da vitrine. Desde a revisão,
+  também a cor do crédito por suporte (`CREDIT_COLOUR`: cinza sobre reboco, creme sobre o forro
+  da vitrine), que a cena passa ao quadro. O crédito não recebe luz: sai na tela com um brilho
+  só, e a cor tem de valer contra o forro aceso e contra o preto.
+- **`runtimePlacedParts.ts`** (revisão): as receitas que o runtime coloca sem linha de conteúdo
+  (o suporte sob uma peça montada, as folhas de uma porta) numa tabela só, lida pela cena, pelas
+  portas, pelo validador (`kit-part-unused`, `exhibit-not-on-mount`) e pela suíte de navegação.
+  Eram quatro cópias com um comentário pedindo que se acompanhassem.
 - **Validadores novos** (`validate.ts`): `wall-fixture-off-the-wall` (controle de energia a até
   35 cm de uma parede e a mais de 6 mm do reboco), `power-control-without-state` (sem `__led` e
   sem luz prática) e `power-control-node-missing` (lente sem `__lever`).
@@ -1138,6 +1154,14 @@ adversarial), o 8 (revisor), o 9 e o 10 (push e deploy), o 11 (fumaça em produ�
   containers **e controles de energia**; a porta de chegada de cada sala; o jogador que anda
   contra um quadro), `scripts/lib/sightline.ts` (linhas de visada contra a caixa de tudo o que
   está na sala; tamanho em pixels), `scripts/lib/ratchets.ts` e `scripts/lib/bundlePaths.mjs`.
+  Da revisão: `scripts/lib/runtimeWiring.ts` (as chamadas que os componentes têm de fazer aos
+  módulos puros, conferidas na fonte sem comentários nem espaços) e `scripts/lib/creditWrap.ts`
+  (a quebra de linha do crédito medida com a fonte do jogo: lê `head`, `hhea`, `hmtx` e `cmap`
+  do WOFF, sem dependência nova).
+- **Scripts de medição** (`scripts/audit`): `geo.mjs` lê a marcenaria e o recheio da vitrine
+  corrida do `layout` do gerador, não de listas digitadas; `atrium-walk.mjs` e
+  `breaker-ray.mjs` usam o mundo e o volume de `museumWorld.ts`; `geo2.mjs` segue sem o
+  `dist/`. `test:docs` roda os dezesseis a cada portão e exige que terminem bem.
 
 ### 10.3 Medições
 
@@ -1173,15 +1197,26 @@ erro; o único aviso é o `THREE.Clock`, que já existia.
 Bundle, pela medida do portão novo (gzip nível 9, arquivo a arquivo): documento 63,24 kB, tela de
 título 28,29 kB, jogo 388,18 kB; **91,52 kB antes do clique** (orçamento 250) e **479,70 kB** no
 total (orçamento 600). Não se compara com os 92,85 e 484,58 kB da linha de base, que eram a conta
-que o Vite imprime. Textura residente: 107,08 MiB (112.284.380 bytes), sem mudança.
+que o Vite imprime. Textura residente: 107,08 MiB (112.284.380 bytes), sem mudança. **Depois da
+revisão:** documento 63.235 bytes, título 28.353 (+67: os textos corrigidos são mais longos) e
+jogo 388.248 (+72: a cor do crédito por suporte e a tabela de `runtimePlacedParts.ts`), ou seja
+91,59 kB antes do clique e 479,84 kB no total; os tetos de `title` e `game` subiram 100 bytes
+cada, com o motivo escrito em `scripts/lib/ratchets.ts`. A revisão não mudou o que nenhuma sala
+desenha (nenhuma geometria, nenhum material, nenhum programa): os dez pontos de referência não
+foram medidos de novo e o `BROWSER_RECORD` é o de `047f3bb`.
 
 Teste de farol (`test:opening`): átrio 24,5° do eixo, quadro de 19 × 23 px, 21 de 21 visadas
 livres; Holyoke 20,8°, 29 × 36 px, 21 de 21. Em z = 5,0 (a proposta original) o teste acusa a
 vitrine-herói, e na parede da porta acusa o quadro atrás do jogador.
 
 Capturas: `docs/contact-sheets/l1/` (17 quadros, conjunto `l1` em `CAPTURE_SETS`, ainda **não
-congelado**: a revisão e a passada de toque podem acrescentar quadros; quem fecha o lote congela
-com o digest). O antes de cada um está no conjunto de P0:
+congelado**: a passada de toque pode acrescentar quadros; quem fecha o lote congela com o
+digest). O manifesto nomeia `047f3bb`, o commit cuja árvore os quadros mostram; nomeava
+`ab6625e`, onde o quadro da Holyoke ainda está na parede da porta. Os quatro quadros da revisão
+(o crédito em creme: aceso, no vão apagado, e a três metros no escuro, sem e com lanterna) estão
+em `docs/contact-sheets/l1-review/`, conjunto próprio porque foram tirados sobre outra árvore; o
+campo `commit` dele é `047f3bb+` («a árvore de trabalho sobre 047f3bb», que o commit da revisão
+grava), e quem congelar troca pelo hash. O antes de cada um está no conjunto de P0:
 
 | Depois (L1) | Antes (P0) |
 |---|---|
@@ -1200,15 +1235,19 @@ com o digest). O antes de cada um está no conjunto de P0:
 `validate:content`, e `test:bundle`, no fim, que roda `vite build` antes de medir):
 
 - conteúdo: 3 salas válidas, 29 dívidas datadas impressas;
-- catracas: 4/4; fontes: 28; documentação: 21/21; capturas: 9/9; saves: 19/19;
-- energia: 28/28 (eram 16); abertura: 31/31 (eram 29); fluxo da abertura: 44/44; rádio: 27/27;
-- colisão: 28/28; kit e posicionamento: 339/339, mais **vitrine corrida: 10/10** (novo,
-  `scripts/test-case-run.ts`, encadeado em `test:kit`);
+- catracas: 4/4; fontes: 28; documentação: 23/23 (eram 21; a revisão somou os scripts de medição
+  rodando e `CONTENT_LOT` preso ao plano); capturas: 12/12 (eram 9); saves: 19/19;
+- energia: 30/30 (eram 16 antes do lote, 28 antes da revisão); abertura: 31/31 (eram 29); fluxo
+  da abertura: 44/44; rádio: 27/27;
+- colisão: 28/28; kit e posicionamento: 339/339, mais **vitrine corrida: 12/12** (novo,
+  `scripts/test-case-run.ts`, encadeado em `test:kit`; 10 antes da revisão);
 - materiais: 10; mesa do curador: 9; estantes: 20;
 - runtime do kit: 26; runtime das salas: 19; LOD: 23;
-- aquecimento de GPU: verde, mais **prontidão da sala: 5/5** (novo, no mesmo arquivo);
+- aquecimento de GPU: verde, mais **prontidão da sala: 6/6** (novo, no mesmo arquivo; 5 antes
+  da revisão);
 - render: 16/16; sinalização: 26; portas: 29/29; controles móveis: 13/13;
-- navegação: 67/67 (eram 55); bundle: 5/5 (novo); `npm run build`: verde.
+- navegação: 68/68 (eram 55; 67 antes da revisão), com a dívida do farol da Holyoke impressa;
+  bundle: 5/5 (novo); `npm run build`: verde.
 
 Vermelho primeiro (§9.1, passo 2), conferido rodando cada suíte nova contra o estado anterior:
 
@@ -1250,7 +1289,28 @@ reprovam, cada uma com a mensagem certa.
   is dated where history dates it» virou linhas da tabela de asserções por chave.
 - `test:kit` agora são dois arquivos; `test:kit-runtime` não mudou (56 e 53 lotes).
 
-### 10.6 Dívidas datadas (`src/content/knownDebt.ts`, 35 linhas)
+Da revisão:
+
+- `scripts/test-opening.ts`: «what the runtime places by itself is what the validator counts as
+  used» era um `includes` sobre quatro linhas de fonte; passa a ser o comportamento do validador
+  (uma peça posta sobre plinto, mesa ou torre tira as receitas da lista de `kit-part-unused`; sem
+  porta declarada, as folhas entram nela).
+- `scripts/test-opening-flow.ts`: a regra do traje deixou de **exigir** «1901–1915» e passou a
+  proibir «1901»; entraram as regras da etiqueta do guia, do cavalo, do convite de Gulick, das
+  três chaves sem «costura», da última dica (a luz como feita) e da dica curta da gaveta (o
+  gesto, não a plaqueta), e uma sobre o comentário do gerador da rede.
+- `scripts/test-case-run.ts`: a legenda dos quadros deixou de ser medida com «quatro linhas»
+  digitado; as linhas saem do texto que o runtime formata e da fonte que ele embarca, nas duas
+  línguas. A primeira asserção nova prende a medida à quebra que o navegador desenhou
+  (`l1-h02`): se o crédito mudar, olha-se o quadro de novo e reescrevem-se as quatro linhas ali.
+- `scripts/test-docs.ts`: além de conferir que os scripts de `scripts/audit` têm entrada e
+  cabeçalho, **roda cada um** (cerca de 8 s) e exige saída 0. Eles continuam fora do portão no
+  sentido que importava: o portão nunca lê o que imprimem.
+- `scripts/test-navigation.ts`: a suíte ganhou a caminhada do farol (da porta, reto para o
+  quadro, sem pontos escolhidos) e passou a assentar dívidas de `KNOWN_DEBT` (o portão
+  `test:navigation`).
+
+### 10.6 Dívidas datadas (`src/content/knownDebt.ts`, 36 linhas)
 
 O portão imprime as do conteúdo em toda execução e cobra a data; `CONTENT_LOT` é 1.
 
@@ -1260,6 +1320,7 @@ O portão imprime as do conteúdo em toda execução e cobra a data; `CONTENT_LO
 | `validate:content` | `i18n-key-unused` | 12 chaves (planta L2; escada de dicas L4; ajustes L16; modo leitura L24) | L2 a L24 |
 | `validate:content` | `wall-fixture-off-the-wall` | `atrium-breaker`, a 25,5 cm do reboco | L10 |
 | `test:power` | `pilot-reaches-neighbour` | `atrium-breaker`: piloto de 2,4 m a 1,06 m da Holyoke | L10 |
+| `test:navigation` | `lighthouse-walk-blocked` | `holyoke-breaker`: quem anda reto da porta para o piloto para no quiosque, 7,6 m antes (revisão) | L14 |
 | `test:ratchets` | `ratchet-over-budget` | `kit-glb` (2.182 KiB contra 800), `programs` (35 contra 25), `atrium-draws` (101 contra 100, teto temporário 102), `pair-draws` (125 contra 100) | L6 |
 | `test:ratchets` | `ratchet-over-budget` | `resident-texture` (107,08 MiB contra 45) | L7 |
 
@@ -1267,7 +1328,10 @@ Fechadas por L1: AS-H1, CAP-1 e a parte de L1 de AS-H3; AS-H14 para o quadro da 
 de posição de ÁT-B4. Sem código, só registradas (texto que outro lote conserta): o bilhete do
 Otávio ainda fala em medalhas e cofre (L3); `doc-halstead` é `kind: 'letter'` sem ser carta
 (L8); as fichas ainda dizem «Reprodução» e «Fac-símile» (L8); o detalhe `credit` do guia ainda
-revela `filipino-spike` (L4).
+revela `filipino-spike` (L4). Da revisão: o título do guia («Morgan conta a história») repousa
+num publicador só e espera o dono antes de L8 (plano, 7.7, item 21); a data do traje volta à
+ficha com um catálogo capturado (7.7, item 20, L14); os focos da vitrine corrida não iluminam
+três das quatro peças (H-24, L10; 10.8).
 
 ### 10.7 Onde a execução se afastou do plano do lote
 
@@ -1294,6 +1358,21 @@ revela `filipino-spike` (L4).
   bytes, além dos dois orçamentos do papel.
 - `PLAYER_EYE_HEIGHT` saiu de `PlayerController.tsx` para `playerPosition.ts`, para os testes
   lançarem o raio do mesmo olho que o jogo.
+- **ÁT-H3 foi entregue em L1 só para os dois quadros.** A linha do plano mestre pede «alcance de
+  cada interativo de onde a cápsula para»; o plano do lote estreitou para «cada ponto final
+  diante de um quadro» sem registrar a redução. Peças, arquivos e dispositivos ficam com M15, em
+  L2, que tem de conferir também o ponto mais próximo em que a cápsula para (olho fora do alvo e
+  dentro do `INTERACTION_REACH` do sistema), não só a existência de um ponto de pé; `net-1897`,
+  que se atravessa, entra como dívida datada com H-31 (L14) quando essa checagem chegar.
+- **A rota provada até o quadro da Holyoke é um desvio escolhido** (`[0,-2.5]`, `[-4.9,-2.5]`,
+  `[-4.9,2.2]`: pelo norte da sala e pela parede do fundo), não a reta que o farol convida a
+  andar. A reta da chegada ao quadro passa a 4 cm do centro do `history-info-kiosk`, quase
+  perpendicular à face comprida dele (2,48 m): a cápsula para ali, a 7,6 m do quadro. Não é
+  beco, basta contornar. O conserto é geométrico e mexe na composição da primeira vista da
+  sala: pela simulação, o quiosque teria de girar uns 20° (de 2,14 para 2,5 rad) ou sair 1,7 m
+  da linha, e ele foi posto de frente para a porta de propósito. Ficou como dívida datada
+  (`lighthouse-walk-blocked`, L14), provada em `test:navigation` pela caminhada do farol; a do
+  átrio passa (o anel do plinto é redondo e a cápsula escorrega).
 
 ### 10.8 O que o navegador mostrou, e o que não foi feito
 
@@ -1319,12 +1398,26 @@ Servidor `museum-dev` reiniciado depois da última edição; painel oculto, como
 **Não foi feito, e fica para quem fechar o lote:** a rota inteira em inglês; a rota inteira com
 os botões de toque (andar e olhar pelos direcionais); a leitura das oito etiquetas e das fichas
 na tela; o exame das quatro peças (a plaqueta do retrato ainda pede inclinar a moldura); as
-falas do Jorge ouvidas no jogo (primeira chamada, dica curta da gaveta, última dica); a revisão
-adversarial; o deploy e a fumaça em produção.
+falas do Jorge ouvidas no jogo (primeira chamada, dica curta da gaveta, última dica); o deploy e
+a fumaça em produção. Da revisão, no navegador (servidor reiniciado, painel oculto): o crédito
+dos dois quadros nas quatro situações de `l1-review`; e, com `?qaSave=production-drawer-open`,
+que uma chamada ao Jorge monta `radio.hint.vault` e que o servidor serve o texto novo dela. A
+legenda não foi lida no HUD: com o painel oculto ela fica guardada.
 
 **Visto de passagem, sem conserto neste lote:** de perto e no escuro o piloto estoura o quadro e
 lava a lente (`l1-e02`); com o alcance de hoje ele banha de vermelho a ponta sul do mural. Os
 dois são de L10. Os vãos de quadro ficam com a prateleira de baixo vazia (L14).
+
+**Os focos da vitrine corrida** (revisão): das três luminárias sobre ela só duas acendem, em
+x = −4 e x = +4 (`sampleEvenly` fica com cinco das sete da sala e descarta a do meio de cada
+fila). Com as peças nos vãos, o manual de 1897 saiu do cone do foco oeste (19,8° do eixo →
+34,1°; fator 0,65 → 0) e esse foco ilumina inteiro o vão −4,08, que não hospeda nada; guia e
+retrato já estavam fora de qualquer cone. Só o panorama fica no facho (0,89). Não é «os quatro
+vãos acesos»: é a lavagem da sala em três deles. Reapontar é H-24 (chaves K2 e K3 da tabela
+4.7), de L10, com teste de iluminância por peça e aceite visual; em L1 só o comentário de
+`museum.ts` foi corrigido. **Texto que não recebe luz** (crédito, placas) aparece no escuro com
+o brilho de sempre (`l1r-e01`): é o modelo de hoje, das placas também, e é assunto do apagão
+de verdade (L10).
 
 ### 10.9 Lições
 
@@ -1343,6 +1436,20 @@ dois são de L10. Os vãos de quadro ficam com a prateleira de baixo vazia (L14)
   página; a fronteira de erro por sala é de L6 (M13a).
 - **Regra nova que acusa o conteúdo de hoje entra com a dívida datada no mesmo commit**, e o
   teste que chama o validador direto assenta a dívida antes de exigir zero erros.
+- **Módulo puro provado não prova que o componente o chama.** A suíte montava o colisor do
+  quadro no mundo dela e rodava uma cópia do que o `Room` faz com a espera: tirar a chamada do
+  componente deixava tudo verde. Quando a regra só vive no JSX, prende-se a chamada na fonte
+  (`runtimeWiring.ts`), e a própria checagem é provada aplicando a ela, em memória, o refactor
+  que ela existe para pegar.
+- **Ferramenta que ninguém roda apodrece no lote seguinte.** Dois dos dezesseis scripts de
+  medição pararam num `TypeError` quando o gerador ganhou `anchors` e `layout`, e outros dois
+  continuaram descrevendo o defeito já consertado, porque montavam um mundo próprio.
+- **Conferir a rota por pontos escolhidos prova que se chega, não que se chega por onde o jogo
+  convida.** Um farol pede a caminhada sem pontos: da porta, reto para a luz.
+- **Texto sem luz tem um brilho só.** A cor dele tem de valer contra a superfície acesa e contra
+  a mesma superfície apagada; um teste de contraste contra o albedo, sozinho, não diz nada.
+- **Número de linhas de um texto de runtime não se digita num teste**: mede-se com a fonte
+  embarcada, e prende-se a medida a um quadro que o navegador desenhou.
 
 Do harness, para quem repetir a rota:
 
@@ -1363,10 +1470,71 @@ Do harness, para quem repetir a rota:
 
 ### 10.10 Próximos passos
 
-1. Fechar L1: revisão adversarial (passo 5), o resto da rota de 10.8, revisor, push, deploy e
-   fumaça; congelar o conjunto `l1` de capturas; anotar a versão Cloudflare aqui.
+1. Fechar L1: o resto da rota de 10.8, revisor, push, deploy e fumaça; anotar a versão
+   Cloudflare aqui. E o que falta do passo 12:
+   - **corpus de saves**: depois do deploy, gravar em `src/content/saveFixtures.ts` um save
+     escrito pelo build de L1 no fim da rota (`from` com o commit e a versão Cloudflare) e
+     cobri-lo em `test:qa-save`, que já aceita entradas que não sejam `production-*`; ou
+     registrar aqui que L1 não muda o que um save guarda (`src/state` não foi tocado desde
+     `842750f`) e que L2 parte de `production-drawer-open`. Hoje o corpus tem só os cinco
+     saves de produção, e o checklist final do plano conta «L1 a L24»;
+   - **capturas**: congelar `l1` e `l1-review` com o digest, trocando o `047f3bb+` do segundo
+     pelo hash do commit da revisão;
+   - `npm run graph:snapshot` não existe ainda: o primeiro instantâneo é o de L2.
 2. L2 (Trilhos). Ele paga `map.legend` (`i18n-key-unused`) e move `CONTENT_LOT` para 2 no commit
    que a pagar. Texto novo na tela de título mexe no teto de `title` do bundle, que tem 14 bytes
    de folga: sobe no mesmo commit, com o motivo em `scripts/lib/ratchets.ts`.
 3. Um lote que mudar o que uma sala desenha mede de novo os dez pontos e troca `BROWSER_RECORD`
-   (`scripts/lib/ratchets.ts`): o portão reprova um registro com mais de um lote de idade.
+   (`scripts/lib/ratchets.ts`): o portão reprova um registro com mais de um lote de idade. A
+   idade conta a partir de `CONTENT_LOT`, que `test:docs` prende ao «Feito em» do plano: fechar
+   um lote no plano sem mover a constante reprova. Os números de draws, triângulos e programas
+   continuam sendo o último registro escrito, não uma medição do portão; o estimador é de L5.
+4. Lote que mexer num gerador confere que `npm run test:docs` segue verde (ele roda os scripts
+   de `scripts/audit`) e lê a saída dos que medem a receita tocada.
+
+### 10.11 Revisão adversarial (passo 5 de §9.1), 2026-10-04
+
+Cinco lentes (fluxo, fatos, bake, testes, visual), 27 achados, 19 distintos; cada um conferido
+de forma independente antes de chegar aqui. Um «major», os demais «minor» ou acabamento. Tudo
+num commit local, com `npm run check` e `npm run build` verdes.
+
+| Achado | O que foi feito | Onde está provado |
+|---|---|---|
+| A metade de runtime de T1, T2 e T5 não tinha guarda: revertê-la deixava o portão verde (major) | as chamadas dos componentes presas na fonte: colisor do quadro, lente por estado, proxy de dupla face, a espera contada no `useFrame`, os três chamadores no carregador que não rejeita | `test:power` (2 checagens) e `test:gpu-warmup` (1), via `scripts/lib/runtimeWiring.ts`; contra a árvore de `842750f` acusa 17 problemas |
+| `audit:geo` e `audit:geo2` quebravam; `audit:walk` e `audit:breaker-ray` relatavam o estado antigo | os quatro consertados (10.2) | `test:docs` roda os dezesseis |
+| Catracas de navegador e dívidas dependiam de `CONTENT_LOT`, que nada ancorava | `CONTENT_LOT` preso ao maior lote com «Feito em» no plano (igual, ou um à frente); cabeçalho de `ratchets.ts` corrigido (`roomDraws` e `frameTriangles` ficam no teto duro, não no medido) | `test:docs` |
+| Da porta da Holyoke, andar reto para o piloto para no quiosque (2 achados) | datado, não movido (10.7) | `test:navigation`, caminhada do farol; dívida `lighthouse-walk-blocked` até L14 |
+| A dica curta da gaveta mandava a uma plaqueta que o modelo não tem | a fala diz o gesto, nas duas línguas | `test:opening-flow` |
+| A última dica oferecia «luz» com as três salas já acesas (2 achados) | as quatro chaves dão a luz como feita | `test:opening-flow`, que também confere que a dica só toca com tudo aceso |
+| Etiqueta do guia afirmava em placa um fato de um publicador | a etiqueta diz o que tem dois; o título fica para o dono (10.6) | `test:opening-flow` |
+| Etiqueta e ficha do traje afirmavam o que nenhuma fonte diz | sem data; a etiqueta diz o que o museu não sabe | `test:opening-flow` |
+| «Cavalo com alças» que a foto não mostra | «cavalo de salto» / “a vaulting horse” | `test:opening-flow` |
+| «Convocada por Gulick» | «a convite de» | `test:opening-flow` |
+| «Costuras amareladas» na ficha da bola de Tóquio | «canais amarelados» | `test:opening-flow` |
+| Comentário de `kit.mjs` ainda dizia «half a foot» (3 achados) | corrigido | `test:opening-flow` |
+| Inglês pouco idiomático em três strings | a ficha do traje e a última dica reescritas; a etiqueta do manual fica como está (ver abaixo) | `test:opening-flow` |
+| O crédito do panorama era ilegível contra o forro aceso | creme sobre o forro, pela tabela `CREDIT_COLOUR` | `test:kit` (contraste ≥ 3:1 contra o forro a plena luz e contra o preto: o cinza dava 1,14:1); `l1r-h01` |
+| A legenda dos quadros era medida com um número de linhas digitado (2 achados) | medida com a fonte do jogo | `test:kit` |
+| Três das quatro peças da vitrine fora de qualquer foco (2 achados) | datado em 10.8; comentário corrigido | H-24, L10 |
+| ÁT-H3 entregue pela metade | registrado (10.7) | M15, L2 |
+| Passo 12 dado como feito sem o corpus de saves | o registro deixou de dizê-lo; o item está em 10.10 | — |
+| O conjunto `l1` apontava para um commit em que os quadros não se reproduzem | `047f3bb`; convenção do `+` para conjunto aberto | `test:captures` |
+| Teste novo provava a tabela do validador por grep | tabela única e teste de comportamento (10.5) | `test:opening` |
+
+**O que não foi feito, e por quê.**
+
+- **A etiqueta do manual em inglês** não foi trocada por “was the League's first”: muda a
+  afirmação (o primeiro manual da Liga, e não o primeiro manual oficial) e a redação de hoje
+  liga etiqueta, título e fato. A outra sugestão do mesmo achado (“the first to print the
+  rules”) contradiz a ficha, que diz que as regras saíram um ano antes numa revista.
+- **O quiosque não foi movido nem girado** e **os focos não foram reapontados**: as duas coisas
+  mudam o que o jogador vê ao entrar na ala e pedem o aceite visual do dono, que L1 não tem.
+
+**Vermelho primeiro.** Cada asserção nova reprovou o estado de `047f3bb` antes do conserto: 26
+linhas de texto histórico e 12 de fala em `test:opening-flow`, mais a do comentário do gerador;
+a caminhada do farol (`holyoke-breaker`: para em −14,52; −1,58, a 7,61 m do quadro); o
+contraste do crédito (1,14:1); `audit:geo` e `audit:geo2` com saída 1; o conjunto `l1` nomeando
+`ab6625e`; a cena e as portas sem ler a tabela compartilhada. Três nascem verdes, porque
+guardam contra uma volta atrás, e são provadas por mutação dentro do próprio teste: as
+chamadas dos componentes (cinco e quatro refactors aplicados em memória), `CONTENT_LOT` (planos
+feitos para o teste) e a medida da legenda (um crédito mais longo quebra em mais linhas).

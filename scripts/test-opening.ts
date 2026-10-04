@@ -28,7 +28,7 @@ import {
   type KnownDebt,
 } from '../src/content/knownDebt.ts'
 import { MUSEUM } from '../src/content/museum.ts'
-import type { MuseumContent, RoomData } from '../src/content/schema.ts'
+import type { ExhibitMount, MuseumContent, RoomData } from '../src/content/schema.ts'
 import {
   validateContent,
   validateOpening,
@@ -63,12 +63,14 @@ import {
 import { isRoomPowered } from '../src/engine/power.ts'
 import { buildPowerControlLightRig } from '../src/engine/powerControlLightRig.ts'
 import { progressConditionMet } from '../src/engine/progressCondition.ts'
+import { MOUNT_PARTS, mountPartNames, transitionDoorPartNames } from '../src/engine/runtimePlacedParts.ts'
 import {
   buildTransitionDoorSpecs,
   transitionDoorBlock,
 } from '../src/engine/transitionDoorTopology.ts'
 import { useMuseum } from '../src/state/store.ts'
 import { arrivalOf, recipeParts } from './lib/museumWorld.ts'
+import { squeezed } from './lib/runtimeWiring.ts'
 import { bearingDegrees, projectedSize, roomObstacles, sightlineBlockers } from './lib/sightline.ts'
 import { KEY_NAMED_NOT_USED, keysCitedIn, readSourceTree } from './lib/translationUsage.ts'
 
@@ -901,14 +903,59 @@ test('each validator the gate lacked fails a museum broken on purpose', () => {
 })
 
 test('what the runtime places by itself is what the validator counts as used', () => {
-  // The two tables in the validator mirror code a component owns; a recipe
-  // renamed on one side only would turn a used part into dead weight.
-  const doors = readFileSync(new URL('../src/engine/TransitionDoors.tsx', import.meta.url), 'utf8')
-  assert.ok(doors.includes("side === 'left' ? 'door-leaf' : 'door-leaf-right'"))
-  const scene = readFileSync(new URL('../src/scenes/MuseumScene.tsx', import.meta.url), 'utf8')
-  assert.ok(scene.includes("plinth: { part: 'plinth-block' }"))
-  assert.ok(scene.includes("'vitrine-table': { part: 'vitrine-table', extra: 'vitrine-glass' }"))
-  assert.ok(scene.includes("'vitrine-tower': { part: 'vitrine-tower' }"))
+  // A mount type and a door style become kit recipes in one table
+  // (`runtimePlacedParts.ts`), read by the component that draws them and by
+  // the validator that counts them. This used to be four lines of source
+  // matched as text, which a formatter could fail and a real change could
+  // pass; it is the validator's behaviour now.
+  const unused = (content: MuseumContent) => accused(gate(content), 'kit-part-unused')
+  const authored = unused(MUSEUM)
+
+  // No exhibit of the house stands on a plinth, a table or a tower today, so
+  // those recipes are accused (and dated). One exhibit given the mount is
+  // what takes each of them off the list.
+  const [first] = MUSEUM.exhibits
+  const mounted = (mount: ExhibitMount): MuseumContent => ({
+    ...MUSEUM,
+    exhibits: MUSEUM.exhibits.map((exhibit) => (exhibit === first ? { ...exhibit, mount } : exhibit)),
+  })
+  const drawing = (Object.keys(MOUNT_PARTS) as ExhibitMount[]).filter((mount) => mountPartNames(mount).length > 0)
+  assert.deepEqual(drawing.sort(), ['plinth', 'vitrine-table', 'vitrine-tower'])
+  assert.deepEqual(mountPartNames('vitrine-table'), ['vitrine-table', 'vitrine-glass'], 'the table and its hood')
+  for (const mount of drawing) {
+    const after = unused(mounted(mount))
+    for (const part of mountPartNames(mount)) {
+      assert.ok(authored.includes(part), `"${part}" is placed by nothing but a ${mount} mount`)
+      assert.ok(!after.includes(part), `an exhibit on a ${mount} puts "${part}" in use`)
+    }
+  }
+  for (const mount of ['wall', 'case-wall', 'floor'] as const) {
+    assert.deepEqual(unused(mounted(mount)), authored, `a ${mount} mount draws nothing of the kit`)
+  }
+
+  // The leaves are in use because a doorway declares a door; without one
+  // they are dead weight.
+  const doorless: MuseumContent = {
+    ...MUSEUM,
+    rooms: MUSEUM.rooms.map((room) => ({
+      ...room,
+      portals: room.portals.map(({ transitionDoor: _, ...portal }) => portal),
+    })),
+  }
+  const leaves = transitionDoorPartNames('double-panel')
+  assert.deepEqual([...leaves], ['door-leaf', 'door-leaf-right'])
+  for (const leaf of leaves) {
+    assert.ok(!authored.includes(leaf), `"${leaf}" hangs in a doorway`)
+    assert.ok(unused(doorless).includes(leaf), `with no door declared, "${leaf}" is accused`)
+  }
+
+  // And the components draw from that table rather than from one of their own.
+  const source = (path: string) => squeezed(readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8'))
+  assert.ok(source('scenes/MuseumScene.tsx').includes('MOUNT_PARTS[exhibit.mount]'), 'the scene reads MOUNT_PARTS')
+  assert.ok(
+    source('engine/TransitionDoors.tsx').includes("TRANSITION_DOOR_LEAVES['double-panel'][side]"),
+    'the doors read TRANSITION_DOOR_LEAVES',
+  )
 })
 
 test('a key counts as cited only as one whole quoted literal', () => {

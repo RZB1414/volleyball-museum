@@ -1330,9 +1330,14 @@ const ROOMS = [
       { part: 'label-angled', position: [4.15, 0, -4.15], rotationY: 0 },
       { part: 'label-angled', position: [3.8, 0, -0.7], rotationY: -Math.PI / 2 },
 
-      // Three heads wash the archival run; three model the gym and mural. Each
-      // target is authored with the fixture so layout changes cannot leave an
-      // invisible light shining at empty floor.
+      // Three heads hang over the archival run and three over the gym and the
+      // mural, each authored with its target. Only FIVE of the seven are ever
+      // lit: the light rig samples that many evenly and drops the middle head
+      // of each row, so over the run the lit ones are x = -4 and x = +4. Since
+      // the collection moved into its bays the west one lights the bay that
+      // hosts nothing and the handbook, the guide and the portrait have only
+      // the room's wash: left as it is for the lot that re-aims the room
+      // (H-24, L10), which owns the key lights and their acceptance.
       { part: 'ceiling-spot', position: [-4.0, 4.2, 6.3], lightTarget: [-4.0, 1.4, 7.25] },
       { part: 'ceiling-spot', position: [0, 4.2, 6.3], lightTarget: [0, 1.4, 7.25] },
       { part: 'ceiling-spot', position: [4.0, 4.2, 6.3], lightTarget: [4.0, 1.4, 7.25] },
