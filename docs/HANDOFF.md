@@ -1482,8 +1482,9 @@ Do harness, para quem repetir a rota:
      pelo hash do commit da revisão;
    - `npm run graph:snapshot` não existe ainda: o primeiro instantâneo é o de L2.
 2. L2 (Trilhos). Ele paga `map.legend` (`i18n-key-unused`) e move `CONTENT_LOT` para 2 no commit
-   que a pagar. Texto novo na tela de título mexe no teto de `title` do bundle, que tem 14 bytes
-   de folga: sobe no mesmo commit, com o motivo em `scripts/lib/ratchets.ts`.
+   que a pagar. Texto novo na tela de título mexe no teto de `title` do bundle, que tem cerca de
+   meio por cento de folga (28.500 sobre 28.353 medidos): se passar, sobe no mesmo commit, com o
+   motivo em `scripts/lib/ratchets.ts`.
 3. Um lote que mudar o que uma sala desenha mede de novo os dez pontos e troca `BROWSER_RECORD`
    (`scripts/lib/ratchets.ts`): o portão reprova um registro com mais de um lote de idade. A
    idade conta a partir de `CONTENT_LOT`, que `test:docs` prende ao «Feito em» do plano: fechar

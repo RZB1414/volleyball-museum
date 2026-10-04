@@ -210,9 +210,11 @@ export const BUNDLE_BUDGETS = {
 
 /**
  * What each moment weighed, gzipped, when a lot last measured it
- * (`scripts/lib/bundlePaths.mjs` says how). Rounded up to the next hundred
- * bytes, so that a patch release of zlib does not turn the gate red and
- * anything a person wrote does.
+ * (`scripts/lib/bundlePaths.mjs` says how), plus about half a per cent of
+ * slack. The measure is Node's own zlib over the bundler's output, and the
+ * repository pins neither: the next hundred bytes (47 of slack on 28 kB) would
+ * have turned the gate red on another machine with no code changed. Half a
+ * per cent is still a few lines of text, so what a person adds shows.
  *
  * These are the figures of L1: 63,235, 28,353 and 388,248 bytes, which is
  * 91.6 kB before the click and 479.8 kB in all. They are not comparable
@@ -233,9 +235,9 @@ export const BUNDLE_BUDGETS = {
  *     (`runtimePlacedParts.ts`) instead of being typed in each component.
  */
 export const BUNDLE_PATH_CEILINGS = {
-  document: 63_300,
-  title: 28_400,
-  game: 388_300,
+  document: 63_600,
+  title: 28_500,
+  game: 390_200,
 } as const
 
 /** Strings that only the content set and the bake manifest contain. */
