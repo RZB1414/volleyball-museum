@@ -1,6 +1,17 @@
-import { pathToFileURL } from 'node:url'
-const repo = 'C:/Users/rzbui/OneDrive/Documentos/Portfolio/Volleyball Museum'
-const { MUSEUM } = await import(pathToFileURL(repo + '/src/content/museum.ts').href)
+/**
+ * Measures the atrium's slatted wall bays along each wall: where they overlap,
+ * where they leave a strip of plaster, and how close they come to a doorway.
+ *
+ * Two bays of the west wall overlap by a third of a metre, and the bays next
+ * to a doorway stop 3 cm from the opening, on top of its architrave (ÁT-F4,
+ * AS-A4); this prints the intervals that show it. Read-only.
+ *
+ *   npm run audit:bays
+ */
+
+import { load } from './lib/repo.mjs'
+
+const { MUSEUM } = await load('src/content/museum.ts')
 const atrium = MUSEUM.rooms.find((r) => r.id === 'atrium')
 const bays = atrium.kit.filter((k) => k.part === 'atrium-wall-bay-plain')
 const HALF = 1.62 // trim half-width; backing 1.60

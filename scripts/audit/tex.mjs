@@ -1,15 +1,25 @@
-// Read-only: decode the shipped albedo/ORM maps and report the colour every
-// material key actually renders at (mean linear albedo x runtime factor).
-import { createRequire } from 'node:module'
+/**
+ * Measures the colour every material key really renders at: it decodes the
+ * shipped albedo and ORM maps and multiplies their mean linear albedo by the
+ * runtime factor, next to the colour the key declares.
+ *
+ * A tint only scales channels, so a key's name says nothing about what it
+ * looks like on a map with a hue of its own (AS-S4): the table is how the
+ * plan knows which woods, leathers and brasses are off their palette, and
+ * which keys no baked part uses. Read-only.
+ *
+ *   npm run audit:tex
+ */
+
 import { readFileSync, statSync } from 'node:fs'
-import { pathToFileURL } from 'node:url'
 import { resolve } from 'node:path'
 
-const REPO = 'C:/Users/rzbui/OneDrive/Documentos/Portfolio/Volleyball Museum'
-const require = createRequire(resolve(REPO, 'package.json'))
-const sharp = require('sharp')
-const { BAKED_MATERIALS, BAKED_BUNDLES } = await import(pathToFileURL(resolve(REPO, 'src/content/bake.generated.ts')).href)
-const { MATERIALS } = await import(pathToFileURL(resolve(REPO, 'scripts/bake/lib/glb.mjs')).href)
+import sharp from 'sharp'
+
+import { load, REPO } from './lib/repo.mjs'
+
+const { BAKED_MATERIALS, BAKED_BUNDLES } = await load('src/content/bake.generated.ts')
+const { MATERIALS } = await load('scripts/bake/lib/glb.mjs')
 
 const toLinear = (v) => (v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)
 const toSrgb = (v) => Math.round(255 * (v <= 0.0031308 ? v * 12.92 : 1.055 * Math.max(v, 0) ** (1 / 2.4) - 0.055))

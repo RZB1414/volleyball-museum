@@ -1,9 +1,20 @@
-import { pathToFileURL } from 'node:url'
-const repo = 'C:/Users/rzbui/OneDrive/Documentos/Portfolio/Volleyball Museum'
-const u = (p) => pathToFileURL(repo + p).href
-const THREE = await import(u('/node_modules/three/build/three.module.js'))
+/**
+ * Simulates the first frame of examining every exhibit from four sides and
+ * reports which hotspots already face the camera, then checks which world
+ * axis the vertical drag turns about for each heading.
+ *
+ * An exhibit whose required hotspot is seen on that first frame is catalogued
+ * without being turned, and one whose hotspot never faces the camera cannot
+ * be catalogued at all (ÁT-C1, ÁT-C3, H-01). Read-only.
+ *
+ *   npm run audit:examine-sim
+ */
+
+import { load } from './lib/repo.mjs'
+
+const THREE = await import('three')
 const { Vector3, Quaternion, Matrix4, Euler } = THREE
-const { MUSEUM } = await import(u('/src/content/museum.ts'))
+const { MUSEUM } = await load('src/content/museum.ts')
 const HOLD = 0.42, DOT = 0.55, EYE = 1.62
 function seenAtPickup(exhibit, room, camPos) {
   const centre = new Vector3(room.origin[0] + exhibit.position[0], exhibit.position[1], room.origin[2] + exhibit.position[2])

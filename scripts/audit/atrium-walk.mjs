@@ -1,12 +1,22 @@
-import { pathToFileURL } from 'node:url'
-const repo = 'C:/Users/rzbui/OneDrive/Documentos/Portfolio/Volleyball Museum'
-const u = (p) => pathToFileURL(repo + p).href
-const THREE = await import(u('/node_modules/three/build/three.module.js'))
+/**
+ * Walks the real player capsule (`movePlayer`) along 25 routes of the atrium
+ * and reports where it arrives, where it stops and how low it sinks.
+ *
+ * The same collision code and the same room shells as the game, with no
+ * browser: it is how the audit proved the capsule ends up inside the breaker
+ * panel (ÁT-A1) and walks through the queue ropes (ÁT-H1). Read-only.
+ *
+ *   npm run audit:walk
+ */
+
+import { load } from './lib/repo.mjs'
+
+const THREE = await import('three')
 const { BoxGeometry, Mesh, MeshBasicMaterial, Vector3 } = THREE
-const { BAKED_BUNDLES } = await import(u('/src/content/bake.generated.ts'))
-const { MUSEUM } = await import(u('/src/content/museum.ts'))
-const { movePlayer, worldFromMeshes } = await import(u('/src/engine/collision.ts'))
-const { buildRoomShell, prepareRoomShells } = await import(u('/scripts/bake/kit.mjs'))
+const { BAKED_BUNDLES } = await load('src/content/bake.generated.ts')
+const { MUSEUM } = await load('src/content/museum.ts')
+const { movePlayer, worldFromMeshes } = await load('src/engine/collision.ts')
+const { buildRoomShell, prepareRoomShells } = await load('scripts/bake/kit.mjs')
 
 const CAPSULE = { radius: 0.3, height: 1.75 }
 const kit = BAKED_BUNDLES.find((b) => b.name === 'kit')

@@ -1,9 +1,22 @@
-// Read-only inventory of the baked manifest against the content placements.
-import { pathToFileURL } from 'node:url'
-import { resolve } from 'node:path'
+/**
+ * Measures the baked manifest against the content's placements: triangles,
+ * families, size and use of every recipe.
+ *
+ * One mode per question, as the first argument:
+ *   recipes    every recipe, its families and the rooms that place it (default)
+ *   totals     bytes, triangles and nodes per bundle
+ *   materials  every material key as baked: maps, factors, finish
+ *   rooms      what each room places, in batches and instanced triangles
+ *
+ * `recipes.txt`, next to this file, is the `recipes` output at the commit the
+ * plan was written from (82756c4), kept as the figures its recipe tables
+ * start from. Read-only.
+ *
+ *   npm run audit:inv
+ *   npm run audit:inv -- totals
+ */
 
-const REPO = 'C:/Users/rzbui/OneDrive/Documentos/Portfolio/Volleyball Museum'
-const load = (rel) => import(pathToFileURL(resolve(REPO, rel)).href)
+import { load } from './lib/repo.mjs'
 
 const { BAKED_BUNDLES, BAKED_MATERIALS, BAKE_TOTALS } = await load('src/content/bake.generated.ts')
 const { MUSEUM } = await load('src/content/museum.ts')

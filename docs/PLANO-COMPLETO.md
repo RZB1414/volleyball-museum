@@ -1,5 +1,11 @@
 # Plano completo — do átrio ao Cofre do Fundador
 
+> **Substituído em parte, em 2026-10-03, por `docs/PLANO-ATE-O-FINAL.md`.** Onde os dois divergem,
+> vale o plano novo; o Anexo D dele lista o que mudou, e cada seção alterada aqui leva uma nota
+> "Substituído" logo abaixo do título: §2, §2.2, §2.4, §3, §5, §9, §11 e §12. Continuam valendo, sem
+> mudança: §4 (as três armadilhas e as quatro regras), os heróis e as premissas das cinco alas, a
+> posição sobre o Brasil, as defesas contra envelhecer e o final "o museu se declara".
+
 Este documento é o desenho do jogo inteiro: as seis alas, os fios temáticos, cada tranca, cada
 código, o mezanino, o cofre e o final. Ele continua de onde `docs/PLANO-DO-ZERO.md` parou —
 aquele desenhou a arquitetura e a Ala 1; este desenha as cinco alas restantes e o arco.
@@ -31,6 +37,10 @@ que este documento fecha.
 
 ## 2. A espinha da progressão
 
+> **Substituído** (`docs/PLANO-ATE-O-FINAL.md`, Anexo D). As galerias não abrem todas "desde o
+> primeiro segundo": as alas abrem depois da Reabertura, uma por lote e em sequência (o termo de uma
+> deslacra a pasta da seguinte).
+
 Três sistemas independentes se cruzam. Nenhum deles tranca uma galeria — todas as seis abrem desde
 o primeiro segundo. O que eles trancam é o **arquivo**.
 
@@ -58,6 +68,10 @@ um distintivo, entrega três no térreo e deixa a quarta como a razão de subir.
 genuinamente o menos conhecido dos quatro, então a estrutura ensina a mesma coisa que o conteúdo.
 
 ### 2.2 Três medalhas — o portão do segundo ato
+
+> **Substituído** (`docs/PLANO-ATE-O-FINAL.md`, Anexo D). As medalhas são `curator`, `founding` e
+> `lineage`, ganhas na casa original, e não nas Alas 2, 3 e 6. O plinto de três soquetes não está
+> construído: entra em L11.
 
 `founding` · `olympic` · `global`
 
@@ -100,6 +114,9 @@ libera o último painel da parede de créditos.
 
 ### 2.4 Três ferramentas
 
+> **Substituído** (`docs/PLANO-ATE-O-FINAL.md`, Anexo D). A `service-key` abre o cofre de ferro do
+> escritório, não uma gaveta, e `breaker-handle` sai do jogo.
+
 `crate-dolly` (Ala 4, abre o atalho da doca de carga) · `service-key` (escritório, consumida numa
 gaveta) · `step-ladder` (mezanino). `breaker-handle` já é coberto pelo sistema de energia
 implementado — não duplique.
@@ -107,6 +124,10 @@ implementado — não duplique.
 ---
 
 ## 3. Os sete códigos
+
+> **Substituído** (`docs/PLANO-ATE-O-FINAL.md`, Anexo D). Dos sete, quatro continuam digitados ou
+> girados (`1896`, `1962`, `1973` e o `15`, este só com fonte), dois passam a ser contados e `1998`
+> vira ritual.
 
 Um por ala mais um segundo em Ferro e Areia. Todos numéricos, todos distintos, nenhum
 super-exposto, cada um certificado pela seção de correções da pesquisa.
@@ -193,6 +214,9 @@ conhecimento com fonte frágil é um soft-lock que a CI não enxerga.
 ---
 
 ## 5. Ala 2 — Paris, 1930–1949
+
+> **Substituído** (`docs/PLANO-ATE-O-FINAL.md`, Anexo D). O ritual `paris-seating-plan` (ordenar as
+> catorze delegações) dá lugar a `paris-beyond-europe` (alfinetar as quatro de fora da Europa).
 
 **Apelido:** *a sala da mesa verde*. Segunda opção com a mesma força: *a das catorze cadeiras*.
 
@@ -352,6 +376,10 @@ prefere isso — se toda ala desse medalha, medalha viraria carimbo.
 
 ## 9. Ala 6 — Global, 2000 até hoje
 
+> **Substituído** (`docs/PLANO-ATE-O-FINAL.md`, Anexo D). O ritual das seis bolas não concede a
+> medalha `global`: vira "seis bolas, três moldes", paga o fio e é exigido pelo termo de
+> encerramento.
+
 **Apelido:** *a sala da bola com covinhas*.
 
 **Premissa.** Em vinte e cinco anos a bola foi redesenhada duas vezes, o árbitro passou a receber
@@ -411,6 +439,9 @@ O que existe lá e em lugar nenhum mais:
 
 ## 11. O Cofre do Fundador e o final
 
+> **Substituído** (`docs/PLANO-ATE-O-FINAL.md`, Anexo D). Não há escada: a plataforma desce.
+> Assina-se o termo de reabertura no púlpito, e o livro de visitas passa a ser o resumo.
+
 Três medalhas no plinto. O cofre fica **no subsolo, com acesso pelo átrio**.
 
 **A sequência, em ordem, e cada beat custa quase nada:**
@@ -447,6 +478,9 @@ A carta do antecessor pede uma coisa ao novo curador: **continue declarando.**
 ---
 
 ## 12. Ordem de construção
+
+> **Substituído** (`docs/PLANO-ATE-O-FINAL.md`, Anexo D). As fases A a F deram lugar aos lotes L1 a
+> L24; os portões de fase viraram critérios de aceite de L18, L19 e L22.
 
 Cada fase tem um portão. Se o portão não passar, o problema é de arquitetura e se conserta ali,
 não duas fases depois.

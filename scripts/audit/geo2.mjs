@@ -1,12 +1,22 @@
-// Read-only: shading quality (crease pass over bevelled boxes), roundness of
-// turned/tubed metal, shell trim projections, gzip sizes.
-import { pathToFileURL } from 'node:url'
+/**
+ * Measures shading quality and download size: flat faces whose normals the
+ * crease pass bent (AS-S2), how round the turned and tubed metal is, how far
+ * the shell's trim projects, and what every GLB and chunk weighs on disk, in
+ * gzip and in brotli.
+ *
+ * The size table reads `dist/assets`, so run `npm run build` first; that
+ * dependency on a build is one reason these scripts stay out of the gate.
+ * Read-only.
+ *
+ *   npm run audit:geo2
+ */
+
 import { resolve } from 'node:path'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { gzipSync, brotliCompressSync } from 'node:zlib'
 
-const REPO = 'C:/Users/rzbui/OneDrive/Documentos/Portfolio/Volleyball Museum'
-const load = (rel) => import(pathToFileURL(resolve(REPO, rel)).href)
+import { load, REPO } from './lib/repo.mjs'
+
 const kit = await load('scripts/bake/kit.mjs')
 const atriumDecor = await load('scripts/bake/parts/atriumDecor.mjs')
 const atriumFurn = await load('scripts/bake/parts/atriumFurnishings.mjs')

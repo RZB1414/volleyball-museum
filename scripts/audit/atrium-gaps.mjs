@@ -1,8 +1,19 @@
-import { pathToFileURL } from 'node:url'
-const repo = 'C:/Users/rzbui/OneDrive/Documentos/Portfolio/Volleyball Museum'
-const u = (p) => pathToFileURL(repo + p).href
-const { BAKED_BUNDLES } = await import(u('/src/content/bake.generated.ts'))
-const { MUSEUM } = await import(u('/src/content/museum.ts'))
+/**
+ * Measures the gaps between the atrium's colliders, and from each to the
+ * wainscot, against the 0.60 m the capsule needs.
+ *
+ * A gap that looks open and does not let the player through is the worst
+ * kind of invisible wall. The script lists every pair closer than 1.2 m, so
+ * a new floor plan (plan 4.7b) can be checked before anything is baked.
+ * Read-only.
+ *
+ *   npm run audit:atrium-gaps
+ */
+
+import { load } from './lib/repo.mjs'
+
+const { BAKED_BUNDLES } = await load('src/content/bake.generated.ts')
+const { MUSEUM } = await load('src/content/museum.ts')
 const kit = BAKED_BUNDLES.find((b) => b.name === 'kit')
 const atrium = MUSEUM.rooms.find((r) => r.id === 'atrium')
 const obbs = []

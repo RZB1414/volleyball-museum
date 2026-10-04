@@ -1,10 +1,19 @@
-// Read-only geometry reconstruction: imports the generators (pure functions),
-// never bake.mjs, and measures placement defects in the atrium and Holyoke.
-import { pathToFileURL } from 'node:url'
-import { resolve } from 'node:path'
+/**
+ * Measures where every placed part of the atrium and Holyoke really sits:
+ * what floats, what sinks into its support, what cuts through its neighbour
+ * and how far each wall piece stands from the plaster.
+ *
+ * It rebuilds the geometry from the generators themselves (pure functions),
+ * never through `bake.mjs`, and applies each placement the way the runtime
+ * does. Most of the measured model defects of plan section 4 (AS-A1 to
+ * AS-A20, AS-H1 to AS-H16) are lines of this output, and the bake gate
+ * "support and clearance within a recipe" (plan 4.4b) is to be promoted from
+ * it. Read-only.
+ *
+ *   npm run audit:geo
+ */
 
-const REPO = 'C:/Users/rzbui/OneDrive/Documentos/Portfolio/Volleyball Museum'
-const load = (rel) => import(pathToFileURL(resolve(REPO, rel)).href)
+import { load } from './lib/repo.mjs'
 
 const kit = await load('scripts/bake/kit.mjs')
 const atriumDecor = await load('scripts/bake/parts/atriumDecor.mjs')
@@ -13,7 +22,6 @@ const holyoke = await load('scripts/bake/parts/holyokeDecor.mjs')
 const fixtures = await load('scripts/bake/parts/fixtures.mjs')
 const interp = await load('scripts/bake/parts/interpretive.mjs')
 const balls = await load('scripts/bake/parts/historicalVolleyballs.mjs')
-const openings = await load('scripts/bake/parts/openings.mjs')
 const { MUSEUM } = await load('src/content/museum.ts')
 
 const f = (v, d = 3) => (typeof v === 'number' ? v.toFixed(d) : String(v))
@@ -313,7 +321,7 @@ section('ATRIUM: exhibits on the console risers')
     }
     return min
   }
-  const core = new (await load('node_modules/three/build/three.module.js')).SphereGeometry(0.105 - 0.0012, 24, 16)
+  const core = new (await import('three')).SphereGeometry(0.105 - 0.0012, 24, 16)
   const coreMax = Math.max(...radial(core))
   const t98 = balls.buildTricolourVolleyball1998()
   const t08 = balls.buildEightPanelVolleyball2008()
@@ -339,7 +347,6 @@ const stiles = Array.from({ length: bays + 1 }, (_, i) => -width / 2 + bayW * i)
     console.log(`  bay ${b} (local x ${f(cx - bayW / 2, 2)}..${f(cx + bayW / 2, 2)}, world x ${f(-(cx + bayW / 2), 2)}..${f(-(cx - bayW / 2), 2)}): shelves span y ${ys.map((y) => `${f(y - 0.0135)}..${f(y + 0.0135)}`).join(' and ')}, x ${f(cx - (bayW - 0.15) / 2, 3)}..${f(cx + (bayW - 0.15) / 2, 3)}, z 0.055..${f(0.055 + shelfDepth(b))}`)
   }
   // decoys: measure by family, per bay, objects sitting between deck and lower shelf
-  const inBay = (v, b) => v[0] > -width / 2 + bayW * b + 0.04 && v[0] < -width / 2 + bayW * (b + 1) - 0.04
   const DECK = 0.76
   const report = (label, g, pred, support) => {
     const bb = bounds(g, pred)
@@ -361,7 +368,7 @@ const stiles = Array.from({ length: bays + 1 }, (_, i) => -width / 2 + bayW * i)
     const shelfTop = shelfYs(b)[0] + 0.0135
     console.log(`    bay${b} leaning document at x=${f(x, 2)}: bottom edge y=${f(low)} vs lower shelf top ${f(shelfTop)} => passes ${f((shelfTop - low) * 1000, 0)} mm THROUGH the shelf`)
   }
-  for (const [b, x, y] of [[0, -4.08 - 0.14, 1.86], [3, 2.04 + 0.10, 1.84]]) {
+  for (const [b, , y] of [[0, -4.08 - 0.14, 1.86], [3, 2.04 + 0.10, 1.84]]) {
     const up = shelfYs(b)[1]
     console.log(`    bay${b} box garment centred y=${y} (y ${f(y - 0.35)}..${f(y + 0.35)}, z 0.3025..0.3775): upper shelf at y=${f(up)} (z 0.055..${f(0.055 + shelfDepth(b))}) cuts it at chest height`)
   }
@@ -372,7 +379,7 @@ section('HOLYOKE: real exhibits inside the case run and elsewhere')
 {
   const room = rooms.holyoke
   const runPl = room.kit.find((k) => k.part === 'history-case-run')
-  const three = await load('node_modules/three/build/three.module.js')
+  const three = await import('three')
   const builders = {
     'ball/spalding-laced-1900': () => [kit.buildSpaldingBall()],
     'ball/basketball-bladder-1895': () => [kit.buildBladder()],

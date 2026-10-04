@@ -1,8 +1,18 @@
-import { pathToFileURL } from 'node:url'
-const repo = 'C:/Users/rzbui/OneDrive/Documentos/Portfolio/Volleyball Museum'
-const u = (p) => pathToFileURL(repo + p).href
-const { BAKED_BUNDLES } = await import(u('/src/content/bake.generated.ts'))
-const { MUSEUM } = await import(u('/src/content/museum.ts'))
+/**
+ * Measures the kit recipes that are baked and downloaded but placed in no
+ * room, in triangles, and counts the atrium's placements per recipe.
+ *
+ * About a sixth of the kit is dead weight in the first download (ÁT-K3,
+ * AS-L6); the list is also the stock of parts a room can use without
+ * modelling anything. Read-only.
+ *
+ *   npm run audit:unused-kit
+ */
+
+import { load } from './lib/repo.mjs'
+
+const { BAKED_BUNDLES } = await load('src/content/bake.generated.ts')
+const { MUSEUM } = await load('src/content/museum.ts')
 const kit = BAKED_BUNDLES.find((b) => b.name === 'kit')
 const used = new Set()
 for (const r of MUSEUM.rooms) {

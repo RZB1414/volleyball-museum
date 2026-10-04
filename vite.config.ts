@@ -3,6 +3,8 @@ import { defineConfig } from 'vite'
 
 // @ts-expect-error -- plain .mjs dev plugin, no types needed
 import { capturePlugin } from './scripts/vite-plugin-capture.mjs'
+// @ts-expect-error -- plain .mjs dev plugin, no types needed
+import { qaSavePlugin } from './scripts/vite-plugin-qa-save.mjs'
 
 /**
  * Deliberately NO manual chunking.
@@ -30,7 +32,7 @@ import { capturePlugin } from './scripts/vite-plugin-capture.mjs'
  * on top of that was fighting it.
  */
 export default defineConfig({
-  plugins: [react(), capturePlugin()],
+  plugins: [react(), capturePlugin(), qaSavePlugin()],
   build: {
     target: 'es2023',
     // Every warning here is a real regression against the bundle budget.

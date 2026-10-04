@@ -1,11 +1,23 @@
-import { createRequire } from 'node:module'
+/**
+ * Measures the wall media: pixel size, file size and resident texture memory
+ * of every image, and how much of each the frame it hangs in really shows
+ * (the `cover` crop) at how many pixels per metre.
+ *
+ * Media is outside the 45 MiB texture gate today (EN-A13), and a frame of
+ * another aspect crops its picture without telling anyone (AS-H9): both
+ * numbers come from here. Read-only.
+ *
+ *   npm run audit:media
+ */
+
 import { readdirSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
-const REPO = 'C:/Users/rzbui/OneDrive/Documentos/Portfolio/Volleyball Museum'
-const require = createRequire(resolve(REPO, 'package.json'))
-const sharp = require('sharp')
-const { MUSEUM } = await import(pathToFileURL(resolve(REPO, 'src/content/museum.ts')).href)
+
+import sharp from 'sharp'
+
+import { load, REPO } from './lib/repo.mjs'
+
+const { MUSEUM } = await load('src/content/museum.ts')
 const dir = resolve(REPO, 'public/textures/media')
 let total = 0
 const dims = new Map()

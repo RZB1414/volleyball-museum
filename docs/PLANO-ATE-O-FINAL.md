@@ -100,6 +100,8 @@ Cada linha tem um padrão. O trabalho segue com o padrão se não houver respost
 mudam algo que já está no ar, o cânone ou a ordem do trabalho, e merecem um "sim" antes do lote
 indicado.
 
+**Decidido em 2026-10-04:** seguir os padrões, nas 36. Registro: `docs/plano-mestre/DECISOES.md`.
+
 **História**
 
 | # | Decisão | Padrão recomendado | Por quê | Antes de |
@@ -1075,7 +1077,7 @@ da receita) diz ao `check` quais estão vencidas.
 ### 4.4b Cada defeito de modelo com item, teste e lote
 
 "Apoio" é o portão novo de bake **apoio e folga intra-receita** (toda parte apoiada a ±0,5 mm, nada
-no ar, nada atravessado), promovido de `tools/geo.mjs`. "Colocação" é `test:room-placement`.
+no ar, nada atravessado), promovido de `scripts/audit/geo.mjs`. "Colocação" é `test:room-placement`.
 
 | Defeito | Item que o fecha | Teste | Lote |
 |---|---|---|---|
@@ -1693,9 +1695,11 @@ medalhas, fios, plinto, final) há apenas os tipos no schema. Achados que mudam 
 ### 6.2 Os pacotes
 
 Tamanho: **P** até ~150 linhas (runtime e teste) · **M** 150–500 · **G** 500–1.200 · **GG** maior, ou
-muda bake, runtime e testes ao mesmo tempo. Regra conferida mecanicamente (`scripts/audit/packages`):
-**nenhum pacote entra num lote anterior ao de suas dependências**; onde a dependência era só de uma
-parte, o pacote foi partido em fatias (a, b).
+muda bake, runtime e testes ao mesmo tempo. Regra conferida mecanicamente (`scripts/audit/packages`,
+`npm run audit:packages`): **nenhum pacote entra num lote anterior ao de suas dependências**; onde a
+dependência era só de uma parte, o pacote foi partido em fatias (a, b). Dois não foram partidos e
+saem do script como `staged`: M14 e M35 são entregues ao longo de vários lotes e começam antes de M3
+chegar; só a parte de L5 (o estimador) e a de L9 (o papel de toda colocação) dependem dele.
 
 | Pacote | O que constrói | Depende | Validadores e testes | Tam. · risco | Lote |
 |---|---|---|---|---|---|
@@ -2547,15 +2551,22 @@ feita, HANDOFF escrito. Se algum passo falhar, não se força: registra-se o blo
    `docs/plano-mestre/fontes/`; os scripts de medição (`geo.mjs`, `geo2.mjs`, `tex.mjs`, `media.mjs`,
    `lights.mjs`, `inv.mjs`, `atrium-walk.mjs`, `breaker-ray.mjs`, `examine-sim.mjs`,
    `laced-sweep.mjs`, `bays.mjs` e os demais) em `scripts/audit/`; as 100 capturas em
-   `docs/contact-sheets/baseline-2026-10-03/`. **Falta:** trocar o caminho absoluto do repositório
-   dentro dos scripts por um relativo e criar as entradas `npm run audit:*`.
+   `docs/contact-sheets/baseline-2026-10-03/`. **Feito em 2026-10-04:** o caminho absoluto saiu dos
+   scripts (todos resolvem a raiz por `scripts/audit/lib/repo.mjs`), cada um abre dizendo o que mede
+   e tem a sua entrada `npm run audit:*`, fora do `check`; `scripts/audit/packages.mjs`, que a
+   seção 6.2 citava, foi escrito.
 2. Registrar as decisões D1–D36 (as marcadas com (!) com resposta do dono; as outras, pelo padrão).
+   **Feito em 2026-10-04:** `docs/plano-mestre/DECISOES.md` (o dono mandou seguir os padrões).
 3. Apontar para este plano em `AGENTS.md` e no HANDOFF; marcar em `docs/PLANO-COMPLETO.md` o que foi
    substituído (Anexo D). Um teste de documentação confere que todo ID citado aqui resolve num
-   arquivo do repositório.
+   arquivo do repositório. **Feito em 2026-10-04:** `npm run test:docs`.
 4. M44: `?qaSave=<fixture>`; manifesto de capturas; os saves de produção de hoje escritos à mão no
    formato de `legacySave.ts` (gaveta aberta e fechada; `guide-1916` e `atrium-ball-laced`
    catalogadas sem girar; sem `radioCalls`; rádio na mesa com o jogador na Holyoke).
+   **Feito em 2026-10-04:** os cinco saves em `src/content/saveFixtures.ts`, carregados pelo caminho
+   real de carga em `npm run test:qa-save`; `?qaSave=<nome>` só no servidor de desenvolvimento
+   (`src/dev/qaSave.ts`); o manifesto em `docs/contact-sheets/baseline-2026-10-03/manifest.json`,
+   gerado por `npm run captures:manifest` e lido por `npm run test:captures`.
 5. `npm run facts:capture` (M11): capturar em dois grupos o `1896`, o catorze (lista de nomes), o
    `1962` e o `1973`; o que o robô não abrir vai para `facts.manual.ts`, conferido à mão.
 6. **Aparelho real nº 1** (dono, 30 minutos, com o build de hoje): Android médio e iPhone; memória
@@ -3016,7 +3027,7 @@ lote, e o resultado fica no HANDOFF.
 | Fontes que não aparecem (antena, televisão, número da camisa, Kaizuka, console, F88–F93) | sala sem a tese prevista | a versão padrão de cada sala já é a sem fonte (7.7) |
 | Fonte que bloqueia robô de captura | lote de ala travado | `facts.manual.ts`; as capturas de código são feitas em P0 |
 | Carga de leitura somada; doze exames no caminho da Reabertura | cansa | `validatePacing` por palavras; playtest em L4 e L12; não há alternativa "com ressalva" (o grafo não a permite): se cansar, a correção é no ritmo do exame |
-| Os scripts de `scripts/audit/` têm o caminho do repositório fixo | só rodam nesta máquina | P0: caminho relativo e entradas `npm run audit:*`; os relatórios e as capturas já estão no repositório |
+| Os scripts de `scripts/audit/` têm o caminho do repositório fixo | só rodam nesta máquina | **fechado em P0 (2026-10-04):** caminho relativo, entradas `npm run audit:*` e o `test:docs` reprovando caminho absoluto; os relatórios e as capturas já estão no repositório |
 
 ### 10.3 Pendências honestas
 
@@ -3309,7 +3320,7 @@ gaveta.)
 
 | Lote | Suítes novas | Suítes que ganham casos |
 |---|---|---|
-| P0 | manifesto de capturas; teste de documentação (todo ID resolve) | — |
+| P0 | manifesto de capturas (`test:captures`); teste de documentação, todo ID resolve (`test:docs`); saves de produção pelo caminho real de carga (`test:qa-save`) | — |
 | L1 | catracas (tamanho do `kit.glb`, bytes por caminho, programas, textura residente) | `validate:content` (M0, `fact-code-uncaptured`), `test:kit` (peça × `layout`), `test:power`, `test:navigation`, `test:opening`, `test:opening-flow`, `test:gpu-warmup` |
 | L2 | `test:save`, `test:triggers`, `test:locks`, `test:playthrough`, `test:map`, `validateAdditive`; lints de numerais e `text-ages` | `validate:content` (`simulateProgress`), `test:transition-door`, `test:navigation` |
 | L3 | `test:ending`, `test:speech-coherence` | `test:mobile-controls` (segurar), `test:radio`, `test:opening`, `test:opening-flow` |
@@ -3354,7 +3365,7 @@ linha entra aqui, com data, no plano do lote.
 
 | Agosto | Este plano |
 |---|---|
-| §2: "todas as seis abrem desde o primeiro segundo" | as alas abrem depois da Reabertura, uma por lote; no jogo completo, em qualquer ordem |
+| §2: "todas as seis abrem desde o primeiro segundo" | as alas abrem depois da Reabertura, uma por lote e em sequência: o termo de uma deslacra a pasta da seguinte (D28) |
 | §2.2: medalhas `founding`, `olympic`, `global` nas Alas 2, 3 e 6; "plinto já construído" | `curator`, `founding`, `lineage`, na casa original; o plinto é construído em L11 |
 | §2.4: `service-key` consumida numa gaveta; `breaker-handle` | a chave abre o cofre de ferro; `breaker-handle` sai |
 | §3: sete códigos | quatro digitados ou girados (`1896`, `1962`, `1973`, e o `15` só com fonte), dois contados; `1998` vira ritual |

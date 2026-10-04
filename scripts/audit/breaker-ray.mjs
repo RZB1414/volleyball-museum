@@ -1,6 +1,16 @@
-import { pathToFileURL } from 'node:url'
-const repo = 'C:/Users/rzbui/OneDrive/Documentos/Portfolio/Volleyball Museum'
-const THREE = await import(pathToFileURL(repo + '/node_modules/three/build/three.module.js').href)
+/**
+ * Casts the interaction ray at the atrium breaker's aiming proxy from eight
+ * distances, both aimed at the panel and looking straight ahead.
+ *
+ * The proxy is rebuilt here as `PowerControls.tsx` builds it. A ray cast from
+ * inside a single-sided box hits nothing, which is why the prompt vanishes
+ * when the player walks up to the panel (ÁT-A1, S7): the table shows the
+ * distance at which the hit is lost. Read-only; it loads nothing but three.
+ *
+ *   npm run audit:breaker-ray
+ */
+
+const THREE = await import('three')
 const { BoxGeometry, Mesh, MeshBasicMaterial, Raycaster, Vector3, Group } = THREE
 // Breaker proxy as PowerControls.tsx builds it: instance bounds x±0.23, y0..0.64, z0..0.249; minimum [0.42,0.48,0.34]
 const size = [0.46, 0.64, Math.max(0.249, 0.34)]

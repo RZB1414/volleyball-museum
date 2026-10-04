@@ -1,8 +1,19 @@
-import { pathToFileURL } from 'node:url'
-const repo = 'C:/Users/rzbui/OneDrive/Documentos/Portfolio/Volleyball Museum'
-const THREE = await import(pathToFileURL(repo + '/node_modules/three/build/three.module.js').href)
+/**
+ * Sweeps every standing point within reach of the atrium's four balls and
+ * counts from how many of them each ball is catalogued the instant it is
+ * picked up.
+ *
+ * The number behind ÁT-C3: the laced ball needs no turning from about half
+ * the places a player can stand. Read-only.
+ *
+ *   npm run audit:laced-sweep
+ */
+
+import { load } from './lib/repo.mjs'
+
+const THREE = await import('three')
 const { Vector3, Quaternion, Matrix4, Euler } = THREE
-const { MUSEUM } = await import(pathToFileURL(repo + '/src/content/museum.ts').href)
+const { MUSEUM } = await load('src/content/museum.ts')
 const HOLD = 0.42, DOT = 0.55, EYE = 1.62, REACH = 2.6
 for (const id of ['atrium-ball-laced','atrium-ball-tokyo-1964','atrium-ball-colour-1998','atrium-ball-eight-panel-2008']) {
   const ex = MUSEUM.exhibits.find((e) => e.id === id)

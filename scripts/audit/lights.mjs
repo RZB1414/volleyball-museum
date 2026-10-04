@@ -1,7 +1,18 @@
-import { pathToFileURL } from 'node:url'
-import { resolve } from 'node:path'
-const REPO = 'C:/Users/rzbui/OneDrive/Documentos/Portfolio/Volleyball Museum'
-const load = (rel) => import(pathToFileURL(resolve(REPO, rel)).href)
+/**
+ * Measures which authored light fixtures actually get a light: the slots the
+ * gallery rig builds for each room, the fixtures with no target, and the ones
+ * the even sampling drops.
+ *
+ * The pool is eight spots for the whole building, so a room can show more
+ * fixtures than it lights. This is how the audit found that two of Holyoke's
+ * seven authored spots never light and that no slot aims at its hero case
+ * (H-24, AS-H4). Read-only.
+ *
+ *   npm run audit:lights
+ */
+
+import { load } from './lib/repo.mjs'
+
 const { MUSEUM } = await load('src/content/museum.ts')
 const { buildGalleryLightRig } = await load('src/engine/galleryLightRig.ts')
 for (const room of MUSEUM.rooms) {

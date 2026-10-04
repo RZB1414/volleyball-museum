@@ -523,6 +523,28 @@ decisões do dono em §0.3. Ele substitui o roteiro de `docs/PLANO-COMPLETO.md` 
 `scripts/audit/` e as capturas de referência em `docs/contact-sheets/baseline-2026-10-03/`. A
 lista abaixo é anterior ao plano e vale no que ele não cobrir.
 
+**Decisões.** Em 2026-10-04 o dono mandou seguir os padrões nas 36 decisões de §0.3; o registro é
+`docs/plano-mestre/DECISOES.md`.
+
+**Preparação (P0), estado em 2026-10-04.** Nada mudou no jogo; o build de produção é o mesmo.
+
+- Feito (itens 1 a 4):
+  - os scripts de `scripts/audit/` rodam de qualquer clone (raiz por `scripts/audit/lib/repo.mjs`),
+    cada um abre dizendo o que mede e tem a sua entrada `npm run audit:*`. São ferramentas de
+    medição: ficam fora do `check`, e o `audit:geo2` precisa de `npm run build` antes;
+  - `npm run test:docs`: todo ID do plano resolve (defeitos nos relatórios de origem, scripts,
+    capturas citadas pelo nome, decisões) e o `PLANO-COMPLETO.md` diz o que foi substituído;
+  - `npm run test:captures`: o manifesto de `docs/contact-sheets/baseline-2026-10-03/` (gerado por
+    `npm run captures:manifest`) bate com os 100 quadros. A linha de base é congelada: um quadro
+    trocado reprova, e regerar o manifesto não resolve. Toda pasta nova de capturas entra em
+    `CAPTURE_SETS` (`scripts/lib/captureManifest.mjs`);
+  - `npm run test:qa-save`: os cinco saves de produção escritos à mão
+    (`src/content/saveFixtures.ts`) carregam pelo caminho real de carga sem perder nada. Um save
+    desses é registro, não conteúdo: quando um lote renomear um id, o registro fica como está e a
+    migração tem de carregá-lo.
+- Falta: item 5 (`npm run facts:capture`), item 6 (aparelho real nº 1, tarefa do dono) e item 7
+  (Anexo E no navegador e a linha de base de contadores).
+
 1. **Teste em dispositivos móveis reais.** Num Android médio, valide fullscreen,
    lock landscape, multitouch, fluidez, temperatura e pressão de memória. Num
    iPhone/iPad, teste Safari e o web app pela Tela de Início, inclusive rotação e
@@ -560,6 +582,14 @@ Harness disponível:
 Em desenvolvimento, o mesmo harness também aceita
 `?qaCamera=x,y,z,yaw,pitch&qaPower=room-id`. Esse bridge existe porque alguns
 navegadores de QA isolam scripts de inspeção dos globais instalados pelo jogo.
+
+`?qaSave=<nome>` (só no servidor de desenvolvimento) começa a sessão de um save
+nomeado de `src/content/saveFixtures.ts`: o save é gravado na chave do jogo antes de
+o store ser avaliado, e por isso passa pela migração de verdade, ao contrário do
+`qaPower`, que só acende a sala. Recarregar com o parâmetro volta ao save; sem ele,
+continua. Nome desconhecido não grava nada e lista os nomes no console. O módulo é
+injetado por `scripts/vite-plugin-qa-save.mjs` e nada em `src/dev` entra no build
+de produção (o `test:qa-save` confere).
 
 A inspeção visual final desta etapa confirmou no build servido:
 

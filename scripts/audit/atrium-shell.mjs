@@ -1,6 +1,17 @@
-import { pathToFileURL } from 'node:url'
-const repo = 'C:/Users/rzbui/OneDrive/Documentos/Portfolio/Volleyball Museum'
-const { BAKED_BUNDLES } = await import(pathToFileURL(repo + '/src/content/bake.generated.ts').href)
+/**
+ * Measures the baked bounds and colliders of the atrium's shell, its exhibits
+ * and the wall-mounted kit recipes (plaques, door leaves, thresholds).
+ *
+ * The reference for "how far from the wall is this": the atrium audit used it
+ * to show the breaker panel and the wall art standing clear of the plaster
+ * (ÁT-A2). Read-only.
+ *
+ *   npm run audit:atrium-shell
+ */
+
+import { load } from './lib/repo.mjs'
+
+const { BAKED_BUNDLES } = await load('src/content/bake.generated.ts')
 const fmt = (a) => a.map((n) => n.toFixed(3)).join(', ')
 for (const name of ['room-atrium', 'exhibits-atrium']) {
   const b = BAKED_BUNDLES.find((x) => x.name === name)

@@ -3,6 +3,11 @@
 **Leia `docs/HANDOFF.md` antes de qualquer coisa.** Ele tem o estado atual, a
 próxima tarefa, o backlog priorizado e as armadilhas cujas lições ainda se aplicam.
 
+**O que construir, e em que ordem, está em `docs/PLANO-ATE-O-FINAL.md`:** a
+preparação (P0) e os lotes L1 a L24, cada um com escopo, aceite e portões, e o
+processo que todo lote segue (§9.1). As decisões do dono, D1 a D36, estão
+registradas em `docs/plano-mestre/DECISOES.md`.
+
 Museu do voleibol em primeira pessoa. React 19 · TypeScript 6 · Vite 8 (Rolldown) ·
 three r185 · @react-three/fiber · zustand · Cloudflare Workers.
 

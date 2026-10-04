@@ -1,7 +1,19 @@
-import { pathToFileURL } from 'node:url'
-const repo = 'C:/Users/rzbui/OneDrive/Documentos/Portfolio/Volleyball Museum'
-const { BAKED_BUNDLES } = await import(pathToFileURL(repo + '/src/content/bake.generated.ts').href)
-const { MUSEUM } = await import(pathToFileURL(repo + '/src/content/museum.ts').href)
+/**
+ * Measures the baked bounds and colliders of every kit recipe placed in the
+ * atrium, family by family.
+ *
+ * The collision the player feels comes from the manifest, not from what is
+ * drawn. Printing both side by side is how the atrium audit found colliders
+ * smaller than their upholstery and furniture with none at all (ÁT-H2).
+ * Read-only: it reads the baked manifest and the content, and writes nothing.
+ *
+ *   npm run audit:atrium-colliders
+ */
+
+import { load } from './lib/repo.mjs'
+
+const { BAKED_BUNDLES } = await load('src/content/bake.generated.ts')
+const { MUSEUM } = await load('src/content/museum.ts')
 const kit = BAKED_BUNDLES.find((b) => b.name === 'kit')
 const atrium = MUSEUM.rooms.find((r) => r.id === 'atrium')
 const seen = new Set()
