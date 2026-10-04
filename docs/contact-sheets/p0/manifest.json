@@ -1,0 +1,60 @@
+{
+  "set": "p0",
+  "capturedAt": "2026-10-04",
+  "commit": "0061eb2",
+  "report": "docs/lotes/P0-linha-de-base.md",
+  "filePrefix": "p0",
+  "viewport": {
+    "cssWidth": 1280,
+    "cssHeight": 720,
+    "pixelRatio": 1.2,
+    "quality": "medium"
+  },
+  "frame": {
+    "width": 1536,
+    "height": 864
+  },
+  "groups": {
+    "a": {
+      "room": "atrium",
+      "powered": true
+    },
+    "h": {
+      "room": "holyoke",
+      "powered": true
+    },
+    "e": {
+      "room": "holyoke",
+      "powered": false
+    },
+    "o": {
+      "room": "office",
+      "powered": true
+    }
+  },
+  "frozen": true,
+  "count": 20,
+  "digest": "0c5ea7527c922267af446a3e3cfce2025611f142f4bdcaec4a315a99a0d5000e",
+  "captures": [
+    {"id":"a01","file":"p0-a01-ref-atrium-from-office-door-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"ref-atrium-from-office-door","width":1536,"height":864,"bytes":220146,"sha256":"29750cd26173d35a8192e4650a65bec0c50c3eb6c93dd1980e52639ec9223b8b"},
+    {"id":"a02","file":"p0-a02-ref-atrium-diagonal-se-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"ref-atrium-diagonal-se","width":1536,"height":864,"bytes":228624,"sha256":"74ac29aa0cd016882cb3a69f9a7f0de604ee14e0c611f2c16403d4444739ca40"},
+    {"id":"a03","file":"p0-a03-ref-atrium-overview-nw-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"ref-atrium-overview-nw","width":1536,"height":864,"bytes":195281,"sha256":"e13bd72e7aab4fd93e8d05bd6977dd94c6192bdaafe942d4c67770dcd9e302cf"},
+    {"id":"a04","file":"p0-a04-ref-atrium-from-holyoke-door-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"ref-atrium-from-holyoke-door","width":1536,"height":864,"bytes":178950,"sha256":"dad51d1de8991931a194e9f2c441c63a33094febddbebaa8d0a53684d787e542"},
+    {"id":"e01","file":"p0-e01-holyoke-entry-pilot-out-of-view-dark-notorch.jpg","room":"holyoke","light":"dark","view":"room","subject":"holyoke-entry-pilot-out-of-view","width":1536,"height":864,"bytes":109024,"sha256":"e22390831d832fd88cce3b2c16d4a8387246e1b1ac93e8ca3de368fdc916706f"},
+    {"id":"e02","file":"p0-e02-holyoke-entry-turned-to-breaker-dark-notorch.jpg","room":"holyoke","light":"dark","view":"room","subject":"holyoke-entry-turned-to-breaker","width":1536,"height":864,"bytes":130590,"sha256":"9539f6e8ffce46f5953cd1e33fb03a264c0a31e5ba61ad4faf7047a1e689cd03"},
+    {"id":"e03","file":"p0-e03-breaker-site-plan-z50-from-entry-dark-notorch.jpg","room":"holyoke","light":"dark","view":"room","subject":"breaker-site-plan-z50-from-entry","width":1536,"height":864,"bytes":111503,"sha256":"9bd6676f51e83547302846cae1a5f717ab62b7a8772052a0d4c45b4e58137837"},
+    {"id":"e04","file":"p0-e04-breaker-site-recommended-z22-from-entry-dark-notorch.jpg","room":"holyoke","light":"dark","view":"room","subject":"breaker-site-recommended-z22-from-entry","width":1536,"height":864,"bytes":112276,"sha256":"64debe506b79180c75807e4cd3c8f44aa892bb61b25b84e21f51a5707a8c5eb0"},
+    {"id":"h01","file":"p0-h01-case-run-portrait-morgan-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"case-run-portrait-morgan","width":1536,"height":864,"bytes":132290,"sha256":"ecd6bd6ece0631097315fd7d668ff97d8852308e93660642c71c273607735532"},
+    {"id":"h02","file":"p0-h02-case-run-guide-1916-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"case-run-guide-1916","width":1536,"height":864,"bytes":118152,"sha256":"6029af54f390d227614553260bfd74afa9f7c17370f12e85ed173f0400051cbe"},
+    {"id":"h03","file":"p0-h03-case-run-handbook-1897-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"case-run-handbook-1897","width":1536,"height":864,"bytes":274605,"sha256":"63beb5a48ef49436ed791981faf37e3a5431d63f457d8e6034dff8b348004176"},
+    {"id":"h04","file":"p0-h04-case-run-photo-gym-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"case-run-photo-gym","width":1536,"height":864,"bytes":258918,"sha256":"ab6b2d4581b2a8d7a008d006b096ddf3e75c808a1ed7115425bd62a87d5c04ee"},
+    {"id":"h05","file":"p0-h05-breaker-site-recommended-west-wall-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"breaker-site-recommended-west-wall","width":1536,"height":864,"bytes":211519,"sha256":"3fbf6e58fc140844787279a796de9df0701103e2f97f9b56bd774833c637b227"},
+    {"id":"h06","file":"p0-h06-ref-holyoke-door-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"ref-holyoke-door","width":1536,"height":864,"bytes":168235,"sha256":"3fc3f14131f0518ded1f8604932e463df6375679047cd91e3fbde7f8db1b030f"},
+    {"id":"h07","file":"p0-h07-ref-holyoke-door-sw-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"ref-holyoke-door-sw","width":1536,"height":864,"bytes":223683,"sha256":"4992597afd7799023988fde2315fed5fea35292d17c74bd62e4c8c3531321164"},
+    {"id":"h08","file":"p0-h08-ref-holyoke-overview-nw-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"ref-holyoke-overview-nw","width":1536,"height":864,"bytes":154949,"sha256":"500cbfda700519b2243fe681225c6707145835a15b6ba129b1039d941a9a4501"},
+    {"id":"h09","file":"p0-h09-ref-pair-door-open-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"ref-pair-door-open","width":1536,"height":864,"bytes":132322,"sha256":"b8f438429b3ebbf449aa1478bf58731a8adafb8ca4af4e819a60192662dce227"},
+    {"id":"o01","file":"p0-o01-office-door-preparing-prompt-screen-lit.jpg","room":"office","light":"lit","view":"room","subject":"office-door-preparing-prompt-screen","width":1536,"height":864,"bytes":59886,"sha256":"c8824a4774a53e4ec4b8479c3957331a4e9c64205bbb57b2054b4496df930341"},
+    {"id":"o02","file":"p0-o02-ref-office-reading-lit.jpg","room":"office","light":"lit","view":"room","subject":"ref-office-reading","width":1536,"height":864,"bytes":224627,"sha256":"4743fc78313230211e8204545374603344030e5c3385174c4fb990a36fb81c04"},
+    {"id":"o03","file":"p0-o03-ref-office-spawn-lit.jpg","room":"office","light":"lit","view":"room","subject":"ref-office-spawn","width":1536,"height":864,"bytes":164989,"sha256":"7f78541dff6ba1727c70cf23bd1ec78192e42068b27e424befdc109abf128cea"}
+  ]
+}

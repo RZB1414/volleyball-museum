@@ -59,6 +59,32 @@ export const CAPTURE_SETS = {
     frozen: true,
     digest: '7b9d2872dd46453f8386285a798261d59aa7dfdbfab463113808f7c86e8ed5bc',
   },
+  /**
+   * The browser checks of the preparation lot (plan, P0 item 7): the four
+   * Anexo E items L1 depends on and the ten reference points of the counter
+   * baseline. Frozen for the same reason as the hundred frames above: these
+   * are what "before L1" looked like, and L1 moves the very things they show.
+   *
+   * One frame, `o01`, is not a canvas capture: the canvas has no HUD, and the
+   * prompt on the stuck door is the whole point of that frame. It is a
+   * screenshot of the pane resampled to the set's size; the record says so.
+   */
+  p0: {
+    capturedAt: '2026-10-04',
+    commit: '0061eb2',
+    report: 'docs/lotes/P0-linha-de-base.md',
+    filePrefix: 'p0',
+    viewport: { cssWidth: 1280, cssHeight: 720, pixelRatio: 1.2, quality: 'medium' },
+    frame: { width: 1536, height: 864 },
+    groups: {
+      a: { room: 'atrium', powered: true },
+      h: { room: 'holyoke', powered: true },
+      e: { room: 'holyoke', powered: false },
+      o: { room: 'office', powered: true },
+    },
+    frozen: true,
+    digest: '0c5ea7527c922267af446a3e3cfce2025611f142f4bdcaec4a315a99a0d5000e',
+  },
 }
 
 /** How a file name ends, and the light it says the frame was taken in. */

@@ -11,6 +11,7 @@
  */
 
 import assert from 'node:assert/strict'
+import { existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -29,6 +30,7 @@ import {
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const BASELINE = 'baseline-2026-10-03'
+const P0 = 'p0'
 
 let passed = 0
 function test(name: string, run: () => void) {
@@ -113,6 +115,36 @@ test('the baseline is the hundred frames of 3 October, from the commit before th
   assert.equal(count('holyoke', 'lit'), 34)
   assert.equal(count('atrium', 'dark') + count('atrium', 'torch'), 18)
   assert.equal(count('holyoke', 'dark') + count('holyoke', 'torch'), 14)
+})
+
+test('every set names a report that is in the repository', () => {
+  // A frame is evidence for a document; a set whose report is gone argues for nothing.
+  for (const [setName, set] of Object.entries(CAPTURE_SETS)) {
+    assert.ok(existsSync(resolve(ROOT, set.report)), `${setName}: its report ${set.report} is missing`)
+  }
+})
+
+test('the P0 set is the twenty frames of 4 October behind the baseline record', () => {
+  assert.ok(P0 in CAPTURE_SETS, `${CAPTURE_ROOT}/${P0} is not a capture set`)
+  const p0 = readCaptureManifest(ROOT, P0)
+  assert.ok(p0, `${CAPTURE_ROOT}/${P0}/${MANIFEST_FILE} is missing`)
+  assert.equal(p0.count, 20)
+  assert.equal(p0.captures.length, 20)
+  // The commit the browser was looking at: the last one before the record itself.
+  assert.equal(p0.commit, '0061eb2')
+  assert.equal(p0.report, 'docs/lotes/P0-linha-de-base.md')
+  // "Before L1" has to stay before L1: the set is never re-shot.
+  assert.equal(p0.frozen, true)
+  const count = (room: string, light: string) =>
+    p0.captures.filter(
+      (capture: { room: string; light: string }) => capture.room === room && capture.light === light,
+    ).length
+  assert.equal(count('office', 'lit'), 3)
+  assert.equal(count('atrium', 'lit'), 4)
+  assert.equal(count('holyoke', 'lit'), 9)
+  assert.equal(count('holyoke', 'dark'), 4)
+  // No frame of P0 uses the torch: the two dark checks are about the pilot alone.
+  assert.equal(p0.captures.filter((capture: { light: string }) => capture.light === 'torch').length, 0)
 })
 
 test('a file name is read as id, room, light, view and subject, or refused', () => {

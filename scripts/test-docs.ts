@@ -39,6 +39,8 @@ const DECISIONS_PATH = 'docs/plano-mestre/DECISOES.md'
 const AUGUST_PLAN_PATH = 'docs/PLANO-COMPLETO.md'
 const AUDIT_DIR = 'scripts/audit'
 const BASELINE_MANIFEST = 'docs/contact-sheets/baseline-2026-10-03/manifest.json'
+const P0_RECORD = 'docs/lotes/P0-linha-de-base.md'
+const P0_MANIFEST = 'docs/contact-sheets/p0/manifest.json'
 
 const plan = read(PLAN_PATH)
 const sourceFiles = readdirSync(inRepo(SOURCES_DIR)).filter((name) => name.endsWith('.md'))
@@ -289,6 +291,130 @@ test('every baseline capture cited by name is a frame of the baseline set', () =
 })
 
 // ---------------------------------------------------------------------------
+// The preparation lot's baseline record
+// ---------------------------------------------------------------------------
+
+/**
+ * `docs/lotes/P0-linha-de-base.md` is what the plan's last preparation item
+ * leaves behind: the verdict on the browser checks L1 depends on, and the
+ * counters every later lot is compared with. It is a record of one day, so
+ * nothing here compares its numbers with the build of today; what is pinned
+ * is that the record is whole: every check has a verdict, every reference
+ * point has its camera and its counters, and every frame it argues from is a
+ * frame of its own capture set.
+ */
+type CaptureRow = { id: string; file: string; room: string }
+
+const p0Record = readIfThere(P0_RECORD)
+const p0Captures = (() => {
+  const text = readIfThere(P0_MANIFEST)
+  return text ? (JSON.parse(text) as { captures: CaptureRow[] }).captures : null
+})()
+/** The cells of a markdown table row, without the outer pipes. */
+const tableCells = (line: string) =>
+  line
+    .replace(/^\||\|\s*$/g, '')
+    .split('|')
+    .map((cell) => cell.trim())
+
+test('the baseline record gives a verdict on every Anexo E item that L1 depends on', () => {
+  assert.ok(p0Record, `${P0_RECORD} is missing`)
+
+  // The list is read from the plan, so an item moved to L1 later is not
+  // silently left without a verdict.
+  const annex = plan.slice(plan.indexOf('## Anexo E'), plan.indexOf('## Anexo F'))
+  const forL1 = annex
+    .split('\n')
+    .filter((line) => /^\| \d+ \|/.test(line))
+    .map(tableCells)
+    .filter((cells) => cells[cells.length - 1].split(',').some((lot) => lot.trim() === 'L1'))
+    .map((cells) => cells[0])
+  assert.deepEqual(forL1, ['2', '3', '4', '8'], 'the Anexo E items marked for L1 changed: the record has to follow')
+
+  const problems: string[] = []
+  for (const item of forL1) {
+    const start = p0Record.search(new RegExp(`^### Anexo E #${item} `, 'm'))
+    if (start < 0) {
+      problems.push(`Anexo E #${item} has no section`)
+      continue
+    }
+    const next = p0Record.indexOf('\n### ', start + 1)
+    const section = p0Record.slice(start, next < 0 ? undefined : next)
+    if (!/^\*\*Veredito:\*\* \S/m.test(section)) problems.push(`Anexo E #${item} has no "**Veredito:**" line`)
+    // A verdict with nothing to look at is an opinion.
+    if (!/`p0-[a-z]\d\d-/.test(section)) problems.push(`Anexo E #${item} cites no capture of its own`)
+  }
+  expectNone(problems, 'Anexo E verdicts')
+})
+
+test('the baseline record measures ten reference points, each with its camera and counters', () => {
+  assert.ok(p0Record, `${P0_RECORD} is missing`)
+  const rows = p0Record
+    .split('\n')
+    .filter((line) => /^\| R\d\d \|/.test(line))
+    .map(tableCells)
+  assert.deepEqual(
+    rows.map((cells) => cells[0]),
+    Array.from({ length: 10 }, (_, index) => `R${String(index + 1).padStart(2, '0')}`),
+    'the reference points are not R01 to R10, once each and in order',
+  )
+
+  const problems: string[] = []
+  const rooms = new Set<string>()
+  for (const [id, room, , camera, draws, triangles, programs, capture] of rows) {
+    rooms.add(room)
+    // The camera is what makes the point repeatable: x,y,z,yaw,pitch, as `?qaCamera=` takes it.
+    if (!/^`-?\d+(?:\.\d+)?(?:,-?\d+(?:\.\d+)?){4}`$/.test(camera ?? '')) problems.push(`${id}: no x,y,z,yaw,pitch camera`)
+    for (const [name, cell] of [['draw calls', draws], ['triangles', triangles], ['programmes', programs]] as const) {
+      if (!/^\d{1,3}(?:\.\d{3})*$/.test(cell ?? '')) problems.push(`${id}: ${name} is not a count ("${cell}")`)
+    }
+    if (!/^`p0-[a-z]\d\d-[a-z0-9-]+`$/.test(capture ?? '')) problems.push(`${id}: no capture`)
+  }
+  for (const room of ['office', 'atrium', 'holyoke']) {
+    if (!rooms.has(room)) problems.push(`no reference point in "${room}"`)
+  }
+  // The other figures L1 turns into ratchets, each as a row of its own.
+  for (const [what, pattern] of [
+    ['the kit bundle in bytes', /^\| `kit\.[0-9a-f]{8}\.glb` \| \d/m],
+    ['the bytes before the click', /^\| \*\*Antes do clique\*\* \| \d/m],
+    ['the bytes after the click', /^\| \*\*Depois do clique\*\* \| \d/m],
+    ['the resident texture memory', /^\| \*\*Textura residente\*\* \| \d/m],
+  ] as const) {
+    if (!pattern.test(p0Record)) problems.push(`the record has no row for ${what}`)
+  }
+  expectNone(problems, 'baseline table')
+})
+
+test('every frame of the P0 set is cited by the record, and every P0 frame cited is in the set', () => {
+  assert.ok(p0Record, `${P0_RECORD} is missing`)
+  assert.ok(p0Captures, `${P0_MANIFEST} is missing: run \`npm run captures:manifest\``)
+  const byId = new Map(p0Captures.map((capture) => [capture.id, capture.file]))
+
+  const problems: string[] = []
+  // The set holds evidence, not leftovers: a frame nobody argues from goes.
+  for (const capture of p0Captures) {
+    const name = capture.file.replace(/\.jpg$/, '')
+    if (!p0Record.includes(`\`${name}\``)) problems.push(`${capture.file} is in the set and the record never cites it`)
+  }
+  // Cited by its whole name everywhere: `a01` alone is a frame of the 3 October baseline.
+  const documents = [P0_RECORD, PLAN_PATH, 'docs/HANDOFF.md']
+  for (const path of documents) {
+    for (const [slug, id] of read(path).matchAll(/(?<![\w-])p0-([a-z]\d\d)(?:-[a-z0-9]+)*/g)) {
+      const file = byId.get(id)
+      if (!file) problems.push(`${path}: \`${slug}\` is not a frame of the P0 set`)
+      else if (file.replace(/\.jpg$/, '') !== slug) problems.push(`${path}: \`${slug}\` is not ${file}`)
+    }
+  }
+  expectNone(unique(problems), 'P0 capture citations')
+})
+
+test('the preparation lot points to its baseline record', () => {
+  const preparation = plan.slice(plan.indexOf('### P0 —'), plan.indexOf('### L1 —'))
+  assert.ok(preparation.includes(P0_RECORD), `P0 in the plan does not point to ${P0_RECORD}`)
+  assert.ok(read('docs/HANDOFF.md').includes(P0_RECORD), `docs/HANDOFF.md does not point to ${P0_RECORD}`)
+})
+
+// ---------------------------------------------------------------------------
 // Decisions
 // ---------------------------------------------------------------------------
 
@@ -361,7 +487,7 @@ test('every repository path the entry documents give for the plan exists', () =>
   for (const path of documents) {
     const text = readIfThere(path)
     if (text === null) continue
-    for (const [, cited] of text.matchAll(/`((?:docs\/plano-mestre|docs\/contact-sheets\/baseline|scripts\/audit)[\w./-]*)`/g)) {
+    for (const [, cited] of text.matchAll(/`((?:docs\/plano-mestre|docs\/lotes|docs\/contact-sheets\/(?:baseline|p0)|scripts\/audit)[\w./-]*)`/g)) {
       const target = cited.replace(/\/$/, '')
       const found = existsSync(inRepo(target)) || existsSync(inRepo(`${target}.mjs`))
       if (!found) problems.push(`${path} cites \`${cited}\`, which does not exist`)

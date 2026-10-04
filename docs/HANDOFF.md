@@ -106,6 +106,15 @@ O frame está dentro dos tetos desktop e do teto duro móvel de 100 draws / 150k
 triângulos, mas ainda excede o alvo móvel ideal de 45 draw calls. A captura está em
 `docs/contact-sheets/atrium-gallery-implemented.png`.
 
+**Linha de base de 2026-10-04** (`docs/lotes/P0-linha-de-base.md`; é contra ela que os lotes
+se comparam, e as câmeras estão registradas lá): escritório 58 e 66 draws nas duas câmeras
+acima; átrio 80 da porta do escritório, 101 na diagonal sudeste, 85 do canto noroeste e 79
+chegando pela porta da Holyoke; Holyoke 36 da porta, 67 para sudoeste e 83 do canto noroeste.
+Com a porta da Holyoke aberta e o jogador dentro da ala olhando o átrio, **128 draws e 101.310
+triângulos**: o par passa do teto duro móvel de 100. 35 programas com as três salas
+residentes. As medições do átrio e da Holyoke dos dois blocos acima são de uma disposição
+anterior e de câmeras que não foram registradas.
+
 ---
 
 ## 3. Arquitetura que não pode regredir
@@ -573,8 +582,29 @@ lista abaixo é anterior ao plano e vale no que ele não cobrir.
   `src/content/facts.manual.ts` como pedido (`check: null`): alguém abre a página no navegador e
   preenche data, título, trecho e hash. Não trava nada hoje (o `1962` tem dois publicadores sem
   ela); a Ala 3 precisa dela para «em Moscou» (plano, 7.7, item 6).
-- Falta: item 6 (aparelho real nº 1, tarefa do dono) e item 7 (Anexo E no navegador e a linha de
-  base de contadores).
+- Feito (item 7, Anexo E no navegador e linha de base): `docs/lotes/P0-linha-de-base.md`, com 20
+  capturas em `docs/contact-sheets/p0/` (conjunto congelado, como o de 3 de outubro).
+  - **Anexo E #2, confirmado:** da entrada da Holyoke o piloto fica a 103° do eixo da câmera e
+    não muda um pixel do quadro.
+  - **Anexo E #3, confirmado:** as quatro peças da vitrine corrida cruzam um montante e uma
+    prateleira. O registro traz o centro de cada vão e o topo real de cada prateleira
+    (`supportY: 1.32` é o centro da tábua).
+  - **Anexo E #4:** a parede oeste está livre, mas em z = 5,0 (a proposta do plano) a
+    vitrine-herói fica na frente do quadro. Validada: `position: [-5.86, 1.15, 2.2]`,
+    `rotationY: Math.PI / 2`. O plano (H-26) já diz isso.
+  - **Anexo E #8, confirmado, com um desfecho a mais:** com uma imagem do átrio parada, a porta
+    do escritório fica em «Preparando a próxima sala…» sem fim; com a imagem **falhando**, o
+    `useLoader` lança, não há limite de erro e a página fica em branco. O tempo-limite de L1
+    cobre o primeiro caso; o segundo precisa apanhar o erro do carregador.
+  - **Linha de base:** dez pontos de referência com câmera registrada (R01 a R10), programas,
+    bytes por caminho e textura residente. Três números do livro-caixa mudaram (plano, 4.8):
+    o par de salas com a porta aberta dá **128 draws** (era 93; o teto é 100), a diagonal
+    sudeste do átrio dá 101 e a textura residente é 107,08 MiB (era 98,6: faltavam os dois SVG
+    e o atlas de texto).
+  - `npm run test:docs` confere que o registro tem veredito para cada item do Anexo E marcado
+    para L1, os dez pontos com câmera e contadores, e que toda captura citada existe;
+    `npm run test:captures` confere o conjunto.
+- Falta: item 6 (aparelho real nº 1, tarefa do dono).
 
 Lições da captura, para quem acrescentar fonte:
 
@@ -643,6 +673,26 @@ o store ser avaliado, e por isso passa pela migração de verdade, ao contrário
 continua. Nome desconhecido não grava nada e lista os nomes no console. O módulo é
 injetado por `scripts/vite-plugin-qa-save.mjs` e nada em `src/dev` entra no build
 de produção (o `test:qa-save` confere).
+
+Para medir do mesmo jeito que a linha de base de `docs/lotes/P0-linha-de-base.md` (seção 0
+dela), e o que a medição de 2026-10-04 ensinou sobre o harness:
+
+- **Reload limpo exige calar o save antes de navegar.** O store grava ao descarregar a página;
+  `localStorage.clear()` sozinho devolve o save antigo. Faça
+  `Storage.prototype.setItem = function () {}`, depois `clear()`, depois navegue, e confira que
+  o botão do título diz «Entrar no museu».
+- **Uma chamada de JavaScript que estoura os 45 s continua rodando.** Uma delas gravou, minutos
+  depois, um quadro por cima de outro. Divida o trabalho em chamadas curtas e confira o hash dos
+  quadros depois de qualquer estouro.
+- **`img.decode()` não resolve com o painel oculto.** Leia pixels com `gl.readPixels` logo
+  depois do `__museumRender()`.
+- **O aquecimento de GPU leva cerca de 70 s com o painel oculto.** Espere programas,
+  geometrias e texturas pararem de mudar antes de ler contadores; não é número de desempenho.
+- **A cena está ao alcance da página** pelo `_roots` do `@react-three/fiber`, importado pelo
+  mesmo endereço que o jogo usa (`performance.getEntriesByType('resource')` diz qual). Serve para
+  lançar raios de visada, medir caixas e ligar ou desligar uma luz no mesmo quadro. Mover um
+  objeto assim é medição, nunca conserto: devolva-o e diga no registro o que foi movido.
+- **O HUD não sai no `/__capture`.** A captura de tela do painel sai, a 800 × 450.
 
 A inspeção visual final desta etapa confirmou no build servido:
 

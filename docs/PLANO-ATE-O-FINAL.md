@@ -699,7 +699,7 @@ acabamento; na Holyoke, **S1** bloqueia objetivo, **S2** alto, **S3** médio, **
 | ÁT-A4 | G | `PowerControls.tsx:221`; `RoomLighting.tsx:131-139`; `Hud.tsx:428-459`; `museum.ts:819-852` | `E`: toast e sino; a luz troca num quadro, quase toda atrás do jogador; o Jorge fica mudo | som de alavanca e relés; focos em cascata de longe para perto em 1,2 s (interpolar intensidades, sem programa novo); chamada `porter-atrium-service` | `test:radio`: toca uma vez e não repete em save antigo; `test:power`: `powerRampIntensity(t)` monotônica | L3 (chamada), L10 (rampa e som) |
 | ÁT-A5 | M | `pt-BR.ts:169, 177, 193`; `MuseumMap.tsx:189-191` | "parede oeste" num jogo sem bússola | direção relativa nas falas («do outro lado do saguão, em linha reta»); seta de direção e norte na planta | `validateTranslations`: palavras cardeais proibidas em dica; `test:map`: o marcador recebe o yaw | L1 (falas), L2 (planta) |
 | ÁT-A6 | M | `Devices.tsx:527-538`; `deviceRules.ts:88-98, 154-162`; `radioCall.ts:103-108` | (a) rádio na mesa continua legendando no átrio; (b) quem religa com a primeira chamada no ar ainda lê "procure a luzinha"; (c) quem religa antes nunca conhece o Jorge | (c) `porter-hello` sempre devida, separada da instrução do quadro; (a) suspender e retomar fora do alcance; (b) cortar para a fala de reação quando a condição cai | `test:radio`: os três cenários pelo caminho real | L3 (c), L10 (a, b) |
-| H-26 | S3 | `museum.ts:1230, 1236-1256`; `pt-BR.ts:178-179` | o quadro da ala fica na parede da própria entrada (leste), 2,2 m ao norte da porta, atrás de quem entra; a dica diz só "lá dentro" | quadro na **parede oposta à entrada** (oeste), lado sul: ≈ `[-5.86, 1.15, 5.0]` local, `rotationY: +π/2` **[a validar]**, entre o mural (acaba em z = 1,4) e a vitrine corrida; conferir o emissor `holyoke-clock`. O jogador cruza a sala em diagonal e sai pelo atalho, na parede leste. Lente `led-red` emissiva já em L1. Dica com direção relativa | `test:opening` (teste de farol): do ponto e da orientação de entrada, o piloto fica a ≤ 35° do eixo, subtende ≥ 6 px e a linha de visão não cruza colisor (vitrine-herói, quiosque); `test:navigation`: rota porta → quadro → atalho | L1 |
+| H-26 | S3 | `museum.ts:1230, 1236-1256`; `pt-BR.ts:178-179` | o quadro da ala fica na parede da própria entrada (leste), 2,2 m ao norte da porta, atrás de quem entra; a dica diz só "lá dentro" | quadro na **parede oposta à entrada** (oeste), lado sul: `[-5.86, 1.15, 2.2]` local, `rotationY: +π/2`, **validado em P0** (`docs/lotes/P0-linha-de-base.md`): fica 0,57 m ao sul do mural (que acaba em z = 1,4), a 20,8° do eixo de entrada e com a visada livre; a primeira proposta, z = 5,0, cai atrás da vitrine-herói. Longe da vitrine corrida e do emissor `holyoke-clock`. O jogador cruza a sala em diagonal e sai pelo atalho, na parede leste. Lente `led-red` emissiva já em L1. Dica com direção relativa | `test:opening` (teste de farol): do ponto e da orientação de entrada, o piloto fica a ≤ 35° do eixo, subtende ≥ 6 px (a lente de hoje, de 5,8 cm, dá 3 px a 11,5 m: o teste mede o clarão ou o quadro, ou a lente cresce para 12 cm) e a linha de visão não cruza colisor (vitrine-herói, quiosque); `test:navigation`: rota porta → quadro → atalho | L1 |
 | H-27 | S3 | `museum.ts:819-852, 563-566` | acender a ala, catalogar, abrir arquivo, aprender o ano: nada responde | chamadas `porter-holyoke-lit`, `porter-first-catalogued`, `porter-drawer-open`; item de lista «Ala 1: n de 8» | `test:radio`: cada marco tem exatamente uma chamada | L3 |
 
 ### 3.2 Frente 2 — Luz apagada e acesa
@@ -1271,6 +1271,14 @@ catracas (o número medido hoje não pode crescer).
 | `kit.glb` | catraca em 2.189 KB até L6; depois, 1,5 MB por sala | 2.189 KB (antes do primeiro frame) | −16% sem as receitas ociosas (L5); por sala em L6 | L1, L5, L6 |
 | Buffers da fusão | — | — | 2,3 MiB no átrio (Float32, depois de dequantizar) | L6 |
 | Bundle por caminho | 250 KB gzip antes do clique; 600 depois (catraca desde L1) | ≈ 95 KB antes do clique | o store não importa conteúdo (M5); dicionário em camadas em L17; transcoder do KTX2 depois do clique | L1, L17 |
+
+**Linha de base de P0 (2026-10-04, `docs/lotes/P0-linha-de-base.md`).** A medição no navegador
+confirma a coluna "Hoje", menos em três linhas. O **par de salas com a porta aberta** chega a
+128 draws e 101.310 triângulos (da Holyoke, olhando o átrio pela porta; o papel dizia 93): o teto
+de 100 já está estourado, a catraca de L1 para o par é 128, e quem o baixa é L6 e L17. A
+**diagonal sudeste do átrio** dá 101 draws, dentro do teto temporário de 102. A **textura
+residente** é 107,08 MiB, não 98,6: a soma antiga deixava de fora as duas imagens em SVG
+(7,49 MiB) e o atlas de texto (1,00 MiB); a catraca até L7 é o número medido. Os programas são 35.
 
 Se a medição em aparelho real (P0, L6) mostrar que os alvos móveis de papel estão errados, os tetos
 desta tabela mudam para os medidos, e a mudança é registrada no HANDOFF.
@@ -2602,6 +2610,14 @@ feita, HANDOFF escrito. Se algum passo falhar, não se força: registra-se o blo
    livro-caixa como teto medido.
 7. Conferir no navegador os itens do Anexo E; gravar a linha de base (dez pontos de referência,
    draws, triângulos e programas depois de reload limpo).
+   **Feito em 2026-10-04:** `docs/lotes/P0-linha-de-base.md`, com as 20 capturas em
+   `docs/contact-sheets/p0/`. Os quatro itens do Anexo E que L1 usa estão conferidos: o #2 e o #3
+   se confirmam; no #4 a parede está livre, mas a posição proposta (z = 5,0) fica atrás da
+   vitrine-herói para quem entra, e a validada é `[-5.86, 1.15, 2.2]`; no #8 a porta fica presa
+   como previsto, e uma imagem que **falha** (em vez de não chegar) desmonta o jogo inteiro. A
+   linha de base tem dez pontos com câmera registrada, os programas, os bytes por caminho e a
+   textura residente; ela corrige três números do livro-caixa (nota em 4.8). Os outros itens do
+   Anexo E ficam com os lotes que os usam.
 
 ### L1 — Correções no ar
 
@@ -3413,13 +3429,13 @@ museu se declara".
 | # | O que conferir | Como | Para o lote |
 |---|---|---|---|
 | 1 | `net-1897` e `gym-suit` nunca catalogam; `photo-gym` quase nunca | examinar as três | L4 |
-| 2 | o piloto da Holyoke fica fora do campo de visão de quem entra | `?qaCamera=-10.2,0,-2,1.5708,0`, sem `qaPower` | L1 |
-| 3 | as quatro peças da vitrine corrida | `?qaCamera=-14.1,0,6.45,3.1416,0.25&qaPower=holyoke` e as outras três URLs da auditoria | L1 |
-| 4 | a posição nova do quadro da Holyoke (parede oeste, lado sul) fica livre do mural, da vitrine corrida e do emissor `holyoke-clock`, e o piloto se vê da entrada | medir; teste de farol | L1 |
+| 2 | o piloto da Holyoke fica fora do campo de visão de quem entra | `?qaCamera=-10.2,0,-2,1.5708,0`, sem `qaPower`. **Conferido em P0: confirmado** (o piloto fica a 103° do eixo; nenhum pixel muda com ele ligado) | L1 |
+| 3 | as quatro peças da vitrine corrida | `?qaCamera=-14.1,0,6.45,3.1416,0.25&qaPower=holyoke` e as outras três URLs da auditoria. **Conferido em P0: confirmado** nas quatro | L1 |
+| 4 | a posição nova do quadro da Holyoke (parede oeste, lado sul) fica livre do mural, da vitrine corrida e do emissor `holyoke-clock`, e o piloto se vê da entrada | medir; teste de farol. **Conferido em P0:** livre, mas em z = 5,0 a vitrine-herói tapa o quadro; validada `[-5.86, 1.15, 2.2]` | L1 |
 | 5 | a secretária eletrônica cabe no escritório sem lote novo | contar lotes depois do bake | L3 |
 | 6 | o quadro do átrio de lado; a faixa tracejada sob a capa do lambri | capturas `a17`, `a31` | L10, L9 |
 | 7 | a luz ao abrir uma porta; os pilotos atravessando a parede | abrir a porta da Holyoke com o átrio aceso | L10 |
-| 8 | a porta do escritório sem saída quando uma textura do átrio não chega | simular a falha | L1 |
+| 8 | a porta do escritório sem saída quando uma textura do átrio não chega | simular a falha. **Conferido em P0: confirmado**; e a textura que falha (em vez de não chegar) desmonta o jogo, o que o tempo-limite não cobre | L1 |
 | 9 | por que a bola de 1964 sai lisa (mapas a 64 px?) | `historicalVolleyballs.mjs:359` | L7 |
 | 10 | o ganho real de draws da fusão do kit | medir em frame, depois de reload limpo | L6 |
 | 11 | o fosso falso do plinto lê como grade sobre água | captura no escuro, com a lanterna | L11 |
