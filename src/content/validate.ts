@@ -11,6 +11,7 @@
  * broken content edit fails loudly instead of at runtime.
  */
 
+import { validateFactCaptures, type FactCaptureSet } from './factCapture.ts'
 import { PRE_OPENING_SAVE } from './legacySave.ts'
 import type {
   Credential,
@@ -1485,11 +1486,18 @@ export function validateContent(
   content: MuseumContent,
   bundles?: readonly BakedBundleLike[],
   translationKeys?: ReadonlySet<string>,
+  /**
+   * The fact bank and what was read of it. Passed in, like the bake and the
+   * dictionary, so that this module stays free of the capture data: the gate
+   * script supplies the committed files, a test supplies its own.
+   */
+  captures?: FactCaptureSet,
 ): ValidationIssue[] {
   return [
     ...validateReferences(content),
     ...validatePower(content),
     ...validateFacts(content.facts),
+    ...(captures ? validateFactCaptures(content.facts, captures) : []),
     ...validateAttribution(content),
     ...validateSolvability(content),
     ...validateOpening(content),

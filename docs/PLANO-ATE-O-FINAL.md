@@ -849,7 +849,7 @@ não tiver nenhuma das três sai da sala. Validador `placement-without-role` sob
 | H-46 | S4 | `:310, 331, 335, 345` | «leve demais, boiava»; «O primeiro regulamento impresso»; «Censo de 1916» | «leve e lenta demais» (a ordem das palavras do Morgan: a câmara primeiro, a bola inteira depois); «O primeiro manual oficial»; «estimativa de 1916» | L1 |
 | H-48 | S4 | `kit.mjs:687-749`; `pt-BR.ts:325, 327` | a rede modelada (4,8 m, fita em cima e embaixo, esticada) não é a descrita | «trecho reconstruído»; sem fita embaixo; barriga na malha | L14 (`test:kit`: sem fita embaixo, flecha da malha > 0) |
 | H-53 | S3 | etiquetas da ala | 1.063 palavras na ala; cinco etiquetas acima de 40 | etiqueta ≤ 40 palavras; o excedente desce para a ficha; `validatePacing` conta palavras nas duas línguas | L8 |
-| — | — | `museum.ts:61, 77, 109` | fonte nº 2 do `1896` devolve 404; dois fatos citam página que não contém o ano | URLs da seção 7.2 | L1 |
+| — | — | `museum.ts:61, 77, 109` | fonte nº 2 do `1896` devolve 404; dois fatos citam página que não contém o ano | URLs da seção 7.2 | L1 (feito em P0, com a captura) |
 | — | — | átrio: `pt-BR.ts:258, 285-286, 289-290, 295-298` | «DESDE 1895»; «costurados à mão»; «milhares de dimples»; «canal de costura» | «O JOGO DESDE 1895»; sem «costurados à mão»; «oito gomos, superfície com covinhas»; «canal estreito e rebaixado entre os painéis» | L1 |
 | — | — | `pt-BR.ts:354-357` | «em 1891»; «27 de dezembro de 1942» | «no início dos anos 1890»; «dezembro de 1942» | L1 |
 
@@ -1718,7 +1718,7 @@ chegar; só a parte de L5 (o estimador) e a de L9 (o papel de toda colocação) 
 | **M8** | fios: `ThreadData { nodes: [{ kind: 'exhibit' \| 'document', id }], completeFromLot }`; fechamento por gatilho gravado em `progress.threadsClosed`; antes do lote completo o Acervo mostra «n de m — falta ala em montagem» | M5 | `thread-single-room`, `thread-node-missing`, `thread-closes-before-complete`; `validateAdditive` trata nó novo em fio incompleto como aditivo | P/M · baixo | L17; fecham em L22 |
 | **M9** | rádio por etapa: chamadas de marco com `when`, `lapsesWhen` e `mentions`; respostas condicionais (`RadioReply.when`); aparelho de voz genérico (`call`, `play-once`); dica em três alturas com `targetId` | M5 | `test:radio`; `radio-hint-coverage`, `hint-points-to-nothing`, `speech-mentions-missing`; chave de fala ≤ 130 caracteres | M · baixo | L3; arestas em L10; retomada em L15 |
 | **M10** | `simulateProgress(content)` com as funções puras do runtime; robô de partida | M5, M6a, M4a | `test:playthrough`; `test:speech-coherence` | G · médio | L2, cresce a cada lote |
-| **M11** | fatos: banco como dado (`facts.bank.ts`), captura (`facts.generated.ts`, só o script escreve) e captura manual conferida (`facts.manual.ts`: URL, data, trecho citado, hash); lint de numerais em duas regras (6.4); `claims` em toda chave de texto de acervo | — | `numeral-exclusivity`, `counted-pattern`, `text-ages`, `fact-code-uncaptured`, `fact-code-value-not-in-source`, `fact-publishers-dependent`, `wall-claim-single-publisher`, `label-without-claim`, `claim-fact-unknown`, `present-tense-fact-without-asof`, `living-person-single-source`, `provenance-claims-original-without-source` | M · baixo | P0 (captura), L1 (`fact-code-uncaptured`), L2 (lint), L8 (`claims`) |
+| **M11** | fatos: banco como dado (`facts.bank.ts`), captura (`facts.generated.ts`, só o script escreve) e captura manual conferida (`facts.manual.ts`: URL, data, trecho citado, hash); lint de numerais em duas regras (6.4); `claims` em toda chave de texto de acervo | — | `numeral-exclusivity`, `counted-pattern`, `text-ages`, `fact-code-uncaptured`, `fact-code-value-not-in-source`, `fact-publishers-dependent`, `wall-claim-single-publisher`, `label-without-claim`, `claim-fact-unknown`, `present-tense-fact-without-asof`, `living-person-single-source`, `provenance-claims-original-without-source`. Entregues em P0: `fact-code-uncaptured` (que já cobre `fact-code-value-not-in-source`, porque página sem o valor não é captura, e `fact-publishers-dependent`, porque o grupo sai do host e de `copies`), mais `fact-source-uncaptured`, `fact-source-drift` e `fact-capture-malformed` | M · baixo | P0 (captura e `fact-code-uncaptured`), L2 (lint), L8 (`claims`) |
 | **M12** | kit por sala e resolvedor "receita → bundle": receita de uma sala vai para `kit-<sala>`; de duas ou mais, para `kit-core` | M3 | GLB por sala ≤ 1,5 MB | G · alto | L6 |
 | **M13a** | fronteira de Suspense por sala | M12 | `test:room-lod` | M · médio | L6 |
 | **M13b** | residência de detalhe (no máximo três salas), texturas por sala, descarte verificado | M13a | textura por trio; `renderer.info.memory` volta à linha de base depois de ida e volta (manual, registrado) | G · alto | L17 |
@@ -1924,6 +1924,18 @@ Site que bloqueia robô entra em `facts.manual.ts`, conferido por uma pessoa. O 
 arquivos commitados e aceita qualquer um por grupo de publicadores. As quatro capturas de código
 (`1896`, catorze, `1962`, `1973`) são feitas em P0, não no lote da ala.
 
+**Como ficou (P0, 2026-10-04).** O fato declara no banco como é achado numa página: o algarismo
+como token inteiro **com uma das palavras da afirmação por perto** (`near`; a página que o jogo
+citava para 1897 continha o ano num menu e nada sobre o manual), ou a lista de nomes, todos juntos
+num trecho (`names`). Ainda não há forma "por extenso em cada idioma": nenhuma das quatro capturas
+precisou; entra no lote que precisar. O grupo de publicadores não é digitado por fonte: sai do
+host, por um registro (`PUBLISHERS` em `src/content/factCapture.ts`), e a página que repete o texto
+de outro publicador declara `copies` e conta com ele (a página do Morgan no IVHF repete a da FIVB).
+A Wikipédia é lida pela API como uma revisão renderizada e fica registrada pelo link permanente
+dessa revisão. Rodar de novo sem que a página tenha mudado não altera um byte, nem a data. O que o
+jogo cita em `FACTS` (título, publicador, data) é conferido contra a captura; o registro, com
+trechos e hashes, não entra no bundle.
+
 **O que é portão automático e o que é conferência manual.** Automático: tudo o que está acima, mais
 o estimador de orçamento (M14). Manual, com responsável e roteiro no plano do lote: draws e
 programas medidos em frame; memória; aparelho real; "lê couro", "lê roupa" e o aceite visual; o
@@ -2026,6 +2038,11 @@ um; um site que copia outro não conta.
 **Consertos em `FACTS` (`museum.ts:44-115`), em L1:** `springfield-renaming` ganha as URLs acima;
 `first-rulebook` e `six-a-side` citam hoje uma página que não contém o ano (trocar pela história da
 FIVB e pela página do Morgan no IVHF); `filipino-spike` tem um publicador só e nunca vira código.
+**Feito em 2026-10-04, com a captura (P0, item 5):** `springfield-renaming` cita as quatro páginas;
+`first-rulebook`, a FIVB e a página do Morgan (um publicador só: é o mesmo texto nos dois sites);
+`six-a-side`, a FIVB. A página de história do IVHF não traz 1897; traz 1918 na mesma frase da
+FIVB, palavra por palavra, e por isso está no banco como cópia (`copies`), não como segundo
+publicador.
 
 ### 7.3 As trancas de conhecimento do jogo completo
 
@@ -2240,12 +2257,12 @@ chegada (F81). Regras, conferidas na fatia 0 de cada ala:
 
 | # | Pendência | Sem ela, o que vale | Portão de |
 |---|---|---|---|
-| 1 | captura do `1896` em dois grupos (FIVB e IVHF) | o lote não fecha | P0, L1 |
+| 1 | captura do `1896` em dois grupos (FIVB e IVHF) — **feita em 2026-10-04** | o lote não fecha | P0, L1 |
 | 2 | scan do manual de 1897 (Springfield College, HathiTrust) e do guia de 1916 | manual e guia ficam como reconstrução tipológica; F07 e F09 fora | L14 |
 | 3 | costura ou cola na bola de 1964 e na tricolor | nenhuma menção a costura no saguão | L8 |
 | 4 | Digital Commonwealth reaberta (foto do ginásio) | a fonte declarada é o Commons | L8 |
-| 5 | capturas do catorze (lista de nomes), do `1962` e do `1973` | a ala não abre | P0; L18, L19, L20 |
-| 6 | `olympics.com` reaberto para «em Moscou» | a placa diz «jogando em casa», sem a cidade | L19 |
+| 5 | capturas do catorze (lista de nomes), do `1962` e do `1973` — **feitas em 2026-10-04**; refazer com `npm run facts:capture` no lote de cada ala | a ala não abre | P0; L18, L19, L20 |
+| 6 | `olympics.com` reaberto para «em Moscou» (o robô não abre: pedido em aberto em `facts.manual.ts`) | a placa diz «jogando em casa», sem a cidade | L19 |
 | 7 | PDF do J-STAGE lido (F38) | a ficha da bola de 1964 diz só «o museu não sabe o fabricante» | L19 |
 | 8 | regulamento americano de 1940 e as duas medidas de quadra | sem número de gomos; a placa dos regulamentos descreve o objeto | L18 |
 | 9 | calendário soviético de 1941–1944 (e 1937) reaberto | a peça vira «calendários de parede (cenografia)», sem a frase | L18 |
@@ -2569,6 +2586,17 @@ feita, HANDOFF escrito. Se algum passo falhar, não se força: registra-se o blo
    gerado por `npm run captures:manifest` e lido por `npm run test:captures`.
 5. `npm run facts:capture` (M11): capturar em dois grupos o `1896`, o catorze (lista de nomes), o
    `1962` e o `1973`; o que o robô não abrir vai para `facts.manual.ts`, conferido à mão.
+   **Feito em 2026-10-04:** o banco (`src/content/facts.bank.ts`) diz em que páginas cada fato se
+   apoia; o script lê cada uma e grava em `src/content/facts.generated.ts` o status, o título real,
+   o hash do texto, a data e um trecho de até catorze palavras em volta do valor; `facts.manual.ts`
+   guarda o que o robô não abre. Capturados, cada um em dois grupos de publicadores: `1896` (FIVB,
+   IVHF e Wikipédia), o catorze como lista de nomes (IVHF; Wikipédias IT e PT), `1962` (Wikipédias
+   EN e RU; IVHF) e `1973` (PAP; Wikipédias PL e EN). Uma página não abriu para o robô e espera uma
+   pessoa: `olympics.com` (item 6 de 7.7). No `check`: `fact-code-uncaptured` e os códigos novos
+   `fact-source-uncaptured`, `fact-source-drift` e `fact-capture-malformed` (em
+   `validate:content`), e `npm run test:facts`. Os consertos de `FACTS` previstos para L1 (a URL
+   morta e as duas páginas sem o ano, 3.12 e 7.2) entraram junto, porque o portão novo reprovava os
+   três.
 6. **Aparelho real nº 1** (dono, 30 minutos, com o build de hoje): Android médio e iPhone; memória
    depois das três salas, draws e fps no átrio, tempo até o primeiro frame. Os números entram no
    livro-caixa como teto medido.
@@ -3320,7 +3348,7 @@ gaveta.)
 
 | Lote | Suítes novas | Suítes que ganham casos |
 |---|---|---|
-| P0 | manifesto de capturas (`test:captures`); teste de documentação, todo ID resolve (`test:docs`); saves de produção pelo caminho real de carga (`test:qa-save`) | — |
+| P0 | manifesto de capturas (`test:captures`); teste de documentação, todo ID resolve (`test:docs`); saves de produção pelo caminho real de carga (`test:qa-save`); fontes lidas e registradas (`test:facts`) | `validate:content` (`fact-code-uncaptured`, `fact-source-uncaptured`, `fact-source-drift`, `fact-capture-malformed`) |
 | L1 | catracas (tamanho do `kit.glb`, bytes por caminho, programas, textura residente) | `validate:content` (M0, `fact-code-uncaptured`), `test:kit` (peça × `layout`), `test:power`, `test:navigation`, `test:opening`, `test:opening-flow`, `test:gpu-warmup` |
 | L2 | `test:save`, `test:triggers`, `test:locks`, `test:playthrough`, `test:map`, `validateAdditive`; lints de numerais e `text-ages` | `validate:content` (`simulateProgress`), `test:transition-door`, `test:navigation` |
 | L3 | `test:ending`, `test:speech-coherence` | `test:mobile-controls` (segurar), `test:radio`, `test:opening`, `test:opening-flow` |

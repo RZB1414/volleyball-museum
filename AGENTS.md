@@ -18,9 +18,12 @@ three r185 · @react-three/fiber · zustand · Cloudflare Workers.
    kit e navegação).
    Se algo ficar vermelho, conserte — não contorne o teste.
 
-2. **Nunca edite arquivos gerados.** `src/content/bake.generated.ts` e
-   `src/content/media.generated.ts` saem de `npm run bake` e de
-   `npm run media:fetch`. Edite a origem e regere.
+2. **Nunca edite arquivos gerados.** `src/content/bake.generated.ts`,
+   `src/content/media.generated.ts` e `src/content/facts.generated.ts` saem de
+   `npm run bake`, de `npm run media:fetch` e de `npm run facts:capture`. Edite a
+   origem e regere. Fonte de fato não se digita: entra em
+   `src/content/facts.bank.ts`, o script lê a página, e `museum.ts` cita só o que
+   ele leu.
 
 3. **Conteúdo é dado.** Salas, peças, documentos e fechaduras vivem em
    `src/content/museum.ts`, tipados em `src/content/schema.ts`. Adicionar conteúdo

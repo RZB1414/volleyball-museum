@@ -37,9 +37,42 @@ import type {
 // ---------------------------------------------------------------------------
 
 /**
+ * No source here is typed from memory. Each one is a page of the fact bank
+ * (`facts.bank.ts`) that `npm run facts:capture` read and found the value on,
+ * and the gate holds these four fields to that reading: the title is the
+ * page's own, the publisher is the registered owner of its host, the date is
+ * the day it was read (`fact-source-uncaptured`, `fact-source-drift`). The
+ * record itself, with hashes and excerpts, stays out of the game's bundle.
+ *
+ * The three pages cited by more than one fact are named once.
+ */
+const FIVB_HISTORY = {
+  title: 'History – FIVB',
+  url: 'https://www.fivb.com/volleyball/the-game/history/',
+  publisher: 'FIVB',
+  accessedAt: '2026-10-04',
+} as const
+
+const IVHF_MORGAN = {
+  title:
+    'William G. Morgan - Father of Volleyball - International Volleyball Hall of Fame - Holyoke, Massachusetts USA',
+  url: 'https://www.volleyhall.org/william-morgan-father-of-volleyball.html',
+  publisher: 'International Volleyball Hall of Fame',
+  accessedAt: '2026-10-04',
+} as const
+
+const WIKIPEDIA_VOLLEYBALL = {
+  title: 'Volleyball',
+  url: 'https://en.wikipedia.org/wiki/Volleyball',
+  publisher: 'Wikipedia',
+  accessedAt: '2026-10-04',
+} as const
+
+/**
  * Only `springfield-renaming` is wired to a lock in this slice, so only it has
- * to clear the two-independent-publishers bar. The others are catalogue
- * content and are marked honestly.
+ * to clear the two-independent-publishers bar (`fact-code-uncaptured`). The
+ * others are catalogue content and are marked honestly: each rests on one
+ * publisher, and none of them may become a code as it stands.
  */
 const FACTS = [
   {
@@ -47,21 +80,21 @@ const FACTS = [
     claimKey: 'fact.springfield-renaming.claim',
     value: '1896',
     confidence: 'high',
-    verifiedAt: '2026-07-30',
+    verifiedAt: '2026-10-04',
     usedAsCode: true,
     sources: [
+      FIVB_HISTORY,
       {
-        title: 'Volleyball',
-        url: 'https://en.wikipedia.org/wiki/Volleyball',
-        publisher: 'Wikipedia',
-        accessedAt: '2026-07-30',
-      },
-      {
-        title: 'History of Volleyball',
-        url: 'https://www.volleyhall.org/page/show/3821594-history-of-volleyball',
+        title:
+          'The REAL History of Volleyball - International Volleyball Hall of Fame - Holyoke, Massachusetts USA',
+        url: 'https://www.volleyhall.org/history-of-volleyball.html',
         publisher: 'International Volleyball Hall of Fame',
-        accessedAt: '2026-07-30',
+        accessedAt: '2026-10-04',
       },
+      // Tells the renaming in the federation's words: the bank counts this
+      // page with the federation, not as a second voice of the Hall of Fame.
+      IVHF_MORGAN,
+      WIKIPEDIA_VOLLEYBALL,
     ],
   },
   {
@@ -69,48 +102,28 @@ const FACTS = [
     claimKey: 'fact.first-rulebook.claim',
     value: '1897',
     confidence: 'high',
-    verifiedAt: '2026-07-30',
+    verifiedAt: '2026-10-04',
     usedAsCode: false,
-    sources: [
-      {
-        title: 'Official Handbook of the Athletic League of the YMCA of North America',
-        url: 'https://en.wikipedia.org/wiki/Volleyball',
-        publisher: 'Wikipedia',
-        accessedAt: '2026-07-30',
-      },
-    ],
+    // One account on two sites: one publisher, however many addresses.
+    sources: [FIVB_HISTORY, IVHF_MORGAN],
   },
   {
     id: 'filipino-spike',
     claimKey: 'fact.filipino-spike.claim',
     value: '1916',
     confidence: 'high',
-    verifiedAt: '2026-07-30',
+    verifiedAt: '2026-10-04',
     usedAsCode: false,
-    sources: [
-      {
-        title: 'Volleyball — history',
-        url: 'https://en.wikipedia.org/wiki/Volleyball',
-        publisher: 'Wikipedia',
-        accessedAt: '2026-07-30',
-      },
-    ],
+    sources: [WIKIPEDIA_VOLLEYBALL],
   },
   {
     id: 'six-a-side',
     claimKey: 'fact.six-a-side.claim',
     value: '1918',
     confidence: 'high',
-    verifiedAt: '2026-07-30',
+    verifiedAt: '2026-10-04',
     usedAsCode: false,
-    sources: [
-      {
-        title: 'Volleyball rule chronology',
-        url: 'https://en.wikipedia.org/wiki/Volleyball',
-        publisher: 'Wikipedia',
-        accessedAt: '2026-07-30',
-      },
-    ],
+    sources: [FIVB_HISTORY],
   },
 ] as const satisfies readonly Fact[]
 

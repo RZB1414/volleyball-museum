@@ -381,6 +381,7 @@ npm run dev
 npm run bake
 npm run check
 npm run validate:content
+npm run test:facts
 npm run test:power
 npm run test:opening
 npm run test:opening-flow
@@ -404,6 +405,12 @@ npm run build
 Rode `npm run check` antes de qualquer commit. Se mudar geradores, manifesto,
 materiais ou colliders, rode `npm run bake` antes do check. Nunca corrija um teste
 diminuindo sua cobertura.
+
+`npm run facts:capture` fica fora do `check` de propósito (precisa de rede): rode
+quando mudar `src/content/facts.bank.ts` e antes do lote de conteúdo de cada ala, e
+commite o `facts.generated.ts` que ele gravar. `-- --dry-run` só relata;
+`-- --fact=<id>` lê um fato só. Nunca edite o arquivo gerado: o `test:facts`
+compara byte a byte com o que o script escreveria.
 
 O gate de kit soma a receita inteira (`root` + `root__*`) e limita cada prop a
 2.500 triângulos. Os casos mais próximos do teto são `coat-stand` (2.472, com o
@@ -542,8 +549,54 @@ lista abaixo é anterior ao plano e vale no que ele não cobrir.
     (`src/content/saveFixtures.ts`) carregam pelo caminho real de carga sem perder nada. Um save
     desses é registro, não conteúdo: quando um lote renomear um id, o registro fica como está e a
     migração tem de carregá-lo.
-- Falta: item 5 (`npm run facts:capture`), item 6 (aparelho real nº 1, tarefa do dono) e item 7
-  (Anexo E no navegador e a linha de base de contadores).
+- Feito (item 5, captura de fontes):
+  - `npm run facts:capture` lê cada página que o banco de fatos (`src/content/facts.bank.ts`)
+    nomeia e grava em `src/content/facts.generated.ts` o que ela continha: status, título real, hash
+    do texto, data e um trecho de até catorze palavras em volta do valor. **Precisa de rede e fica
+    fora do `check`**; o portão lê o arquivo commitado. Rodar de novo sem a página ter mudado não
+    altera um byte (a data só anda quando o texto muda);
+  - os quatro códigos estão capturados, cada um em dois grupos de publicadores: `1896` (FIVB, IVHF,
+    Wikipédia), o catorze como **lista de nomes** (IVHF; Wikipédias IT e PT), `1962` (Wikipédias EN
+    e RU; IVHF) e `1973` (PAP/dzieje.pl; Wikipédias PL e EN). Os três das alas (`founding-federations`,
+    `japan-world-title`, `wagner-takes-poland`) estão no banco antes de as alas existirem; o lote da
+    ala cria o `Fact` com o mesmo id;
+  - `validate:content` ganhou `fact-code-uncaptured` (código só com dois publicadores
+    independentes lidos), `fact-source-uncaptured` e `fact-source-drift` (o que `FACTS` cita é
+    página lida, com o título, o publicador e a data da leitura) e `fact-capture-malformed`;
+    `npm run test:facts` (28) prova a leitura em páginas escritas para o teste e confere o registro
+    commitado. Os quatro são erro, não aviso: nada entrou em `knownDebt`;
+  - `FACTS` em `museum.ts` foi consertado junto (era de L1): saiu a URL do IVHF que devolvia 404, e
+    `first-rulebook` e `six-a-side` deixaram de citar a Wikipédia "Volleyball", que não contém 1897
+    nem 1918. Mudou só o dado das fontes; nenhum texto do jogo mudou.
+- Aberto na captura: `olympics.com` não responde ao robô (tempo esgotado em toda rodada, como na
+  pesquisa de 03/10; a página existe e respondeu 200 a outro User-Agent no mesmo dia). Está em
+  `src/content/facts.manual.ts` como pedido (`check: null`): alguém abre a página no navegador e
+  preenche data, título, trecho e hash. Não trava nada hoje (o `1962` tem dois publicadores sem
+  ela); a Ala 3 precisa dela para «em Moscou» (plano, 7.7, item 6).
+- Falta: item 6 (aparelho real nº 1, tarefa do dono) e item 7 (Anexo E no navegador e a linha de
+  base de contadores).
+
+Lições da captura, para quem acrescentar fonte:
+
+- **Grupo de publicadores sai do host**, pelo registro `PUBLISHERS` em
+  `src/content/factCapture.ts`; host novo é registrado antes. Duas páginas de um site são um
+  publicador, e toda Wikipédia é uma família. Página que repete o texto de outro publicador declara
+  `copies`: a página do Morgan no IVHF conta a renomeação e o manual de 1897 com as palavras da
+  FIVB, e a história do IVHF dá 1918 com a mesma frase da FIVB, palavra por palavra. Por isso
+  `first-rulebook` e `six-a-side` têm duas páginas e **um** publicador: nenhum dos dois pode virar
+  código.
+- **O ano sozinho não prova nada.** O banco dá as palavras que têm de estar perto do valor
+  (`near`), e palavra solta engana: «Japan» fica ao lado de 1962 em toda lista de sedes (URSS 1962,
+  Japão 1967). Use a expressão da afirmação («champions Japan», «limited to six»).
+- **A Wikipédia é lida pela API**, como uma revisão renderizada, e o registro guarda o link
+  permanente dessa revisão. Não cite o HTML do artigo: muda a cada requisição.
+- **O robô se identifica e não se disfarça.** O `olympics.com` deixa o User-Agent do projeto sem
+  resposta; a saída é a conferência manual, não trocar o User-Agent. `fivb.com` e `dzieje.pl`
+  derrubam a primeira conexão de uma rajada: o script espaça as leituras e tenta três vezes
+  (tempo esgotado não se repete: meio minuto de silêncio já é resposta). Em rede com IPv6
+  quebrado, `NODE_OPTIONS=--dns-result-order=ipv4first`.
+- **Trecho curto de propósito**: catorze palavras localizam a frase; o hash fixa o texto inteiro. A
+  página é do publicador.
 
 1. **Teste em dispositivos móveis reais.** Num Android médio, valide fullscreen,
    lock landscape, multitouch, fluidez, temperatura e pressão de memória. Num

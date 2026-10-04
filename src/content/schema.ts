@@ -84,9 +84,16 @@ export type GeneratedMediaId =
 // Facts — the canonical store
 // ---------------------------------------------------------------------------
 
+/**
+ * What the game prints of a source. None of the four is free text: each is
+ * checked against the reading of that page recorded by `npm run facts:capture`
+ * (`factCapture.ts`), so a source cannot be typed from memory.
+ */
 export type FactSource = {
+  /** The page's own title. */
   readonly title: string
   readonly url: string
+  /** The registered owner of the URL's host. */
   readonly publisher: string
   /** ISO date the source was actually read. */
   readonly accessedAt: string
@@ -102,6 +109,11 @@ export type FactSource = {
  *   sources. The adversarial fact-check pass on the source research found 109
  *   corrections across 199 milestones — roughly a 50% pre-verification error
  *   rate — which is exactly why this gate exists.
+ *
+ * And by `validateFactCaptures()`: "independent" and "source" are not taken on
+ * the content's word. The two publishers have to be pages that were read and
+ * hold the value (`fact-code-uncaptured`), and every source any fact cites,
+ * code or not, has to be one of those readings (`fact-source-uncaptured`).
  */
 export type Fact = {
   readonly id: string
