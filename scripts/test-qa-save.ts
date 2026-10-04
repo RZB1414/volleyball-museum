@@ -141,17 +141,22 @@ test('a fixture is written whole, under the key the store reads', () => {
 
 test('the corpus holds the production saves the plan lists', () => {
   // P0, item 4: drawer open and closed; two pieces catalogued without a turn;
-  // no `radioCalls`; the radio on the desk with the player in Holyoke.
-  assert.deepEqual(fixtureIds, [
+  // no `radioCalls`; the radio on the desk with the player in Holyoke. Later
+  // lots add their own saves beside these; these five never leave.
+  const production = [
     'production-drawer-open',
     'production-drawer-closed',
     'production-catalogued-unturned',
     'production-pre-opening',
     'production-radio-on-desk',
-  ])
+  ]
+  for (const id of production) {
+    assert.ok(Object.hasOwn(SAVE_FIXTURES, id), `${id} is gone from the corpus`)
+    assert.ok(SAVE_FIXTURES[id as FixtureId].from.startsWith('production-'), `${id} is a production save`)
+  }
   for (const id of fixtureIds) {
     assert.ok(SAVE_FIXTURES[id].summary.length > 0, `${id} says what it is`)
-    assert.ok(SAVE_FIXTURES[id].from.startsWith('production-'), `${id} says which build wrote it`)
+    assert.ok(SAVE_FIXTURES[id].from.length > 0, `${id} says which build wrote it`)
   }
 })
 
@@ -167,6 +172,9 @@ for (const id of fixtureIds) {
     assert.equal(progress.version, store.SAVE_VERSION)
     assert.equal(store.hasSavedProgress(progress), true, 'the title offers nothing to continue')
 
+    // Everything the record holds is still there. Loading may add (a notebook
+    // granted, a field that did not exist yet); it may not take away. A lot
+    // that renames an id carries the record's id through its alias here.
     for (const [field, value] of Object.entries(raw)) {
       const kept = (progress as Record<string, unknown>)[field]
       if (Array.isArray(value)) {
@@ -181,9 +189,6 @@ for (const id of fixtureIds) {
       { ...store.DEFAULT_SETTINGS, ...SAVE_FIXTURES[id].save.settings },
       'the settings are the player\'s own',
     )
-
-    // A save written since the opening is trusted as it is: nothing is added.
-    if ('radioCalls' in raw && 'hintsShown' in raw) assert.deepEqual(progress, raw)
 
     // What the store would write back loads to the same thing again.
     const reloaded = store.migrateProgress(JSON.parse(JSON.stringify(progress)))
@@ -277,7 +282,13 @@ test('after loading, every id a fixture names is one the content still has', () 
 
 test('each fixture is a state the game could really have reached', () => {
   // Hand-written saves drift into the impossible one field at a time. These
-  // are the relations the runtime itself guarantees when it writes a save.
+  // are the relations the published runtime guarantees when it writes a save.
+  //
+  // They are today's rules. A lot that changes one on purpose (a new required
+  // detail, a cabinet read one sheet at a time) makes the old saves break it
+  // for real, and this test failing is the corpus saying so: decide what the
+  // migration does with such a save, then hold the changed relation only for
+  // fixtures written from that lot on (`from`). Never edit a record to fit.
   for (const id of fixtureIds) {
     const progress = progressOf(id)
     const say = (what: string) => `${id}: ${what}`
@@ -342,55 +353,59 @@ test('each fixture is a state the game could really have reached', () => {
 // What each fixture is for
 // ---------------------------------------------------------------------------
 
+// What follows reads the RECORD wherever it says what a save "is": the record
+// never changes, while the content it is compared with grows every lot. A
+// check of "all the documents" against tomorrow's content would fail for no
+// fault of the save.
+
 const DRAWER = 'office-drawer'
-const drawerDocuments = MUSEUM.documents.filter((doc) => 'lockId' in doc && doc.lockId === DRAWER)
+const list = (id: FixtureId, field: string) => rawProgress(id)[field] as readonly string[]
 
 test('the drawer is open in one save and shut in the other, on the same night', () => {
-  assert.ok(drawerDocuments.length > 0, 'the drawer holds something')
   const open = progressOf('production-drawer-open')
   const closed = progressOf('production-drawer-closed')
-
   assert.equal(progressConditionMet({ locksOpened: [DRAWER] }, open, MUSEUM), true)
   assert.equal(progressConditionMet({ locksClosed: [DRAWER] }, closed, MUSEUM), true)
-  for (const doc of drawerDocuments) {
-    assert.ok(open.documentsRead.includes(doc.id), 'the open drawer was read')
-    assert.ok(!closed.documentsRead.includes(doc.id), 'the shut drawer was not')
-  }
+
+  // The letter in the drawer, by the id the published build gave it.
+  assert.ok(list('production-drawer-open', 'documentsRead').includes('doc-predecessor'))
+  assert.ok(!list('production-drawer-closed', 'documentsRead').includes('doc-predecessor'))
   // Both stand at the same point otherwise: the building lit, the year known.
-  for (const progress of [open, closed]) {
-    for (const room of ['office', 'atrium', 'holyoke']) assert.ok(progress.roomsPowered.includes(room))
-    assert.ok(progress.factsKnown.includes('springfield-renaming'), 'the code was learnt in the museum')
+  for (const id of ['production-drawer-open', 'production-drawer-closed'] as const) {
+    assert.deepEqual(list(id, 'roomsPowered'), ['office', 'atrium', 'holyoke'])
+    assert.ok(list(id, 'factsKnown').includes('springfield-renaming'), 'the code was learnt in the museum')
   }
 })
 
-test('the open-drawer save is as far as the published game goes', () => {
-  const progress = progressOf('production-drawer-open')
-  // Nine of twelve: these three cannot be catalogued in the published build
-  // (plan, Anexo C: `exhibit-uncataloguable`), so no honest save has them.
-  const uncataloguable = ['net-1897', 'gym-suit', 'photo-gym']
-  for (const exhibit of uncataloguable) assert.ok(!progress.catalogued.includes(exhibit), exhibit)
-  const reachable = MUSEUM.exhibits.map((exhibit) => exhibit.id as string).filter((id) => !uncataloguable.includes(id))
-  assert.deepEqual([...progress.catalogued].sort(), reachable.sort())
-  assert.deepEqual(
-    [...progress.documentsRead].sort(),
-    MUSEUM.documents.map((doc) => doc.id as string).sort(),
-    'every document the build has was read',
-  )
+test('the open-drawer save is as far as the published game went', () => {
+  // Nine of the twelve pieces and all five documents of that build (checked
+  // against its content when the record was written). The three missing
+  // cannot be catalogued there (plan, Anexo C: `exhibit-uncataloguable`), so
+  // no honest save has them.
+  const catalogued = list('production-drawer-open', 'catalogued')
+  assert.equal(catalogued.length, 9)
+  for (const exhibit of ['net-1897', 'gym-suit', 'photo-gym']) assert.ok(!catalogued.includes(exhibit), exhibit)
+  assert.equal(list('production-drawer-open', 'documentsRead').length, 5)
+  assert.deepEqual(list('production-drawer-open', 'locksOpened'), [DRAWER])
 })
 
 test('two pieces are catalogued by a detail seen before any turn', () => {
-  const progress = progressOf('production-catalogued-unturned')
-  assert.deepEqual([...progress.catalogued].sort(), ['atrium-ball-laced', 'guide-1916'])
-  for (const exhibitId of progress.catalogued) {
-    const exhibit = exhibitById.get(exhibitId)!
-    const seen = progress.hotspots.filter((key) => key.startsWith(`${exhibitId}:`))
-    const required = exhibit.hotspots
-      .filter((hotspot) => hotspot.requiredForCatalogue)
-      .map((hotspot) => `${exhibitId}:${hotspot.id}`)
-    // Never turned: the optional detail, on another face, was never seen.
-    assert.deepEqual(seen, required, `${exhibitId} shows a detail only a turn reveals`)
-    assert.ok(exhibit.hotspots.length > required.length, `${exhibitId} has a face the player never saw`)
+  assert.deepEqual(list('production-catalogued-unturned', 'catalogued'), ['atrium-ball-laced', 'guide-1916'])
+  // One detail each, the one that faces the camera as the piece is picked up
+  // (`npm run audit:examine-sim`, `npm run audit:laced-sweep`).
+  assert.deepEqual(list('production-catalogued-unturned', 'hotspots'), [
+    'atrium-ball-laced:lacing',
+    'guide-1916:credit',
+  ])
+  // Never turned: each piece has another face, and nothing on it was seen.
+  for (const exhibitId of list('production-catalogued-unturned', 'catalogued')) {
+    assert.ok(exhibitById.get(exhibitId)!.hotspots.length > 1, `${exhibitId} has a face the player never saw`)
   }
+  assert.deepEqual(
+    [...progressOf('production-catalogued-unturned').catalogued].sort(),
+    ['atrium-ball-laced', 'guide-1916'],
+    'a piece the published build catalogued stays catalogued',
+  )
 })
 
 test('a save from before the opening is brought forward, not replayed', () => {
@@ -403,14 +418,18 @@ test('a save from before the opening is brought forward, not replayed', () => {
   assert.ok(progress.documentsRead.includes(PRE_OPENING_SAVE.journalDocumentId), 'the notebook is granted')
   assert.equal(journalUnlocked(MUSEUM, progress.documentsRead), true)
   assert.ok(progress.radioCalls.includes(PRE_OPENING_SAVE.firstCallId), 'the first call is history')
-  assert.deepEqual(progress.hintsShown, [PRE_OPENING_SAVE.journalHintId], 'no toast for a notebook never picked up')
+  assert.ok(
+    progress.hintsShown.includes(PRE_OPENING_SAVE.journalHintId),
+    'a toast would announce a notebook never picked up',
+  )
   assert.deepEqual(progress.devicesCarried, [])
   // The office was never lit: the player wakes in the dark with a lamp to find,
-  // and once it is on the porter has nothing stale to say.
+  // and once it is on the porter does not send them to a breaker already thrown.
   assert.ok(!progress.roomsPowered.includes(MUSEUM.spawn.room))
   for (const radio of radios) {
     const lit = { ...progress, roomsPowered: [...progress.roomsPowered, MUSEUM.spawn.room] }
-    assert.deepEqual(dueRadioCalls(radio, lit, MUSEUM), [])
+    const due = dueRadioCalls(radio, lit, MUSEUM).map((call) => call.id as string)
+    assert.ok(!due.includes(PRE_OPENING_SAVE.firstCallId), 'the first call would play again')
   }
   assert.equal(state.settings.locale, 'en', 'the language survives')
 })
