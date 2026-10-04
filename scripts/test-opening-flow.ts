@@ -968,38 +968,272 @@ test('a broken key in any content collection fails the translation gate', () => 
   )
 })
 
-test('the office drawer code is printed where the hint and the lock point', () => {
+const LOCALES = [
+  ['pt-BR', ptBR as Record<string, string>],
+  ['en', en as Record<string, string>],
+] as const
+
+test('the office drawer code is printed where the lock points, and nowhere else', () => {
   for (const lock of MUSEUM.locks) {
     if (lock.kind !== 'knowledge') continue
     const fact = MUSEUM.facts.find((candidate) => candidate.id === lock.factId)
     const exhibit = MUSEUM.exhibits.find((candidate) => candidate.id === lock.sourceExhibitId)
     assert.ok(fact && exhibit)
     // The hotspot that teaches the fact is the text the player is reading at
-    // the moment they learn it; the catalogue entry it unlocks repeats it.
+    // the moment they learn it.
     const teaching = exhibit.hotspots.find((hotspot) => hotspot.revealsFactId === fact.id)
     assert.ok(teaching, `${exhibit.id} has a hotspot that reveals ${fact.id}`)
-    for (const [locale, dictionary] of [
-      ['pt-BR', ptBR],
-      ['en', en],
-    ] as const) {
-      const lookup = (key: string) => (dictionary as Record<string, string>)[key] ?? ''
-      assert.ok(lookup(teaching.labelKey).includes(fact.value), `${locale}: the plaque shows ${fact.value}`)
-      assert.ok(lookup(exhibit.catalogueKey).includes(fact.value), `${locale}: the catalogue shows it`)
+    // A code the player can pick up from any label in the wing is not a code
+    // they found. The year stays on the plaque and on the title of the one
+    // document that reveals the same fact; the catalogue entry used to repeat
+    // it, and so did two other cards.
+    const allowed = [
+      teaching.labelKey,
+      ...MUSEUM.documents.filter((doc) => doc.revealsFactId === fact.id).map((doc) => doc.titleKey),
+    ].sort()
+    assert.equal(allowed.length, 2, 'the plaque and one document title')
+    for (const [locale, dictionary] of LOCALES) {
+      assert.ok(dictionary[teaching.labelKey].includes(fact.value), `${locale}: the plaque shows ${fact.value}`)
+      const printedOn = Object.keys(dictionary)
+        .filter((key) => dictionary[key].includes(fact.value))
+        .sort()
+      assert.deepEqual(printedOn, allowed, `${locale}: ${fact.value} is printed on exactly these keys`)
     }
   }
   // The porter's drawer hint names the same exhibit.
   assert.ok(ptBR['radio.hint.drawer'].includes('Morgan') && en['radio.hint.drawer'].includes('Morgan'))
 })
 
-test('the renaming is dated where history dates it', () => {
-  // Morgan devised Mintonette at Holyoke in 1895; the Springfield YMCA
-  // conference demonstration of July 1896 gave it the name Volley Ball.
-  for (const dictionary of [ptBR, en]) {
-    assert.ok(dictionary['exhibit.portrait-morgan.label'].includes('1895'))
-    assert.ok(dictionary['exhibit.portrait-morgan.catalogue'].includes('Springfield'))
-    assert.ok(dictionary['hotspot.portrait-morgan.date.label'].includes('Springfield'))
-    assert.ok(!dictionary['hotspot.portrait-morgan.date.label'].includes('1895'))
+// ---------------------------------------------------------------------------
+// The history the wing prints (front 12 of the plan)
+// ---------------------------------------------------------------------------
+
+type Wording = string | RegExp
+type TextRule = {
+  readonly keys: readonly (keyof typeof ptBR)[]
+  /** Each pair is [pt-BR, en]; a string is a case-sensitive fragment. */
+  readonly has?: readonly (readonly [Wording, Wording])[]
+  readonly lacks?: readonly (readonly [Wording, Wording])[]
+}
+const both = (wording: Wording) => [wording, wording] as const
+const says = (text: string, wording: Wording) =>
+  typeof wording === 'string' ? text.includes(wording) : wording.test(text)
+
+/**
+ * One line per correction the fact check asked for. Each of them was a claim
+ * the game made on a wall with no source behind it, or with the source saying
+ * something else; the rule pins the corrected wording in both languages so a
+ * later rewrite cannot bring the old one back.
+ */
+const HISTORY_RULES: readonly TextRule[] = [
+  {
+    // He left the YMCA in 1897, not 1900; the day of his death and the
+    // occasion of the renaming are where the sources part, so neither is given.
+    keys: ['exhibit.portrait-morgan.catalogue'],
+    has: [both('1897'), both('Springfield')],
+    lacks: [both('1900'), both('1896'), ['julho', 'July'], ['27 de dezembro', '27 December']],
+  },
+  { keys: ['exhibit.portrait-morgan.label'], has: [both('1895')], lacks: [both('1891')] },
+  {
+    // The plaque states the year and the town, never the contested occasion.
+    keys: ['hotspot.portrait-morgan.date.label'],
+    has: [both('1896'), both('Springfield')],
+    lacks: [['demonstra', 'demonstration'], both('1895')],
+  },
+  {
+    keys: ['exhibit.net-1897.label'],
+    has: [['logo acima da cabeça', 'just above the head']],
+    lacks: [['meio pé', 'half a foot']],
+  },
+  { keys: ['exhibit.guide-1916.title'], has: [both('Morgan')], lacks: [[/bomba/i, /bomb/i]] },
+  {
+    keys: ['exhibit.guide-1916.label', 'exhibit.guide-1916.catalogue', 'hotspot.guide-1916.credit.label'],
+    has: [both('Woods')],
+    lacks: [both(/\bWood\b/), both(/bomberino/i), ['forçou', 'forced']],
+  },
+  {
+    keys: ['hotspot.guide-1916.census.label'],
+    has: [[/estimativa/i, /estimate/i]],
+    lacks: [[/censo/i, /census/i]],
+  },
+  {
+    keys: ['exhibit.handbook-1897.title', 'fact.first-rulebook.claim'],
+    has: [['manual oficial', 'official handbook']],
+    lacks: [[/regulamento/i, /rulebook/i]],
+  },
+  {
+    keys: ['exhibit.handbook-1897.catalogue'],
+    has: [both('1952'), ['associação americana', 'American association']],
+    lacks: [both('1896')],
+  },
+  {
+    keys: ['exhibit.photo-gym.label'],
+    has: [['publicada em 1897', 'published in 1897']],
+    lacks: [['treliças', 'trusses'], both('High'), both('Appleton'), ['fotografado', 'photographed']],
+  },
+  { keys: ['exhibit.photo-gym.catalogue'], has: [both('1943')], lacks: [both('1886'), both('1896')] },
+  {
+    keys: ['exhibit.gym-suit.label', 'exhibit.gym-suit.catalogue'],
+    has: [both('1901–1915')],
+    lacks: [[/\bsolas?\b/i, /\bsoles?\b/i], [/óxido/i, /oxide/i], [/vitoriano/i, /victorian/i], ['suor', 'sweat']],
+  },
+  {
+    keys: ['exhibit.ball-improvised.label', 'exhibit.ball-improvised.catalogue'],
+    has: [[/leve e lenta demais/i, /too light and too slow/i]],
+    lacks: [['boiava', 'floated'], [/mole demais/i, /too soft/i], [/primeiro objeto/i, /first object/i]],
+  },
+  {
+    keys: ['exhibit.ball-spalding.label'],
+    has: [['25 a 27', '25 to 27']],
+    lacks: [['Cerca de 25', 'Roughly 25']],
+  },
+  {
+    keys: ['exhibit.ball-spalding.catalogue'],
+    has: [['anos 1920', '1920s']],
+    lacks: [['anos 1930', '1930s'], both('c. 1900–1920')],
+  },
+  {
+    keys: ['document.rule-changes.body'],
+    has: [both('1922')],
+    lacks: [both(/\b21\b/), both(/\b15\b/), ['até hoje', 'to this day'], ['As três', 'All three']],
+  },
+  {
+    // The Hall of Fame infers the month; it does not state it.
+    keys: ['document.invention-date.body'],
+    has: [['Hall da Fama', "Hall of Fame's reckoning"]],
+    lacks: [['situa', 'places the invention']],
+  },
+  { keys: ['document.halstead.body'], has: [['divergem', 'disagree']], lacks: [both('1896')] },
+  { keys: ['sign.atrium.eyebrow'], has: [['O JOGO DESDE 1895', 'THE GAME SINCE 1895']] },
+  {
+    keys: ['exhibit.atrium-ball-colour-1998.label', 'hotspot.atrium-ball-colour-1998.seam.label'],
+    lacks: [[/costurados à mão/i, /hand-stitched/i]],
+  },
+  {
+    keys: ['exhibit.atrium-ball-eight-panel-2008.title'],
+    has: [['covinhas', 'dimpled']],
+    lacks: [['milhares', 'thousands']],
+  },
+  {
+    keys: ['hotspot.atrium-ball-tokyo-1964.seam.label'],
+    has: [[/canal/i, /channel/i]],
+    lacks: [[/costura/i, /seam/i]],
+  },
+  { keys: ['exhibit.atrium-ball-laced.label'], lacks: [both('1918'), both('1925')] },
+  {
+    // The same clue in both languages: English had shortened it to four.
+    keys: ['radio.patience.t3.crossword'],
+    has: [['cinco letras', 'five letters']],
+    lacks: [both('four letters')],
+  },
+]
+
+test('every correction of the fact check is on the wall, in both languages', () => {
+  const wrong: string[] = []
+  for (const rule of HISTORY_RULES) {
+    for (const key of rule.keys) {
+      LOCALES.forEach(([locale, dictionary], column) => {
+        const text = dictionary[key]
+        for (const pair of rule.has ?? []) {
+          if (!says(text, pair[column])) wrong.push(`${key} (${locale}) should say ${pair[column]}`)
+        }
+        for (const pair of rule.lacks ?? []) {
+          if (says(text, pair[column])) wrong.push(`${key} (${locale}) still says ${pair[column]}`)
+        }
+      })
+    }
   }
+  for (const [locale, dictionary] of LOCALES) {
+    if (dictionary['document.halstead.title'] !== 'Springfield, 1896') {
+      wrong.push(`document.halstead.title (${locale}) is "${dictionary['document.halstead.title']}"`)
+    }
+  }
+  // Portuguese has a word for them.
+  for (const [key, text] of Object.entries(ptBR)) {
+    if (/dimples/i.test(text)) wrong.push(`${key} (pt-BR) still says dimples`)
+  }
+  assert.deepEqual(wrong, [])
+})
+
+test('the museum has one name, everywhere it names itself', () => {
+  const root = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
+  const wrong: string[] = []
+  for (const [key, text] of Object.entries(ptBR)) {
+    if (/Museu do V[ôo]lei\b/i.test(text)) wrong.push(`${key} (pt-BR): ${text}`)
+  }
+  for (const [key, text] of Object.entries(en)) {
+    if (/Museum of Volleyball/i.test(text)) wrong.push(`${key} (en): ${text}`)
+  }
+  for (const file of ['index.html', 'public/manifest.webmanifest']) {
+    if (/Museu do V[ôo]lei\b/i.test(root(file))) wrong.push(`${file} still carries the short name`)
+  }
+  assert.deepEqual(wrong, [])
+  assert.equal(ptBR['ui.title'], 'Museu do Voleibol')
+  assert.equal(en['ui.title'], 'Volleyball Museum')
+  assert.equal(ptBR['sign.atrium.heading'], 'MUSEU DO VOLEIBOL')
+  assert.equal(en['sign.atrium.heading'], 'VOLLEYBALL MUSEUM')
+  // What the phone prints under the icon is the museum's own name too.
+  assert.ok(root('index.html').includes('name="apple-mobile-web-app-title" content="Museu do Voleibol"'))
+  assert.equal(JSON.parse(root('public/manifest.webmanifest')).short_name, 'Museu do Voleibol')
+})
+
+test('every wall label fits in forty words, in both languages', () => {
+  // A word is what stands between spaces and has a letter or a digit in it.
+  const words = (text: string) => text.split(/\s+/).filter((token) => /[\p{L}\p{N}]/u.test(token)).length
+  const over: string[] = []
+  for (const exhibit of MUSEUM.exhibits) {
+    for (const [locale, dictionary] of LOCALES) {
+      const count = words(dictionary[exhibit.labelKey])
+      if (count > 40) over.push(`${exhibit.labelKey} (${locale}): ${count} words`)
+    }
+  }
+  assert.equal(MUSEUM.exhibits.length, 12, 'the twelve labels of the house')
+  assert.deepEqual(over, [])
+})
+
+test('the porter sends nobody to what is not there, in lines short enough to read', () => {
+  const patience = radio.patience
+  assert.ok(patience)
+  const answers = [
+    ...patience.tiers.flatMap((tier) => [...tier.replies, ...(tier.outbursts ?? [])]),
+    ...(patience.praise ?? []),
+    ...patience.deadAir,
+  ]
+  const spoken = new Set<string>([
+    ...radio.calls.flatMap((call) => call.lineKeys),
+    ...radio.hints.flatMap((hint) => [...hint.lineKeys, ...(hint.curtLineKeys ?? [])]),
+    ...answers.flatMap((answer) => [
+      ...answer.lineKeys,
+      ...('closingKeys' in answer ? (answer.closingKeys ?? []) : []),
+    ]),
+  ])
+  const wrong: string[] = []
+  for (const key of spoken) {
+    for (const [locale, dictionary] of LOCALES) {
+      const text = dictionary[key]
+      if (text.length > 130) wrong.push(`${key} (${locale}) is ${text.length} characters`)
+    }
+  }
+
+  // Until the night has an ending (L3), the last hint and the line about the
+  // basement say what can be done tonight. There are no medals to find, no
+  // vault to open and no way down to forbid.
+  const lastHint = radio.hints[radio.hints.length - 1]
+  const firstCall = radio.calls.find((call) => call.id === 'porter-first-call')
+  assert.ok(firstCall && firstCall.lineKeys.length === 4)
+  const honest = [...lastHint.lineKeys, ...(lastHint.curtLineKeys ?? []), firstCall.lineKeys[3]]
+  const promises: Record<string, readonly RegExp[]> = {
+    'pt-BR': [/medalha/i, /cofre/i, /não desce/i],
+    en: [/medal/i, /vault/i, /don't go down/i],
+  }
+  for (const key of honest) {
+    for (const [locale, dictionary] of LOCALES) {
+      for (const promise of promises[locale]) {
+        if (promise.test(dictionary[key])) wrong.push(`${key} (${locale}) still says ${promise}`)
+      }
+    }
+  }
+  assert.deepEqual(wrong, [])
 })
 
 console.log(`\n${passed}/${passed} opening-flow checks passed.\n`)

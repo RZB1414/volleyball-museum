@@ -1120,3 +1120,64 @@ A dark walnut-panelled wall hung with a grid of cast bronze plaques, each roughl
 - **Alegacao:** Italy women beat Türkiye 3–2 (25–23, 13–25, 26–24, 19–25, 15–8) … Italy men beat Bulgaria 3–1 (25–21, 25–17, 17–25, 25–10).
   - **Problema:** Both sets of set-by-set scores remain unverified. The Wikipedia tournament pages confirm every surrounding fact — Italy women's second world title over Türkiye with Alessia Orro MVP and Brazil beating Japan for bronze (22 Aug – 7 Sep 2025, Thailand, 32 teams); Italy men's fifth title over Bulgaria with Alessandro Michieletto MVP and Poland third (12–28 Sept 2025, SM Mall of Asia Arena, Pasay, 32 teams) — but neither page surfaced the individual set scores, and dedicated final-match articles do not exist. The 25–10 fourth set in the men's final in particular is an unusual enough scoreline to warrant confirmation.
   - **Correto:** Winners, MVPs, venues, dates, team counts and bronze medallists for both 2025 World Championships are confirmed. The set-by-set scores of both finals are not — leave them off the plaque or re-verify against an official Volleyball World match report.
+
+---
+
+## Atualizações datadas
+
+> Ficam no fim de propósito. Os relatórios em `docs/plano-mestre/fontes/` citam este arquivo por
+> número de linha, e uma seção inserida no meio deslocaria todas as citações. O texto acima
+> continua como foi gerado em 30/07/2026; o que mudou depois está aqui, por era e por data.
+
+### 2026-10-04 — Era 1 (1895–1929) e a vitrine das bolas do átrio
+
+Origem: a conferência de fontes de 03/10/2026 (`docs/plano-mestre/fontes/07-facts.md`, seções 2.1,
+2.2 e 2.4) e o lote L1 (`docs/lotes/L1-plano.md`, seção 4), que levou as correções ao texto do
+jogo nas duas línguas. Cada linha diz o que a pesquisa acima afirma, o que as páginas abertas em
+03/10 dizem e o que o jogo passou a imprimir. «Um publicador» quer dizer que a afirmação fica na
+ficha da peça, nunca em placa de parede nem em código de tranca.
+
+**Fonte que mudou de estado**
+
+| Assunto | Acima | Páginas abertas em 03/10/2026 | O jogo, desde L1 |
+|---|---|---|---|
+| «volley ball» em duas palavras até 1952 | linhas 160–162: sem fonte | a história da FIVB diz que a associação americana (USVBA) votou a grafia em uma palavra em 1952. Um publicador | ficha do manual: «até 1952, quando a associação americana adotou a forma em uma palavra» |
+| Morte de Morgan | linhas 70 e 282: 27 de dezembro de 1942, «Wikipédia e IVHF concordam» | a página do Morgan no IVHF dá **28** de dezembro; a Wikipédia, 27. Não concordam mais | «dezembro de 1942», sem o dia |
+| Prédio da YMCA de Holyoke | linhas 56, 111 e 172–174: «(1886–1943)», sem fonte | a descrição do arquivo no Commons (com base no Digital Commonwealth) diz prédio **construído em 1892** e destruído por incêndio em 1943. 1886 é o ano da associação, e só apareceu em resultado de busca do site da YMCA de Holyoke. Um publicador | ficha da fotografia: «O prédio, do começo dos anos 1890, queimou em 1943». Sem 1886 até uma página aberta que o diga |
+| Texto do manual de 1897 | linhas 163–165: nenhuma reprodução alcançada | há reprodução acessível em `volleyball1on1.com` (secundária), com as duas tentativas de saque, os 10 pés e a exceção do primeiro saque na rede. Continua sem fac-símile | medidas da etiqueta e da ficha (25 × 50 pés, 6 pés e 6 polegadas, 25 a 27 polegadas, nove innings) |
+| Páginas do IVHF | linhas 116 e 128: endereços que devolviam 404 | as páginas mudaram de endereço; existe `https://www.volleyhall.org/first-us-championship-1922.html` (link visto, página não aberta), que pode resolver «23 × 27 times» | nada: o campeonato de 1922 não está no jogo |
+| Fontes dos quatro fatos do jogo | — | lidas pelo robô em 04/10/2026 (`npm run facts:capture`); saiu a URL do IVHF que devolvia 404, e `first-rulebook` e `six-a-side` deixaram de citar a Wikipédia «Volleyball», que não contém 1897 nem 1918 | `FACTS` cita só página lida (`fact-source-uncaptured`); o registro é `src/content/facts.generated.ts` |
+
+**Afirmação que o jogo fazia e deixou de fazer**
+
+| Assunto | Acima | Páginas abertas em 03/10/2026 | O jogo, desde L1 |
+|---|---|---|---|
+| Ordem dos testes de bola | linhas 30 e 74: primeiro a bola de basquete («a little too heavy»), depois a câmara («too soft») | nas palavras do próprio Morgan (história da FIVB; página do Morgan no IVHF) a **câmara veio primeiro**, leve e lenta demais, e depois a bola inteira, grande e pesada demais. A página de história do IVHF conta na ordem inversa e diz «mole demais» | a ordem e as palavras do Morgan: «leve e lenta demais»; «grande e pesada demais». Saiu «o primeiro objeto da história do vôlei» |
+| A renomeação | linhas 75 e 142–144: 7 de julho de 1896, na demonstração | FIVB e página do Morgan no IVHF: conferência «no início de 1896», sugestão de Halstead depois da demonstração. História do IVHF: Morgan **visitou** Halstead no início de 1896, e a conferência é de 7 de julho (com recorte do *Holyoke Daily Transcript*). Wikipédia do Morgan: dezembro de 1895. O ano é firme; o mês e a ocasião, não | plaqueta do retrato: só «em 1896, em Springfield». A ficha do retrato e o documento «Springfield, 1896» declaram a divergência. O ano fica impresso em duas chaves e em nenhuma outra |
+| Saída de Morgan da YMCA | linha 78: 1900 (corrigido em 139–141) | 1897: Wikipédia do Morgan (citando o Springfield College) e Buffalo Sports Hall of Fame | 1897 |
+| Encontro com Naismith | linha 70: 1891 (corrigido em 136–138) | 1891 em Mount Hermon (IVHF) × 1892 em Springfield (Wikipédia) | «no início dos anos 1890» |
+| Altura da rede | linhas 36 e 73: «meio pé» (corrigido em 154–156) | Morgan, pela FIVB e pelo IVHF: «just above the head of an average man» | «logo acima da cabeça de um homem médio», igual nas duas línguas (o inglês dizia outra coisa) |
+| «Dr. Frank Wood» | linhas 48 e 73 (corrigido em 157–159) | o IVHF, com a página 11 do guia de 1916–17 e o jornal de 7/7/1896, grafa **Woods**; a FIVB, Wood | Woods, na etiqueta, na ficha e no detalhe do guia |
+| O guia de 1916–17 e a «bomba» | linha 83: «bomba», «bomberino», e o ataque «forçou» as regras | nenhuma fonte liga o guia ao ataque filipino. «Bomberino» não apareceu em nenhuma página aberta. Quem chamou o golpe de quê varia (Wikipédia × Eric Nusbaum). A Wikipédia «Volleyball in the Philippines» conta que o limite de três toques veio **antes** do ataque | o guia é «Morgan conta a história». O ataque fica na ficha, como «ficou conhecido como bomba filipina», sem bomberino e sem causalidade, até ter documento próprio (L8) |
+| Os 200 mil de 1916 | linha 84 (soma apontada em 151–153) | é a estimativa de Robert C. Cubbon num artigo do guia (FIVB), não um censo; as parcelas somam 155 mil | «Estimativa de 1916: cerca de 200 mil praticantes». Sem as parcelas |
+| Três toques por equipe | linhas 88 e 103: 1920 × 1922 | Wikipédia: 1920; história da FIVB: 1922 | o recorte das regras dá 1920 e declara: «a federação internacional diz 1922». Saíram «as três respondem ao mesmo problema» e «até hoje» |
+| Dezembro de 1895 | linha 72: o IVHF «places the invention» | o IVHF **infere** dezembro («provavelmente») | «Pela conta do Hall da Fama, a invenção cai provavelmente em dezembro de 1895» |
+| Bola Spalding | linha 74: «roughly 25 inches»; linha 20: «c. 1900–1920» | «uns 25» (IVHF) × 25 a 27 (FIVB e manual de 1897). Para o fim do cadarço, a única data achada é 1940, na cronologia da NCVA (linhas 322–327), sem regulamento de arquivo | «25 a 27 polegadas»; «foi saindo de cena entre os anos 1920 e 1940»; a etiqueta diz que a peça é reconstrução |
+| Traje de ginásio | linhas 52 e 190–192: sola de borracha «em 1903», sem fonte | sem fonte para a data da sola; «vitoriano» é impreciso para os EUA de 1895–1915; Morgan explica o jogo pela idade e pelo fôlego dos sócios, não pela lã | traje de catálogo de c. 1901–1915; os sócios de 1895 jogavam de camisa e calça comprida «pelo que se sabe» (as duas variantes da linha 52 são inferência: não há fotografia deles). Sem sola e sem a causalidade da lã |
+| Fotografia do ginásio | linhas 56 e 58: esquina, treliças de aço rebitado | o crédito no Commons diz **publicada** em 1897 na *Transcript Industrial Edition*; a esquina vem da descrição de um cartão-postal | «em fotografia publicada em 1897», e só o que a foto mostra: argolas, cavalo com alças, pesos de polia, pista de corrida suspensa |
+
+**Vitrine das bolas do átrio** (referências em `docs/ATRIO-BOLAS-HISTORICAS.md`)
+
+| Assunto | O jogo dizia | Páginas abertas em 03/10/2026 | O jogo, desde L1 |
+|---|---|---|---|
+| Bola de cadarço | «catálogos de 1918–1920» e «bola de cerca de 1925» | as três referências estão registradas, mas **não foram reabertas** em 03/10 | «catálogos de época» e «uma bola preservada», sem as datas até a fonte ser reaberta (plano, 7.7) |
+| Tóquio 1964 | «canal de costura», «sem fio exposto» | nenhuma fonte diz que a bola de 1964 era costurada; bola de quadra de competição é, em regra, colada sobre a carcaça | «canal estreito e rebaixado entre os painéis» |
+| MVL200, 1998 | «dezoito painéis costurados à mão» | a única fonte é a nota de produção do Powerhouse, numa ficha incoerente: chama o objeto de bola de praia e transcreve inscrição de bola de quadra, de couro | sem «costurados à mão», na etiqueta, na ficha e no detalhe. Fica pendente conferir com a Mikasa |
+| MVA200, 2008 | «milhares de dimples» | fonte primária para o modelo (comunicado Kuraray/Mikasa de 25/6/2008; Museu Olímpico, ref. 201691); nenhuma dá a quantidade | «Oito gomos, superfície com covinhas» |
+| «DESDE 1895» na dedicatória | lia-se como a idade do museu | o que é de 1895 é o jogo (FIVB e IVHF) | «O JOGO DESDE 1895» |
+
+**O que continua aberto nesta era** (não mudou em L1): a contagem de gomos da bola original
+(linha 100); 1896 × 1900 para a primeira bola Spalding (linha 101); o que os jogadores de Holyoke
+vestiam, sem fotografia (linha 110); o interior do ginásio, que continua tipológico (linha 111); a
+MVL200 costurada ou colada. Os itens 5, 7, 8 e 9 da seção 2.4 do relatório `07` são de outras eras
+e entram aqui quando o lote da ala correspondente os usar.

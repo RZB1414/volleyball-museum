@@ -5,28 +5,47 @@
  *
  * Exits non-zero on any error-severity issue. Warnings print but do not fail —
  * they flag design smells (a passive exhibit, a wing with no shortcut back)
- * that are judgement calls rather than bugs.
+ * that are judgement calls rather than bugs. Dated debts (`knownDebt.ts`)
+ * print on every run and do not fail until the lot that pays them arrives.
  */
+
+import { fileURLToPath } from 'node:url'
 
 import { BAKED_BUNDLES, BAKE_TOTALS } from '../src/content/bake.generated.ts'
 import { goodCaptures } from '../src/content/factCapture.ts'
 import { FACT_BANK } from '../src/content/facts.bank.ts'
 import { CAPTURED_SOURCES } from '../src/content/facts.generated.ts'
 import { MANUAL_CAPTURES } from '../src/content/facts.manual.ts'
+import { en } from '../src/content/i18n/en.ts'
 import { ptBR } from '../src/content/i18n/pt-BR.ts'
+import { CONTENT_LOT, debtOf } from '../src/content/knownDebt.ts'
 import { MUSEUM } from '../src/content/museum.ts'
-import { formatIssues, validateContent } from '../src/content/validate.ts'
+import { formatIssues, formatKnownDebt, validateContent } from '../src/content/validate.ts'
+import { KEY_NAMED_NOT_USED, keysCitedIn, readSourceTree } from './lib/translationUsage.ts'
 
 // The committed record of what each source held, never the network: the gate
 // has to give the same verdict offline (`npm run facts:capture` is the
 // writing side, outside the gate).
 const captures = { bank: FACT_BANK, captured: CAPTURED_SOURCES, manual: MANUAL_CAPTURES }
 
-// Imported from the dictionary module rather than `src/i18n.ts`: that one pulls
+// Imported from the dictionary modules rather than `src/i18n.ts`: that one pulls
 // in the zustand store, and the gate must run in bare Node with no DOM.
-const issues = validateContent(MUSEUM, BAKED_BUNDLES, new Set(Object.keys(ptBR)), captures)
+const translationKeys = new Set(Object.keys(ptBR))
+
+// What the code itself asks the dictionary for.
+const keysCitedByCode = keysCitedIn(
+  translationKeys,
+  readSourceTree(fileURLToPath(new URL('../src', import.meta.url)), KEY_NAMED_NOT_USED),
+)
+
+const issues = validateContent(MUSEUM, BAKED_BUNDLES, translationKeys, captures, {
+  dictionaries: { 'pt-BR': ptBR, en },
+  keysCitedByCode,
+  knownDebt: { lines: debtOf('validate:content'), lot: CONTENT_LOT },
+})
 const errors = issues.filter((issue) => issue.severity === 'error')
 const warnings = issues.filter((issue) => issue.severity === 'warning')
+const debts = issues.filter((issue) => issue.severity === 'debt')
 
 console.log(
   `content: ${MUSEUM.rooms.length} rooms · ${MUSEUM.exhibits.length} exhibits · ` +
@@ -44,7 +63,13 @@ console.log(
     `${BAKE_TOTALS.triangles.toLocaleString('en-US')} triangles`,
 )
 
-if (issues.length === 0) {
+// Before the verdict, so a green run still shows what it is letting through.
+if (debts.length > 0) {
+  console.log(`\nknown debt, content at L${CONTENT_LOT}: ${debts.length} dated line(s)`)
+  console.log(formatKnownDebt(issues))
+}
+
+if (errors.length + warnings.length === 0) {
   console.log('\nAll checks passed.')
 } else {
   console.log('')

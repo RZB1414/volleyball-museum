@@ -11,7 +11,9 @@
  * broken content edit fails loudly instead of at runtime.
  */
 
+import { buildRoomSignageLayout } from '../engine/signageLayout.ts'
 import { validateFactCaptures, type FactCaptureSet } from './factCapture.ts'
+import { settleKnownDebt, type KnownDebt } from './knownDebt.ts'
 import { PRE_OPENING_SAVE } from './legacySave.ts'
 import type {
   Credential,
@@ -24,13 +26,28 @@ import type {
 } from './schema'
 
 export type ValidationIssue = {
-  readonly severity: 'error' | 'warning'
+  /**
+   * `debt` is an error the table in `knownDebt.ts` has written down with the
+   * lot that pays it: the gate prints it on every run and does not fail on it
+   * until that lot arrives.
+   */
+  readonly severity: 'error' | 'warning' | 'debt'
   readonly code: string
   readonly message: string
+  /**
+   * What the issue is about, when it is about one thing. A debt line names an
+   * accusation by code and id, so only an issue that carries one can be owed.
+   */
+  readonly id?: string
+  /** With severity `debt`: when it falls due, and why it waits. */
+  readonly debt?: { readonly untilLot: number; readonly note: string }
 }
 
 /** The player's physical radius; a spawn must leave this much clear floor. */
 const SPAWN_CLEARANCE = 0.3
+
+/** Wall thickness in the bake; a room's plaster face is half of it inside the shell line. */
+const SHELL_WALL = 0.25
 
 function credentialKey(credential: Credential): string {
   return `${credential.kind}:${credential.id}`
@@ -186,6 +203,109 @@ function validateReferences(content: MuseumContent): ValidationIssue[] {
       if (!exhibitIds.has(lock.sourceExhibitId)) {
         error('lock-source-missing', `Knowledge lock "${lock.id}" names unknown source exhibit "${lock.sourceExhibitId}".`)
       }
+    }
+  }
+
+  issues.push(...validateLockHosts(content))
+
+  return issues
+}
+
+/**
+ * Where each lock lives, and whether the runtime can open it there.
+ *
+ * `validateSolvability` proves a lock CAN be opened; nothing asked whether
+ * the player ever meets the lock, or what happens when they do. Each rule
+ * here is a way the two disagreed in silence: a lock in the list that no
+ * object carries, a keypad that is not as long as its own answer, a code
+ * resting on a fact nobody certified as one, a note that claims to be free
+ * inside a locked drawer, and a kind of lock the one panel the game has
+ * cannot show.
+ */
+function validateLockHosts(content: MuseumContent): ValidationIssue[] {
+  const issues: ValidationIssue[] = []
+  const error = (code: string, id: string, message: string) =>
+    issues.push({ severity: 'error', code, id, message })
+  const locksById = new Map(content.locks.map((lock) => [lock.id, lock]))
+  const factsById = new Map(content.facts.map((fact) => [fact.id, fact]))
+  const hosted = new Set<string>()
+
+  /**
+   * The keypad is the only lock panel there is, and only containers and power
+   * controls open it. Any other kind of lock on one of them opens a modal
+   * with nothing in it.
+   */
+  const hostsKeypad = (lockId: string | undefined, hostId: string, what: string) => {
+    if (!lockId) return
+    hosted.add(lockId)
+    const lock = locksById.get(lockId)
+    if (lock && lock.kind !== 'knowledge') {
+      error(
+        'lock-host-kind-unsupported',
+        hostId,
+        `${what} "${hostId}" carries the ${lock.kind} lock "${lock.id}", but the runtime can only open a knowledge lock there: the panel would be empty.`,
+      )
+    }
+  }
+
+  for (const room of content.rooms) {
+    for (const container of room.containers ?? []) hostsKeypad(container.lockId, container.id, 'Container')
+    // A room's power lock is met at its control; with no control, nowhere.
+    if (room.powerControl) hostsKeypad(room.powerLockId, room.powerControl.id, 'Power control')
+    for (const portal of room.portals) {
+      if (!portal.lockId) continue
+      hosted.add(portal.lockId)
+      // The solver honours a portal's lock; the door that stands in it never
+      // asks for one. Until a door can, the solver would be proving a game
+      // nobody can play.
+      error(
+        'lock-host-kind-unsupported',
+        portal.id,
+        `Portal "${portal.id}" in room "${room.id}" names lock "${portal.lockId}", but no doorway in the runtime asks for a lock: the door would open, or never open, regardless.`,
+      )
+    }
+  }
+
+  for (const lock of content.locks) {
+    if (!hosted.has(lock.id)) {
+      error(
+        'lock-without-host',
+        lock.id,
+        `Lock "${lock.id}" is carried by no container, portal or power control, so the player never meets it.`,
+      )
+    }
+    if (lock.kind !== 'knowledge') continue
+    const fact = factsById.get(lock.factId)
+    if (!fact) continue // lock-fact-missing already reports this
+    if (lock.digits !== fact.value.length) {
+      error(
+        'lock-digits-mismatch',
+        lock.id,
+        `Knowledge lock "${lock.id}" has ${lock.digits} digit(s) but its answer "${fact.value}" has ${fact.value.length}: the keypad could never hold it.`,
+      )
+    }
+    if (!fact.usedAsCode) {
+      error(
+        'knowledge-lock-fact-not-code',
+        lock.id,
+        `Knowledge lock "${lock.id}" opens with fact "${fact.id}", which is not marked \`usedAsCode\`: nothing has held it to two captured publishers.`,
+      )
+    }
+  }
+
+  const containersById = new Map(
+    content.rooms.flatMap((room) => (room.containers ?? []).map((container) => [container.id, container] as const)),
+  )
+  for (const doc of content.documents) {
+    const container = containersById.get(doc.containerId)
+    if (!container) continue
+    if (doc.lockId !== container.lockId) {
+      const says = (lockId: string | undefined) => (lockId ? `lock "${lockId}"` : 'no lock')
+      error(
+        'document-lock-disagrees-with-container',
+        doc.id,
+        `Document "${doc.id}" declares ${says(doc.lockId)} but its container "${container.id}" declares ${says(container.lockId)}. The solver reads the document's, the player meets the container's.`,
+      )
     }
   }
 
@@ -993,6 +1113,56 @@ const MOUNT_BASE_PART: Record<string, string | null> = {
 const MOUNT_TOLERANCE = 0.015
 
 /**
+ * Every kit recipe a mount type puts in the scene: the scene's own `MOUNTS`
+ * table, as a list. Unlike `MOUNT_BASE_PART` it is about what is DRAWN, so
+ * the tower counts here though it gives no height there.
+ */
+const MOUNT_PARTS: Record<string, readonly string[]> = {
+  plinth: ['plinth-block'],
+  'vitrine-table': ['vitrine-table', 'vitrine-glass'],
+  'vitrine-tower': ['vitrine-tower'],
+}
+
+/** The leaves `TransitionDoors` hangs in a doorway, by door style. */
+const TRANSITION_DOOR_PARTS: Record<string, readonly string[]> = {
+  'double-panel': ['door-leaf', 'door-leaf-right'],
+}
+
+/** A thing this close to the plaster, or closer, is on that wall. */
+const WALL_REACH = 0.35
+
+/** Thinner than this, a thing lying on the floor is flooring, not an obstacle. */
+const FLOORING_HEIGHT = 0.05
+
+/**
+ * The room-local box of something placed like a kit part: its own bounds,
+ * scaled, turned about the vertical and moved. Axis-aligned, so a part turned
+ * to an odd angle gets the box that contains it.
+ */
+function placedExtent(
+  bounds: BakedBoundsLike,
+  position: readonly number[],
+  rotationY = 0,
+  scale = 1,
+): BakedBoundsLike {
+  const cos = Math.cos(rotationY)
+  const sin = Math.sin(rotationY)
+  const xs: number[] = []
+  const zs: number[] = []
+  for (const x of [bounds.min[0], bounds.max[0]]) {
+    for (const z of [bounds.min[2], bounds.max[2]]) {
+      // three's rotation about +Y: local +Z turns towards +X.
+      xs.push(position[0] + scale * (x * cos + z * sin))
+      zs.push(position[2] + scale * (-x * sin + z * cos))
+    }
+  }
+  return {
+    min: [Math.min(...xs), position[1] + scale * bounds.min[1], Math.min(...zs)],
+    max: [Math.max(...xs), position[1] + scale * bounds.max[1], Math.max(...zs)],
+  }
+}
+
+/**
  * The content set names geometry recipes; the bake emits parts. Nothing links
  * them at compile time, so an exhibit can quietly reference a recipe nobody
  * generates and the player finds an empty plinth.
@@ -1240,6 +1410,163 @@ export function validateBake(
     }
   }
 
+  /**
+   * Nothing hangs, stands or is fixed across a doorway.
+   *
+   * Wall art, signs, power controls, devices and kit are each placed by a
+   * centre and a rotation, and a doorway is placed the same way by somebody
+   * else: nothing joined the two, so a wainscot panel or a print could run
+   * straight across an opening and only a screenshot would say so. A thing
+   * is taken to be on a wall when it comes within arm's length of the
+   * plaster; what merely lies on the floor (a rug, a brass inlay) may run
+   * through a doorway, and what hangs above the door head is a sign.
+   */
+  const recipeBounds = (recipe: string): BakedBoundsLike | null => {
+    let merged: { min: number[]; max: number[] } | null = null
+    for (const [name, bounds] of partBounds) {
+      if (name !== recipe && !name.startsWith(`${recipe}__`)) continue
+      merged = merged
+        ? {
+            min: merged.min.map((value, axis) => Math.min(value, bounds.min[axis])),
+            max: merged.max.map((value, axis) => Math.max(value, bounds.max[axis])),
+          }
+        : { min: [...bounds.min], max: [...bounds.max] }
+    }
+    return merged
+  }
+  for (const room of content.rooms) {
+    const openings = room.portals.map((portal) => {
+      // As in `validatePortals`: a portal sits on the wall it is nearest to.
+      const onEastWest = Math.abs(Math.abs(portal.position[0]) - room.shell.width / 2) < WALL_REACH
+      const across = onEastWest ? 0 : 2
+      const along = onEastWest ? 2 : 0
+      const side = portal.position[across] < 0 ? -1 : 1
+      const half = (onEastWest ? room.shell.width : room.shell.depth) / 2
+      return {
+        portal,
+        across,
+        along,
+        side,
+        face: side * (half - SHELL_WALL / 2),
+        from: portal.position[along] - portal.width / 2,
+        to: portal.position[along] + portal.width / 2,
+        sill: portal.position[1],
+        head: portal.position[1] + portal.height,
+      }
+    })
+    if (openings.length === 0) continue
+
+    type WallItem = { readonly id: string; readonly what: string; readonly extent: BakedBoundsLike | null }
+    const flat = (width: number, height: number): BakedBoundsLike => ({
+      min: [-width / 2, -height / 2, 0],
+      max: [width / 2, height / 2, 0.02],
+    })
+    const baked = (recipe: string, position: readonly number[], rotationY?: number, scale?: number) => {
+      const bounds = recipeBounds(recipe)
+      return bounds ? placedExtent(bounds, position, rotationY, scale) : null
+    }
+    const items: WallItem[] = [
+      ...(room.wallArt ?? []).map((art) => ({
+        id: art.id,
+        what: 'Wall art',
+        extent: placedExtent(flat(art.width, art.height), art.position, art.rotationY),
+      })),
+      ...(room.signage ?? []).flatMap((sign) =>
+        sign.width && sign.height
+          ? [{ id: sign.id, what: 'Sign', extent: placedExtent(flat(sign.width, sign.height), sign.position, sign.rotationY) }]
+          : [],
+      ),
+      ...(room.devices ?? []).map((device) => ({
+        id: device.id,
+        what: 'Device',
+        extent: baked(device.part, device.position, device.rotationY),
+      })),
+      ...(room.kit ?? []).map((placement) => ({
+        id: `${room.id}/${placement.part}@${placement.position.join(',')}`,
+        what: 'Kit placement',
+        extent: baked(placement.part, placement.position, placement.rotationY, placement.scale),
+      })),
+    ]
+    if (room.powerControl) {
+      const control = room.powerControl
+      items.push({
+        id: control.id,
+        what: 'Power control',
+        extent: baked(control.part, control.position, control.rotationY, control.scale),
+      })
+    }
+
+    for (const item of items) {
+      const extent = item.extent
+      if (!extent) continue // an unbaked recipe is reported above
+      for (const opening of openings) {
+        const gap =
+          opening.side > 0 ? opening.face - extent.max[opening.across] : extent.min[opening.across] - opening.face
+        if (gap > WALL_REACH) continue
+        const run = Math.min(extent.max[opening.along], opening.to) - Math.max(extent.min[opening.along], opening.from)
+        const rise = Math.min(extent.max[1], opening.head) - Math.max(extent.min[1], opening.sill)
+        if (run > 0.001 && rise > FLOORING_HEIGHT) {
+          issues.push({
+            severity: 'error',
+            code: 'wall-item-over-opening',
+            id: item.id,
+            message:
+              `${item.what} "${item.id}" in room "${room.id}" runs ${run.toFixed(3)} m across the ` +
+              `opening of portal "${opening.portal.id}", within its height. Move it clear of the doorway.`,
+          })
+        }
+      }
+    }
+  }
+
+  /**
+   * Every recipe in the kit is used by something.
+   *
+   * The kit is one file every player downloads before the first room, and a
+   * sixth of it was recipes that nothing places: generators written for a
+   * layout that changed. The runtime places a few parts with no line of
+   * content naming the recipe (door leaves, the plaques over doorways, the
+   * support under a mounted exhibit); those count as used through the same
+   * rules the runtime follows.
+   */
+  const kitBundle = bundleByName.get('kit')
+  if (kitBundle) {
+    const used = new Set<string>()
+    const roomsById = new Map<string, RoomData>(content.rooms.map((room) => [room.id, room]))
+    for (const room of content.rooms) {
+      for (const placement of room.kit ?? []) used.add(placement.part)
+      for (const container of room.containers ?? []) used.add(container.part)
+      for (const device of room.devices ?? []) used.add(device.part)
+      if (room.powerControl) used.add(room.powerControl.part)
+      for (const placement of buildRoomSignageLayout(room, roomsById).placements) used.add(placement.part)
+      for (const portal of room.portals) {
+        for (const part of portal.transitionDoor ? TRANSITION_DOOR_PARTS[portal.transitionDoor.style] : []) {
+          used.add(part)
+        }
+      }
+    }
+    for (const exhibit of content.exhibits) {
+      for (const part of MOUNT_PARTS[exhibit.mount] ?? []) used.add(part)
+    }
+
+    const trianglesByRecipe = new Map<string, number>()
+    for (const part of kitBundle.parts) {
+      const recipe = part.name.split('__')[0]
+      trianglesByRecipe.set(recipe, (trianglesByRecipe.get(recipe) ?? 0) + part.triangles)
+    }
+    for (const [recipe, triangles] of trianglesByRecipe) {
+      if (used.has(recipe)) continue
+      issues.push({
+        severity: 'error',
+        code: 'kit-part-unused',
+        id: recipe,
+        message:
+          `Kit recipe "${recipe}" (${triangles} triangles) is baked and downloaded, and no placement, ` +
+          `container, device, power control, sign, door or mount uses it.`,
+      })
+    }
+  }
+
   // Unused geometry is dead weight in a bundle the player downloads. A recipe
   // used in another room does not make this room's duplicate geometry useful.
   for (const bundle of bundles) {
@@ -1420,6 +1747,48 @@ export function validatePortals(content: MuseumContent): ValidationIssue[] {
     }
   }
 
+  /**
+   * No two rooms occupy the same ground.
+   *
+   * A shell's walls straddle its outline, so its footprint reaches half a
+   * wall beyond it, and two neighbours stand back to back: their footprints
+   * touch and overlap by nothing. An origin typed a metre out puts one room's
+   * floor, walls and colliders inside the other's, and every check above
+   * still passes for the rooms taken one at a time. Rooms on different
+   * storeys may stand over one another, so the heights have to overlap too.
+   */
+  const footprint = (room: RoomData) => ({
+    min: [
+      room.origin[0] - room.shell.width / 2 - WALL / 2,
+      room.origin[1],
+      room.origin[2] - room.shell.depth / 2 - WALL / 2,
+    ],
+    max: [
+      room.origin[0] + room.shell.width / 2 + WALL / 2,
+      room.origin[1] + room.shell.height,
+      room.origin[2] + room.shell.depth / 2 + WALL / 2,
+    ],
+  })
+  const OVERLAP = 1e-4
+  content.rooms.forEach((room, index) => {
+    const a = footprint(room)
+    for (const other of content.rooms.slice(index + 1)) {
+      const b = footprint(other)
+      const shared = [0, 1, 2].map((axis) => Math.min(a.max[axis], b.max[axis]) - Math.max(a.min[axis], b.min[axis]))
+      if (shared.every((length) => length > OVERLAP)) {
+        issues.push({
+          severity: 'error',
+          code: 'room-overlap',
+          id: [room.id, other.id].sort().join('+'),
+          message:
+            `Rooms "${room.id}" and "${other.id}" overlap by ${shared[0].toFixed(3)} x ` +
+            `${shared[2].toFixed(3)} m in plan (walls included). Neighbours share a wall: ` +
+            `their footprints touch, and overlap by nothing.`,
+        })
+      }
+    }
+  })
+
   return issues
 }
 
@@ -1437,13 +1806,22 @@ export function validatePortals(content: MuseumContent): ValidationIssue[] {
 export function validateTranslations(
   content: MuseumContent,
   keys: ReadonlySet<string>,
+  /**
+   * The keys the code cites by hand (`t('prompt.examine')`), found by the gate
+   * script reading `src/`. With them the rule runs the other way too: a key
+   * neither the content nor the code cites is `i18n-key-unused`. Without them
+   * only the first direction is checked.
+   */
+  keysCitedByCode?: ReadonlySet<string>,
 ): ValidationIssue[] {
   const issues: ValidationIssue[] = []
   const seen = new Set<string>()
+  const citedByContent = new Set<string>()
 
   const require = (key: string | undefined, where: string) => {
     if (!key || seen.has(`${key} ${where}`)) return
     seen.add(`${key} ${where}`)
+    citedByContent.add(key)
     if (keys.has(key)) return
     issues.push({
       severity: 'error',
@@ -1477,10 +1855,108 @@ export function validateTranslations(
   // would have shown an empty paragraph on its keypad.
   for (const [collection, value] of Object.entries(content)) walk(value, collection)
 
+  // The other direction: copy that is written, translated and shown nowhere.
+  // It costs a translation every time the neighbouring line changes, and it
+  // reads as a feature the game has (a settings screen, a hint ladder).
+  if (keysCitedByCode) {
+    for (const key of keys) {
+      if (citedByContent.has(key) || keysCitedByCode.has(key)) continue
+      issues.push({
+        severity: 'error',
+        code: 'i18n-key-unused',
+        id: key,
+        message: `Translation key "${key}" is cited by neither the content nor the code: nothing shows it.`,
+      })
+    }
+  }
+
   return issues
 }
 
 // ---------------------------------------------------------------------------
+// What is said aloud
+// ---------------------------------------------------------------------------
+
+type Dictionaries = Readonly<Record<string, Readonly<Record<string, string>>>>
+
+/**
+ * Compass words, whole, by language. The player has no compass and the map
+ * has no north arrow, so "the west wall" names nothing they can find.
+ */
+const CARDINAL_WORDS: Record<string, RegExp> = {
+  'pt-BR': /(?<![\p{L}\p{N}])(?:norte|sul|leste|oeste|nordeste|noroeste|sudeste|sudoeste)(?![\p{L}\p{N}])/iu,
+  en: /(?<![\p{L}\p{N}])(?:north|south|east|west)(?:-?(?:east|west))?(?:ern|wards?)?(?![\p{L}\p{N}])/iu,
+}
+
+/** Every dictionary key a radio can say: calls, hints in both tempers, the porter's patience, dead air. */
+function spokenKeys(content: MuseumContent): Set<string> {
+  const keys = new Set<string>()
+  for (const room of content.rooms) {
+    for (const device of room.devices ?? []) {
+      if (device.kind !== 'radio') continue
+      for (const call of device.calls) for (const key of call.lineKeys) keys.add(key)
+      for (const hint of device.hints) {
+        for (const key of [...hint.lineKeys, ...(hint.curtLineKeys ?? [])]) keys.add(key)
+      }
+      const patience = device.patience
+      if (!patience) continue
+      const replies = [...patience.tiers.flatMap((tier) => tier.replies), ...(patience.praise ?? []), ...patience.deadAir]
+      for (const reply of replies) {
+        for (const key of [...reply.lineKeys, ...(reply.closingKeys ?? [])]) keys.add(key)
+      }
+      for (const outburst of patience.tiers.flatMap((tier) => tier.outbursts ?? [])) {
+        for (const key of outburst.lineKeys) keys.add(key)
+      }
+    }
+  }
+  return keys
+}
+
+/**
+ * Rules about the words themselves, in every language they are said in.
+ *
+ * `validateTranslations` proves a line exists; this reads it. A direction
+ * given over the radio is the one piece of copy the player acts on at once
+ * and in the dark, so it has to be relative to something they can see: a
+ * door, a light, the side they came in by.
+ */
+export function validateSpeech(content: MuseumContent, dictionaries: Dictionaries): ValidationIssue[] {
+  const issues: ValidationIssue[] = []
+  for (const key of spokenKeys(content)) {
+    for (const [locale, dictionary] of Object.entries(dictionaries)) {
+      const text = dictionary[key]
+      if (text === undefined) continue // missing-translation reports this
+      // A language with no list of its own is read against every list.
+      const lists = CARDINAL_WORDS[locale] ? [CARDINAL_WORDS[locale]] : Object.values(CARDINAL_WORDS)
+      const bearing = lists.map((list) => list.exec(text)?.[0]).find((word) => word !== undefined)
+      if (bearing === undefined) continue
+      issues.push({
+        severity: 'error',
+        code: 'speech-uses-cardinal',
+        id: key,
+        message:
+          `Radio line "${key}" (${locale}) says "${bearing}". The player has no compass: ` +
+          `say it by a door, a light or the side they came in by.`,
+      })
+    }
+  }
+  return issues
+}
+
+// ---------------------------------------------------------------------------
+
+/** What only the gate script can supply; a test supplies its own. */
+export type ContentGateExtras = {
+  /** Every dictionary, by locale: what is said is read in each language. */
+  readonly dictionaries?: Dictionaries
+  /** Dictionary keys the code cites by hand; see `validateTranslations`. */
+  readonly keysCitedByCode?: ReadonlySet<string>
+  /**
+   * The dated debts this gate collects and the lot the content stands at.
+   * Without it every accusation is an error, which is what a test wants.
+   */
+  readonly knownDebt?: { readonly lines: readonly KnownDebt[]; readonly lot: number }
+}
 
 export function validateContent(
   content: MuseumContent,
@@ -1492,8 +1968,9 @@ export function validateContent(
    * script supplies the committed files, a test supplies its own.
    */
   captures?: FactCaptureSet,
+  extras: ContentGateExtras = {},
 ): ValidationIssue[] {
-  return [
+  const issues = [
     ...validateReferences(content),
     ...validatePower(content),
     ...validateFacts(content.facts),
@@ -1505,14 +1982,44 @@ export function validateContent(
     ...validateWallMounts(content),
     ...validatePacing(content),
     ...(bundles ? validateBake(content, bundles) : []),
-    ...(translationKeys ? validateTranslations(content, translationKeys) : []),
+    ...(translationKeys ? validateTranslations(content, translationKeys, extras.keysCitedByCode) : []),
+    ...(extras.dictionaries ? validateSpeech(content, extras.dictionaries) : []),
   ]
+  return extras.knownDebt
+    ? settleKnownDebt(issues, extras.knownDebt.lines, extras.knownDebt.lot)
+    : issues
 }
 
+/** Errors and warnings, one per line; debts are printed apart, by `formatKnownDebt`. */
 export function formatIssues(issues: readonly ValidationIssue[]): string {
-  if (issues.length === 0) return 'content OK'
-  return issues
+  const shown = issues.filter((issue) => issue.severity !== 'debt')
+  if (shown.length === 0) return 'content OK'
+  return shown
     .map((issue) => `  ${issue.severity === 'error' ? 'ERROR' : 'warn '}  [${issue.code}] ${issue.message}`)
+    .join('\n')
+}
+
+/**
+ * The table of what is owed, soonest first. Printed on every run of the gate,
+ * so a debt cannot be forgotten by being quiet.
+ */
+export function formatKnownDebt(issues: readonly ValidationIssue[]): string {
+  const owed = issues.flatMap((issue) => (issue.severity === 'debt' && issue.debt ? [{ issue, debt: issue.debt }] : []))
+  if (owed.length === 0) return ''
+  const sorted = [...owed].sort(
+    (a, b) =>
+      a.debt.untilLot - b.debt.untilLot ||
+      a.issue.code.localeCompare(b.issue.code) ||
+      (a.issue.id ?? '').localeCompare(b.issue.id ?? ''),
+  )
+  const codeWidth = Math.max(...sorted.map(({ issue }) => issue.code.length))
+  const idWidth = Math.max(...sorted.map(({ issue }) => (issue.id ?? '').length))
+  return sorted
+    .map(
+      ({ issue, debt }) =>
+        `  until L${String(debt.untilLot).padEnd(2)}  ${issue.code.padEnd(codeWidth)}  ` +
+        `${(issue.id ?? '').padEnd(idWidth)}  ${debt.note}`,
+    )
     .join('\n')
 }
 

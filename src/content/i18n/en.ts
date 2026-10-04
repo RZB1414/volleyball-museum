@@ -52,7 +52,6 @@ export const en = {
 
   'prompt.examine': 'Examine',
   'prompt.read': 'Read',
-  'prompt.open': 'Open',
   'prompt.rotate': 'Drag to rotate',
   'prompt.locked': 'Locked',
   'prompt.close': 'Close',
@@ -99,7 +98,6 @@ export const en = {
     'Every image in this museum is public domain or Creative Commons licensed. Each is credited here and beneath the work itself in the gallery.',
   'credits.source': 'Source',
   'credits.licence': 'Licence',
-  'prompt.journal': 'Notebook',
   'container.holyoke-a.title': 'Archive — provenance',
   'container.holyoke-b.title': 'Archive — rules',
 
@@ -153,21 +151,21 @@ export const en = {
   'radio.call.first.2':
     'The panel here says the office lights are back. The storm tripped every breaker in the building.',
   'radio.call.first.3':
-    "The atrium breaker is on the west wall, beside the Wing 1 entrance. Look for the little red light.",
+    'The atrium breaker is across the hall, a little to your right as you leave, by the Wing 1 entrance. Look for the little red light.',
   'radio.call.first.4':
-    "And don't go down to the basement: it flooded. Anything at all, take the radio off the desk and call me. Over and out.",
+    'The basement flooded; nobody goes down there tonight. Anything at all, take the radio off the desk and call me. Over and out.',
   'radio.call.notebook.1':
     'Oh, and Helena, the director, left you a notebook there on the desk. Take it before you go — it explains everything. Over.',
   'radio.hint.notebook':
     'Notebook first, curator: Helena, the director, left you one on the office desk. It explains everything.',
   'radio.hint.atrium':
-    'The atrium breaker is on the west wall, near the Wing 1 entrance. The little red light shows you where.',
+    'The atrium breaker is on the same wall as the Wing 1 entrance, right beside the door. The little red light shows you where.',
   'radio.hint.holyoke':
-    "Wing 1 has its own breaker panel, inside. Cross it in the dark if you have to — the torch will do.",
+    'Wing 1 has its own breaker, on the far wall, to your left as you walk in. Cross it in the dark — the torch will do.',
   'radio.hint.drawer':
     "That locked drawer in your office? Otávio used dates you can find on the labels. Have a look at Morgan's portrait in Wing 1.",
   'radio.hint.vault':
-    "It's all yours now, curator. Otávio was always going on about three medals and a vault under the atrium. Over.",
+    'The basement flooded; nobody goes down there tonight. What can be done tonight is the lights and the checking. Over.',
 
   'radio.speaker.static': 'Radio',
   'radio.call.taken.1':
@@ -175,10 +173,11 @@ export const en = {
   'radio.call.taken.2':
     'Just press the side button and call me. Just not every five minutes, eh? Over.',
   'radio.hint.notebook.curt': 'Notebook. On the desk. Pick it up and read it. Over.',
-  'radio.hint.atrium.curt': 'Atrium. West wall. Little red light. Over.',
-  'radio.hint.holyoke.curt': "Wing 1. Panel's inside. Torch in hand. Go.",
-  'radio.hint.drawer.curt': "Otávio's drawer: a date. The date's on the Wing 1 labels. Read them.",
-  'radio.hint.vault.curt': 'Three medals. One vault. Under the atrium. The rest is up to you.',
+  'radio.hint.atrium.curt': 'Atrium. Beside the Wing 1 door. Little red light. Over.',
+  'radio.hint.holyoke.curt': 'Wing 1. Breaker on the far wall, to the left. Little red light. Go.',
+  'radio.hint.drawer.curt':
+    "Otávio's drawer: a date. Morgan's portrait, Wing 1. The plaque at the foot of the frame.",
+  'radio.hint.vault.curt': "Basement's flooded: nobody goes down tonight. Tonight it's lights and checking.",
   'radio.patience.t1.ready': 'Front desk, go ahead.',
   'radio.patience.t1.listening': "Go on, curator. I'm listening.",
   'radio.patience.t1.jorge': 'Jorge here. Over.',
@@ -194,7 +193,7 @@ export const en = {
     'Otávio worked here thirty years and called me twice. Once was a wrong number.',
   'radio.patience.t3.torch': 'Want me to come over and hold the torch for you too?',
   'radio.patience.t3.crossword':
-    "I'd nearly finished the crossword. Just missing “pest”, four letters. Go on.",
+    "I'd nearly finished the crossword. Just missing “pest”, five letters. Go on.",
   'radio.patience.t3.announcer':
     "I know it by heart now. I'll do my radio-announcer voice, it sounds nicer:",
   'radio.patience.t4.please': "Curator… for heaven's sake.",
@@ -236,8 +235,9 @@ export const en = {
   // ---------------------------------------------------------------------
   // Wall lettering
   // ---------------------------------------------------------------------
-  'sign.atrium.eyebrow': 'SINCE 1895 · MEMORY IN MOTION',
-  'sign.atrium.heading': 'MUSEUM OF VOLLEYBALL',
+  'sign.atrium.eyebrow': 'THE GAME SINCE 1895 · MEMORY IN MOTION',
+  // The name the title screen, the flyleaf and the porter's recording use.
+  'sign.atrium.heading': 'VOLLEYBALL MUSEUM',
   'sign.atrium.body':
     'A game invented in 1895 for people who found basketball too rough.\n' +
     'Reopening tomorrow. You are the one who finishes the install.',
@@ -248,7 +248,7 @@ export const en = {
   // Atrium — the ball through time.
   'exhibit.atrium-ball-laced.title': 'Leather, seams and lacing',
   'exhibit.atrium-ball-laced.label':
-    'Before the recessed valve, the cover had to open to reach the bladder. This reconstruction combines the form shown in 1918–1920 catalogues with a surviving ball from about 1925: leather, raised seams and crossed lacing.',
+    'Before the recessed valve, the cover had to open to reach the bladder. This reconstruction combines the form shown in period catalogues with a surviving ball: leather, raised seams and crossed lacing.',
   'exhibit.atrium-ball-laced.catalogue':
     'Laced volleyball, c. 1900–1925. A typological reconstruction, not a replica of the original 1895 ball. Twelve broad sections form a slightly soft sphere; olive-brown leather darkens along the seams, while an elongated opening is closed with rawhide lace.',
   'hotspot.atrium-ball-laced.lacing.label':
@@ -258,25 +258,25 @@ export const en = {
 
   'exhibit.atrium-ball-tokyo-1964.title': 'The ball enters the Games',
   'exhibit.atrium-ball-tokyo-1964.label':
-    'Tokyo 1964 hosted the first Olympic volleyball tournament. Surviving official balls show eighteen panels in six groups of three, ivory-white leather and narrow seam channels. The collection record does not identify a maker for this reconstruction.',
+    'Tokyo 1964 hosted the first Olympic volleyball tournament. Surviving official balls show eighteen panels in six groups of three, ivory-white leather and narrow channels between the panels. The collection record does not identify a maker for this reconstruction.',
   'exhibit.atrium-ball-tokyo-1964.catalogue':
     'Official Tokyo 1964 ball, reconstructed without markings. The unused example held by the Japan Sport Council is ivory, with fine grain, yellowed seams and small ochre stains. The used ball is darkened, creased and deformed — evidence behind this model’s restrained wear.',
   'hotspot.atrium-ball-tokyo-1964.panels.label':
     'Eighteen near-rectangular panels arranged in six groups of three',
   'hotspot.atrium-ball-tokyo-1964.seam.label':
-    'Narrow recessed seam channel with no exposed thread',
+    'Narrow recessed channel between the panels',
 
   'exhibit.atrium-ball-colour-1998.title': 'The game gains colour',
   'exhibit.atrium-ball-colour-1998.label':
-    'At the 1998 World Championship, the official ball adopted white, yellow and blue for clearer reading on court and on television. The MVL200 retained the classic construction: eighteen hand-stitched panels, now arranged as broad contrasting bands.',
+    'At the 1998 World Championship, the official ball adopted white, yellow and blue for clearer reading on court and on television. The MVL200 retained the classic construction: eighteen panels, now arranged as broad contrasting bands.',
   'exhibit.atrium-ball-colour-1998.catalogue':
-    'Mikasa MVL200, the design adopted for the 1998 World Championship. Reconstructed without logos. Its six trios alternate white–yellow–white and blue–yellow–blue; the cover has fine grain, a satin sheen and recessed seams, without the dimples of the next generation.',
+    'Mikasa MVL200, the design adopted for the 1998 World Championship. Reconstructed without logos. Its six trios alternate white–yellow–white and blue–yellow–blue; the cover has fine grain, a satin sheen and recessed channels, without the dimples of the next generation.',
   'hotspot.atrium-ball-colour-1998.sequence.label':
     'White–yellow–white and blue–yellow–blue panel sequences',
   'hotspot.atrium-ball-colour-1998.seam.label':
-    'Hand-stitched panels; the thread remains hidden within the channel',
+    'Narrow recessed channel between the coloured panels',
 
-  'exhibit.atrium-ball-eight-panel-2008.title': 'Eight panels, thousands of dimples',
+  'exhibit.atrium-ball-eight-panel-2008.title': 'Eight panels, a dimpled surface',
   'exhibit.atrium-ball-eight-panel-2008.label':
     'Introduced in 2008, the MVA200 replaced eighteen panels with eight curved petals. Violet-blue and yellow form a spiral; shallow dimples and microtexture cover the entire surface. The change affected both its visual read and its contact with the air.',
   'exhibit.atrium-ball-eight-panel-2008.catalogue':
@@ -288,83 +288,84 @@ export const en = {
 
   'exhibit.ball-improvised.title': 'The ball that did not exist',
   'exhibit.ball-improvised.label':
-    'Morgan tried a basketball first: too heavy. Then the bare bladder with the leather stripped off: too light, it floated. Without a proper ball, the game he had just invented did not work. The answer came from a commission.',
+    'Morgan first tried the bladder of a basketball: too light and too slow. Then the whole ball: too big and too heavy. Without a proper ball, the newly invented game did not work. The answer came from a commission.',
   'exhibit.ball-improvised.catalogue':
-    'Basketball rubber bladder, c. 1895. Reproduction. The first object in volleyball history is a failure: too soft to come down, too light to cross the net with intent. That inadequacy is what produced the Spalding commission.',
+    "Basketball rubber bladder, c. 1895. Reproduction. In Morgan's words, too light and too slow; the whole basketball, too big and too heavy. That inadequacy is what led to the Spalding commission.",
 
   'exhibit.ball-spalding.title': 'The laced Spalding ball',
   'exhibit.ball-spalding.label':
-    'A.G. Spalding & Bros. had a factory in Chicopee Falls, a few miles from Holyoke. Morgan commissioned a purpose-built ball: a rubber bladder inside hand-stitched leather, closed with a rawhide lace. Roughly 25 inches in circumference.',
+    'A.G. Spalding & Bros. had a factory in Chicopee, near Holyoke. Morgan asked it for a purpose-built ball: a rubber bladder in a leather cover, 25 to 27 inches in circumference. This one is a reconstruction.',
   'exhibit.ball-spalding.catalogue':
-    'Spalding volleyball, tanned leather with raised waxed-thread outseams and a lace closure, c. 1900–1920. The lace is what dates the object: it survived into the 1930s and vanished once the laceless ball became the official standard.',
+    'Spalding volleyball, tanned leather with raised waxed-thread outseams and a lace closure. The lace is what places the object in time: the laced ball went out of use gradually between the 1920s and the 1940s.',
   'hotspot.ball-spalding.lacing.label': 'Rawhide lace over the inflation opening',
   'hotspot.ball-spalding.maker.label': "Maker's mark embossed on the opposite panel",
   'hotspot.ball-spalding.seam.label': 'Raised outseam, stitched by hand',
 
   'exhibit.net-1897.title': 'The net at 1.98 metres',
   'exhibit.net-1897.label':
-    'The first net stood 6 feet 6 inches off the floor — about half a foot above the average man of the period. The court measured 25 by 50 feet. The 1897 rules required a net at least 2 feet wide and 27 feet long.',
+    'The first net stood 6 feet 6 inches high, just above the head of an average man. By the 1897 handbook it was at least 2 feet wide and 27 feet long, on a court of 25 by 50 feet.',
   'exhibit.net-1897.catalogue':
     'Cotton cord net with canvas edge tape and wooden posts seated in cast-iron floor sockets. The low height is not an accident: the game was designed to be easy, for middle-aged men who found basketball too strenuous.',
   'hotspot.net-1897.tape.label': 'Canvas tape stitched along the top edge',
   'hotspot.net-1897.socket.label': 'Cast-iron socket set into the floor',
 
-  'exhibit.handbook-1897.title': 'The first printed rulebook',
+  'exhibit.handbook-1897.title': 'The first official handbook',
   'exhibit.handbook-1897.label':
-    'The 1897 Official Handbook of the Athletic League of the YMCA of North America carries the first published specifications: a 25 by 50 foot court, a net at 6 feet 6 inches, and a ball of 25 to 27 inches circumference weighing 9 to 12 ounces. A game ran nine innings.',
+    'The 1897 Official Handbook of the YMCA Athletic League is the first official handbook: a 25 by 50 foot court, a net at 6 feet 6 inches and a ball of 25 to 27 inches. A game ran nine innings.',
   'exhibit.handbook-1897.catalogue':
-    'Official Handbook of the Athletic League of the Y.M.C.A. of North America, 1897. Facsimile. The original ten rules had appeared a year earlier in the July 1896 issue of Physical Education magazine. The name stayed two words — volley ball — until 1952.',
+    'Official Handbook of the Athletic League of the Y.M.C.A. of North America, 1897. Facsimile. The original ten rules had appeared a year earlier, in July, in Physical Education magazine. The name was written as two words — volley ball — until 1952, when the American association adopted the one-word form.',
   'hotspot.handbook-1897.innings.label': 'The nine-innings clause, inherited from baseball',
   'hotspot.handbook-1897.ball-spec.label': 'Ball specification: 25 to 27 inches, 9 to 12 ounces',
 
-  'exhibit.guide-1916.title': 'The guide that recorded the bomba',
+  'exhibit.guide-1916.title': 'Morgan tells the story',
   'exhibit.guide-1916.label':
-    'In the Philippines, around 1916, players invented the combination that changed everything: a high pass followed by a second player striking the ball downward. They called the kill the bomba and the hitter the bomberino. Americans called it the Filipino bomb.',
+    "Two decades after inventing the game, Morgan told its story in Spalding's volleyball guide. In it he credited Dr. Frank Woods and fire chief John Lynch for their contributions to the first rules.",
   'exhibit.guide-1916.catalogue':
-    'Spalding Athletic Library — Volley Ball Guide, 1916–17 edition. It is here that Morgan formally credited Dr. Frank Wood and fire chief John Lynch for their contributions to the first rules. The Filipino attack forced the rule changes that followed.',
-  'hotspot.guide-1916.credit.label': 'Morgan credits Frank Wood and John Lynch',
-  'hotspot.guide-1916.census.label': 'The 1916 census: roughly 200,000 players in the United States',
+    'Spalding Athletic Library — Volley Ball Guide, 1916–17 edition. It is here that Morgan credited Dr. Frank Woods and fire chief John Lynch for their contributions to the first rules. From the same decade comes the attack that became known as the Filipino bomb: a high pass, then a downward strike.',
+  'hotspot.guide-1916.credit.label': 'Morgan credits Frank Woods and John Lynch',
+  'hotspot.guide-1916.census.label':
+    'An estimate from 1916: roughly 200,000 players in the United States',
 
-  'exhibit.gym-suit.title': 'The gymnasium suit',
+  'exhibit.gym-suit.title': 'The catalogue gymnasium suit',
   'exhibit.gym-suit.label':
-    'Ribbed worsted wool, knee-length trousers, canvas shoes with rubber soles. No synthetics, no white plastic: everything is a pigment, a dye or an oxide. Volleyball was born inside Victorian gymnasium dress, not inside sportswear.',
+    'Ribbed wool jersey and knee-length trousers, as in sporting-goods catalogues of c. 1901–1915. The members of 1895, as far as is known, played in shirts and long trousers.',
   'exhibit.gym-suit.catalogue':
-    'YMCA gymnasium suit, c. 1895–1915. Reproduction. The wool knit was heavy and held sweat, which helps explain why the game was designed without contact and with a low net: it was recreation for a middle-aged body, not competition.',
+    'A gymnasium suit like those in catalogues of c. 1901–1915. Reproduction. Morgan explained the game by the age and the wind of his members, not by their clothes: it was recreation for middle-aged men who found basketball too strenuous.',
 
   'exhibit.portrait-morgan.title': 'William G. Morgan',
   'exhibit.portrait-morgan.label':
-    'Physical director of the YMCA in Holyoke, Massachusetts. In 1895, aged 25, he built a non-contact game for older, sedentary members. He called it Mintonette. He had met James Naismith, the inventor of basketball, in 1891.',
+    'Physical director of the Holyoke YMCA. In 1895, aged 25, he devised a non-contact game for older, sedentary members. He called it Mintonette. He had met James Naismith, the inventor of basketball, in the early 1890s.',
   'exhibit.portrait-morgan.catalogue':
-    'William George Morgan (Lockport, New York, 23 January 1870 — 27 December 1942). He graduated from the International YMCA Training School in 1894 and took up the Holyoke post on 30 August 1895. In July 1896, demonstrating the game at a YMCA conference in Springfield, he agreed to rename Mintonette Volley Ball. He left the YMCA in 1900 for industry.',
+    'William George Morgan (Lockport, New York, 23 January 1870 — December 1942). He graduated from the International YMCA Training School in 1894 and took up the Holyoke post on 30 August 1895. The following year, in Springfield, he agreed to rename Mintonette Volley Ball; whether on a visit or at the YMCA conference demonstration, the sources disagree. He left the YMCA in 1897 for industry.',
   'hotspot.portrait-morgan.date.label':
-    'Frame plaque: in 1896, at a demonstration in Springfield, Mintonette was renamed Volley Ball',
+    'Frame plaque: in 1896, in Springfield, Mintonette was renamed Volley Ball',
 
   'exhibit.photo-gym.title': 'The gymnasium where it happened',
   'exhibit.photo-gym.label':
-    'The Holyoke YMCA gymnasium, photographed in 1897, at the corner of High and Appleton Streets. Wooden floor, riveted steel trusses, gymnastic apparatus stacked against the wall. This is the space the first match was played in.',
+    'The Holyoke YMCA gymnasium, in a photograph published in 1897: rings, a pommel horse, pulley weights and, overhead, the suspended running track. This is the space the first match was played in.',
   'exhibit.photo-gym.catalogue':
-    'Interior of the old Holyoke YMCA building, 1897. The building served from 1886 to 1943. On 7 July 1896 Morgan took two five-man teams from Holyoke to Springfield to demonstrate the game — that is where it got its lasting name.',
+    'Interior of the old Holyoke YMCA building. Reproduction of a photograph published in 1897 in the Transcript Industrial Edition. The building, from the early 1890s, burned down in 1943. From here came the two five-man teams Morgan took to Springfield to demonstrate the game.',
 
   // ---------------------------------------------------------------------
   // Documents
   // ---------------------------------------------------------------------
   'document.invention-date.title': 'Provenance note: the disputed date',
   'document.invention-date.body':
-    'The date of 9 February 1895, repeated almost everywhere, does not survive the archive. The International Volleyball Hall of Fame found no verifiable citation for it and established that Morgan\'s posting in Auburn, Maine only ended in August 1895, and that he took up Holyoke on 30 August. The institution places the invention in December 1895. The plaques in this wing therefore say only 1895.',
+    'The date of 9 February 1895, repeated almost everywhere, does not survive the archive. The International Volleyball Hall of Fame found no verifiable citation for it and established that Morgan\'s posting in Auburn, Maine only ended in August 1895, and that he took up Holyoke on 30 August. By the Hall of Fame\'s reckoning, the invention probably falls in December 1895. The plaques in this wing therefore say only 1895.',
 
-  'document.halstead.title': 'Springfield, 7 July 1896',
+  'document.halstead.title': 'Springfield, 1896',
   'document.halstead.body':
-    'Morgan demonstrated the game in the east gymnasium of the International YMCA Training School, during the physical directors\' conference convened by Luther Halsey Gulick. He brought two five-man teams from Holyoke, captained by mayor James J. Curran and fire chief John Lynch. Professor Alfred T. Halstead, watching the volleying nature of the play, proposed replacing Mintonette with Volley Ball. Morgan agreed.',
+    "Morgan demonstrated the game in the east gymnasium of the International YMCA Training School, at the physical directors' conference convened by Luther Halsey Gulick. He brought two five-man teams from Holyoke, captained by mayor James J. Curran and fire chief John Lynch. It was Professor Alfred T. Halstead who proposed replacing Mintonette with Volley Ball, and Morgan agreed. The sources disagree on the occasion: the Hall of Fame speaks of a visit early in the year and dates the conference to 7 July; the international federation places the suggestion after the demonstration.",
 
   'document.rule-changes.title': 'The changes that made the modern game',
   'document.rule-changes.body':
-    'In 1917 a game was shortened from 21 points to 15. In 1918 the number of players was fixed at six per side. In 1920 came the two rules that define volleyball to this day: a maximum of three contacts per team, and a restriction on attacking from the back row. All three answer the same problem — the attack invented in the Philippines had unbalanced the game.',
+    'In 1917 a game was shortened from twenty-one points to fifteen. In 1918 the number of players was fixed at six per side. In 1920 came two rules: a maximum of three contacts per team, and a restriction on attacking from the back row. On the three contacts the sources disagree: the international federation says 1922.',
 
   // ---------------------------------------------------------------------
   // Facts
   // ---------------------------------------------------------------------
   'fact.springfield-renaming.claim': 'The year Mintonette was renamed Volley Ball',
-  'fact.first-rulebook.claim': 'The year of the first printed official rulebook',
+  'fact.first-rulebook.claim': 'The year of the first official handbook',
   'fact.filipino-spike.claim': 'The year the spike emerged in the Philippines',
   'fact.six-a-side.claim': 'The year the side was fixed at six players',
 
@@ -372,7 +373,6 @@ export const en = {
   // Locks
   // ---------------------------------------------------------------------
   'lock.office-drawer.mapLabel': 'Combination drawer — 4 digits',
-  'lock.holyoke-power.mapLabel': 'Breaker panel — handle',
   'lock.hint.highlight': 'The right plaque has lit up.',
   'lock.hint.audio': 'The docent recording repeats the year.',
   'lock.hint.reveal': 'The dial has caught on the correct digit.',

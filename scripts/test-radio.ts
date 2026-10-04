@@ -919,6 +919,48 @@ test('every line of his exists in both languages and fits a subtitle', () => {
   assert.ok(!/Only not/.test(en['radio.call.taken.2']))
 })
 
+/**
+ * What each hint sends the player to, keyed by the first line of the full
+ * hint.
+ *
+ * A curt hint is the same help from a porter out of patience, so it has to
+ * keep the address. The drawer's curt line once said only «a data tá nas
+ * placas da Ala 1»: the one player who had called often enough to hear it
+ * was the one it stopped helping.
+ */
+const HINT_TARGETS: Record<string, { readonly 'pt-BR': readonly string[]; readonly en: readonly string[] }> = {
+  'radio.hint.notebook': { 'pt-BR': ['caderno'], en: ['notebook'] },
+  'radio.hint.atrium': { 'pt-BR': ['Ala 1', 'luzinha vermelha'], en: ['Wing 1', 'little red light'] },
+  'radio.hint.holyoke': { 'pt-BR': ['Ala 1', 'quadro'], en: ['Wing 1', 'breaker'] },
+  'radio.hint.drawer': { 'pt-BR': ['Morgan'], en: ['Morgan'] },
+  'radio.hint.vault': { 'pt-BR': ['subsolo'], en: ['basement'] },
+}
+
+test('every curt hint names the same target as the full one', () => {
+  const missing: string[] = []
+  for (const hint of radio.hints) {
+    const targets = HINT_TARGETS[hint.lineKeys[0]]
+    assert.ok(targets, `hint "${hint.lineKeys[0]}" has its target nouns listed`)
+    const curtLineKeys = hint.curtLineKeys ?? []
+    assert.ok(curtLineKeys.length > 0, `hint "${hint.lineKeys[0]}" has a curt form`)
+    for (const [language, dictionary] of [['pt-BR', ptBR], ['en', en]] as const) {
+      const said = (keys: readonly string[]) =>
+        keys.map((key) => (dictionary as Record<string, string>)[key]).join(' ').toLowerCase()
+      const full = said(hint.lineKeys)
+      const curt = said(curtLineKeys)
+      for (const target of targets[language]) {
+        if (!full.includes(target.toLowerCase())) {
+          missing.push(`${hint.lineKeys[0]} (${language}) does not say "${target}"`)
+        }
+        if (!curt.includes(target.toLowerCase())) {
+          missing.push(`${curtLineKeys[0]} (${language}) drops "${target}"`)
+        }
+      }
+    }
+  }
+  assert.deepEqual(missing, [])
+})
+
 // ---------------------------------------------------------------------------
 // The subtitles and the HUD (#5, #13, the skip button, the touch column)
 // ---------------------------------------------------------------------------

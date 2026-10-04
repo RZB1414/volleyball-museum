@@ -13,10 +13,26 @@
 
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 
+import { BAKED_BUNDLES } from '../src/content/bake.generated.ts'
+import { en } from '../src/content/i18n/en.ts'
+import { ptBR } from '../src/content/i18n/pt-BR.ts'
+import {
+  CONTENT_LOT,
+  debtOf,
+  KNOWN_DEBT,
+  settleKnownDebt,
+  type KnownDebt,
+} from '../src/content/knownDebt.ts'
 import { MUSEUM } from '../src/content/museum.ts'
-import type { MuseumContent } from '../src/content/schema.ts'
-import { validateOpening, validateSolvability } from '../src/content/validate.ts'
+import type { MuseumContent, RoomData } from '../src/content/schema.ts'
+import {
+  validateContent,
+  validateOpening,
+  validateSolvability,
+  type ValidationIssue,
+} from '../src/content/validate.ts'
 import {
   clockHandAngles,
   clockTimeAfter,
@@ -49,6 +65,7 @@ import {
   transitionDoorBlock,
 } from '../src/engine/transitionDoorTopology.ts'
 import { useMuseum } from '../src/state/store.ts'
+import { KEY_NAMED_NOT_USED, keysCitedIn, readSourceTree } from './lib/translationUsage.ts'
 
 let passed = 0
 function test(name: string, run: () => void) {
@@ -445,6 +462,323 @@ test('a broken spawn or a silent radio fails the gate', () => {
     })),
   }
   assert.ok(validateOpening(silent).some((issue) => issue.code === 'condition-lock-missing'))
+})
+
+// ---------------------------------------------------------------------------
+// The validators that were missing (M0), on museums broken on purpose
+// ---------------------------------------------------------------------------
+
+const DICTIONARY_KEYS: ReadonlySet<string> = new Set(Object.keys(ptBR))
+const DICTIONARIES = { 'pt-BR': ptBR as Record<string, string>, en: en as Record<string, string> }
+const SOURCE_ROOT = fileURLToPath(new URL('../src', import.meta.url))
+const KEYS_CITED_BY_CODE = keysCitedIn(DICTIONARY_KEYS, readSourceTree(SOURCE_ROOT, KEY_NAMED_NOT_USED))
+
+type GatePatch = {
+  readonly bundles?: Parameters<typeof validateContent>[1]
+  readonly keys?: ReadonlySet<string>
+  readonly dictionaries?: Record<string, Record<string, string>>
+  readonly keysCitedByCode?: ReadonlySet<string>
+}
+/** The whole content gate, as `npm run validate:content` runs it, minus the debt table. */
+const gate = (content: MuseumContent, patch: GatePatch = {}) =>
+  validateContent(content, patch.bundles ?? BAKED_BUNDLES, patch.keys ?? DICTIONARY_KEYS, undefined, {
+    dictionaries: patch.dictionaries ?? DICTIONARIES,
+    keysCitedByCode: patch.keysCitedByCode ?? KEYS_CITED_BY_CODE,
+  })
+const accused = (issues: readonly ValidationIssue[], code: string) =>
+  issues.filter((issue) => issue.code === code && issue.severity === 'error').map((issue) => issue.id)
+
+const withRoom = (id: string, patch: (room: RoomData) => Partial<RoomData>): MuseumContent => ({
+  ...MUSEUM,
+  rooms: MUSEUM.rooms.map((room) => (room.id === id ? { ...room, ...patch(room) } : room)),
+})
+
+test('each validator the gate lacked fails a museum broken on purpose', () => {
+  const authored = gate(MUSEUM)
+  const quiet: string[] = []
+  const noisy: string[] = []
+  /** `code` is raised about `id` on the broken museum, and not on the authored one. */
+  const proves = (code: string, id: string, broken: readonly ValidationIssue[]) => {
+    if (!accused(broken, code).includes(id)) quiet.push(`${code} does not accuse "${id}"`)
+    if (accused(authored, code).length > 0) noisy.push(`${code} accuses the authored museum: ${accused(authored, code).join(', ')}`)
+  }
+
+  // A lock nothing in the building carries: the player never meets it.
+  proves(
+    'lock-without-host',
+    'office-drawer',
+    gate(
+      withRoom('office', (room) => ({
+        containers: (room.containers ?? []).map(({ lockId: _, ...container }) => container),
+      })),
+    ),
+  )
+
+  // A keypad one digit short of its own answer.
+  proves(
+    'lock-digits-mismatch',
+    'office-drawer',
+    gate({
+      ...MUSEUM,
+      locks: MUSEUM.locks.map((lock) => (lock.kind === 'knowledge' ? { ...lock, digits: 3 } : lock)),
+    }),
+  )
+
+  // A code resting on a fact nobody certified as one.
+  proves(
+    'knowledge-lock-fact-not-code',
+    'office-drawer',
+    gate({
+      ...MUSEUM,
+      facts: MUSEUM.facts.map((fact) =>
+        fact.id === 'springfield-renaming' ? { ...fact, usedAsCode: false } : fact,
+      ),
+    }),
+  )
+
+  // The drawer is locked and the note inside it says it is not: the solver
+  // would read the note without ever opening the drawer.
+  proves(
+    'document-lock-disagrees-with-container',
+    'doc-predecessor',
+    gate({
+      ...MUSEUM,
+      documents: MUSEUM.documents.map((doc) => {
+        if (doc.id !== 'doc-predecessor') return doc
+        const { lockId: _, ...unlocked } = doc
+        return unlocked
+      }),
+    }),
+  )
+
+  // The keypad is the only panel the runtime has: a tool lock on a cabinet
+  // opens an empty modal, and a lock on a doorway is never asked for at all.
+  const toolLock = {
+    kind: 'tool',
+    id: 'service-hatch',
+    requires: 'service-key',
+    consumesTool: false,
+    mapLabelKey: 'lock.office-drawer.mapLabel',
+  } as const
+  proves(
+    'lock-host-kind-unsupported',
+    'holyoke-cabinet-a',
+    gate({
+      ...withRoom('holyoke', (room) => ({
+        containers: (room.containers ?? []).map((container) =>
+          container.id === 'holyoke-cabinet-a' ? { ...container, lockId: toolLock.id } : container,
+        ),
+      })),
+      locks: [...MUSEUM.locks, toolLock],
+    }),
+  )
+  proves(
+    'lock-host-kind-unsupported',
+    'atrium-to-holyoke',
+    gate(
+      withRoom('atrium', (room) => ({
+        portals: room.portals.map((portal) =>
+          portal.id === 'atrium-to-holyoke' ? { ...portal, lockId: 'office-drawer' } : portal,
+        ),
+      })),
+    ),
+  )
+
+  // The office pushed a metre into the atrium.
+  proves(
+    'room-overlap',
+    'atrium+office',
+    gate(withRoom('office', (room) => ({ origin: [room.origin[0] - 1, room.origin[1], room.origin[2]] }))),
+  )
+
+  // A print hung across the doorway to Wing 1; the same print above the door
+  // head is a sign, and is left alone.
+  const doorway = atrium.portals.find((portal) => portal.id === 'atrium-to-holyoke')
+  const print = atrium.wallArt?.[0]
+  assert.ok(doorway && print)
+  const hung = (id: string, y: number) =>
+    withRoom('atrium', (room) => ({
+      wallArt: [
+        ...(room.wallArt ?? []),
+        { ...print, id, position: [print.position[0], y, doorway.position[2]], width: 1.2, height: 0.8 },
+      ],
+    }))
+  proves('wall-item-over-opening', 'over-the-door', gate(hung('over-the-door', 1.5)))
+  if (accused(gate(hung('above-the-door', doorway.height + 0.6)), 'wall-item-over-opening').length > 0) {
+    noisy.push('wall-item-over-opening accuses a print above the door head')
+  }
+  // The wainscot panel beside that doorway stops three centimetres short of
+  // it. Slid five along the wall, its baked trim is in the opening.
+  const wainscot = atrium.kit.find(
+    (placement) => placement.part === 'atrium-wall-bay-plain' && placement.position[2] === 0.45,
+  )
+  assert.ok(wainscot, 'the panel south of the Wing 1 doorway')
+  const slid = withRoom('atrium', (room) => ({
+    kit: room.kit.map((placement) =>
+      placement === wainscot
+        ? { ...placement, position: [placement.position[0], placement.position[1], 0.4] as const }
+        : placement,
+    ),
+  }))
+  proves('wall-item-over-opening', 'atrium/atrium-wall-bay-plain@-8.875,0,0.4', gate(slid))
+
+  // Geometry that is baked, downloaded and placed nowhere.
+  const kit = BAKED_BUNDLES.find((bundle) => bundle.name === 'kit')
+  assert.ok(kit)
+  const withOrphan = BAKED_BUNDLES.map((bundle) =>
+    bundle === kit ? { ...bundle, parts: [...bundle.parts, { ...kit.parts[0], name: 'orphan-crate' }] } : bundle,
+  )
+  const unusedKit = accused(gate(MUSEUM, { bundles: withOrphan }), 'kit-part-unused')
+  if (!unusedKit.includes('orphan-crate')) quiet.push('kit-part-unused does not accuse "orphan-crate"')
+  // What the runtime places without a line of content saying so is in use:
+  // door leaves, the plaques over the doorways, the dedication panel.
+  for (const part of [
+    'door-leaf',
+    'door-leaf-right',
+    'wayfinding-plaque-navy',
+    'wayfinding-plaque-green',
+    'wayfinding-plaque-walnut',
+    'dedication-plaque',
+    'breaker-panel',
+    'desk-radio',
+    'archive-cabinet',
+  ]) {
+    if (unusedKit.includes(part)) noisy.push(`kit-part-unused accuses "${part}", which a room uses`)
+  }
+
+  // Copy translated twice for a screen that does not exist.
+  const unusedKeys = accused(
+    gate(MUSEUM, { keys: new Set([...DICTIONARY_KEYS, 'ui.nobody.reads.this']) }),
+    'i18n-key-unused',
+  )
+  if (!unusedKeys.includes('ui.nobody.reads.this')) quiet.push('i18n-key-unused does not accuse "ui.nobody.reads.this"')
+  for (const key of ['ui.title', 'exhibit.ball-spalding.title', 'radio.hint.vault.curt', 'prompt.examine']) {
+    if (unusedKeys.includes(key)) noisy.push(`i18n-key-unused accuses "${key}", which the game shows`)
+  }
+
+  // The porter gives a compass bearing to a player who has no compass.
+  const bearing = (locale: 'pt-BR' | 'en', key: string, text: string) => ({
+    ...DICTIONARIES,
+    [locale]: { ...DICTIONARIES[locale], [key]: text },
+  })
+  const spoken = 'radio.hint.atrium.curt'
+  proves(
+    'speech-uses-cardinal',
+    spoken,
+    gate(MUSEUM, { dictionaries: bearing('pt-BR', spoken, 'Átrio. Parede oeste. Câmbio.') }),
+  )
+  proves('speech-uses-cardinal', spoken, gate(MUSEUM, { dictionaries: bearing('en', spoken, 'Atrium. West wall. Over.') }))
+  // A wall label may say where Springfield is; and "consulta" is not "sul".
+  const harmless = gate(MUSEUM, {
+    dictionaries: {
+      ...bearing('pt-BR', 'exhibit.photo-gym.label', 'A fachada oeste do prédio.'),
+      en: { ...DICTIONARIES.en, [spoken]: 'Atrium. The least you could do is look. Over.' },
+    },
+  })
+  if (accused(harmless, 'speech-uses-cardinal').length > 0) {
+    noisy.push('speech-uses-cardinal accuses a wall label, or a word that only contains a bearing')
+  }
+
+  assert.deepEqual(quiet, [], 'every broken museum is caught')
+  assert.deepEqual(noisy, [], 'and the authored one is not accused of what it does not do')
+})
+
+test('what the runtime places by itself is what the validator counts as used', () => {
+  // The two tables in the validator mirror code a component owns; a recipe
+  // renamed on one side only would turn a used part into dead weight.
+  const doors = readFileSync(new URL('../src/engine/TransitionDoors.tsx', import.meta.url), 'utf8')
+  assert.ok(doors.includes("side === 'left' ? 'door-leaf' : 'door-leaf-right'"))
+  const scene = readFileSync(new URL('../src/scenes/MuseumScene.tsx', import.meta.url), 'utf8')
+  assert.ok(scene.includes("plinth: { part: 'plinth-block' }"))
+  assert.ok(scene.includes("'vitrine-table': { part: 'vitrine-table', extra: 'vitrine-glass' }"))
+  assert.ok(scene.includes("'vitrine-tower': { part: 'vitrine-tower' }"))
+})
+
+test('a key counts as cited only as one whole quoted literal', () => {
+  const keys = new Set(['prompt.read', 'prompt.examine', 'prompt.close', 'ui.title'])
+  const cited = keysCitedIn(keys, [
+    { path: 'a.tsx', text: "<p>{t('prompt.read')}</p> // prompt.examine is only mentioned" },
+    { path: 'b.ts', text: 'const label = closeLabel(t("prompt.close"), `ui.title`)' },
+  ])
+  assert.deepEqual([...cited].sort(), ['prompt.close', 'prompt.read', 'ui.title'])
+  // The dictionaries define keys and the debt table names the unused ones:
+  // neither is a use, and neither is read.
+  const read = readSourceTree(SOURCE_ROOT, KEY_NAMED_NOT_USED).map((file) => file.path)
+  assert.ok(read.includes('content/museum.ts') && read.includes('ui/Hud.tsx'))
+  assert.ok(!read.some((path) => path.startsWith('content/i18n') || path === 'content/knownDebt.ts'))
+})
+
+// ---------------------------------------------------------------------------
+// The debt table
+// ---------------------------------------------------------------------------
+
+test('the debt table is honest: paid, overdue and unlisted all fail', () => {
+  const accusation = (id: string): ValidationIssue => ({
+    severity: 'error',
+    code: 'kit-part-unused',
+    id,
+    message: `Kit recipe "${id}" is placed nowhere.`,
+  })
+  const owed = (id: string, untilLot: number): KnownDebt => ({
+    gate: 'validate:content',
+    code: 'kit-part-unused',
+    id,
+    untilLot,
+    note: 'leaves the GLB or gains a use',
+  })
+  const errorsOf = (issues: readonly ValidationIssue[]) =>
+    issues.filter((issue) => issue.severity === 'error').map((issue) => issue.code)
+
+  // In good standing: no longer an error, still on the printed table.
+  const standing = settleKnownDebt([accusation('crate')], [owed('crate', 5)], 1)
+  assert.deepEqual(errorsOf(standing), [])
+  assert.deepEqual(
+    standing.map((issue) => [issue.severity, issue.code, issue.id, issue.debt?.untilLot]),
+    [['debt', 'kit-part-unused', 'crate', 5]],
+  )
+
+  // The lot that was to pay it arrived and the accusation is still there.
+  const overdue = settleKnownDebt([accusation('crate')], [owed('crate', 5)], 5)
+  assert.deepEqual(errorsOf(overdue).sort(), ['kit-part-unused', 'known-debt-overdue'])
+
+  // Paid: the line has to leave the table, or the table stops meaning anything.
+  assert.deepEqual(errorsOf(settleKnownDebt([], [owed('crate', 5)], 1)), ['known-debt-stale'])
+
+  // An accusation nobody wrote down is an error like any other.
+  const unlisted = settleKnownDebt([accusation('crate'), accusation('barrel')], [owed('crate', 5)], 1)
+  assert.deepEqual(errorsOf(unlisted), ['kit-part-unused'])
+  assert.equal(unlisted.find((issue) => issue.severity === 'error')?.id, 'barrel')
+
+  // A debt covers one thing, never a whole code, and never a warning.
+  const warning: ValidationIssue = { ...accusation('crate'), severity: 'warning' }
+  assert.deepEqual(errorsOf(settleKnownDebt([warning], [owed('crate', 5)], 1)), ['known-debt-stale'])
+})
+
+test('the committed table settles the committed museum, and bites when a lot comes due', () => {
+  const lines = debtOf('validate:content')
+  const settled = (lot: number) =>
+    validateContent(MUSEUM, BAKED_BUNDLES, DICTIONARY_KEYS, undefined, {
+      dictionaries: DICTIONARIES,
+      keysCitedByCode: KEYS_CITED_BY_CODE,
+      knownDebt: { lines, lot },
+    })
+  const now = settled(CONTENT_LOT)
+  assert.deepEqual(
+    now.filter((issue) => issue.severity === 'error').map((issue) => `${issue.code} ${issue.id ?? ''}`),
+    [],
+  )
+  assert.ok(lines.length > 0, 'the table is not empty')
+  assert.equal(now.filter((issue) => issue.severity === 'debt').length, lines.length, 'every line is still owed')
+  assert.equal(new Set(KNOWN_DEBT.map((line) => `${line.gate} ${line.code} ${line.id}`)).size, KNOWN_DEBT.length)
+  for (const line of KNOWN_DEBT) {
+    assert.ok(Number.isInteger(line.untilLot) && line.untilLot > CONTENT_LOT, `${line.code} ${line.id} is dated ahead`)
+    assert.ok(line.note.trim().length > 0, `${line.code} ${line.id} says why it waits`)
+  }
+
+  // The same museum, one lot on: what was promised for it is now an error.
+  const next = Math.min(...lines.map((line) => line.untilLot))
+  const due = settled(next).filter((issue) => issue.code === 'known-debt-overdue')
+  assert.equal(due.length, lines.filter((line) => line.untilLot === next).length)
 })
 
 console.log(`\n${passed}/${passed} opening checks passed.\n`)

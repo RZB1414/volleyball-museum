@@ -715,7 +715,7 @@ test('the capture stays out of the gate, and the gate reads what it wrote', () =
   assert.ok(scripts.check.includes('npm run test:facts'))
   assert.ok(scripts.check.includes('npm run validate:content'))
   const gate = read('scripts/validate-content.ts')
-  assert.match(gate, /validateContent\(MUSEUM, .*, captures\)/, 'the content gate does not pass the record in')
+  assert.match(gate, /validateContent\(MUSEUM, .*, captures\b/, 'the content gate does not pass the record in')
   assert.match(gate, /captured: CAPTURED_SOURCES/, 'the content gate does not read the committed captures')
 
   // Importing the capture script runs it, so nothing else may import it.
@@ -731,12 +731,21 @@ test('the capture stays out of the gate, and the gate reads what it wrote', () =
 test('nothing the game ships carries the capture record', () => {
   // The runtime needs four fields of a source, and has them in museum.ts. The
   // bank, the excerpts and the hashes are the gate's; a shipped module that
-  // imported them would put every page's excerpt in the bundle.
-  const gateOnly = ['factCapture.ts', 'facts.bank.ts', 'facts.generated.ts', 'facts.manual.ts', 'validate.ts']
+  // imported them would put every page's excerpt in the bundle. The debt
+  // table is the gate's for the same reason: a list of what is still wrong
+  // is not something a player downloads.
+  const gateOnly = [
+    'factCapture.ts',
+    'facts.bank.ts',
+    'facts.generated.ts',
+    'facts.manual.ts',
+    'validate.ts',
+    'knownDebt.ts',
+  ]
   const offenders = sourceFiles(resolve(ROOT, 'src'), /\.(?:ts|tsx)$/)
     .filter((path) => !gateOnly.some((name) => path.endsWith(`content${path.includes('\\') ? '\\' : '/'}${name}`)))
     .filter((path) =>
-      /(?:from|import)\s*\(?\s*['"][^'"]*(?:factCapture|facts\.bank|facts\.generated|facts\.manual|content\/validate|\.\/validate)[^'"]*['"]/.test(
+      /(?:from|import)\s*\(?\s*['"][^'"]*(?:factCapture|facts\.bank|facts\.generated|facts\.manual|content\/validate|\.\/validate|knownDebt)[^'"]*['"]/.test(
         readFileSync(path, 'utf8'),
       ),
     )

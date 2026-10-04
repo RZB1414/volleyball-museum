@@ -150,11 +150,13 @@ const LOCKS = [
     digits: 4,
     mapLabelKey: 'lock.office-drawer.mapLabel',
     hints: STANDARD_HINTS,
-    // The answer is on the Morgan portrait: its frame plaque and its
-    // catalogue entry both give 1896, and the Springfield document repeats
-    // it — all in the Holyoke wing, which the player reaches before ever
-    // needing the drawer. The porter's drawer hint sends the player there,
-    // and `test-opening-flow` proves the year really is printed on it.
+    // The answer is on the Morgan portrait: its frame plaque gives 1896, and
+    // the title of the Springfield document repeats it — both in the Holyoke
+    // wing, which the player reaches before ever needing the drawer. Those
+    // are the only two places the year is printed: a code that every card in
+    // the wing repeats is not one the player found. The porter's drawer hint
+    // sends the player to the portrait, and `test-opening-flow` proves the
+    // year is on the plaque and on nothing but those two keys.
     sourceExhibitId: 'portrait-morgan',
   },
 ] as const satisfies readonly Lock[]
@@ -470,10 +472,12 @@ const HOLYOKE_EXHIBITS = [
       {
         id: 'date',
         // The frame plaque, turned towards the player, states the 1896
-        // renaming — the code to the office drawer — and completing it
-        // unlocks the catalogue entry that tells the same story at length.
-        // Morgan devised the game in Holyoke in 1895; the name "volley ball"
-        // came at the Springfield YMCA conference demonstration of 1896.
+        // renaming — the code to the office drawer. Morgan devised the game
+        // in Holyoke in 1895; the name "volley ball" came in Springfield in
+        // 1896. The plaque says the year and the town and stops there: the
+        // sources part on the occasion (a visit early in the year, or the
+        // conference demonstration), and the catalogue entry says that they
+        // do instead of choosing one.
         localPosition: [0, -0.28, 0.03],
         labelKey: 'hotspot.portrait-morgan.date.label',
         revealsFactId: 'springfield-renaming',
@@ -886,6 +890,11 @@ const OFFICE_DEVICES = [
         lineKeys: ['radio.hint.drawer'],
         curtLineKeys: ['radio.hint.drawer.curt'],
       },
+      // The fallback, once nothing is left to point at. Its keys still say
+      // "vault" because they are ids the tests cite; the line itself no
+      // longer does. Until the night has an ending (the Posse, L3) it tells
+      // the player what can be done tonight, and sends them to nothing that
+      // is not in the building.
       { when: {}, lineKeys: ['radio.hint.vault'], curtLineKeys: ['radio.hint.vault.curt'] },
     ],
     patience: PORTER_PATIENCE,
