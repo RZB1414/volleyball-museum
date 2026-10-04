@@ -2649,8 +2649,9 @@ dono e continua pendente. Não trava L1; trava o livro-caixa de L6.
   bytes por caminho, programas, textura residente.
 - **Risco.** Baixo. Teto temporário de ÁT-K1 (a lente emissiva).
 - **Passagem.** Nenhum final novo; nenhuma instrução aponta para o que não existe.
-- **Feito em 2026-10-04, ainda não publicado.** Plano do lote em `docs/lotes/L1-plano.md`; dois
-  commits locais na `main` (conteúdo, depois geometria e motor); `npm run check` e
+- **Feito em 2026-10-04 e publicado** (até `f0fb5a3`, versão Cloudflare `1d3a4554`). Plano do lote
+  em `docs/lotes/L1-plano.md`; commits de conteúdo, de geometria e motor e das duas revisões;
+  `npm run check` e
   `npm run build` verdes; rota conferida no navegador de desenvolvimento, com o piloto da Holyoke
   visto da porta no escuro e os quatro vãos; medições, dívidas e o que saiu diferente do plano em
   `docs/HANDOFF.md` §10. **O teto temporário de 58 lotes não foi gasto:** a lente e a alavanca

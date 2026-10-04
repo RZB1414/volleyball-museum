@@ -55,8 +55,8 @@ completa das suítes e o que cada uma ganhou está em §10.4):
 
 O único aviso é o preexistente `react(only-export-components)` em `src/main.tsx:17`.
 Deploy de produção: `https://volleyball-museum.renanbuiatti14.workers.dev`, versão
-Cloudflare `0027afaa-9600-4e0f-a5d3-0a5e699cf735` (2026-10-03: toda a rodada de §9,
-até `db4cc70`). **L1 está commitado na `main` local e ainda não foi publicado** (§10).
+Cloudflare `1d3a4554-c21a-457a-9bf3-7d5bfc594ae4` (2026-10-04: P0 e L1 do plano, até
+`f0fb5a3`; §10). A anterior era `0027afaa` (2026-10-03, a rodada de §9).
 
 Bake atual:
 
@@ -1069,13 +1069,15 @@ histórico, nome, falas do Jorge, validadores de M0 e a tabela de dívidas), `04
 e motor: os dois quadros de energia, a vitrine corrida, a porta que não fica presa, navegação e
 catracas) e o da revisão adversarial, que fecha ou data os 27 achados dela (10.11).
 
-**Estado: implementado, revisto e conferido no navegador de desenvolvimento; não publicado.** Dos
-passos de §9.1 do plano estão feitos o 1 (plano do lote), o 2 (teste primeiro), o 3, o 4 (portão
-verde), o 5 (revisão adversarial: 10.11) e o 6 (rota do lote, com as ressalvas de 10.8). O 12
-está feito **em parte**: este registro e os manifestos de capturas existem; o corpus de saves de
-L1 e o congelamento das capturas, não (10.10). **Faltam** o 8 (revisor), o 9 e o 10 (push e
-deploy), o 11 (fumaça em produção) e o 13 (playtest). A produção continua na versão Cloudflare
-`0027afaa`, de 3 de outubro.
+**Estado: publicado em 2026-10-04**, até `f0fb5a3`, versão Cloudflare `1d3a4554`. Dos passos de
+§9.1 do plano estão feitos o 1 (plano do lote), o 2 (teste primeiro), o 3, o 4 (portão verde), o
+5 (revisão adversarial: 10.11), o 6 (rota do lote, com as ressalvas de 10.8), o 8 (revisor: nada
+bloqueante; a folga dos tetos de bundle subiu para cerca de meio por cento), o 9 e o 10 (push e
+deploy) e o 11 (fumaça em produção: título com o nome novo, nenhum código de desenvolvimento no
+bundle, cena montada, console limpo). O 12 está feito **em parte**: este registro e os manifestos
+de capturas existem; o corpus de saves de L1 (agora que o build está no ar) e o congelamento das
+capturas, não (10.10). **Falta** o 13 (playtest) e a medição em aparelho real (P0, item 6, do
+dono).
 
 ### 10.1 O que mudou para o jogador
 
