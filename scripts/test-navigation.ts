@@ -25,20 +25,37 @@
  * middle of the next. It asserts arrival, and it asserts the floor was under
  * the player the whole way — a doorway you can pass through by falling into
  * the void is not a doorway.
+ *
+ * The world itself lives in `scripts/lib/museumWorld.ts`, shared with the
+ * power suite: shells, kit, containers and the power controls. Routes inside
+ * a room start where a player really arrives in it (`arrivalPoint`), not at
+ * a convenient point in the middle of the floor.
  */
 
-import { BoxGeometry, Mesh, MeshBasicMaterial, Vector3 } from 'three'
+import { Vector3 } from 'three'
 
 import { BAKED_BUNDLES, type BakedBundle } from '../src/content/bake.generated.ts'
 import { MUSEUM } from '../src/content/museum.ts'
-import type { ExhibitMount, RoomData, Vec3 } from '../src/content/schema.ts'
-import { CollisionWorld, movePlayer, worldFromMeshes } from '../src/engine/collision.ts'
+import type { ExhibitMount, RoomData } from '../src/content/schema.ts'
+import { movePlayer } from '../src/engine/collision.ts'
+import { INTERACTION_REACH } from '../src/engine/interactionTarget.ts'
 // @ts-expect-error - the bake is plain JS with no type declarations.
-import { buildRoomShell, prepareRoomShells } from './bake/kit.mjs'
+import { prepareRoomShells } from './bake/kit.mjs'
+import {
+  arrivalPoint,
+  buildMuseumWorld,
+  CAPSULE,
+  colliderPartsFor as colliderPartsOf,
+  controlNormal,
+  controlPoint,
+  isWallControl,
+  reachFromWhereTheCapsuleStops,
+  roomPoint,
+  STEP,
+  WALK_SPEED as SPEED,
+  type Placement,
+} from './lib/museumWorld.ts'
 
-const CAPSULE = { radius: 0.3, height: 1.75 }
-const STEP = 1 / 60
-const SPEED = 2.6
 /** Give up after this many simulated seconds; a real crossing takes about six. */
 const TIME_LIMIT = 30
 /** The player's feet must never drop this far below the floor plane. */
@@ -77,76 +94,14 @@ type PreparedRoomShell = Pick<RoomData, 'id' | 'shell'> & {
 }
 
 const ROOM_SHELLS = prepareRoomShells(MUSEUM.rooms) as PreparedRoomShell[]
-const preparedRoomById = new Map(ROOM_SHELLS.map((room) => [room.id, room]))
 
-type Placement = {
-  readonly part: string
-  readonly position: Vec3
-  readonly rotationY?: number
-  readonly scale?: number
-}
+// Furniture collision is data-driven. Recipes may be a root node or a set of
+// `root__material` siblings; only components carrying a collider in the bake
+// manifest participate. In particular, a partition collides by its wider foot
+// rather than by its decorative face.
+const colliderPartsFor = (placement: Placement) => colliderPartsOf(placement.part)
 
-function colliderPartsFor(placement: Placement) {
-  if (!kitBundle) return []
-  return kitBundle.parts.filter(
-    (part) =>
-      part.collider &&
-      (part.name === placement.part || part.name.startsWith(`${placement.part}__`)),
-  )
-}
-
-function addFurnitureColliders(
-  meshes: Mesh[],
-  room: RoomData,
-  placement: Placement,
-) {
-  for (const part of colliderPartsFor(placement)) {
-    if (!part.collider) continue
-    const [hx, hy, hz] = part.collider.halfExtents
-    const geometry = new BoxGeometry(hx * 2, hy * 2, hz * 2)
-    geometry.translate(...part.collider.centre)
-
-    const mesh = new Mesh(geometry, new MeshBasicMaterial())
-    mesh.name = `${room.id}__${part.name}__collider`
-    mesh.position.set(
-      room.origin[0] + placement.position[0],
-      room.origin[1] + placement.position[1],
-      room.origin[2] + placement.position[2],
-    )
-    mesh.rotation.y = placement.rotationY ?? 0
-    mesh.scale.setScalar(placement.scale ?? 1)
-    meshes.push(mesh)
-  }
-}
-
-function buildWorld(): CollisionWorld {
-  const meshes: Mesh[] = []
-  for (const room of MUSEUM.rooms) {
-    const preparedRoom = preparedRoomById.get(room.id)
-    if (!preparedRoom) throw new Error(`no prepared shell for room "${room.id}"`)
-
-    for (const part of buildRoomShell(preparedRoom) as { name: string; geometry: never }[]) {
-      const mesh = new Mesh(part.geometry, new MeshBasicMaterial())
-      mesh.name = part.name
-      mesh.position.set(room.origin[0], room.origin[1], room.origin[2])
-      meshes.push(mesh)
-    }
-
-    // Furniture collision is data-driven too. Recipes may be a root node or a
-    // set of `root__material` siblings; only components carrying a collider in
-    // the bake manifest participate. In particular, a partition collides by
-    // its wider foot rather than by its decorative face.
-    for (const placement of room.kit) {
-      addFurnitureColliders(meshes, room, placement)
-    }
-    for (const container of room.containers ?? []) {
-      addFurnitureColliders(meshes, room, { ...container, scale: 1 })
-    }
-  }
-  return worldFromMeshes(meshes)
-}
-
-const world = buildWorld()
+const world = buildMuseumWorld()
 
 type Footprint = {
   readonly owner: string
@@ -218,6 +173,12 @@ function collectSolidFootprints() {
       )
     }
 
+    if (room.powerControl) {
+      footprints.push(
+        ...footprintsFor(room, `${room.id}/power:${room.powerControl.id}`, room.powerControl),
+      )
+    }
+
     for (const exhibitId of room.exhibitIds) {
       const exhibit = MUSEUM.exhibits.find((candidate) => candidate.id === exhibitId)
       if (!exhibit) continue
@@ -264,13 +225,13 @@ const overlapKey = (a: Footprint, b: Footprint) => [a.owner, b.owner].sort().joi
 // ids here. Rope spans/posts currently need none because they are non-solid.
 const INTENTIONAL_SOLID_OVERLAPS = new Set<string>()
 
-function roomPoint(roomId: string, x: number, z: number) {
-  const room = MUSEUM.rooms.find((candidate) => candidate.id === roomId)
-  if (!room) throw new Error(`no room "${roomId}"`)
-  return new Vector3(room.origin[0] + x, room.origin[1], room.origin[2] + z)
-}
-
-/** Safe gathering points, deliberately outside every furniture footprint. */
+/**
+ * Gathering points in the open floor of each room, outside every furniture
+ * footprint: where a doorway crossing begins and ends. Nobody STARTS at
+ * these. The atrium's was the spawn before the night began in the office,
+ * and every atrium route used to leave from it; routes inside a room now
+ * leave from `arrivalPoint` and pass here on the way.
+ */
 const ROOM_ANCHORS = {
   atrium: [2.5, 1],
   holyoke: [-0.5, -2],
@@ -481,6 +442,56 @@ check(
   forbiddenOverlaps.join('; '),
 )
 
+// A control fixed to a wall is something the player walks into: without a
+// collider the capsule passes through the iron box and the eye ends inside
+// the interaction volume (ÁT-A1). With one, it joins the proof above.
+const wallControls = MUSEUM.rooms.flatMap((room) =>
+  room.powerControl && isWallControl(room, room.powerControl) ? [{ room, control: room.powerControl }] : [],
+)
+const solidControls = new Set(
+  solidFootprints.flatMap((footprint) => (footprint.owner.includes('/power:') ? [footprint.owner] : [])),
+)
+check(
+  'every wall-mounted power control is solid',
+  wallControls.length >= 2 &&
+    wallControls.every(({ room, control }) => solidControls.has(`${room.id}/power:${control.id}`)),
+  `solid: ${[...solidControls].join(', ') || 'none'}; on a wall: ${wallControls.map(({ control }) => control.id).join(', ')}`,
+)
+check(
+  'power controls do not interpenetrate furniture',
+  !forbiddenOverlaps.some((pair) => pair.includes('/power:')),
+  forbiddenOverlaps.filter((pair) => pair.includes('/power:')).join('; '),
+)
+
+/**
+ * The end of a route that goes to a breaker: the capsule is standing in
+ * front of it, and from there, walking on until the wall stops it, the
+ * centre of the screen still finds the control with the eye outside its
+ * interaction volume. A route that ends in front of bare plaster fails here.
+ */
+function checkRouteEndsAtControl(name: string, roomId: string, end: Vector3) {
+  const room = MUSEUM.rooms.find((candidate) => candidate.id === roomId)
+  const control = room?.powerControl
+  if (!room || !control) throw new Error(`room "${roomId}" has no power control`)
+  const normal = controlNormal(control)
+  const offset = end.clone().sub(controlPoint(room, control, [0, 0, 0])).setY(0)
+  const ahead = offset.dot(normal)
+  const aside = Math.abs(offset.clone().addScaledVector(normal, -ahead).length())
+  check(
+    `${name} — it ends standing in front of ${control.id}`,
+    ahead > 0 && ahead <= 1.5 && aside <= 0.3,
+    `ended ${ahead.toFixed(2)} m out from the control's wall and ${aside.toFixed(2)} m to its side`,
+  )
+  const reach = reachFromWhereTheCapsuleStops(world, room, control, end)
+  check(
+    `${name} — walking on until stopped, E reaches ${control.id}`,
+    reach.hitDistance !== null && reach.hitDistance <= INTERACTION_REACH.powerControl && !reach.eyeInsideProxy,
+    `capsule ${reach.standOff.toFixed(3)} m from the wall plane, ` +
+      (reach.hitDistance === null ? 'no hit' : `hit at ${reach.hitDistance.toFixed(3)} m`) +
+      (reach.eyeInsideProxy ? ', eye inside the interaction volume' : ''),
+  )
+}
+
 const atriumRoom = MUSEUM.rooms.find((room) => room.id === 'atrium')
 if (!atriumRoom) throw new Error('The atrium is required for its navigation proof.')
 const barrierSegments = atriumRoom.kit.filter(
@@ -689,6 +700,7 @@ const receptionAisleZ = (counterStaffEdge + storageFrontEdge) / 2
 // the two real colliders, so a merely visible but physically sealed slit cannot
 // satisfy the future computer-access requirement.
 const receptionStaffRoute = walk([
+  arrivalPoint('atrium'),
   roomPoint('atrium', 2.5, 1),
   roomPoint('atrium', 2.65, 4.5),
   receptionDeskPoint(receptionEntryX, receptionPublicZ),
@@ -707,10 +719,22 @@ check(
   `dropped to y=${receptionStaffRoute.lowest.toFixed(2)}`,
 )
 
+/**
+ * Every route below leaves from where the office door lets the player into
+ * the atrium, with the old starting point as its first stop.
+ */
 const ATRIUM_WALK_ROUTES = [
   {
     name: 'atrium breaker route',
     points: [[2.5, 1], [2.65, -2.8], [-4.8, -3.55], [-7.55, -4.4]],
+    endsAtControl: true,
+  },
+  {
+    // What a player does with a red light in the dark: walks at it. The line
+    // crosses the podium's ring; the capsule has to slide round and arrive.
+    name: 'office door to the atrium breaker, in a straight line',
+    points: [[-7.5, -4.4]],
+    endsAtControl: true,
   },
   {
     name: 'atrium east plinth circulation',
@@ -735,9 +759,10 @@ const ATRIUM_WALK_ROUTES = [
 ] as const
 
 for (const route of ATRIUM_WALK_ROUTES) {
-  const result = walk(
-    route.points.map(([x, z]) => roomPoint('atrium', x, z)),
-  )
+  const result = walk([
+    arrivalPoint('atrium'),
+    ...route.points.map(([x, z]) => roomPoint('atrium', x, z)),
+  ])
 
   check(
     `${route.name} — the player gets there`,
@@ -748,6 +773,40 @@ for (const route of ATRIUM_WALK_ROUTES) {
     `${route.name} — the floor remains supported`,
     result.lowest > FALL_LIMIT,
     `dropped to y=${result.lowest.toFixed(2)}`,
+  )
+  if ('endsAtControl' in route) checkRouteEndsAtControl(route.name, 'atrium', result.position)
+}
+
+/**
+ * The wing, as it is played: in by the main door, across to the breaker on
+ * the far wall in the dark, round the hero case to the run of wall cases,
+ * and out by the shortcut that only opens from this side.
+ */
+{
+  const name = 'Holyoke door to the breaker to the shortcut'
+  const toBreaker = walk([
+    arrivalPoint('holyoke'),
+    ...([[0, -2.5], [-4.9, -2.5], [-4.9, 2.2]] as const).map(([x, z]) => roomPoint('holyoke', x, z)),
+  ])
+  check(
+    `${name} — the player gets to the breaker`,
+    toBreaker.arrived && toBreaker.lowest > FALL_LIMIT,
+    `stopped at ${toBreaker.position.toArray().map((value) => value.toFixed(2)).join(',')}`,
+  )
+  checkRouteEndsAtControl(name, 'holyoke', toBreaker.position)
+
+  const shortcut = portalWorld('holyoke', 'holyoke-shortcut')
+  const toShortcut = walk([
+    toBreaker.position.clone(),
+    ...([[-3.5, 5.4], [4.6, 5.4]] as const).map(([x, z]) => roomPoint('holyoke', x, z)),
+    shortcut.clone(),
+    // A step past the threshold, on the atrium's floor.
+    shortcut.clone().add(new Vector3(1.2, 0, 0)),
+  ])
+  check(
+    `${name} — and from the breaker out by the shortcut`,
+    toShortcut.arrived && toShortcut.lowest > FALL_LIMIT,
+    `stopped at ${toShortcut.position.toArray().map((value) => value.toFixed(2)).join(',')}`,
   )
 }
 

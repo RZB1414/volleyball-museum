@@ -1,8 +1,8 @@
 # Handoff — Museu do Voleibol
 
-Atualizado em 2026-10-02 (a abertura no escritório, §9); o estado técnico das salas é
-o de 2026-08-12. Este documento é o ponto de entrada para retomar o projeto sem
-depender da conversa anterior.
+Atualizado em 2026-10-04 (L1, o primeiro lote do plano, §10; a abertura no escritório
+é §9); o estado técnico das salas é o de 2026-08-12. Este documento é o ponto de
+entrada para retomar o projeto sem depender da conversa anterior.
 
 Leia também, nesta ordem: `docs/PLANO-DO-ZERO.md` (o desenho do jogo),
 `docs/REFERENCIA-TECNICA.md` (gramática de Resident Evil + pipeline web-3D) e
@@ -31,35 +31,38 @@ intencionalmente no commit `5e51e24`. O museu data-driven é a única aplicaçã
 
 O corte vertical está integrado, assado, caminhável e com progressão de energia.
 
-Portão verde em 2026-10-02 (`npm run check`, depois da rodada da abertura, §9):
+Portão verde em 2026-10-04 (`npm run check`, depois de L1, §10; a lista completa das
+suítes e o que cada uma ganhou está em §10.4):
 
-- conteúdo: 3 salas válidas;
-- energia: 16/16;
-- abertura: 23/23; fluxo da abertura: 38/38; rádio: 22/22;
+- conteúdo: 3 salas válidas, com 29 dívidas datadas impressas (`knownDebt.ts`);
+- catracas: 4/4; fontes: 28; documentação: 21/21; capturas: 9/9; saves: 19/19;
+- energia: 28/28;
+- abertura: 31/31; fluxo da abertura: 44/44; rádio: 27/27;
 - colisão: 28/28;
-- kit e posicionamento: 339/339;
-- materiais: 8; mesa do curador: 7; estantes: 20;
+- kit e posicionamento: 339/339; vitrine corrida: 10/10;
+- materiais: 10; mesa do curador: 9; estantes: 20;
 - runtime do kit: 26/26;
 - runtime das salas: 19/19;
 - LOD de salas: 23/23;
-- aquecimento de GPU: verde;
+- aquecimento de GPU: verde; prontidão da sala: 5/5;
 - performance de render e projeção: 16/16;
 - sinalização arquitetônica: 26/26;
 - portas de transição: 29/29;
 - controles móveis e modo imersivo: 13/13;
-- navegação: 55/55;
+- navegação: 67/67;
+- bundle por caminho: 5/5;
 - `npm run build`: verde.
 
 O único aviso é o preexistente `react(only-export-components)` em `src/main.tsx:17`.
 Deploy de produção: `https://volleyball-museum.renanbuiatti14.workers.dev`, versão
 Cloudflare `0027afaa-9600-4e0f-a5d3-0a5e699cf735` (2026-10-03: toda a rodada de §9,
-até `db4cc70`).
+até `db4cc70`). **L1 está commitado na `main` local e ainda não foi publicado** (§10).
 
 Bake atual:
 
-- **2.946 KB** de GLBs;
-- **151.976 triângulos assados**;
-- kit `public/models/kit.aeabcf76.glb`: 2.189 KB, 105.264 triângulos, 195 nós;
+- **2.938 KB** de GLBs;
+- **151.652 triângulos assados**;
+- kit `public/models/kit.6f5f4950.glb`: 2.182 KB, 104.940 triângulos, 195 nós;
 - salas: `room-atrium.b214394f.glb`, `room-holyoke.aa0b5458.glb` e
   `room-office.a2144060.glb`;
 - texturas: **43,875 MiB** de VRAM (teto duro de 45).
@@ -139,8 +142,9 @@ anterior e de câmeras que não foram registradas.
    `position`, `rotation` ou `scale` diretamente ao `<primitive>` de uma peça do
    kit: isso apaga a compensação do nó quantizado.
 
-6. **Colisão vem do manifesto assado.** Kit, containers e mounts usam a mesma
-   transformação `sala × placement × nó`. Não recrie regras por nome no runtime.
+6. **Colisão vem do manifesto assado.** Kit, containers, mounts e controles de
+   energia usam a mesma transformação `sala × placement × nó`. Não recrie regras por
+   nome no runtime.
 
 7. **Sem chunking manual no Vite/Rolldown.** As tentativas anteriores aumentaram o
    payload. Preserve as fronteiras naturais de `lazy()` documentadas em
@@ -390,6 +394,7 @@ npm run dev
 npm run bake
 npm run check
 npm run validate:content
+npm run test:ratchets
 npm run test:facts
 npm run test:power
 npm run test:opening
@@ -408,8 +413,14 @@ npm run test:render-performance
 npm run test:transition-door
 npm run test:mobile-controls
 npm run test:navigation
+npm run test:bundle
 npm run build
 ```
+
+`npm run test:ratchets` e `npm run test:bundle` são as catracas de L1 (§10): o que foi
+medido pode descer e não pode subir. Os tetos, de onde veio cada um e como mexer neles
+estão em `scripts/lib/ratchets.ts`. `test:bundle` roda `vite build` antes de medir, porque
+um `dist/` velho não prova nada.
 
 Rode `npm run check` antes de qualquer commit. Se mudar geradores, manifesto,
 materiais ou colliders, rode `npm run bake` antes do check. Nunca corrija um teste
@@ -541,6 +552,9 @@ lista abaixo é anterior ao plano e vale no que ele não cobrir.
 
 **Decisões.** Em 2026-10-04 o dono mandou seguir os padrões nas 36 decisões de §0.3; o registro é
 `docs/plano-mestre/DECISOES.md`.
+
+**L1 (Correções no ar), estado em 2026-10-04:** implementado em dois commits locais e conferido
+no navegador de desenvolvimento; falta revisão, push, deploy e fumaça. Tudo em §10.
 
 **Preparação (P0), estado em 2026-10-04.** Nada mudou no jogo; o build de produção é o mesmo.
 
@@ -787,7 +801,8 @@ Regras que valem para qualquer sistema novo que responda ao `E`:
   (gestos, visibilidade, `onstatechange`) e nenhum som é agendado num contexto
   parado; a planta desenha as portas ao longo da parede; o validador de traduções
   percorre todas as coleções. O código da gaveta (1896) está na plaqueta da moldura
-  do retrato do Morgan e na ficha dele.
+  do retrato do Morgan e no título do documento «Springfield, 1896», e em nenhum
+  outro lugar (desde L1, §10; antes estava também na ficha do retrato).
 - **Testes**: `npm run test:opening-flow` (38 checagens, com o save do navegador
   simulado para provar a migração pelo caminho real de carga).
 
@@ -1042,3 +1057,316 @@ Suítes novas: `test:opening-flow` (38), `test:radio` (22), `test:materials` (8)
 - **Rádio na mesa só fala na própria sala.** Uma chamada de conteúdo espera
   (`radioWithinEarshot`) enquanto o jogador está longe de um rádio que ficou no
   carregador; na mão, ele é ouvido em qualquer sala.
+
+---
+
+## 10. L1 — Correções no ar (2026-10-04)
+
+O primeiro lote do plano (`docs/PLANO-ATE-O-FINAL.md`, L1), executado pelo plano de lote
+`docs/lotes/L1-plano.md`. Saiu em dois commits locais na `main`: `ab6625e` (conteúdo: texto
+histórico, nome, falas do Jorge, validadores de M0 e a tabela de dívidas) e o seguinte
+(geometria e motor: os dois quadros de energia, a vitrine corrida, a porta que não fica presa,
+navegação e catracas).
+
+**Estado: implementado e conferido no navegador de desenvolvimento; não publicado.** Dos passos
+de §9.1 do plano estão feitos o 1 (plano do lote), o 2 (teste primeiro), o 3, o 4 (portão verde),
+o 6 (rota do lote, com as ressalvas de 10.8) e o 12 (este registro). **Faltam** o 5 (revisão
+adversarial), o 8 (revisor), o 9 e o 10 (push e deploy), o 11 (fumaça em produção) e o 13
+(playtest). A produção continua na versão Cloudflare `0027afaa`, de 3 de outubro.
+
+### 10.1 O que mudou para o jogador
+
+- **Quadro da Holyoke na parede oposta à entrada.** `position: [-5.875, 1.15, 2.2]`,
+  `rotationY: Math.PI / 2`: da porta, a lente fica 20,8° à esquerda do eixo de quem entra, no vão
+  entre a vitrine-herói e o mural, e o quadro encosta no reboco, acima do roda-meio. Antes ficava
+  na parede da própria porta, a 103° do eixo, e não mudava um pixel do primeiro quadro.
+- **O quadro não some mais quando o jogador encosta nele.** Os dois quadros têm colisor (a
+  receita inteira, alavanca incluída): a cápsula para a 0,55 m do plano da parede, com o olho
+  25 cm fora do volume de interação. Antes parava a 8 cm, com o olho dentro dele, e o aviso
+  «Restaurar energia» sumia nos últimos 21 cm.
+- **A lente do quadro acende.** Vermelha (`led-red`) com a sala sem energia, verde (`led-green`)
+  depois de religada: são os dois materiais do leitor da porta do escritório. A alavanca que
+  desce, o estalo e o piloto de alcance curto são de L10.
+- **As quatro peças da vitrine corrida estão nos vãos.** O retrato do Morgan e o panorama pendem
+  no forro de um vão sem prateleira de cima; o guia de 1916 e o manual de 1897 apoiam no topo
+  real da prateleira de baixo. A legenda do retrato (quatro linhas) aparece inteira.
+- **A porta do escritório abre mesmo que uma imagem do saguão não chegue**, depois de 30 s de
+  jogo, sem a arte de parede. E uma imagem que falha vira um cartão cinza em vez de derrubar a
+  página.
+- O texto (nome, falas, etiquetas, fichas, documentos) é o do commit `ab6625e`: `1896` só na
+  plaqueta do retrato e no título «Springfield, 1896»; «Museu do Voleibol» em tudo; o Jorge sem
+  pontos cardeais e sem mandar a medalhas e cofre; as doze etiquetas em até 40 palavras.
+
+### 10.2 Como ficou no código
+
+- **`breaker-panel`** (`scripts/bake/parts/fixtures.mjs`): as mesmas geometrias, com os nomes que
+  o runtime endereça: `breaker-panel` (carcaça), `__lever` (aro, eixo, alavanca e punho num nó
+  só; o aro e o eixo são cilindros no eixo do pivô, então L10 gira o nó inteiro em torno de
+  `anchors.leverPivot`) e `__led`. Continuam três nós e 892 triângulos: o kit do átrio segue em
+  56 de 56 lotes e a exceção de ÁT-K1 **não foi gasta**. O colisor é a união das três famílias
+  (`scripts/bake.mjs`).
+- **`history-case-run`** (`scripts/bake/parts/holyokeDecor.mjs`): o que cada vão hospeda é dado
+  (`HISTORY_CASE_BAYS`: quadro, quadro, livro, livro, nada, pelo índice do gerador; o vão 0 fica
+  em x = +4,08 da sala). O vão de quadro perde a prateleira e a régua de cima; saíram a camisa,
+  a túnica, os dois documentos em cavalete e a bola de couro do centro (2.308 → 1.984
+  triângulos). A função devolve `layout`: montantes, prateleiras (topo, base, fundo, frente),
+  réguas, mesas de leitura e cada peça do recheio como caixa, escritos das mesmas variáveis que
+  geram a geometria.
+- **Proxies de interação** (`src/engine/interactionProxy.ts`): a conta do volume acolchoado e o
+  material (`side: DoubleSide`) saíram de três componentes para um módulo. A regra: nenhum alvo
+  contém o ponto mais próximo que a cápsula alcança (isso é trabalho do colisor); a dupla face é
+  a rede de segurança.
+- **`PowerControls.tsx`**: registra o colisor do controle (`registerKitColliders`), pinta a
+  lente pelo estado da sala (`paintLenses`, em `deviceNodes.ts`; `powerControlLensMaterial`, em
+  `power.ts`). Controle sem colisor ou sem lente (a luminária) não muda.
+- **Espera da sala** (`src/engine/roomReadiness.ts`): `advanceRoomDetailWait` conta tempo de
+  jogo enquanto a sala está montada e incompleta, em passos de no máximo 0,1 s; aos 30 s a sala
+  fica `degraded`, aquece com o que tem e a porta abre pelo caminho de sempre. O que chega depois
+  aparece sem aquecimento e não reabre a descoberta. Em desenvolvimento o console diz o que
+  faltou («Room "atrium" opens without its wall art»).
+- **`MediaTextureLoader`** (`src/engine/mediaTexture.ts`): o carregador da arte de parede e das
+  fotografias (`RoomWallArt`, `FramedMedia`, `preloadTexture`: a mesma classe nos três, senão o
+  cache do `useLoader` se parte). Falha de imagem resolve numa textura cinza de 1 × 1 com
+  `userData.mediaMissing`, com um aviso por URL. As texturas de material continuam no
+  `TextureLoader` comum: sem elas não há jogo.
+- **`framedMediaLayout.ts`**: as medidas do cartão e da legenda de um quadro, que eram
+  constantes de `FramedMedia.tsx`, agora compartilhadas com o teste da vitrine.
+- **Validadores novos** (`validate.ts`): `wall-fixture-off-the-wall` (controle de energia a até
+  35 cm de uma parede e a mais de 6 mm do reboco), `power-control-without-state` (sem `__led` e
+  sem luz prática) e `power-control-node-missing` (lente sem `__lever`).
+- **Bibliotecas de teste**: `scripts/lib/museumWorld.ts` (o mundo de colisão com casca, kit,
+  containers **e controles de energia**; a porta de chegada de cada sala; o jogador que anda
+  contra um quadro), `scripts/lib/sightline.ts` (linhas de visada contra a caixa de tudo o que
+  está na sala; tamanho em pixels), `scripts/lib/ratchets.ts` e `scripts/lib/bundlePaths.mjs`.
+
+### 10.3 Medições
+
+Bake: **2.938 KB** de GLBs, **151.652 triângulos** (eram 2.946 KB e 151.976). Kit
+`public/models/kit.6f5f4950.glb`: 2.234.252 bytes (2.182 KiB), 104.940 triângulos, 195 nós. As
+três cascas e os dois GLBs de peças não mudaram de hash; nenhuma textura mudou (43,875 MiB).
+Kit instanciado por sala: átrio 56 lotes e 46.272 triângulos, Holyoke 28 e 16.544 (eram 16.868),
+escritório 53 e 34.230.
+
+Pontos de referência, medidos como a linha de base (`docs/lotes/P0-linha-de-base.md`, seção 0):
+reload limpo, 1280 × 720 a DPR 1,2, qualidade `medium`, três salas acesas, duas passadas com o
+mesmo resultado.
+
+| Ponto | Linha de base | Depois de L1 | Previsto no plano do lote |
+|---|---|---|---|
+| R01 escritório, leitura | 58 · 36.086 | 58 · 36.086 | sem mudança |
+| R02 escritório, spawn | 66 · 37.906 | 66 · 37.906 | sem mudança |
+| R03 átrio, da porta do escritório | 80 · 63.940 | 80 · 63.940 | sem mudança |
+| R04 átrio, diagonal sudeste | 101 · 77.324 | 101 · 77.334 | sem mudança |
+| R05 átrio, do canto noroeste | 85 · 67.810 | 85 · 67.820 | sem mudança |
+| R06 átrio, da porta da Holyoke | 79 · 70.764 | 79 · 70.774 | sem mudança |
+| R07 Holyoke, da porta | 36 · 37.108 | **39 · 37.676** | 39 · 37.676 |
+| R08 Holyoke, da porta para sudoeste | 67 · 51.468 | **70 · 52.036** | 70 · 52.036 |
+| R09 Holyoke, do canto noroeste | 83 · 63.050 | **81 · 62.374** | 80 a 83 |
+| R10 par com a porta aberta | 128 · 101.310 | **125 · 100.428** | 125 · 100.418 |
+
+(draws · triângulos.) Os dez triângulos a mais em R04, R05, R06 e R10 são os cinco glifos de
+«O JOGO» na sobrelinha da dedicatória, do commit de texto. As subidas de R07 e R08 são o quadro
+entrando no quadro de quem está na porta: é o que o lote pedia. **Programas: 35**, com os mesmos
+nomes da linha de base; geometrias 267 e texturas 53 com as três salas residentes. Console sem
+erro; o único aviso é o `THREE.Clock`, que já existia.
+
+Bundle, pela medida do portão novo (gzip nível 9, arquivo a arquivo): documento 63,24 kB, tela de
+título 28,29 kB, jogo 388,18 kB; **91,52 kB antes do clique** (orçamento 250) e **479,70 kB** no
+total (orçamento 600). Não se compara com os 92,85 e 484,58 kB da linha de base, que eram a conta
+que o Vite imprime. Textura residente: 107,08 MiB (112.284.380 bytes), sem mudança.
+
+Teste de farol (`test:opening`): átrio 24,5° do eixo, quadro de 19 × 23 px, 21 de 21 visadas
+livres; Holyoke 20,8°, 29 × 36 px, 21 de 21. Em z = 5,0 (a proposta original) o teste acusa a
+vitrine-herói, e na parede da porta acusa o quadro atrás do jogador.
+
+Capturas: `docs/contact-sheets/l1/` (17 quadros, conjunto `l1` em `CAPTURE_SETS`, ainda **não
+congelado**: a revisão e a passada de toque podem acrescentar quadros; quem fecha o lote congela
+com o digest). O antes de cada um está no conjunto de P0:
+
+| Depois (L1) | Antes (P0) |
+|---|---|
+| `l1-e01-holyoke-entry-pilot-from-door-dark-notorch` | `p0-e01-holyoke-entry-pilot-out-of-view-dark-notorch` |
+| `l1-h02-case-run-portrait-morgan-lit` | `p0-h01-case-run-portrait-morgan-lit` |
+| `l1-h04-case-run-guide-1916-lit` | `p0-h02-case-run-guide-1916-lit` |
+| `l1-h05-case-run-handbook-1897-lit` | `p0-h03-case-run-handbook-1897-lit` |
+| `l1-h03-case-run-photo-gym-lit` | `p0-h04-case-run-photo-gym-lit` |
+| `l1-h07-ref-holyoke-door-lit` | `p0-h06-ref-holyoke-door-lit` |
+| `l1-h06-ref-pair-door-open-lit` | `p0-h09-ref-pair-door-open-lit` |
+| `l1-a02-ref-atrium-from-office-door-lit` | `p0-a01-ref-atrium-from-office-door-lit` |
+
+### 10.4 O portão
+
+`npm run check` verde em 2026-10-04, agora com 27 passos (entraram `test:ratchets`, depois de
+`validate:content`, e `test:bundle`, no fim, que roda `vite build` antes de medir):
+
+- conteúdo: 3 salas válidas, 29 dívidas datadas impressas;
+- catracas: 4/4; fontes: 28; documentação: 21/21; capturas: 9/9; saves: 19/19;
+- energia: 28/28 (eram 16); abertura: 31/31 (eram 29); fluxo da abertura: 44/44; rádio: 27/27;
+- colisão: 28/28; kit e posicionamento: 339/339, mais **vitrine corrida: 10/10** (novo,
+  `scripts/test-case-run.ts`, encadeado em `test:kit`);
+- materiais: 10; mesa do curador: 9; estantes: 20;
+- runtime do kit: 26; runtime das salas: 19; LOD: 23;
+- aquecimento de GPU: verde, mais **prontidão da sala: 5/5** (novo, no mesmo arquivo);
+- render: 16/16; sinalização: 26; portas: 29/29; controles móveis: 13/13;
+- navegação: 67/67 (eram 55); bundle: 5/5 (novo); `npm run build`: verde.
+
+Vermelho primeiro (§9.1, passo 2), conferido rodando cada suíte nova contra o estado anterior:
+
+- `test:power`: 6 de 26 reprovavam (a cápsula a 0,081 m da parede do quadro do átrio, sem acerto
+  e com o olho dentro do volume; o raio de dentro do proxy; `__handle`, `__indicator` e
+  `glass-green` no manifesto; o piloto da Holyoke a 0,82 m do átrio; o quadro da Holyoke a 15 mm
+  do reboco);
+- `test:opening`: farol (Holyoke a 106,3° e atrás do jogador; nenhuma lente), validadores novos e
+  a tabela de dívidas (três acusações fora dela);
+- `test:navigation`: 5 de 67 (nenhum controle de parede sólido; `E` não alcança o quadro do
+  átrio no fim das duas rotas; a rota da Holyoke acaba diante de uma parede sem quadro);
+- `test:kit` (vitrine corrida): com o `layout` exportado, o bake refeito e o conteúdo antigo, 5
+  de 8 reprovavam nas quatro peças (910, 950, 890 e 430 mm fora do centro do vão; o manual 63,8 mm
+  dentro da tábua; o retrato a 275 mm do forro);
+- `test:gpu-warmup`: com a espera escrita como o jogo era (nunca degrada) e o carregador comum,
+  5 de 5 (a porta simulada não abria em 40 s; o erro 404 subia).
+
+Catraca nasce verde; a prova de que morde é por mutação, refeita neste lote: baixar o teto do
+kit em um byte, somar uma imagem a `MUSEUM.media` (113,75 MiB), apagar a linha de dívida de
+`programs`, deixar o registro do navegador dois lotes velho, importar `museum.ts` em
+`MuseumApp.tsx` (98,11 kB antes do clique) e mover uma prateleira no gerador sem assar: as seis
+reprovam, cada uma com a mensagem certa.
+
+### 10.5 Testes que mudaram de sentido (plano, 6.5)
+
+- `scripts/test-navigation.ts`: as âncoras (`ROOM_ANCHORS`) são pontos de reunião no piso livre,
+  não pontos de partida. Toda rota do átrio (as seis de `ATRIUM_WALK_ROUTES` e a do balcão) sai
+  de `arrivalPoint('atrium')`, 0,95 m para dentro da porta do escritório, e passa pelo ponto
+  antigo. Rotas novas: porta do escritório → quadro em linha reta (a cápsula contorna o anel do
+  plinto) e porta da Holyoke → quadro → atalho. O mundo do teste veio para
+  `scripts/lib/museumWorld.ts` e ganhou os controles de energia.
+- `scripts/test-power.ts`: «content has no invalid or missing power controls» passa a assentar
+  as dívidas de `wall-fixture-off-the-wall` antes de exigir zero erros. O `check` da suíte deixou
+  de parar na primeira falha.
+- `scripts/test-opening.ts`: o `test()` deixou de parar na primeira falha (imprime `FAIL` e
+  segue; o código de saída continua 1).
+- `scripts/test-opening-flow.ts` (commit `ab6625e`): a checagem do código da gaveta exige o ano
+  na plaqueta e em exatamente duas chaves por dicionário, e proíbe o ano na ficha; «the renaming
+  is dated where history dates it» virou linhas da tabela de asserções por chave.
+- `test:kit` agora são dois arquivos; `test:kit-runtime` não mudou (56 e 53 lotes).
+
+### 10.6 Dívidas datadas (`src/content/knownDebt.ts`, 35 linhas)
+
+O portão imprime as do conteúdo em toda execução e cobra a data; `CONTENT_LOT` é 1.
+
+| Portão | Código | O quê | Fecha em |
+|---|---|---|---|
+| `validate:content` | `kit-part-unused` | 16 receitas sem uso (17.156 triângulos) | L5 |
+| `validate:content` | `i18n-key-unused` | 12 chaves (planta L2; escada de dicas L4; ajustes L16; modo leitura L24) | L2 a L24 |
+| `validate:content` | `wall-fixture-off-the-wall` | `atrium-breaker`, a 25,5 cm do reboco | L10 |
+| `test:power` | `pilot-reaches-neighbour` | `atrium-breaker`: piloto de 2,4 m a 1,06 m da Holyoke | L10 |
+| `test:ratchets` | `ratchet-over-budget` | `kit-glb` (2.182 KiB contra 800), `programs` (35 contra 25), `atrium-draws` (101 contra 100, teto temporário 102), `pair-draws` (125 contra 100) | L6 |
+| `test:ratchets` | `ratchet-over-budget` | `resident-texture` (107,08 MiB contra 45) | L7 |
+
+Fechadas por L1: AS-H1, CAP-1 e a parte de L1 de AS-H3; AS-H14 para o quadro da Holyoke; a metade
+de posição de ÁT-B4. Sem código, só registradas (texto que outro lote conserta): o bilhete do
+Otávio ainda fala em medalhas e cofre (L3); `doc-halstead` é `kind: 'letter'` sem ser carta
+(L8); as fichas ainda dizem «Reprodução» e «Fac-símile» (L8); o detalhe `credit` do guia ainda
+revela `filipino-spike` (L4).
+
+### 10.7 Onde a execução se afastou do plano do lote
+
+- **Uma quinta linha de catraca, `atrium-draws`.** O plano listava quatro e dizia que o teto de
+  102 draws ficava só registrado em `ratchets.ts`. A regra do próprio T11 («toda catraca acima do
+  orçamento de papel tem linha em `KNOWN_DEBT`») pede a linha: R04 mede 101 contra 100. O Anexo C
+  do plano mestre já a listava.
+- **O teto do par desceu para 125** (o medido), não ficou nos 128 da linha de base: catraca
+  aperta quando a medida desce. O do `kit.glb` desceu para 2.234.252.
+- **O teste de farol mede o quadro com as oito quinas da caixa**, não só a face: dá 19 × 23 px no
+  átrio e 29 × 36 na Holyoke (o plano dizia 15 × 21 e 24 × 33). O limite de 6 px vale igual.
+- **O jogador do teste de alcance mantém o quadro no centro da tela enquanto anda.** Com rumo
+  fixo, quem chega alguns graus de lado escorrega pela face de uma caixa de 46 cm e sai pela
+  outra borda em quatro segundos: é verdade para qualquer coisa pequena numa parede, e não é o
+  que o teste pergunta. Vale em `test:power` e no fim das rotas de `test:navigation`.
+- **Mais duas checagens em `test:kit`** além das sete do plano: os limites das famílias não
+  distinguem uma prateleira de outra um centímetro acima, então o `layout` é conferido contra os
+  vértices do próprio GLB (as oito quinas de cada montante, prateleira e régua estão no arquivo;
+  nada assado dentro do vidro fica fora do `layout`). Por isso as mesas de leitura inclinadas,
+  cuja borda de trás entra 5 cm sob o vidro, também estão no `layout`.
+- **Mais uma checagem em `test:power`**: o volume de interação fica dentro do colisor acrescido
+  do raio da cápsula (a regra de ÁT-A1 sem caminhada, para todas as direções).
+- **Os tetos de bundle são três** (documento, título, jogo), arredondados para cima em 100
+  bytes, além dos dois orçamentos do papel.
+- `PLAYER_EYE_HEIGHT` saiu de `PlayerController.tsx` para `playerPosition.ts`, para os testes
+  lançarem o raio do mesmo olho que o jogo.
+
+### 10.8 O que o navegador mostrou, e o que não foi feito
+
+Servidor `museum-dev` reiniciado depois da última edição; painel oculto, como em P0.
+
+- **Piloto da Holyoke, da porta, no escuro, sem lanterna** (`l1-e01`): o quadro aceso de
+  vermelho na parede do fundo, à esquerda de quem entra, entre a vitrine-herói e o mural.
+- **Os dois quadros.** Andando reto com `W` a partir de 1,3 m, a cápsula para a 0,55 m do plano
+  da parede e o aviso «E · Restaurar energia» fica na tela o caminho todo (lido do DOM a cada
+  20 quadros); `E` religa e a lente passa a `led-green` (`l1-d02`, `l1-a01`, `l1-e03`, `l1-h01`).
+- **Os quatro vãos, acesos** (`l1-h02` a `l1-h05`, e o conjunto em `l1-h08`): nenhuma peça
+  cortada; a legenda do retrato em quatro linhas, acima da tábua.
+- **A porta sem saída (P0 #8).** Com o pedido da imagem `atrium-mural-attack` engolido, a porta
+  do escritório ficou em «Preparando a próxima sala…», o console avisou «Room "atrium" opens
+  without its wall art: not ready after 30 s» e a porta passou a «Abrir porta» dez segundos
+  depois (`l1-d03`: o saguão sem a arte de parede). Com o pedido desviado para um arquivo que não
+  existe, a página não ficou em branco, o console avisou uma vez, o mural saiu em cinza (`l1-d04`)
+  e a porta ficou pronta em seis segundos, com as 199 geometrias.
+- **Toque e inglês**, só uma fumaça: em 844 × 390, em inglês, o título é «Volleyball Museum», os
+  três controles de toque montam, o aviso diz «ACTION · Restore power · Atrium main breaker» e o
+  botão **Action** religa o saguão.
+
+**Não foi feito, e fica para quem fechar o lote:** a rota inteira em inglês; a rota inteira com
+os botões de toque (andar e olhar pelos direcionais); a leitura das oito etiquetas e das fichas
+na tela; o exame das quatro peças (a plaqueta do retrato ainda pede inclinar a moldura); as
+falas do Jorge ouvidas no jogo (primeira chamada, dica curta da gaveta, última dica); a revisão
+adversarial; o deploy e a fumaça em produção.
+
+**Visto de passagem, sem conserto neste lote:** de perto e no escuro o piloto estoura o quadro e
+lava a lente (`l1-e02`); com o alcance de hoje ele banha de vermelho a ponta sul do mural. Os
+dois são de L10. Os vãos de quadro ficam com a prateleira de baixo vazia (L14).
+
+### 10.9 Lições
+
+- **Um colisor pequeno numa parede não segura quem chega de lado.** A resolução empurra a cápsula
+  pela normal da face; com um rumo oblíquo ela desliza e sai pela borda. A garantia que vale para
+  todas as direções é geométrica: o volume de interação cabe no colisor acrescido do raio da
+  cápsula.
+- **Limites não provam que o assado é o do gerador.** Uma prateleira movida um centímetro fica
+  dentro da mesma caixa. Quem exporta `layout` confere as quinas contra os vértices do GLB.
+- **A caixa inteira de uma receita é um obstáculo honesto para linha de visada**, e mais dura
+  que as malhas: posição que passa por ela passa no navegador.
+- **`side: DoubleSide` num proxy invisível não custa nada**, e é o que deixa o raio acertar um
+  volume que contém a câmera. Mas o conserto de verdade é a câmera não entrar.
+- **Uma falha de `useLoader` desmonta o jogo inteiro.** Carregador de coisa opcional (uma
+  fotografia) nunca rejeita: resolve num substituto. Um GLB de peças que falha ainda derruba a
+  página; a fronteira de erro por sala é de L6 (M13a).
+- **Regra nova que acusa o conteúdo de hoje entra com a dívida datada no mesmo commit**, e o
+  teste que chama o validador direto assenta a dívida antes de exigir zero erros.
+
+Do harness, para quem repetir a rota:
+
+- **`__museumStep(n)` anda quadros, não o relógio.** O `delta` do `useFrame` é o tempo real entre
+  dois quadros, então 1.800 passos seguidos somam décimos de segundo, não 30 s. A espera de 30 s
+  da sala conta esse `delta` (até 0,1 s por quadro): no painel oculto são 300 passos de um quadro
+  com 101 ms de espera ocupada entre eles (`while (performance.now() < fim) {}`); `setTimeout`
+  não serve, porque o navegador o estrangula na aba oculta.
+- **O HUD é React: leia o DOM depois de ceder a vez** (`await` de um temporizador). Lido na mesma
+  tarefa do `__museumStep`, o aviso ainda não foi desenhado e parece que sumiu.
+- **O store está ao alcance da página**: `(await import('/src/state/store.ts')).useMuseum` é a
+  mesma instância do jogo. Serve para acender as três salas como a linha de base fez.
+- **Teclas**: `window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }))` seguido de
+  `__museumStep` anda o controlador de verdade, sem ponteiro travado. O botão de toque responde a
+  `PointerEvent` com `pointerType: 'touch'`.
+- **A primeira leitura depois de um teleporte vindo de outra sala pode trazer um draw a mais**
+  (59 em R01, depois 58). Meça duas passadas.
+
+### 10.10 Próximos passos
+
+1. Fechar L1: revisão adversarial (passo 5), o resto da rota de 10.8, revisor, push, deploy e
+   fumaça; congelar o conjunto `l1` de capturas; anotar a versão Cloudflare aqui.
+2. L2 (Trilhos). Ele paga `map.legend` (`i18n-key-unused`) e move `CONTENT_LOT` para 2 no commit
+   que a pagar. Texto novo na tela de título mexe no teto de `title` do bundle, que tem 14 bytes
+   de folga: sobe no mesmo commit, com o motivo em `scripts/lib/ratchets.ts`.
+3. Um lote que mudar o que uma sala desenha mede de novo os dez pontos e troca `BROWSER_RECORD`
+   (`scripts/lib/ratchets.ts`): o portão reprova um registro com mais de um lote de idade.

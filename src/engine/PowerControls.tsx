@@ -16,20 +16,23 @@ import {
   Mesh,
   Raycaster,
   Vector2,
-  Vector3,
   type Group,
   type Intersection,
   type Object3D,
 } from 'three'
 
+import type { BakedBundle } from '../content/bake.generated'
 import { MUSEUM } from '../content/museum'
 import type { PowerControlData, RoomData } from '../content/schema'
 import { isModalOpen, useMuseum } from '../state/store'
 import { USE_DRACO, USE_MESHOPT } from './bundleCache'
+import type { CollisionWorld } from './collision'
+import { paintLenses } from './deviceNodes'
+import { PROXY_MATERIAL_PROPS, paddedProxy } from './interactionProxy'
 import { INTERACTION_REACH, interactionWinnerOf, PROXY_MINIMUM } from './interactionTarget'
-import { cloneKitPart, disposeKitPart } from './kitPart'
+import { cloneKitPart, disposeKitPart, registerKitColliders } from './kitPart'
 import type { MaterialLibrary } from './materials'
-import { isRoomPowered } from './power'
+import { isRoomPowered, powerControlLensMaterial } from './power'
 import { isUnclaimedInteractKey, subscribePrimaryAction } from './primaryAction'
 import { buildPowerControlLightRig } from './powerControlLightRig'
 
@@ -93,33 +96,44 @@ export function PowerControlLights({
 
 export function PowerControlLayer({
   room,
-  kitUrl,
+  kitBundle,
   materials,
+  collision,
 }: {
   room: RoomData
-  kitUrl: string
+  kitBundle: BakedBundle
   materials: MaterialLibrary
+  collision: CollisionWorld | null
 }) {
-  const { scene } = useGLTF(kitUrl, USE_DRACO, USE_MESHOPT)
+  const { scene } = useGLTF(kitBundle.url, USE_DRACO, USE_MESHOPT)
   if (!room.powerControl) return null
 
   return (
     <PowerControl
+      room={room}
       control={room.powerControl}
       kit={scene as Group}
+      kitBundle={kitBundle}
       materials={materials}
+      collision={collision}
     />
   )
 }
 
 function PowerControl({
+  room,
   control,
   kit,
+  kitBundle,
   materials,
+  collision,
 }: {
+  room: RoomData
   control: PowerControlData
   kit: Group
+  kitBundle: BakedBundle
   materials: MaterialLibrary
+  collision: CollisionWorld | null
 }) {
   const instance = useMemo(
     () => cloneKitPart(kit, control.part, materials),
@@ -128,22 +142,39 @@ function PowerControl({
 
   useEffect(() => () => disposeKitPart(instance), [instance])
 
+  // A control on a wall is solid, by whatever collider its recipe carries in
+  // the bake manifest; a recipe with none (the desk lamp) registers nothing.
+  // Without this the capsule walked into the breaker until the wall stopped
+  // it, and the eye ended inside the interaction volume below.
+  useEffect(
+    () =>
+      registerKitColliders(kit, control.part, kitBundle, collision, {
+        roomOrigin: room.origin,
+        position: control.position,
+        rotationY: control.rotationY,
+        scale: control.scale,
+      }),
+    [collision, control.part, control.position, control.rotationY, control.scale, kit, kitBundle, room.origin],
+  )
+
+  // A control with a baked lens shows the state of the room it restores. The
+  // two materials are the library's own, already drawn by the door reader:
+  // repainting swaps a reference and compiles nothing. A control without a
+  // lens (the lamp, which lights itself) has no node to repaint.
+  const restoredRooms = useMuseum((state) => state.progress.roomsPowered)
+  const lensMaterial = powerControlLensMaterial(isRoomPowered(room, restoredRooms))
+  useEffect(() => {
+    const material = materials.get(lensMaterial)
+    if (instance && material) paintLenses(instance, control.part, material)
+  }, [control.part, instance, lensMaterial, materials])
+
   const proxy = useMemo(() => {
     if (!instance) return null
     instance.updateMatrixWorld(true)
-    const bounds = new Box3().setFromObject(instance)
-    const centre = bounds.getCenter(new Vector3())
-    const size = bounds.getSize(new Vector3())
-
     // A lamp switch is physically tiny, but the interaction means "looking at
     // the lamp", not threading a crosshair through a ten-millimetre knob. The
     // minimum volume preserves that intent without content-specific hitboxes.
-    const [minX, minY, minZ] = PROXY_MINIMUM.powerControl
-    size.set(Math.max(size.x, minX), Math.max(size.y, minY), Math.max(size.z, minZ))
-    return {
-      centre: centre.toArray() as [number, number, number],
-      size: size.toArray() as [number, number, number],
-    }
+    return paddedProxy(new Box3().setFromObject(instance), PROXY_MINIMUM.powerControl)
   }, [instance])
 
   if (!instance || !proxy) return null
@@ -162,7 +193,7 @@ function PowerControl({
           objects whose `visible` flag remains false. */}
       <mesh position={proxy.centre} visible={false}>
         <boxGeometry args={proxy.size} />
-        <meshBasicMaterial />
+        <meshBasicMaterial {...PROXY_MATERIAL_PROPS} />
       </mesh>
     </group>
   )

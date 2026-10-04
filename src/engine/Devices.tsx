@@ -46,10 +46,11 @@ import {
   aimableDeviceId,
   deviceIdFor,
   hiddenInScene,
-  isLensNode,
+  paintLenses,
   placeHandset,
   prepareHandset,
 } from './deviceNodes'
+import { PROXY_MATERIAL_PROPS, paddedProxy } from './interactionProxy'
 import { INTERACTION_REACH, interactionWinnerOf, PROXY_MINIMUM } from './interactionTarget'
 import { cloneKitPart, disposeKitPart } from './kitPart'
 import type { MaterialLibrary } from './materials'
@@ -93,13 +94,7 @@ function useLensMaterial(
 ) {
   useEffect(() => {
     const material = materials.get(materialKey)
-    if (!instance || !material) return
-    instance.traverse((lens) => {
-      if (!isLensNode(lens.name, part)) return
-      lens.traverse((object) => {
-        if (object instanceof Mesh) object.material = material
-      })
-    })
+    if (instance && material) paintLenses(instance, part, material)
   }, [instance, materialKey, materials, part])
 }
 
@@ -289,16 +284,8 @@ function RadioDeviceView({
 
   const proxy = useMemo(() => {
     instance.updateMatrixWorld(true)
-    const bounds = new Box3().setFromObject(instance)
-    const centre = bounds.getCenter(new Vector3())
-    const size = bounds.getSize(new Vector3())
     // "Looking at the radio", not threading the crosshair through an antenna.
-    const [minX, minY, minZ] = PROXY_MINIMUM.radio
-    size.set(Math.max(size.x, minX), Math.max(size.y, minY), Math.max(size.z, minZ))
-    return {
-      centre: centre.toArray() as [number, number, number],
-      size: size.toArray() as [number, number, number],
-    }
+    return paddedProxy(new Box3().setFromObject(instance), PROXY_MINIMUM.radio)
   }, [instance])
 
   return (
@@ -307,7 +294,7 @@ function RadioDeviceView({
     <group visible={!carried}>
       <mesh position={proxy.centre} visible={false}>
         <boxGeometry args={proxy.size} />
-        <meshBasicMaterial />
+        <meshBasicMaterial {...PROXY_MATERIAL_PROPS} />
       </mesh>
     </group>
   )

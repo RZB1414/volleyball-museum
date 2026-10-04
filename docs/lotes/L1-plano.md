@@ -7,6 +7,11 @@ inglês, as receitas tocadas, o delta previsto por sala, as dívidas datadas e a
 no navegador. **Este arquivo não muda código.** As linhas citadas são as de `98c24b3`; o plano
 mestre cita as de `82756c4`, e a preparação deslocou algumas.
 
+**Executado em 2026-10-04.** Este plano fica como foi escrito. O que saiu, as medições do passo 6
+e os pontos em que a execução se afastou dele (uma quinta linha de catraca, o teto do par em 125,
+duas checagens a mais na vitrine corrida, o jogador do teste de alcance que mantém o quadro no
+centro da tela) estão em `docs/HANDOFF.md`, §10.
+
 Os números marcados **[medido]** saíram de `docs/lotes/P0-linha-de-base.md` ou de uma simulação em
 Node feita para este plano com o código real (colisão, manifesto do bake, fonte do texto 3D). Os
 marcados **[previsto]** são conta; quem os confirma é o passo 6.

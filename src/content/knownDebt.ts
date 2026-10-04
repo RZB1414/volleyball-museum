@@ -94,6 +94,39 @@ export const KNOWN_DEBT: readonly KnownDebt[] = [
   ...['lock.opened', 'lock.hint.highlight', 'lock.hint.audio', 'lock.hint.reveal'].map((key) =>
     keyUnused(key, 4, 'the hint ladder (H-19): shown, or deleted'),
   ),
+
+  // The atrium breaker hangs over the wainscot, a hand's width from the
+  // plaster, and its pilot is lit from 2.4 m. The Holyoke one paid both in
+  // L1 by moving; this one waits for the lot that redraws the panels as
+  // devices and sets the pilots' reach.
+  {
+    gate: 'validate:content',
+    code: 'wall-fixture-off-the-wall',
+    id: 'atrium-breaker',
+    untilLot: 10,
+    note: 'ÁT-A2: 25.5 cm out from the plaster, over the wainscot',
+  },
+  {
+    gate: 'test:power',
+    code: 'pilot-reaches-neighbour',
+    id: 'atrium-breaker',
+    untilLot: 10,
+    note: 'ÁT-B4: a 2.4 m pilot 1.06 m from the Holyoke wing (the reach comes down to 0.8 m)',
+  },
+
+  // Ratchets held at what was measured, above what the plan budgets. Both
+  // figures, and where each ceiling came from, are in `scripts/lib/ratchets.ts`.
+  ...(
+    [
+      ['kit-glb', 6, 'one kit of 2,182 KiB against 800: unused recipes leave in L5, one kit per room in L6'],
+      ['programs', 6, '35 shader programs against 25: measured again after the kit merge'],
+      ['atrium-draws', 6, 'ÁT-K1: 101 draws on the south-east diagonal against 100, under a ceiling of 102'],
+      ['pair-draws', 6, '125 draws with the Holyoke door open against 100 (L17 takes what L6 leaves)'],
+      ['resident-texture', 7, '107.08 MiB against 45: KTX2, and wall media inside the budget (D23, D24)'],
+    ] as const
+  ).map(
+    ([id, untilLot, note]): KnownDebt => ({ gate: 'test:ratchets', code: 'ratchet-over-budget', id, untilLot, note }),
+  ),
 ]
 
 /** The lines one gate collects. */

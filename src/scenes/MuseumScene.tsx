@@ -34,6 +34,7 @@ import { ContainerLayer, ContainerTargeting } from '../engine/Containers'
 import { DeviceLayer, DeviceTargeting, RadioDirector, RadioHandset } from '../engine/Devices'
 import { Flashlight } from '../engine/Flashlight'
 import { FramedMedia } from '../engine/FramedMedia'
+import { framedPrintWidth, PRINT_NUDGE } from '../engine/framedMediaLayout'
 import {
   beginGpuWarmupDiscovery,
   cancelGpuWarmupRoot,
@@ -66,6 +67,15 @@ import { KitLayer } from '../engine/RoomFurniture'
 import { RoomLighting } from '../engine/RoomLighting'
 import { RoomSignage } from '../engine/RoomSignage'
 import { syncRoomDetailTargets } from '../engine/roomDetailTargets'
+import {
+  advanceRoomDetailWait,
+  ALL_DETAIL_BOUNDARIES_COMMITTED,
+  missingRoomDetail,
+  ROOM_DETAIL_TIMEOUT_SECONDS,
+  ROOM_DETAIL_WAIT_IDLE,
+  roomDetailComplete,
+  roomDetailWarmable,
+} from '../engine/roomReadiness'
 import { RoomTextReadinessProvider } from '../engine/RoomText'
 import {
   openDoorNeighbourRooms,
@@ -355,7 +365,7 @@ function ExhibitBundle({
               <FramedMedia
                 readinessId={`exhibit-credit:${exhibit.id}`}
                 asset={asset}
-                width={asset.aspect >= 1.6 ? 1.4 : 0.34}
+                width={framedPrintWidth(asset.aspect)}
                 /**
                  * Offset along the frame's OWN normal.
                  *
@@ -370,7 +380,7 @@ function ExhibitBundle({
                  */
                 position={(() => {
                   const facing = exhibit.rotationY ?? 0
-                  const nudge = 0.032
+                  const nudge = PRINT_NUDGE
                   return [
                     exhibit.position[0] + Math.sin(facing) * nudge,
                     exhibit.position[1],
@@ -390,8 +400,6 @@ function ExhibitBundle({
 // ---------------------------------------------------------------------------
 // Rooms
 // ---------------------------------------------------------------------------
-
-const ALL_DETAIL_BOUNDARIES_COMMITTED = 0b111
 
 type DetailBoundary = 0b001 | 0b010 | 0b100
 
@@ -488,7 +496,12 @@ function CachedRoomDetail({
           materials={materials}
           collision={collision}
         />
-        <PowerControlLayer room={room} kitUrl={KIT_URL} materials={materials} />
+        <PowerControlLayer
+          room={room}
+          kitBundle={KIT_BUNDLE}
+          materials={materials}
+          collision={collision}
+        />
         <DeviceLayer room={room} kitUrl={KIT_URL} materials={materials} />
         <KitLayer
           room={room}
@@ -532,6 +545,8 @@ function Room({
   const warmupQueuedRef = useRef(false)
   const [boundaryMask, setBoundaryMask] = useState(0)
   const [textReady, setTextReady] = useState(false)
+  const detailWaitRef = useRef(ROOM_DETAIL_WAIT_IDLE)
+  const [degraded, setDegraded] = useState(false)
   const renderer = useThree((state) => state.gl)
   const camera = useThree((state) => state.camera)
   const targetScene = useThree((state) => state.scene)
@@ -554,26 +569,49 @@ function Room({
     }
   }, [onDetailGpuReady, renderer, room.id])
 
+  // The wait for a mounted room's detail, counted on the frame clock. A room
+  // completes within seconds and the count goes back to zero; a room one of
+  // whose images never arrives is degraded at the limit and goes on without
+  // it, so that no door is held shut by a picture (`roomReadiness.ts`).
+  useFrame((_, delta) => {
+    const next = advanceRoomDetailWait(detailWaitRef.current, {
+      mounted: detailMounted,
+      complete: roomDetailComplete({ boundaryMask, textReady }),
+      deltaSeconds: delta,
+    })
+    if (next === detailWaitRef.current) return
+    const changed = next.degraded !== detailWaitRef.current.degraded
+    detailWaitRef.current = next
+    if (!changed) return
+    setDegraded(next.degraded)
+    if (next.degraded && import.meta.env.DEV) {
+      console.warn(
+        `[museum] Room "${room.id}" opens without its ${missingRoomDetail({ boundaryMask, textReady }).join(', ')}: ` +
+          `not ready after ${ROOM_DETAIL_TIMEOUT_SECONDS} s.`,
+      )
+    }
+  })
+
   useEffect(() => {
     const root = rootRef.current
     if (!root) return
-    const complete =
-      detailMounted &&
-      boundaryMask === ALL_DETAIL_BOUNDARIES_COMMITTED &&
-      textReady
 
-    if (!complete) {
+    if (!roomDetailWarmable({ mounted: detailMounted, boundaryMask, textReady, degraded })) {
       warmupQueuedRef.current = false
       beginGpuWarmupDiscovery(renderer, root)
       return
     }
+    // Queued once per generation. In a degraded room this also means that a
+    // boundary committing late does not reopen discovery: it would take the
+    // room's readiness back from a door that may already be open on it.
     if (warmupQueuedRef.current) return
     warmupQueuedRef.current = true
 
     // This is deliberately the first scan for the generation. Waiting for all
     // Suspense boundaries and every Troika onSync avoids remembering empty text
     // geometry, while rooting it at Room includes shell and signage as well as
-    // the cached exhibits/furniture subtree.
+    // the cached exhibits/furniture subtree. A degraded room scans what has
+    // committed and nothing else.
     beginGpuWarmupDiscovery(renderer, root)
     const scan = scanGpuWarmupResources(root, createGpuWarmupScanState())
     const compileShaders = scanNeedsShaderCompile(scan)
@@ -586,7 +624,7 @@ function Room({
       scan.textures,
     )
     markGpuWarmupDiscoveryComplete(renderer, root)
-  }, [boundaryMask, camera, detailMounted, renderer, targetScene, textReady])
+  }, [boundaryMask, camera, degraded, detailMounted, renderer, targetScene, textReady])
 
   const visible = tier !== 'hidden'
   const detailed = tier === 'detail'

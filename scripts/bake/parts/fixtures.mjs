@@ -600,10 +600,25 @@ export function buildVentGrille({ width = 0.5, height = 0.3 } = {}) {
  * A wall-mounted distribution panel with a deliberately oversized isolator.
  *
  * The handle is larger than a domestic breaker because this is a gameplay
- * landmark seen in emergency light from several metres away. Case, handle and
- * indicator remain separate material components but share one wall datum, so
- * any room can declare the same recipe without runtime offsets or a special
+ * landmark seen in emergency light from several metres away. Case, lever and
+ * lens remain separate material components but share one wall datum, so any
+ * room can declare the same recipe without runtime offsets or a special
  * component. Like the other wall fixtures, local +Z projects into the room.
+ *
+ * The families are named for what the runtime does to them, and the content
+ * gate requires both (`power-control-without-state`,
+ * `power-control-node-missing`):
+ *
+ *   - `led` is the lens. The runtime repaints it, red while the room waits
+ *     and green once it is restored, as it does the door reader's.
+ *   - `lever` is everything the hand moves, as ONE node: bezel, spindle,
+ *     lever and grip. The bezel and the spindle are cylinders on the pivot's
+ *     own axis, so turning the whole node about `anchors.leverPivot` leaves
+ *     them where they are and swings only the bar. The lot that makes the
+ *     lever come down turns that node; it does not need a second family.
+ *
+ * `anchors` are in the recipe's frame: the centre of the lens's front face,
+ * and the point on the door the lever turns about.
  */
 export function buildBreakerPanel({ width = 0.46, height = 0.64, depth = 0.11 } = {}) {
   const caseParts = []
@@ -633,36 +648,44 @@ export function buildBreakerPanel({ width = 0.46, height = 0.64, depth = 0.11 } 
 
   const caseGeometry = seat(merge(caseParts), 'z', 'min', 0)
 
-  const handleParts = []
+  const pivot = [0, 0.305, depth + 0.047]
+
+  const leverParts = []
   const bezel = new CylinderGeometry(0.055, 0.055, 0.018, 12)
   bezel.rotateX(Math.PI / 2)
-  bezel.translate(0, 0.305, depth + 0.047)
-  handleParts.push(bezel)
+  bezel.translate(...pivot)
+  leverParts.push(bezel)
 
   const spindle = new CylinderGeometry(0.016, 0.016, 0.052, 10)
   spindle.rotateX(Math.PI / 2)
-  spindle.translate(0, 0.305, depth + 0.081)
-  handleParts.push(spindle)
+  spindle.translate(pivot[0], pivot[1], depth + 0.081)
+  leverParts.push(spindle)
 
   // The lever leans away from vertical even in the off state. A perfectly
   // centred bar reads as decoration; the asymmetry reads as something movable.
   const lever = bevelledBox(0.048, 0.22, 0.042, 0.008, 1)
   lever.rotateZ(-0.16)
   lever.translate(0.016, 0.37, depth + 0.105)
-  handleParts.push(lever)
+  leverParts.push(lever)
 
   const grip = bevelledBox(0.085, 0.06, 0.055, 0.01, 1)
   grip.rotateZ(-0.16)
   grip.translate(0.03, 0.472, depth + 0.112)
-  handleParts.push(grip)
+  leverParts.push(grip)
 
-  const indicator = new CylinderGeometry(0.029, 0.029, 0.018, 12)
-  indicator.rotateX(Math.PI / 2)
-  indicator.translate(0.125, 0.505, depth + 0.052)
+  const lensLength = 0.018
+  const lensCentre = [0.125, 0.505, depth + 0.052]
+  const lens = new CylinderGeometry(0.029, 0.029, lensLength, 12)
+  lens.rotateX(Math.PI / 2)
+  lens.translate(...lensCentre)
 
   return {
     case: finalize(caseGeometry, { crease: null, metresPerTile: 0.32 }),
-    handle: finalize(merge(handleParts), { crease: Math.PI / 5, metresPerTile: 0.2 }),
-    indicator: finalize(indicator, { crease: Math.PI / 5, metresPerTile: 0.12 }),
+    lever: finalize(merge(leverParts), { crease: Math.PI / 5, metresPerTile: 0.2 }),
+    led: finalize(lens, { crease: Math.PI / 5, metresPerTile: 0.12 }),
+    anchors: {
+      lens: [lensCentre[0], lensCentre[1], lensCentre[2] + lensLength / 2],
+      leverPivot: pivot,
+    },
   }
 }

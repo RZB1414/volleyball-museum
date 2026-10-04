@@ -168,6 +168,36 @@ export function buildHolyokeEntryScreen({
 // ---------------------------------------------------------------------------
 
 /**
+ * What each bay of the run is for, by the generator's own index.
+ *
+ * Bay 0 is at local -X. The room places the run turned by PI against its
+ * south wall, so bay 0 ends up at the room's +X end and the content reads the
+ * bays right to left.
+ *
+ * The run was dressed first and the collection was hung in it afterwards, by
+ * eye: all four interactive pieces ended up across an upright and a shelf,
+ * the guide wholly inside a board, the portrait that carries the drawer's
+ * code cut through the face. A bay that hosts a piece is now cleared for it
+ * here, where the joinery is made:
+ *
+ *   - `frame`: a picture hangs on the lining, so the bay keeps only its lower
+ *     shelf and loses the upper one and its brass rail, and nothing baked
+ *     stands above that shelf;
+ *   - `book`: an open book lies on the lower shelf, so nothing baked stands
+ *     on the middle of that shelf or hangs over it.
+ *
+ * `test:kit` (`scripts/test-case-run.ts`) holds the content to the `layout`
+ * this function returns.
+ */
+export const HISTORY_CASE_BAYS = [
+  { hosts: 'frame' },
+  { hosts: 'frame' },
+  { hosts: 'book' },
+  { hosts: 'book' },
+  { hosts: null },
+]
+
+/**
  * One complete five-bay dark-timber, brass and glass wall case.
  *
  * The earlier implementation instanced one identically dressed bay five times.
@@ -175,6 +205,11 @@ export function buildHolyokeEntryScreen({
  * look like shop shelving. This single recipe keeps the same draw-call cost and
  * gives every bay its own silhouette. The wall plane is z = 0, minY is zero and
  * +Z is the viewing side.
+ *
+ * Besides the material families it returns `layout`: where the uprights,
+ * shelves, rails and baked dressing are, in the recipe's frame, written from
+ * the same variables that build them. Whatever the content places inside is
+ * checked against it.
  */
 export function buildHistoryCaseRun({
   width = 10.20,
@@ -182,6 +217,10 @@ export function buildHistoryCaseRun({
   depth = 0.64,
   bays = 5,
 } = {}) {
+  if (bays !== HISTORY_CASE_BAYS.length) {
+    throw new Error(`The history case run declares ${HISTORY_CASE_BAYS.length} bays and was asked for ${bays}.`)
+  }
+
   const carcass = []
   const accent = []
   const lining = []
@@ -189,6 +228,28 @@ export function buildHistoryCaseRun({
   const glass = []
   const paper = []
   const artefacts = []
+
+  const boxOf = (geometry) => {
+    geometry.computeBoundingBox()
+    return {
+      min: geometry.boundingBox.min.toArray(),
+      max: geometry.boundingBox.max.toArray(),
+    }
+  }
+  const layoutBays = HISTORY_CASE_BAYS.map((bay, index) => ({
+    index,
+    centreX: -width / 2 + (width / bays) * (index + 0.5),
+    hosts: bay.hosts,
+    shelves: [],
+    rails: [],
+  }))
+  const layoutStiles = []
+  const layoutFiller = []
+  /** Baked dressing: joins its family and is written down as a box. */
+  const fill = (family, geometry, id, bay) => {
+    family.push(geometry)
+    layoutFiller.push({ id, bay, ...boxOf(geometry) })
+  }
 
   const baseHeight = 0.76
   const stile = 0.065
@@ -233,8 +294,10 @@ export function buildHistoryCaseRun({
   // A single Prussian-navy lining sits proud of the timber back. The dark
   // field gives pale paper and leather the contrast seen in a real archive
   // case; without it every layer collapsed into the same brown material.
-  const darkBack = new BoxGeometry(width - 0.12, upperHeight - 0.05, 0.012)
-  darkBack.translate(0, upperLow + upperHeight / 2, 0.032)
+  const liningThickness = 0.012
+  const liningCentreZ = 0.032
+  const darkBack = new BoxGeometry(width - 0.12, upperHeight - 0.05, liningThickness)
+  darkBack.translate(0, upperLow + upperHeight / 2, liningCentreZ)
   lining.push(darkBack)
 
   for (let index = 0; index <= bays; index += 1) {
@@ -242,6 +305,7 @@ export function buildHistoryCaseRun({
     const sideStile = new BoxGeometry(stile, upperHeight, depth)
     sideStile.translate(x, upperLow + upperHeight / 2, depth / 2)
     carcass.push(sideStile)
+    layoutStiles.push({ x, halfWidth: stile / 2 })
   }
 
   const head = bevelledBox(width + 0.045, 0.105, depth + 0.025, 0.012, 1)
@@ -255,14 +319,30 @@ export function buildHistoryCaseRun({
   accent.push(oxbloodBand)
 
   // Shelf heights alternate subtly from bay to bay. The run remains aligned,
-  // but the contents do not fall into a copied spreadsheet grid.
+  // but the contents do not fall into a copied spreadsheet grid. A bay that
+  // hosts a frame keeps the lower level only: the picture hangs where the
+  // upper shelf and its rail would cross it.
+  const shelfThickness = 0.027
+  const shelfBack = 0.055
+  const levelsOf = (bay) => [
+    { id: 'lower', y: 1.32 + (bay % 2) * 0.05 },
+    ...(HISTORY_CASE_BAYS[bay].hosts === 'frame' ? [] : [{ id: 'upper', y: 1.91 - (bay % 3) * 0.04 }]),
+  ]
   for (let bay = 0; bay < bays; bay += 1) {
     const centreX = -width / 2 + bayWidth * (bay + 0.5)
-    for (const shelfY of [1.32 + (bay % 2) * 0.05, 1.91 - (bay % 3) * 0.04]) {
+    for (const level of levelsOf(bay)) {
       const shelfDepth = depth - 0.14 - (bay % 2) * 0.035
-      const shelf = new BoxGeometry(bayWidth - 0.15, 0.027, shelfDepth)
-      shelf.translate(centreX, shelfY, 0.055 + shelfDepth / 2)
+      const shelf = new BoxGeometry(bayWidth - 0.15, shelfThickness, shelfDepth)
+      shelf.translate(centreX, level.y, shelfBack + shelfDepth / 2)
       carcass.push(shelf)
+      layoutBays[bay].shelves.push({
+        id: level.id,
+        top: level.y + shelfThickness / 2,
+        bottom: level.y - shelfThickness / 2,
+        back: shelfBack,
+        front: shelfBack + shelfDepth,
+        halfWidth: (bayWidth - 0.15) / 2,
+      })
     }
   }
 
@@ -270,10 +350,11 @@ export function buildHistoryCaseRun({
   // rails, while the full-height uprights keep the run architectural.
   for (let bay = 0; bay < bays; bay += 1) {
     const centreX = -width / 2 + bayWidth * (bay + 0.5)
-    for (const y of [1.32 + (bay % 2) * 0.05, 1.91 - (bay % 3) * 0.04]) {
+    for (const level of levelsOf(bay)) {
       const rail = new BoxGeometry(bayWidth - 0.09, 0.026, 0.025)
-      rail.translate(centreX, y, faceZ + 0.010)
+      rail.translate(centreX, level.y, faceZ + 0.010)
       trim.push(rail)
+      layoutBays[bay].rails.push({ id: level.id, ...boxOf(rail) })
     }
 
     // Integrated reading ledges create the reference's rhythm of sloped
@@ -283,6 +364,10 @@ export function buildHistoryCaseRun({
     console.rotateX(consoleRake)
     console.translate(centreX, 0.82, depth + 0.17)
     carcass.push(console)
+    // Its raked back edge tucks under the glass, a few centimetres into the
+    // case just above the deck: declared, so that the layout accounts for
+    // everything the bake puts inside the glazing.
+    layoutBays[bay].ledge = boxOf(console)
 
     const graphic = new BoxGeometry(bayWidth - 0.34, 0.012, 0.31)
     graphic.rotateX(consoleRake)
@@ -307,84 +392,68 @@ export function buildHistoryCaseRun({
     glass.push(pane)
   }
 
-  const bayCentre = (index) => -width / 2 + bayWidth * (index + 0.5)
-  const addDocument = (x, y, z, documentWidth, documentHeight, angle = 0) => {
+  const bayCentre = (index) => layoutBays[index].centreX
+  const addDocument = (id, bay, offsetX, y, z, documentWidth, documentHeight, angle = 0) => {
     const document = thinPanel(documentWidth, documentHeight, 0.008)
     document.rotateX(-0.28)
     document.rotateZ(angle)
-    document.translate(x, y, z)
-    paper.push(document)
-  }
-  const addGarment = (x, y, dark = false, darkNumber = false) => {
-    const garment = dark ? lining : paper
-    const torso = new BoxGeometry(0.52, 0.70, 0.075)
-    torso.translate(x, y, 0.34)
-    garment.push(torso)
-    for (const side of [-1, 1]) {
-      const sleeve = new BoxGeometry(0.22, 0.22, 0.065)
-      sleeve.rotateZ(side * 0.20)
-      sleeve.translate(x + side * 0.33, y + 0.20, 0.34)
-      garment.push(sleeve)
-    }
-    if (darkNumber) {
-      const number = new BoxGeometry(0.11, 0.23, 0.012)
-      number.translate(x, y + 0.02, 0.385)
-      artefacts.push(number)
-    }
+    document.translate(bayCentre(bay) + offsetX, y, z)
+    fill(paper, document, id, bay)
   }
 
-  // Bay 1: hanging YMCA jersey over a row of slim catalogues.
-  addGarment(bayCentre(0) - 0.14, 1.86, false, true)
+  // The dressing is what is left once each hosting bay has made room for its
+  // piece. Above the lower shelf, a frame bay is empty and a book bay keeps
+  // only what stands clear of the middle of the board. The jersey, the tunic,
+  // the two propped documents and the second leather ball stood exactly where
+  // the collection now is, and are gone. The rest waits for the lot that
+  // turns the dressing into data (D21).
+
+  // Bay 0 (frame): a row of slim catalogues under the shelf.
   for (let index = 0; index < 5; index += 1) {
     const volume = new BoxGeometry(0.12, 0.34 + (index % 2) * 0.06, 0.22)
     volume.rotateZ((index - 2) * 0.025)
     volume.translate(bayCentre(0) - 0.70 + index * 0.21, 0.95, 0.30)
-    artefacts.push(volume)
+    fill(artefacts, volume, `catalogue-${index}`, 0)
   }
 
-  // Bay 2: an open rule book, portrait card and rolled court diagrams.
-  addDocument(bayCentre(1) - 0.38, 1.49, 0.37, 0.54, 0.40, -0.05)
-  addDocument(bayCentre(1) + 0.28, 1.55, 0.36, 0.42, 0.54, 0.04)
+  // Bay 1 (frame): rolled court diagrams under the shelf.
   for (let index = 0; index < 3; index += 1) {
     const roll = new CylinderGeometry(0.038, 0.038, 0.58 - index * 0.07, 8)
     roll.rotateZ(Math.PI / 2)
     roll.translate(bayCentre(1) - 0.38 + index * 0.34, 0.91 + index * 0.055, 0.31)
-    paper.push(roll)
+    fill(paper, roll, `court-roll-${index}`, 1)
   }
 
-  // Bay 3: early leather ball as a secondary object, flanked by rule cards.
-  const oldBall = new SphereGeometry(0.17, 12, 8)
-  oldBall.translate(bayCentre(2), 1.55, 0.34)
-  artefacts.push(oldBall)
-  addDocument(bayCentre(2) - 0.58, 1.48, 0.35, 0.42, 0.46, -0.06)
-  addDocument(bayCentre(2) + 0.58, 1.48, 0.35, 0.42, 0.46, 0.06)
+  // Bay 2 (book): rule cards to either side of the book, boxes under the shelf.
+  addDocument('rule-card-left', 2, -0.58, 1.48, 0.35, 0.42, 0.46, -0.06)
+  addDocument('rule-card-right', 2, 0.58, 1.48, 0.35, 0.42, 0.46, 0.06)
   for (let index = 0; index < 4; index += 1) {
     const box = new BoxGeometry(0.27 + index * 0.02, 0.055, 0.31)
     box.translate(bayCentre(2) - 0.43 + index * 0.27, 0.82 + index * 0.07, 0.30)
-    paper.push(box)
+    fill(paper, box, `archive-box-${index}`, 2)
   }
 
-  // Bay 4: a dark gym tunic and small brass medals.
-  addGarment(bayCentre(3) + 0.10, 1.84, true)
+  // Bay 3 (book): small brass medals under the shelf.
   for (let index = 0; index < 4; index += 1) {
     const medal = new CylinderGeometry(0.052, 0.052, 0.012, 10)
     medal.rotateX(Math.PI / 2)
     medal.translate(bayCentre(3) - 0.55 + index * 0.30, 1.08 + (index % 2) * 0.10, 0.39)
-    trim.push(medal)
+    fill(trim, medal, `medal-${index}`, 3)
   }
 
-  // Bay 5: large archival leaves, a ledger stack and a laced training ball.
-  addDocument(bayCentre(4) - 0.42, 1.52, 0.37, 0.50, 0.62, -0.04)
-  addDocument(bayCentre(4) + 0.30, 1.48, 0.37, 0.58, 0.48, 0.05)
+  // Bay 4 (hosts nothing): large archival leaves, a ledger stack and a laced
+  // training ball.
+  addDocument('leaf-left', 4, -0.42, 1.52, 0.37, 0.50, 0.62, -0.04)
+  addDocument('leaf-right', 4, 0.30, 1.48, 0.37, 0.58, 0.48, 0.05)
   for (let index = 0; index < 4; index += 1) {
     const ledger = new BoxGeometry(0.44 - index * 0.035, 0.065, 0.31)
     ledger.rotateY(index * 0.035)
     ledger.translate(bayCentre(4) - 0.42 + index * 0.16, 0.81 + index * 0.07, 0.30)
-    artefacts.push(ledger)
+    fill(artefacts, ledger, `ledger-${index}`, 4)
   }
   const finalBall = new SphereGeometry(0.13, 10, 7)
   finalBall.translate(bayCentre(4) + 0.62, 0.91, 0.31)
-  artefacts.push(finalBall)
+  fill(artefacts, finalBall, 'training-ball', 4)
 
   return {
     carcass: finishBoxes(carcass, 0.54),
@@ -394,6 +463,22 @@ export function buildHistoryCaseRun({
     glass: finishBoxes(glass, 0.60),
     paper: finishBoxes(paper, 0.34),
     artefacts: finishMixed(artefacts, 0.28),
+    layout: {
+      width,
+      height,
+      depth,
+      /** Top of the base cabinet: the floor of the glazed part. */
+      deckTop: baseHeight,
+      /** The face of the navy lining: where a frame's back goes. */
+      liningFront: liningCentreZ + liningThickness / 2,
+      /** The inner face of the glazing. */
+      glassBack: depth,
+      /** The underside of the head: the ceiling of the glazed part. */
+      headBottom: upperHigh,
+      stiles: layoutStiles,
+      bays: layoutBays,
+      filler: layoutFiller,
+    },
   }
 }
 

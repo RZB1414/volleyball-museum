@@ -12,12 +12,14 @@
  */
 
 import { useLayoutEffect, useMemo } from 'react'
-import { DoubleSide, SRGBColorSpace, TextureLoader, type Texture } from 'three'
+import { DoubleSide, SRGBColorSpace, type Texture } from 'three'
 import { useLoader } from '@react-three/fiber'
 
 import { formatCreditLine } from '../content/credit'
 import type { MediaAsset } from '../content/schema'
 import { useMuseum } from '../state/store'
+import { CREDIT_GAP, CREDIT_LINE_HEIGHT, CREDIT_SIZE, MOUNT_BORDER } from './framedMediaLayout'
+import { MediaTextureLoader } from './mediaTexture'
 import { RoomText } from './RoomText'
 
 export type FramedMediaProps = {
@@ -28,10 +30,6 @@ export type FramedMediaProps = {
   rotationY?: number
   readinessId: string
 }
-
-const MOUNT_BORDER = 0.06
-const CREDIT_SIZE = 0.032
-const CREDIT_GAP = 0.055
 
 function configureMediaTexture(texture: Texture) {
   let changed = false
@@ -54,7 +52,7 @@ export function FramedMedia({
   readinessId,
 }: FramedMediaProps) {
   const locale = useMuseum((state) => state.settings.locale)
-  const texture = useLoader(TextureLoader, asset.src) as Texture
+  const texture = useLoader(MediaTextureLoader, asset.src) as Texture
 
   useLayoutEffect(() => {
     // Photographs are colour, so they decode as sRGB. Getting this wrong washes
@@ -94,7 +92,7 @@ export function FramedMedia({
         anchorY="top"
         fontSize={CREDIT_SIZE}
         maxWidth={width + MOUNT_BORDER * 2}
-        lineHeight={1.35}
+        lineHeight={CREDIT_LINE_HEIGHT}
         color="#6d6455"
         outlineWidth={0}
         // Labels are read head-on but glimpsed from the side; double-sided

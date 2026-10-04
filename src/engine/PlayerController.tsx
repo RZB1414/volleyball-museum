@@ -28,11 +28,11 @@ import {
   CAMERA_FOV_PUSH_DEGREES,
   cameraVerticalFovDegrees,
 } from './cameraProjection'
-import { PLAYER_CAPSULE, playerPosition } from './playerPosition'
+import { PLAYER_CAPSULE, PLAYER_EYE_HEIGHT, playerPosition } from './playerPosition'
 import { dampTouchLookAxis } from './mobileControls'
 
 const CAPSULE = PLAYER_CAPSULE
-const EYE_HEIGHT = 1.62
+const EYE_HEIGHT = PLAYER_EYE_HEIGHT
 const BASE_SPEED = 3.4
 const ACCELERATION = 14
 const DECELERATION = 18

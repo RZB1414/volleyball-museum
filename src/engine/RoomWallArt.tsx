@@ -14,7 +14,6 @@ import {
   DoubleSide,
   PlaneGeometry,
   SRGBColorSpace,
-  TextureLoader,
   type Texture,
 } from 'three'
 
@@ -23,6 +22,7 @@ import { AUTHORED_MEDIA } from '../content/media.authored'
 import { GENERATED_MEDIA } from '../content/media.generated'
 import type { MediaAsset, RoomData, WallArtData } from '../content/schema'
 import { useMuseum } from '../state/store'
+import { MediaTextureLoader } from './mediaTexture'
 import { RoomText } from './RoomText'
 
 const CURATED_MEDIA = [...GENERATED_MEDIA, ...AUTHORED_MEDIA] as const
@@ -91,9 +91,10 @@ function coverGeometry(width: number, height: number, sourceAspect: number) {
 function WallArtPanel({ art, asset }: { art: WallArtData; asset: MediaAsset }) {
   const locale = useMuseum((state) => state.settings.locale)
   // useLoader shares its cache with FramedMedia because both use the same
-  // TextureLoader + URL key. Adding decorative copies therefore does not fetch
-  // or decode a second copy of an exhibit photograph.
-  const texture = useLoader(TextureLoader, asset.src) as Texture
+  // loader class + URL key. Adding decorative copies therefore does not fetch
+  // or decode a second copy of an exhibit photograph. The class resolves a
+  // failed image to a grey card instead of throwing the room away.
+  const texture = useLoader(MediaTextureLoader, asset.src) as Texture
   const geometry = useMemo(
     () => coverGeometry(art.width, art.height, asset.aspect),
     [art.height, art.width, asset.aspect],

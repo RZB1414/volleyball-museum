@@ -13,7 +13,7 @@
 import { useGLTF } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
 import { useEffect, useMemo, useRef } from 'react'
-import { Box3, Mesh, Raycaster, Vector2, Vector3, type Group, type Object3D } from 'three'
+import { Box3, Mesh, Raycaster, Vector2, type Group, type Object3D } from 'three'
 
 import type { BakedBundle } from '../content/bake.generated'
 import { MUSEUM } from '../content/museum'
@@ -29,6 +29,7 @@ import {
   notebookAdvance,
   notebookPagesFor,
 } from './notebook'
+import { DRAWER_PROXY, PROXY_MATERIAL_PROPS, paddedProxy } from './interactionProxy'
 import { INTERACTION_REACH, interactionWinnerOf, PROXY_MINIMUM } from './interactionTarget'
 import { isUnclaimedInteractKey, subscribePrimaryAction } from './primaryAction'
 import { isModalOpen, useMuseum } from '../state/store'
@@ -121,17 +122,10 @@ function Container({
   // the cabinet's chest-high box around a book on a desk would also swallow
   // the lamp, the radio and the ledgers beside it.
   const proxy = useMemo(() => {
-    if (!instance || !notebook) return null
+    if (!instance) return null
+    if (!notebook) return DRAWER_PROXY
     instance.updateMatrixWorld(true)
-    const bounds = new Box3().setFromObject(instance)
-    const centre = bounds.getCenter(new Vector3())
-    const size = bounds.getSize(new Vector3())
-    const [minX, minY, minZ] = PROXY_MINIMUM.notebook
-    size.set(Math.max(size.x, minX), Math.max(size.y, minY), Math.max(size.z, minZ))
-    return {
-      centre: centre.toArray() as [number, number, number],
-      size: size.toArray() as [number, number, number],
-    }
+    return paddedProxy(new Box3().setFromObject(instance), PROXY_MINIMUM.notebook)
   }, [instance, notebook])
 
   // Reading the notebook is picking it up: it leaves the desk with the player.
@@ -143,7 +137,7 @@ function Container({
     [container, documentsRead],
   )
 
-  if (!instance) return null
+  if (!instance || !proxy) return null
 
   return (
     <group
@@ -167,19 +161,14 @@ function Container({
 
         The proxy is chest-high and a little wider than the carcass, so "looking
         at the cabinet" is enough. It is invisible and casts nothing; the ray
-        hits it, everything else ignores it.
+        hits it, everything else ignores it. A notebook takes its own padded
+        bounds instead; both come from `interactionProxy.ts`, with the
+        material that lets a ray starting inside the box still find it.
       */}
-      {proxy ? (
-        <mesh position={proxy.centre} visible={false}>
-          <boxGeometry args={proxy.size} />
-          <meshBasicMaterial />
-        </mesh>
-      ) : (
-        <mesh position={[0, 0.85, 0.12]} visible={false}>
-          <boxGeometry args={[0.78, 1.7, 0.8]} />
-          <meshBasicMaterial />
-        </mesh>
-      )}
+      <mesh position={proxy.centre} visible={false}>
+        <boxGeometry args={proxy.size} />
+        <meshBasicMaterial {...PROXY_MATERIAL_PROPS} />
+      </mesh>
       </group>
     </group>
   )

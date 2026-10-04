@@ -2619,6 +2619,9 @@ feita, HANDOFF escrito. Se algum passo falhar, não se força: registra-se o blo
    textura residente; ela corrige três números do livro-caixa (nota em 4.8). Os outros itens do
    Anexo E ficam com os lotes que os usam.
 
+**Estado de P0 em 2026-10-04:** itens 1 a 5 e 7 feitos; o item 6 (aparelho real nº 1) é tarefa do
+dono e continua pendente. Não trava L1; trava o livro-caixa de L6.
+
 ### L1 — Correções no ar
 
 - **Objetivo.** Tirar do ar o que está errado hoje, sem motor novo, e ligar as catracas.
@@ -2642,6 +2645,14 @@ feita, HANDOFF escrito. Se algum passo falhar, não se força: registra-se o blo
   bytes por caminho, programas, textura residente.
 - **Risco.** Baixo. Teto temporário de ÁT-K1 (a lente emissiva).
 - **Passagem.** Nenhum final novo; nenhuma instrução aponta para o que não existe.
+- **Feito em 2026-10-04, ainda não publicado.** Plano do lote em `docs/lotes/L1-plano.md`; dois
+  commits locais na `main` (conteúdo, depois geometria e motor); `npm run check` e
+  `npm run build` verdes; rota conferida no navegador de desenvolvimento, com o piloto da Holyoke
+  visto da porta no escuro e os quatro vãos; medições, dívidas e o que saiu diferente do plano em
+  `docs/HANDOFF.md` §10. **O teto temporário de 58 lotes não foi gasto:** a lente e a alavanca
+  renomeiam nós que já existiam, o kit do átrio continua em 56 de 56 e fica a folga inteira para
+  o Livro de L3. Faltam os passos 5 e 8 a 11 de 9.1 (revisão adversarial, revisor, push, deploy,
+  fumaça) e o resto da rota de toque e em inglês.
 
 ### L2 — Trilhos
 

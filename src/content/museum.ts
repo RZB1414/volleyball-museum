@@ -291,6 +291,16 @@ const ATRIUM_EXHIBITS = [
  * Every exhibit carries at least one `requiredForCatalogue` hotspot: the game
  * does not count an object as catalogued unless the player actually turned it
  * over. That is what converts passive looking into active reading.
+ *
+ * Four of the eight live in the run of wall cases on the south wall
+ * (`history-case-run`, placed turned by PI at z = 7.86). Its bays are centred
+ * on x = +4.08, +2.04, 0, -2.04 and -4.08, and each of the four pieces sits on
+ * the centre line of the bay the generator cleared for it: the two frames on
+ * the lining, 2 mm proud of it (z = 7.773), the two books on the top of the
+ * bay's lower shelf. `supportY` is that top, not the middle of the board,
+ * and the shelves of neighbouring bays stand at different heights. The numbers
+ * come from `buildHistoryCaseRun().layout`; `npm run test:kit` checks every
+ * piece against it (centre, support, uprights, dressing, caption, glass).
  */
 const HOLYOKE_EXHIBITS = [
   {
@@ -383,10 +393,12 @@ const HOLYOKE_EXHIBITS = [
     id: 'handbook-1897',
     era: 'holyoke',
     recipe: 'paper/handbook-1897',
-    position: [-2.95, 1.324, 7.5],
+    // Fourth bay of the run. The open book's covers dip 4.3 mm below its
+    // origin, so it stands that much above the board.
+    position: [-2.04, 1.3878, 7.5],
     rotationY: Math.PI,
     mount: 'floor',
-    supportY: 1.32,
+    supportY: 1.3835,
     titleKey: 'exhibit.handbook-1897.title',
     labelKey: 'exhibit.handbook-1897.label',
     catalogueKey: 'exhibit.handbook-1897.catalogue',
@@ -411,10 +423,11 @@ const HOLYOKE_EXHIBITS = [
     id: 'guide-1916',
     era: 'holyoke',
     recipe: 'paper/spalding-guide-1916',
-    position: [-0.95, 1.32, 7.5],
+    // Middle bay of the run, whose lower shelf is 5 cm below its neighbours'.
+    position: [0, 1.3335, 7.5],
     rotationY: Math.PI,
     mount: 'floor',
-    supportY: 1.32,
+    supportY: 1.3335,
     titleKey: 'exhibit.guide-1916.title',
     labelKey: 'exhibit.guide-1916.label',
     catalogueKey: 'exhibit.guide-1916.catalogue',
@@ -459,8 +472,11 @@ const HOLYOKE_EXHIBITS = [
     id: 'portrait-morgan',
     era: 'holyoke',
     recipe: 'frame/portrait-small',
-    // Inside the fourth bay of the south-wall run, behind its front glazing.
-    position: [1.15, 1.92, 7.5],
+    // Second bay of the run, on the lining, behind the glazing. The bay has
+    // no upper shelf: a board and a brass rail used to cross the face. The
+    // credit under the frame wraps to four lines in both languages; at 1.96
+    // the last of them clears the lower shelf, which 1.92 did not.
+    position: [2.04, 1.96, 7.773],
     rotationY: Math.PI,
     mount: 'case-wall',
     titleKey: 'exhibit.portrait-morgan.title',
@@ -489,9 +505,10 @@ const HOLYOKE_EXHIBITS = [
     id: 'photo-gym',
     era: 'holyoke',
     recipe: 'frame/panorama-wide',
-    // The catalogue-scale print remains interactive inside the last case; the
-    // wall mural uses the same licensed source without duplicating interaction.
-    position: [3.65, 1.95, 7.5],
+    // The catalogue-scale print remains interactive in the first bay of the
+    // run, on the lining; the wall mural uses the same licensed source without
+    // duplicating interaction.
+    position: [4.08, 1.95, 7.773],
     rotationY: Math.PI,
     mount: 'case-wall',
     titleKey: 'exhibit.photo-gym.title',
@@ -1248,9 +1265,19 @@ const ROOMS = [
     powerControl: {
       id: 'holyoke-breaker',
       part: 'breaker-panel',
-      // Close to the entrance, but around the corner from the atrium control.
-      position: [5.86, 1.05, -4.2],
-      rotationY: -Math.PI / 2,
+      // On the wall OPPOSITE the entrance, so that it is a lighthouse: from
+      // the doorway its lens is 20.8 degrees left of straight ahead, in the
+      // gap between the hero case (which hides the wall from 25 to 40
+      // degrees) and the mural, whose south edge is 0.57 m to its north. It
+      // used to hang on the entrance wall, behind the shoulder of whoever
+      // walked in, and no pixel of the first frame showed it. z = 2.2 is the
+      // position checked in the browser (docs/lotes/P0-linha-de-base.md); at
+      // 1.15 m the case clears the dado rail, so it sits on the plaster.
+      // `test:opening` proves the bearing and the sight lines from the door.
+      // Left for L10: with today's 2.4 m reach the pilot washes the south end
+      // of the mural red in the dark.
+      position: [-5.875, 1.15, 2.2],
+      rotationY: Math.PI / 2,
       titleKey: 'power.holyoke.title',
       pilotPosition: [0, 0.32, 0.3],
     },

@@ -85,6 +85,34 @@ export const CAPTURE_SETS = {
     frozen: true,
     digest: '0c5ea7527c922267af446a3e3cfce2025611f142f4bdcaec4a315a99a0d5000e',
   },
+  /**
+   * The browser route of L1 (docs/HANDOFF.md, §10): the Holyoke pilot seen
+   * from its door in the dark, both breakers from where the capsule stops and
+   * after E, the four pieces of the wall case in their bays, the office door
+   * opening on an atrium whose wall image never arrived or failed, and the
+   * reference frames whose counters moved. The "after" of the P0 frames
+   * above: `e01` answers `p0-e01`, `h02` to `h05` answer `p0-h01` to `p0-h04`.
+   *
+   * `commit` is the one the frames were shot on top of: they show the working
+   * tree of the lot's geometry and engine half, which the next commit records.
+   * Not frozen yet: the lot still has its review and touch passes to run, and
+   * they may add frames. The lot that closes L1 freezes it with a digest.
+   */
+  l1: {
+    capturedAt: '2026-10-04',
+    commit: 'ab6625e',
+    report: 'docs/HANDOFF.md',
+    filePrefix: 'l1',
+    viewport: { cssWidth: 1280, cssHeight: 720, pixelRatio: 1.2, quality: 'medium' },
+    frame: { width: 1536, height: 864 },
+    groups: {
+      a: { room: 'atrium', powered: true },
+      d: { room: 'atrium', powered: false },
+      h: { room: 'holyoke', powered: true },
+      e: { room: 'holyoke', powered: false },
+    },
+    frozen: false,
+  },
 }
 
 /** How a file name ends, and the light it says the frame was taken in. */

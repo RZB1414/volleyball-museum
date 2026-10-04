@@ -735,8 +735,8 @@ export const BAKED_BUNDLES = [
   },
   {
     "name": "kit",
-    "url": "/models/kit.aeabcf76.glb",
-    "bytes": 2241880,
+    "url": "/models/kit.6f5f4950.glb",
+    "bytes": 2234252,
     "parts": [
       {
         "name": "plinth-block",
@@ -1985,10 +1985,23 @@ export const BAKED_BUNDLES = [
             0.0835
           ]
         },
-        "triangles": 540
+        "triangles": 540,
+        "collider": {
+          "kind": "box",
+          "halfExtents": [
+            0.23,
+            0.32,
+            0.1247
+          ],
+          "centre": [
+            0,
+            0.32,
+            0.1247
+          ]
+        }
       },
       {
-        "name": "breaker-panel__handle",
+        "name": "breaker-panel__lever",
         "material": "brass",
         "bounds": {
           "min": [
@@ -2015,8 +2028,8 @@ export const BAKED_BUNDLES = [
         "triangles": 304
       },
       {
-        "name": "breaker-panel__indicator",
-        "material": "glass-green",
+        "name": "breaker-panel__led",
+        "material": "led-red",
         "bounds": {
           "min": [
             0.096,
@@ -4235,7 +4248,7 @@ export const BAKED_BUNDLES = [
             0.514
           ]
         },
-        "triangles": 816,
+        "triangles": 792,
         "collider": {
           "kind": "box",
           "halfExtents": [
@@ -4289,20 +4302,20 @@ export const BAKED_BUNDLES = [
           "max": [
             5.04,
             2.51,
-            0.3775
+            0.038
           ],
           "size": [
             10.08,
             1.725,
-            0.3515
+            0.012
           ],
           "centre": [
             0,
             1.6475,
-            0.2017
+            0.032
           ]
         },
-        "triangles": 48
+        "triangles": 12
       },
       {
         "name": "history-case-run__trim",
@@ -4329,7 +4342,7 @@ export const BAKED_BUNDLES = [
             0.7133
           ]
         },
-        "triangles": 652
+        "triangles": 628
       },
       {
         "name": "history-case-run__glass",
@@ -4369,21 +4382,21 @@ export const BAKED_BUNDLES = [
           ],
           "max": [
             4.93,
-            2.21,
+            1.8288,
             0.9599
           ],
           "size": [
             9.86,
-            1.4175,
+            1.0363,
             0.8149
           ],
           "centre": [
             0,
-            1.5013,
+            1.3106,
             0.5524
           ]
         },
-        "triangles": 312
+        "triangles": 252
       },
       {
         "name": "history-case-run__artefacts",
@@ -4396,21 +4409,21 @@ export const BAKED_BUNDLES = [
           ],
           "max": [
             4.8267,
-            1.995,
-            0.51
+            1.1514,
+            0.4717
           ],
           "size": [
             9.6752,
-            1.2464,
-            0.3817
+            0.4029,
+            0.3434
           ],
           "centre": [
             -0.0108,
-            1.3718,
-            0.3191
+            0.95,
+            0.3
           ]
         },
-        "triangles": 408
+        "triangles": 228
       },
       {
         "name": "history-hero-case",
@@ -7760,8 +7773,8 @@ export const BAKED_MATERIALS = {
 } as const satisfies Record<string, BakedMaterial>
 
 export const BAKE_TOTALS = {
-  bytes: 3016256,
-  triangles: 151976,
+  bytes: 3008628,
+  triangles: 151652,
   textureBytes: 1269562,
   /** Uncompressed VRAM with mips. The wire size says nothing about this. */
   textureVramBytes: 46006272,

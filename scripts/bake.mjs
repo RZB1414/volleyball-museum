@@ -737,10 +737,13 @@ async function main() {
     ...compoundKitParts('pendant', pendant, { fitting: 'brass', shade: 'plaster' }),
     { name: 'wall-sconce', geometry: buildWallSconce(), material: 'brass' },
     { name: 'vent-grille', geometry: buildVentGrille(), material: 'iron-cast' },
+    // The lens is baked red, the state every session meets it in; the
+    // runtime repaints it green when the room's power returns. Both LED
+    // materials were already drawn by the office door reader.
     ...compoundKitParts(
       'breaker-panel',
       breakerPanel,
-      { case: 'iron-cast', handle: 'brass', indicator: 'glass-green' },
+      { case: 'iron-cast', lever: 'brass', led: 'led-red' },
       'case',
     ),
 
@@ -1113,6 +1116,7 @@ async function main() {
     'history-hero-case',
     'history-info-kiosk',
     'gym-training-set',
+    'breaker-panel',
     'atrium-reception-desk',
     'atrium-reception-desk__storage',
     'atrium-central-podium',
@@ -1142,6 +1146,22 @@ async function main() {
       const maxY = Math.max(part.bounds.max[1], partitionFace.bounds.max[1])
       part.collider.halfExtents[1] = Number(((maxY - minY) / 2).toFixed(4))
       part.collider.centre[1] = Number(((minY + maxY) / 2).toFixed(4))
+    }
+
+    if (part.name === 'breaker-panel' && part.collider) {
+      // The collider is the whole recipe, lever included. With the case alone
+      // (or with nothing, as it was) the capsule stops with the eye inside
+      // the control's interaction volume, and a ray cast from inside a box
+      // does not see it: the prompt went out as the player arrived.
+      const members = kitBundle.manifest.filter(
+        (member) => member.name === part.name || member.name.startsWith(`${part.name}__`),
+      )
+      const min = [0, 1, 2].map((axis) => Math.min(...members.map((member) => member.bounds.min[axis])))
+      const max = [0, 1, 2].map((axis) => Math.max(...members.map((member) => member.bounds.max[axis])))
+      part.collider = boxColliderFrom({
+        size: max.map((value, axis) => value - min[axis]),
+        centre: max.map((value, axis) => Number(((value + min[axis]) / 2).toFixed(4))),
+      })
     }
 
     if (part.name === 'atrium-divider-screen' && part.collider && dividerFrame) {

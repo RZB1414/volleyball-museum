@@ -14,9 +14,13 @@ three r185 · @react-three/fiber · zustand · Cloudflare Workers.
 ## Não negociável
 
 1. **`npm run check` antes de qualquer commit.** Roda typecheck, oxlint, validação de
-   conteúdo e cinco suítes headless (energia, colisão, posicionamento, runtime do
-   kit e navegação).
-   Se algo ficar vermelho, conserte — não contorne o teste.
+   conteúdo (com as dívidas datadas de `src/content/knownDebt.ts`), as catracas
+   (`test:ratchets`), as suítes headless (energia, abertura, colisão, posicionamento,
+   runtime do kit, navegação e as demais) e, no fim, `test:bundle`, que constrói o
+   site e mede o que cada caminho baixa.
+   Se algo ficar vermelho, conserte — não contorne o teste. Um teto de
+   `scripts/lib/ratchets.ts` só sobe no commit da mudança que precisa dele, com o
+   motivo escrito ao lado.
 
 2. **Nunca edite arquivos gerados.** `src/content/bake.generated.ts`,
    `src/content/media.generated.ts` e `src/content/facts.generated.ts` saem de

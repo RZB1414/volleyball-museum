@@ -8,7 +8,8 @@
 
 import { useGLTF } from '@react-three/drei'
 import { useLoader } from '@react-three/fiber'
-import { TextureLoader } from 'three'
+
+import { MediaTextureLoader } from './mediaTexture'
 
 /**
  * Draco is deliberately off everywhere in this project.
@@ -31,7 +32,10 @@ export function preloadBundle(url: string) {
   useGLTF.preload(url, USE_DRACO, USE_MESHOPT)
 }
 
-/** Starts network fetch and image decode without creating a second cache. */
+/**
+ * Starts network fetch and image decode without creating a second cache: the
+ * same loader class the wall art and the framed photographs read with.
+ */
 export function preloadTexture(url: string) {
-  useLoader.preload(TextureLoader, url)
+  useLoader.preload(MediaTextureLoader, url)
 }

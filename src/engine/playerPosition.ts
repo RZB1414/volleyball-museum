@@ -15,3 +15,10 @@ export const playerPosition = new Vector3()
 
 /** Shared physical dimensions for movement and transition-door clearance. */
 export const PLAYER_CAPSULE = Object.freeze({ radius: 0.3, height: 1.75 })
+
+/**
+ * The camera above the capsule's foot. Exported because the headless suites
+ * cast the interaction ray and the sight lines from the same eye: a height
+ * typed again in a test is a second camera that nobody moves.
+ */
+export const PLAYER_EYE_HEIGHT = 1.62

@@ -15,7 +15,9 @@ import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
-import { BAKED_BUNDLES } from '../src/content/bake.generated.ts'
+import { Box3, Vector3 } from 'three'
+
+import { BAKED_BUNDLES, BAKED_MATERIALS } from '../src/content/bake.generated.ts'
 import { en } from '../src/content/i18n/en.ts'
 import { ptBR } from '../src/content/i18n/pt-BR.ts'
 import {
@@ -59,17 +61,29 @@ import {
   notebookPagesFor,
 } from '../src/engine/notebook.ts'
 import { isRoomPowered } from '../src/engine/power.ts'
+import { buildPowerControlLightRig } from '../src/engine/powerControlLightRig.ts'
 import { progressConditionMet } from '../src/engine/progressCondition.ts'
 import {
   buildTransitionDoorSpecs,
   transitionDoorBlock,
 } from '../src/engine/transitionDoorTopology.ts'
 import { useMuseum } from '../src/state/store.ts'
+import { arrivalOf, recipeParts } from './lib/museumWorld.ts'
+import { bearingDegrees, projectedSize, roomObstacles, sightlineBlockers } from './lib/sightline.ts'
 import { KEY_NAMED_NOT_USED, keysCitedIn, readSourceTree } from './lib/translationUsage.ts'
 
 let passed = 0
+let failed = 0
+/** Records a failure and goes on, so one run shows everything that is wrong. */
 function test(name: string, run: () => void) {
-  run()
+  try {
+    run()
+  } catch (error) {
+    failed += 1
+    console.log(`  FAIL  ${name}`)
+    console.log(String(error instanceof Error ? error.message : error).replace(/^/gm, '        '))
+    return
+  }
   passed += 1
   console.log(`  pass  ${name}`)
 }
@@ -435,6 +449,170 @@ test('switching the torch on ends its hint and typing never switches it', () => 
 })
 
 // ---------------------------------------------------------------------------
+// The pilot of a dark room, from the door the player comes in by
+// ---------------------------------------------------------------------------
+
+/**
+ * A room that starts dark shows its power control to whoever walks in.
+ *
+ * The Holyoke breaker hung on the wall of its own entrance, 2.2 m north of
+ * the door: behind the player's shoulder, 103 degrees off the way they were
+ * facing, and its pilot changed no pixel of the first frame. The porter's
+ * hint said "inside" and nothing else did. So this is measured, from 0.95 m
+ * inside the doorway each dark room is first reached by, at eye height,
+ * facing in:
+ *
+ *   - the lens is within 35 degrees of straight ahead;
+ *   - the panel covers at least six pixels each way at 1280 x 720;
+ *   - the lens glows by itself, and the pilot light falls on its own panel;
+ *   - nothing in the room stands between the doorway and the panel, from the
+ *     middle of the opening or from half a metre to either side of it.
+ *
+ * The spawn room is left out: nobody arrives there, they wake beside its lamp.
+ */
+const LIGHTHOUSE_MAX_BEARING_DEGREES = 35
+const LIGHTHOUSE_MIN_PIXELS = 6
+const DOORWAY_SIDESTEP = 0.5
+
+/** What is wrong with a dark room's control as a lighthouse, and what was measured. */
+function lighthouseOf(room: RoomData): { problems: string[]; note: string } | null {
+  const kit = BAKED_BUNDLES.find((bundle) => bundle.name === 'kit')
+  const materials = BAKED_MATERIALS as Record<string, { emissive?: readonly number[]; emissiveIntensity?: number }>
+  const problems: string[] = []
+  {
+    const control = room.powerControl
+    if (room.startsPowered || !control) return null
+    const arrival = arrivalOf(room.id)
+    if (arrival.portalId === null) return null
+
+    // Everything below is room-local.
+    const rotation = control.rotationY ?? 0
+    const place = (local: readonly number[]) =>
+      new Vector3(
+        control.position[0] + local[0] * Math.cos(rotation) + local[2] * Math.sin(rotation),
+        control.position[1] + local[1],
+        control.position[2] - local[0] * Math.sin(rotation) + local[2] * Math.cos(rotation),
+      )
+    const heading = new Vector3(arrival.heading[0], 0, arrival.heading[1])
+    const across = new Vector3(-arrival.heading[1], 0, arrival.heading[0])
+    const eye = new Vector3(arrival.local[0], EYE_HEIGHT, arrival.local[1])
+
+    const nodes = new Map(recipeParts(control.part, kit).map((node) => [node.name, node]))
+    const body = nodes.get(control.part)
+    assert.ok(body, `${control.part} has a root node`)
+    const { min, max } = body.bounds
+    const face = [
+      place([(min[0] + max[0]) / 2, (min[1] + max[1]) / 2, max[2]]),
+      place([min[0], min[1], max[2]]),
+      place([max[0], min[1], max[2]]),
+      place([min[0], max[1], max[2]]),
+      place([max[0], max[1], max[2]]),
+    ]
+    const corners = [min[2], max[2]].flatMap((z) =>
+      [min[0], max[0]].flatMap((x) => [min[1], max[1]].map((y) => place([x, y, z]))),
+    )
+    const pilot = place(control.pilotPosition)
+
+    const lensNode = nodes.get(`${control.part}__led`)
+    const lens = lensNode
+      ? place([
+          (lensNode.bounds.min[0] + lensNode.bounds.max[0]) / 2,
+          (lensNode.bounds.min[1] + lensNode.bounds.max[1]) / 2,
+          lensNode.bounds.max[2],
+        ])
+      : null
+    if (!lensNode) problems.push(`${control.id}: the recipe bakes no lens ("${control.part}__led")`)
+    else if (!((materials[lensNode.material]?.emissiveIntensity ?? 0) > 0)) {
+      problems.push(`${control.id}: the lens is "${lensNode.material}", which does not glow by itself`)
+    }
+
+    // Without a lens the panel's own centre still says where the player
+    // would have to look.
+    const bearing = bearingDegrees(eye, heading, lens ?? face[0])
+    if (bearing > LIGHTHOUSE_MAX_BEARING_DEGREES) {
+      problems.push(
+        `${control.id}: ${bearing.toFixed(1)}° off the way the player walks in by "${arrival.portalId}" ` +
+          `(limit ${LIGHTHOUSE_MAX_BEARING_DEGREES}°)`,
+      )
+    }
+
+    const size = projectedSize(eye, heading, corners)
+    if (!size) problems.push(`${control.id}: the panel is behind the player as they walk in`)
+    else if (size.width < LIGHTHOUSE_MIN_PIXELS || size.height < LIGHTHOUSE_MIN_PIXELS) {
+      problems.push(
+        `${control.id}: the panel is ${size.width.toFixed(1)} x ${size.height.toFixed(1)} px from the door ` +
+          `(at least ${LIGHTHOUSE_MIN_PIXELS} each way)`,
+      )
+    }
+
+    const reach = buildPowerControlLightRig(room)[0].unpowered.distance
+    const toFace = new Box3(new Vector3(...min), new Vector3(...max)).distanceToPoint(
+      new Vector3(...control.pilotPosition),
+    )
+    if (toFace >= reach) {
+      problems.push(`${control.id}: the pilot is ${toFace.toFixed(2)} m from its own panel and reaches ${reach} m`)
+    }
+
+    const obstacles = roomObstacles(room)
+    const targets = [...(lens ? [lens] : []), pilot, ...face]
+    let free = 0
+    for (const sidestep of [0, -DOORWAY_SIDESTEP, DOORWAY_SIDESTEP]) {
+      const from = eye.clone().addScaledVector(across, sidestep)
+      for (const target of targets) {
+        const blockers = sightlineBlockers(from, target, obstacles)
+        if (blockers.length === 0) free += 1
+        else {
+          problems.push(
+            `${control.id}: from ${sidestep === 0 ? 'the middle of the doorway' : `${sidestep} m across the doorway`}, ` +
+              `${[...new Set(blockers)].join(' and ')} stands in front of the panel`,
+          )
+        }
+      }
+    }
+    return {
+      problems: [...new Set(problems)],
+      note:
+        `${control.id} from "${arrival.portalId}": ${bearing.toFixed(1)}° off axis, ` +
+        `${size ? `${size.width.toFixed(0)} x ${size.height.toFixed(0)} px` : 'behind the player'}, ` +
+        `${free} of ${targets.length * 3} sight lines free`,
+    }
+  }
+}
+
+test('from the door each dark room is reached by, its pilot is a lighthouse', () => {
+  const measured = MUSEUM.rooms.flatMap((room) => {
+    const result = lighthouseOf(room)
+    return result ? [result] : []
+  })
+  for (const { note } of measured) console.log(`  note  ${note}`)
+  assert.ok(measured.length >= 2, 'the atrium and the wing are both reached through a door')
+  assert.deepEqual(measured.flatMap(({ problems }) => problems), [])
+})
+
+test('the lighthouse rule sees what stands in the room, and where the door is', () => {
+  const holyoke = roomById('holyoke')
+  const control = holyoke.powerControl
+  assert.ok(control, 'the wing has a breaker')
+  const moved = (position: readonly [number, number, number], rotationY: number) =>
+    lighthouseOf({ ...holyoke, powerControl: { ...control, position, rotationY } })?.problems ?? []
+
+  // Three metres further along the same wall, where the plan first put it:
+  // every number on paper passed, and the hero case stood in the way.
+  const behindTheCase = moved([control.position[0], control.position[1], 5.0], control.rotationY ?? 0)
+  assert.ok(
+    behindTheCase.some((problem) => problem.includes('history-hero-case')),
+    `at z = 5.0 the hero case hides the panel (${behindTheCase.join('; ') || 'nothing reported'})`,
+  )
+  // Where it hung until this lot: on the wall of the door itself.
+  const besideTheDoor = moved([5.875, 1.05, -4.2], -Math.PI / 2)
+  assert.ok(
+    besideTheDoor.some((problem) => problem.includes('off the way the player walks in')) &&
+      besideTheDoor.some((problem) => problem.includes('behind the player')),
+    `beside its own door the panel is behind the player (${besideTheDoor.join('; ') || 'nothing reported'})`,
+  )
+})
+
+// ---------------------------------------------------------------------------
 // Content gate
 // ---------------------------------------------------------------------------
 
@@ -646,6 +824,45 @@ test('each validator the gate lacked fails a museum broken on purpose', () => {
     if (unusedKit.includes(part)) noisy.push(`kit-part-unused accuses "${part}", which a room uses`)
   }
 
+  // A breaker hung a finger's width out from the plaster. The atrium's own,
+  // which stands a hand's width out over the wainscot, is the one accusation
+  // the authored museum carries, and the debt table dates it.
+  const proud = gate(
+    withRoom('holyoke', (room) => {
+      assert.ok(room.powerControl, 'the wing has a breaker')
+      const [x, y, z] = room.powerControl.position
+      return { powerControl: { ...room.powerControl, position: [x + 0.015, y, z] } }
+    }),
+  )
+  if (!accused(proud, 'wall-fixture-off-the-wall').includes('holyoke-breaker')) {
+    quiet.push('wall-fixture-off-the-wall does not accuse "holyoke-breaker"')
+  }
+  const offTheWall = accused(authored, 'wall-fixture-off-the-wall')
+  if (offTheWall.join() !== 'atrium-breaker') {
+    noisy.push(`wall-fixture-off-the-wall accuses the authored museum of: ${offTheWall.join(', ') || 'nothing'}`)
+  }
+  // The desk lamp is a control too, and stands on a desk in the middle of a room.
+  if (accused(proud, 'wall-fixture-off-the-wall').includes('office-lamp-switch')) {
+    noisy.push('wall-fixture-off-the-wall accuses a control that is on no wall')
+  }
+
+  // A breaker baked without its lens looks the same restored as dead; one
+  // with a lens and no lever has nothing for the hand to throw. The lamp
+  // shows its state by its own light and needs neither.
+  const without = (suffix: string) =>
+    BAKED_BUNDLES.map((bundle) =>
+      bundle === kit
+        ? { ...bundle, parts: bundle.parts.filter((part) => part.name !== `breaker-panel${suffix}`) }
+        : bundle,
+    )
+  const lensless = gate(MUSEUM, { bundles: without('__led') })
+  proves('power-control-without-state', 'atrium-breaker', lensless)
+  proves('power-control-without-state', 'holyoke-breaker', lensless)
+  if (accused(lensless, 'power-control-without-state').includes('office-lamp-switch')) {
+    noisy.push('power-control-without-state accuses the lamp, which lights itself')
+  }
+  proves('power-control-node-missing', 'holyoke-breaker', gate(MUSEUM, { bundles: without('__lever') }))
+
   // Copy translated twice for a screen that does not exist.
   const unusedKeys = accused(
     gate(MUSEUM, { keys: new Set([...DICTIONARY_KEYS, 'ui.nobody.reads.this']) }),
@@ -781,4 +998,5 @@ test('the committed table settles the committed museum, and bites when a lot com
   assert.equal(due.length, lines.filter((line) => line.untilLot === next).length)
 })
 
-console.log(`\n${passed}/${passed} opening checks passed.\n`)
+console.log(`\n${passed}/${passed + failed} opening checks passed.\n`)
+if (failed > 0) process.exitCode = 1

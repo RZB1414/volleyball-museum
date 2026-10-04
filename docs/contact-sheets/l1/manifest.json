@@ -1,0 +1,57 @@
+{
+  "set": "l1",
+  "capturedAt": "2026-10-04",
+  "commit": "ab6625e",
+  "report": "docs/HANDOFF.md",
+  "filePrefix": "l1",
+  "viewport": {
+    "cssWidth": 1280,
+    "cssHeight": 720,
+    "pixelRatio": 1.2,
+    "quality": "medium"
+  },
+  "frame": {
+    "width": 1536,
+    "height": 864
+  },
+  "groups": {
+    "a": {
+      "room": "atrium",
+      "powered": true
+    },
+    "d": {
+      "room": "atrium",
+      "powered": false
+    },
+    "h": {
+      "room": "holyoke",
+      "powered": true
+    },
+    "e": {
+      "room": "holyoke",
+      "powered": false
+    }
+  },
+  "frozen": false,
+  "count": 17,
+  "digest": "af2dd6fea65c18c090fd0f7369f2274f6eb8cd7d8ac15807211b2c268067d063",
+  "captures": [
+    {"id":"a01","file":"l1-a01-atrium-breaker-restored-green-lens-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"atrium-breaker-restored-green-lens","width":1536,"height":864,"bytes":32768,"sha256":"20b1820b0b3bbf486eda6f21f833db370f3ac73ee0cf514bf93a955219afeb6d"},
+    {"id":"a02","file":"l1-a02-ref-atrium-from-office-door-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"ref-atrium-from-office-door","width":1536,"height":864,"bytes":220158,"sha256":"e9b7de4db8e037afb87c5b157e40bcb429b795c9518b6c6b778758320a25fa99"},
+    {"id":"d01","file":"l1-d01-atrium-pilot-from-office-door-dark-notorch.jpg","room":"atrium","light":"dark","view":"room","subject":"atrium-pilot-from-office-door","width":1536,"height":864,"bytes":144510,"sha256":"13a3e73b487b4d9839803571c55924453d005b55efc2c4128a756baa74db713a"},
+    {"id":"d02","file":"l1-d02-atrium-breaker-capsule-stopped-prompt-dark-notorch.jpg","room":"atrium","light":"dark","view":"room","subject":"atrium-breaker-capsule-stopped-prompt","width":1536,"height":864,"bytes":99218,"sha256":"07b5e81904ddeecc6baeb46fcc812eefff9c5f5c70663e5d975bd261a2a13861"},
+    {"id":"d03","file":"l1-d03-atrium-degraded-without-wall-art-dark-notorch.jpg","room":"atrium","light":"dark","view":"room","subject":"atrium-degraded-without-wall-art","width":1536,"height":864,"bytes":127000,"sha256":"c18202fc88184c43f8f9daec0e336c726b1be6e5852968116d7a3c3cc66a6326"},
+    {"id":"d04","file":"l1-d04-atrium-mural-failed-grey-card-dark-notorch.jpg","room":"atrium","light":"dark","view":"room","subject":"atrium-mural-failed-grey-card","width":1536,"height":864,"bytes":71876,"sha256":"ae74706516ca578aa3076f02c853efdf81790b5a69026bd77c618a49197a9042"},
+    {"id":"e01","file":"l1-e01-holyoke-entry-pilot-from-door-dark-notorch.jpg","room":"holyoke","light":"dark","view":"room","subject":"holyoke-entry-pilot-from-door","width":1536,"height":864,"bytes":112224,"sha256":"2db8965d1da76d8becf3f6e2849d4d5c57ac1b1f97af1a658210a4ca428f9320"},
+    {"id":"e02","file":"l1-e02-holyoke-breaker-near-red-lens-dark-notorch.jpg","room":"holyoke","light":"dark","view":"room","subject":"holyoke-breaker-near-red-lens","width":1536,"height":864,"bytes":138363,"sha256":"6c8679d047cd6812322d58e7ae775d3f4440a31bd47bbbcf3af92927793669a0"},
+    {"id":"e03","file":"l1-e03-holyoke-breaker-capsule-stopped-prompt-dark-notorch.jpg","room":"holyoke","light":"dark","view":"room","subject":"holyoke-breaker-capsule-stopped-prompt","width":1536,"height":864,"bytes":95173,"sha256":"d03e7a4d3629a5c32438033d7916f6a98f6014566c9e2c12b376f8e8f2c46e51"},
+    {"id":"h01","file":"l1-h01-holyoke-breaker-restored-green-lens-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"holyoke-breaker-restored-green-lens","width":1536,"height":864,"bytes":95182,"sha256":"b0e466c589ceeb880731ba2839027c1eaff5a565a78ee7539471dfd269f66074"},
+    {"id":"h02","file":"l1-h02-case-run-portrait-morgan-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"case-run-portrait-morgan","width":1536,"height":864,"bytes":99892,"sha256":"b2bcb130944a481d99411204fefeb735d99d18f75dc5f8243b8061d47e1bb579"},
+    {"id":"h03","file":"l1-h03-case-run-photo-gym-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"case-run-photo-gym","width":1536,"height":864,"bytes":255208,"sha256":"120472fc9fd0b3dbe9f67873cfe7e427e94052034573db7a0fe8682871e90749"},
+    {"id":"h04","file":"l1-h04-case-run-guide-1916-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"case-run-guide-1916","width":1536,"height":864,"bytes":105134,"sha256":"31655b19eb300c4a8f48b0abcc96c92afd6022fbc758397a6c1e974eb661eb41"},
+    {"id":"h05","file":"l1-h05-case-run-handbook-1897-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"case-run-handbook-1897","width":1536,"height":864,"bytes":122485,"sha256":"98067989f115d68471a15a923a1bb0aa3e80c700313aa3b75689cf7500c3558a"},
+    {"id":"h06","file":"l1-h06-ref-pair-door-open-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"ref-pair-door-open","width":1536,"height":864,"bytes":132028,"sha256":"c170ff70e32d8a6c437004e6c846b0d0da4fe97c8c38c55306405a41636ed706"},
+    {"id":"h07","file":"l1-h07-ref-holyoke-door-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"ref-holyoke-door","width":1536,"height":864,"bytes":168609,"sha256":"5a45386ece733af772c2cc17df7eb96b892bff14fc0d5cf2001e0baed66b5caa"},
+    {"id":"h08","file":"l1-h08-case-run-five-bays-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"case-run-five-bays","width":1536,"height":864,"bytes":192818,"sha256":"bb686318d3592913c979ebe05f519756f3f0a79ecc2a131678e875ccc504f7ab"}
+  ]
+}

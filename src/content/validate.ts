@@ -362,9 +362,69 @@ export function validatePower(content: MuseumContent): ValidationIssue[] {
         message: `Power control "${control.id}" is outside room "${room.id}" at [${control.position.join(', ')}].`,
       })
     }
+
+    /**
+     * A control fixed to a wall touches the wall.
+     *
+     * A wall recipe is authored from its back plane, so the placement IS the
+     * back of the fixture. Both breakers hung in the air: one 15 mm out, with
+     * the dado rail passing behind it, the other a hand's width proud of the
+     * plaster over the wainscot. Neither shows in a head-on screenshot; both
+     * show the moment the player walks along the wall. A control on a desk is
+     * nowhere near a wall and is left alone.
+     */
+    const wall = nearestWallFace(room, control.position)
+    if (wall.gap <= WALL_REACH && Math.abs(wall.gap) > WALL_FIXTURE_TOLERANCE) {
+      issues.push({
+        severity: 'error',
+        code: 'wall-fixture-off-the-wall',
+        id: control.id,
+        message:
+          `Power control "${control.id}" is fixed ${(wall.gap * 1000).toFixed(1)} mm ` +
+          `${wall.gap > 0 ? 'out from' : 'into'} the plaster of room "${room.id}" ` +
+          `(${wall.axis === 0 ? 'x' : 'z'} = ${wall.at.toFixed(3)}). A wall fixture's placement is its back plane: ` +
+          `put it on the face.`,
+      })
+    }
   }
 
   return issues
+}
+
+/** How far a wall fixture's back may stand from the plaster: a coat of paint. */
+const WALL_FIXTURE_TOLERANCE = 0.006
+
+export type WallFace = {
+  /** The axis the wall is normal to: 0 for an east or west wall, 2 for north or south. */
+  readonly axis: 0 | 2
+  /** The plaster face along that axis, room-local. */
+  readonly at: number
+  /** Unit normal of the face, pointing into the room: [x, z]. */
+  readonly inward: readonly [number, number]
+  /** Distance from the point to the face, positive into the room. */
+  readonly gap: number
+}
+
+/**
+ * The plaster face a room-local point is nearest to.
+ *
+ * `shell.width` runs between wall centre lines, so the face is half a wall
+ * inside it: 8.875 m in the eighteen-metre atrium, not 9.
+ */
+export function nearestWallFace(
+  room: Pick<RoomData, 'shell'>,
+  position: readonly number[],
+): WallFace {
+  const faces = ([0, 2] as const).flatMap((axis) => {
+    const half = (axis === 0 ? room.shell.width : room.shell.depth) / 2 - SHELL_WALL / 2
+    return ([-1, 1] as const).map((side) => ({
+      axis,
+      at: side * half,
+      inward: (axis === 0 ? [-side, 0] : [0, -side]) as readonly [number, number],
+      gap: half - side * position[axis],
+    }))
+  })
+  return faces.reduce((nearest, face) => (Math.abs(face.gap) < Math.abs(nearest.gap) ? face : nearest))
 }
 
 // ---------------------------------------------------------------------------
@@ -1262,6 +1322,40 @@ export function validateBake(
         code: 'power-control-part-not-baked',
         message: `Power control "${room.powerControl.id}" uses recipe "${room.powerControl.part}", which the bake does not produce.`,
       })
+    } else if (room.powerControl) {
+      /**
+       * A control shows the state it controls.
+       *
+       * The breakers were a cast-iron box with a green glass bead, lit red
+       * by a point light beside them: restore the power and the box looked
+       * exactly as it had. A control says what it did either through a lens
+       * the runtime repaints (`<part>__led`, as the door reader has) or
+       * through a practical light of its own (the desk lamp). And a control
+       * with a lens has the node the hand acts on, `<part>__lever`: the
+       * runtime turns that node, so it cannot be a detail of the case.
+       */
+      const control = room.powerControl
+      const hasLens = partNames.has(`${control.part}__led`)
+      if (!hasLens && !control.light) {
+        issues.push({
+          severity: 'error',
+          code: 'power-control-without-state',
+          id: control.id,
+          message:
+            `Power control "${control.id}" (recipe "${control.part}") has neither a baked lens ` +
+            `("${control.part}__led") nor a practical light: restored, it looks as it did unpowered.`,
+        })
+      }
+      if (hasLens && !partNames.has(`${control.part}__lever`)) {
+        issues.push({
+          severity: 'error',
+          code: 'power-control-node-missing',
+          id: control.id,
+          message:
+            `Power control "${control.id}" shows its state on a lens but recipe "${control.part}" ` +
+            `bakes no "${control.part}__lever": there is no node for the hand to throw.`,
+        })
+      }
     }
 
     for (const container of room.containers ?? []) {

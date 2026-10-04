@@ -7,7 +7,7 @@
  * helpers are the only code that knows how to find them.
  */
 
-import { Group, type Object3D } from 'three'
+import { Group, Mesh, type Material, type Object3D } from 'three'
 
 /**
  * Whether a node is one of a device's lenses: the `<part>__led` family, or
@@ -16,6 +16,21 @@ import { Group, type Object3D } from 'three'
  */
 export function isLensNode(name: string, part: string) {
   return name === `${part}__led` || (name.startsWith(`${part}__`) && name.endsWith('-led'))
+}
+
+/**
+ * Points every lens of one cloned assembly at a library material, and nothing
+ * else in it: the door reader's lamp, a radio's charger and display, a
+ * breaker's pilot. The material is the library's own instance, shared with
+ * every other lens that shows the same state, so repainting costs no program.
+ */
+export function paintLenses(instance: Object3D, part: string, material: Material) {
+  instance.traverse((lens) => {
+    if (!isLensNode(lens.name, part)) return
+    lens.traverse((object) => {
+      if (object instanceof Mesh) object.material = material
+    })
+  })
 }
 
 const HANDSET_GROUP = 'radio-handset'
