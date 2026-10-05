@@ -102,7 +102,7 @@ const { checklistPageOf, containerById, journalUnlocked, notebookPagesFor } = aw
 const { containerGrant } = await import('../src/engine/progressGrants.ts')
 const { containerReadQueue, readerAdvance, readerKeyPage, readerPageCount, transcriptText } = await import('../src/engine/readingQueue.ts')
 const { contentActions } = await import('../src/content/simulate.ts')
-const { isUnclaimedInteractKey } = await import('../src/engine/primaryAction.ts')
+const { isHoldCancelKey, isInteractKey, isUnclaimedInteractKey } = await import('../src/engine/primaryAction.ts')
 const { progressConditionMet } = await import('../src/engine/progressCondition.ts')
 const {
   bindSaveFlush,
@@ -127,7 +127,7 @@ const {
 } = await import('../src/ui/hudRules.ts')
 const { portalOpening } = await import('../src/ui/mapGeometry.ts')
 const { containerPrompt, credentialsTaken, devicePrompt } = await import('../src/ui/promptRules.ts')
-const { deviceWiringProblems, officeAnswersWiringProblems } = await import('./lib/runtimeWiring.ts')
+const { deviceWiringProblems, holdWiringProblems, officeAnswersWiringProblems } = await import('./lib/runtimeWiring.ts')
 
 type Progress = ReturnType<typeof migrateProgress>
 type StoreState = ReturnType<typeof useMuseum.getState>
@@ -447,6 +447,78 @@ test('every E handler asks the shared guard and the shared arbitration', () => {
   for (const prompt of ['exhibit', 'container', 'power-control', 'device']) {
     assert.ok(hud.includes(`useWinner('${prompt}')`), `the ${prompt} prompt asks the arbitration`)
   }
+  // E coming up is named in the same place as E going down: the device layer
+  // listens for it (the release of a held press), and with no raw test of its own.
+  const devices = source('engine/Devices.tsx')
+  assert.ok(devices.includes('isInteractKey(event)'), 'the release of E is told apart from every other key by the shared rule')
+  assert.equal(isInteractKey({ code: 'KeyE' }), true)
+  assert.equal(isInteractKey({ code: 'KeyR' }), false)
+  assert.equal(isHoldCancelKey({ code: 'Escape' }), true)
+  assert.equal(isHoldCancelKey({ code: 'KeyE' }), false)
+})
+
+test('the press that is held is wired on both paths, and every other press is still a tap (L3)', () => {
+  // The gesture a term is signed with (`holdAction.ts`, run cell by cell in
+  // `test:mobile-controls`) only exists in the game if the key and the touch
+  // button feed it: down, the frames, up, Escape, a lost focus. And it must
+  // leave every other interaction as it was: E a tap, the touch button a click.
+  assert.deepEqual(holdWiringProblems(source), [])
+  const changed = (path: string, from: string | RegExp, to: string) => (asked: string) => {
+    if (asked !== path) return source(asked)
+    const next = source(asked).replace(from, to)
+    assert.notEqual(next, source(asked), `the refactor of ${path} found nothing to change`)
+    return next
+  }
+  const refactors: readonly (readonly [string, (path: string) => string])[] = [
+    // The keyboard.
+    ['E on a desk that begins no hold', changed('engine/Devices.tsx', 'if (isHoldRequest(answer)) beginPrimaryHold(answer)', '')],
+    ['E that claims a press it declined', changed('engine/Devices.tsx', 'if (answer === false) return\n', '')],
+    ['a key that comes up and releases nothing', changed('engine/Devices.tsx', 'if (isInteractKey(event)) releasePrimaryAction()', 'void event')],
+    ['a release nobody listens for', changed('engine/Devices.tsx', "window.addEventListener('keyup', onKeyUp)", '')],
+    ['Escape that leaves the hold going', changed('engine/Devices.tsx', 'if (isHoldCancelKey(event)) cancelPrimaryHold()', '')],
+    ['a window that loses focus and goes on holding', changed('engine/Devices.tsx', "window.addEventListener('blur', dropHold)", '')],
+    ['a hidden tab that goes on holding', changed('engine/Devices.tsx', "document.addEventListener('visibilitychange', dropHoldWhenHidden)", '')],
+    ['a hold no frame counts', changed('engine/Devices.tsx', "if (primaryHold().phase !== 'idle') tickPrimaryHold(delta, interactionHeldIdOf(state, MUSEUM))", '')],
+    ['a hold that goes on for whatever is aimed at', changed('engine/interactionTarget.ts', "if (winner?.kind !== 'device' || !winner.live) return null", 'if (!winner) return null')],
+    ['a hold that goes on with the aim lost', changed('engine/Devices.tsx', 'tickPrimaryHold(delta, interactionHeldIdOf(state, MUSEUM))', 'tickPrimaryHold(delta, state.focusedDevice)')],
+    ['a hold that goes on at a desk that stopped offering', changed('engine/interactionTarget.ts', 'deviceHeld(deviceIntent(device, deviceInputOf(device, state, content))) ? winner.id : null', 'winner.id')],
+    ['a button and a frame that ask two questions', changed('engine/interactionTarget.ts', 'return interactionHeldIdOf(state, content) !== null', "return interactionWinnerOf(state, content)?.kind === 'device'")],
+    // The shared gesture.
+    ['a hold request taken for an action done', changed('engine/primaryAction.ts', "return isHoldRequest(answer) ? beginPrimaryHold(answer) : 'acted'", "return 'acted'")],
+    ['a hold request that lets the press go on down', changed('engine/primaryAction.ts', 'if (answer === false) continue', 'if (answer !== true) continue')],
+    ['a gesture stepped by a rule of its own', changed('engine/primaryAction.ts', 'const next = holdStep(gesture, event)', 'const next = { gesture, fired: null as string | null }')],
+    ['a fired hold that tells nobody', changed('engine/primaryAction.ts', 'for (const listener of [...firedListeners]) listener(next.fired)', 'void next')],
+    ['a HUD told of every frame of a hold', changed('engine/primaryAction.ts', 'if (holdMark(gesture) !== before) for', 'for')],
+    // The touch button.
+    ['a button that presses as the finger lands, whatever it is over', changed('ui/MobileControls.tsx', 'pointerDown(event, held ? pressPrimaryAction : null)', 'pointerDown(event, pressPrimaryAction)')],
+    ['a button that never takes the pointer for a press', changed('ui/MobileControls.tsx', 'pointerDown(event, held ? pressPrimaryAction : null)', 'pointerDown(event, null)')],
+    ['a pointer left unfinished by a hold that signed, kept', changed('ui/MobileControls.tsx', 'pointerRef.current = actionPointerDown(press !== null, event.timeStamp)', 'if (press !== null) pointerRef.current = actionPointerDown(true, event.timeStamp)')],
+    ['a button that does not ask whether the press is held', changed('ui/MobileControls.tsx', 'useMuseum((state) => interactionHeldOf(state, MUSEUM))', 'false')],
+    ['a held press asked of a rule of its own', changed('engine/interactionTarget.ts', 'deviceHeld(deviceIntent(device, deviceInputOf(device, state, content)))', "device.kind === 'signing-desk'")],
+    ['a finger lifted that releases nothing', changed('ui/MobileControls.tsx', 'onPointerUp={pointerUp}\n          onPointerCancel={pointerUp}\n          onLostPointerCapture={pointerUp}', '')],
+    ['a finger lifted that is always a release', changed('ui/MobileControls.tsx', 'if (up.release) releasePrimaryAction()', 'releasePrimaryAction()')],
+    ['an ordinary tap taken for the echo of a press', changed('engine/mobileControls.ts', 'return press ? { pressed: true, at } : NO_ACTION_POINTER', 'return { pressed: press, at }')],
+    ['a click that acts whoever made it', changed('ui/MobileControls.tsx', 'actionClick(pointerRef.current, event.detail, event.timeStamp)', '{ pointer: pointerRef.current, press: true }')],
+    ['a click judged and acted on anyway', changed('ui/MobileControls.tsx', 'if (click.press) act()', 'act()')],
+    ['a click nobody asks about its pointer', changed('engine/mobileControls.ts', 'press: clickIsThePress(detail, at - pointer.at)', 'press: true')],
+    ['the Action button back on the bare click', changed('ui/MobileControls.tsx', /onClick=\{\(event\) => clicked\(event, triggerPrimaryAction\)\}\n\s*\/\/ A long press/, 'onClick={triggerPrimaryAction}\n          // A long press')],
+    ['a tap with no question on glass', changed('ui/MobileControls.tsx', "{actionVisible && hold.phase === 'confirming' ? (", '{false ? (')],
+    ['a «Cancelar» that cancels nothing', changed('ui/MobileControls.tsx', 'pointerDown(event, cancelPrimaryHold)', 'pointerDown(event, releasePrimaryAction)')],
+    ['a button that shows nothing while held', changed('ui/MobileControls.tsx', "hold.phase === 'holding' ? 'mobile-action-button is-holding' : 'mobile-action-button'", "'mobile-action-button'")],
+    ['a long press that brings up the browser menu', changed('ui/MobileControls.tsx', /onContextMenu=\{\(event\) => event\.preventDefault\(\)\}\n/g, '')],
+    // What the player sees.
+    ['a prompt that does not follow the gesture', changed('ui/Hud.tsx', "useSyncExternalStore(subscribePrimaryHold, primaryHoldMark, () => 'idle')", "'idle'")],
+    ['a key that shows nothing while held', changed('ui/Hud.tsx', "className={mine ? 'prompt-key is-holding' : 'prompt-key'}", 'className="prompt-key"')],
+    ['a tap with no question on screen', changed('ui/Hud.tsx', "if (mine?.phase === 'confirming') {", 'if (false) {')],
+    ['a ring nobody draws', changed('styles/museum.css', '.prompt-key.is-holding::after,\n.mobile-action-button.is-holding::after {', '.nothing {')],
+    ['a ring that closes in a time of its own', changed('styles/museum.css', 'animation: hold-ring var(--hold-seconds, 1.2s) linear forwards;', 'animation: hold-ring 3s linear forwards;')],
+    // Every other E in the museum.
+    ['a lamp that waits for a hold', changed('engine/PowerControls.tsx', 'if (interact()) event.preventDefault()', 'if (interact()) beginPrimaryHold({ id: "x", seconds: 1 })')],
+    ['a door that no longer claims its press', changed('engine/TransitionDoors.tsx', 'if (interact()) event.preventDefault()', 'interact()')],
+    ['an exhibit picked up without the shared guard', changed('engine/Interaction.tsx', 'if (isUnclaimedInteractKey(event) && interact()) event.preventDefault()', "if (event.code === 'KeyE' && interact()) event.preventDefault()")],
+  ]
+  const uncaught = refactors.filter(([, reader]) => holdWiringProblems(reader).length === 0).map(([name]) => name)
+  assert.deepEqual(uncaught, [], 'a refactor this check exists to catch went through')
 })
 
 // ---------------------------------------------------------------------------
@@ -622,7 +694,7 @@ test('a thing that only says something holds the prompt and never the key (L3)',
     ['a set clock that goes on showing the storm\'s minute', changed('engine/Devices.tsx', 'clockFaceAngles(device.stoppedAt, count.advance(delta), night)', 'clockFaceAngles(device.stoppedAt, count.advance(delta), null)')],
     ['a clock that reads the hour from somewhere of its own', changed('engine/Devices.tsx', 'setClockMinutes(MUSEUM.nightClock, device.setFlag, state.progress, MUSEUM)', 'setClockMinutes(MUSEUM.nightClock, device.setFlag, EMPTY_PROGRESS, MUSEUM)')],
     ['a toast for any flag at all', changed('ui/Hud.tsx', 'const set = clockJustSet(seenLength.current, flags, clockFlags)', 'const set = flags.length > seenLength.current')],
-    ['an hour of the HUD\'s own', changed('ui/Hud.tsx', 'nightPhraseKey(MUSEUM.nightClock, nightPoints(MUSEUM.nightClock, state.progress, MUSEUM))', "'night.hour.1'")],
+    ['an hour of the HUD\'s own', changed('ui/useNightPhraseKey.ts', 'nightPhraseKey(MUSEUM.nightClock, nightPoints(MUSEUM.nightClock, state.progress, MUSEUM))', "'night.hour.1'")],
     ['a toast that says the clock was set and not to what', changed('ui/Hud.tsx', "{phraseKey ? ` — ${t(phraseKey as never)}` : ''}", '')],
     ['a subtitle that prints the token of the hour', changed('ui/Hud.tsx', 'fillHour(t(radio.lineKeys[radio.index] as never), hourKey ? t(hourKey as never) : null)', 't(radio.lineKeys[radio.index] as never)')],
   ]
@@ -1153,7 +1225,7 @@ test('the components ask those rules: the voice, the reader, the hinge and the t
     ['a voice whose lamp nobody paints', changed('engine/Devices.tsx', "{device.kind === 'voice' && device.messageLamp ? (", "{device.kind === 'voice' && false ? (")],
     // The porter, cut off by a voice that took the air: owed, and delivered again.
     ['a director that asks only when the save changes', changed('engine/Devices.tsx', '}, [onAir, progress])', '}, [progress])')],
-    ['a director that does not watch the air', changed('engine/Devices.tsx', 'const onAir = useMuseum((state) => state.radio !== null)', 'const onAir = false')],
+    ['a director that does not watch the air', changed('engine/Devices.tsx', 'const onAir = useMuseum(airTaken)', 'const onAir = false')],
     ['a call scheduled again while it is being said', changed('engine/Devices.tsx', ' || useMuseum.getState().radio?.callId === call.id) continue', ') continue')],
     // The reader.
     ['E that closes a cabinet from its first paper', changed('engine/Containers.tsx', 'const next = readerAdvance(MUSEUM, state.openedContainer, state.notebookPage)', "const next = 'close' as number | 'close'")],

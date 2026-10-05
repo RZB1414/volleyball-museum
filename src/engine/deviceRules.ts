@@ -18,6 +18,8 @@ import type {
 } from '../content/schema'
 import { isRoomPowered } from './power.ts'
 import { progressConditionMet, type ConditionProgress } from './progressCondition.ts'
+import { dueSequence, type SequenceProgress } from './sequenceRules.ts'
+import { signingDeskState, type SigningDeskState } from './termRules.ts'
 
 export type RadioDevice = Extract<DeviceData, { kind: 'radio' }>
 export type VoiceDevice = Extract<DeviceData, { kind: 'voice' }>
@@ -314,6 +316,10 @@ export function devicePowerRoom(device: DeviceData): EraId | null {
     case 'voice':
       // A dead line answers in the dark; a machine on mains does not.
       return device.poweredBy ?? null
+    case 'signing-desk':
+      // A desk is furniture. The light a term asks for is the term's own
+      // condition, and the desk says which room is still dark.
+      return null
   }
 }
 
@@ -335,6 +341,8 @@ export type DeviceInput = {
    * end, `heard` for one that has been.
    */
   readonly recording: 'none' | 'waiting' | 'heard'
+  /** What a signing desk stands at; `empty` of whatever is no desk. */
+  readonly desk: SigningDeskState
 }
 
 /**
@@ -343,9 +351,24 @@ export type DeviceInput = {
  * which none of it happened (`progressCondition.ts`).
  */
 export type DeviceWorld = {
-  readonly progress: Pick<ConditionProgress, 'roomsPowered'> & Partial<ConditionProgress>
+  readonly progress: Pick<ConditionProgress, 'roomsPowered'> & Partial<SequenceProgress>
   /** The transmission on air, if any, and whose it is. */
   readonly radio: { readonly deviceId?: string } | null
+  /** The directed sequence on screen, if any. Not handed over: none. */
+  readonly sequence?: object | null
+}
+
+/** What a device's input is asked against: the rooms, what conditions name, and what a desk signs. */
+export type DeviceContent = Pick<MuseumContent, 'rooms' | 'exhibits' | 'terms' | 'sequences'>
+
+/**
+ * Whether the air is taken: the radio is saying something, or a directed
+ * sequence is on screen. One line for both, because a sequence speaks on the
+ * same subtitle: a call of the porter's waits for it as it waits for another
+ * call, and is asked for again when it ends.
+ */
+export function airTaken(state: { readonly radio: object | null; readonly sequence?: object | null }): boolean {
+  return state.radio !== null || (state.sequence ?? null) !== null
 }
 
 
@@ -373,18 +396,17 @@ export function voiceUtterance(
  * Asked against the content: a mains device by the room that feeds it, a
  * voice by whatever the conditions of its utterances name.
  */
-export function deviceInputOf(
-  device: DeviceData,
-  world: DeviceWorld,
-  content: Pick<MuseumContent, 'rooms' | 'exhibits'>,
-): DeviceInput {
+export function deviceInputOf(device: DeviceData, world: DeviceWorld, content: DeviceContent): DeviceInput {
   const supply = devicePowerRoom(device)
   const room = supply === null ? undefined : content.rooms.find((candidate) => candidate.id === supply)
   const flag = deviceSetFlag(device)
   // A voice asks its utterances of the save like any other condition; a
   // list the asker did not hand over is the one in which nothing happened.
-  const progress: ConditionProgress = { locksOpened: [], documentsRead: [], catalogued: [], ...world.progress }
+  const progress: SequenceProgress = { locksOpened: [], documentsRead: [], catalogued: [], ...world.progress }
   const recorded = device.kind === 'voice' ? voiceUtterance(device, progress, content)?.documentId : undefined
+  // The sequence that follows a signature, on screen or still owed: until it
+  // has closed the desk offers nothing further (`signingDeskState`).
+  const sequenceOwed = (world.sequence ?? null) !== null || dueSequence(content.sequences ?? [], progress, content) !== null
   return {
     // A supply the content does not have feeds nothing.
     powered: supply === null ? true : room !== undefined && isRoomPowered(room, world.progress.roomsPowered),
@@ -393,8 +415,15 @@ export function deviceInputOf(
     set: flag !== null && Array.isArray(world.progress.flags) && world.progress.flags.includes(flag),
     voicing: device.kind === 'voice' && world.radio?.deviceId === device.id,
     recording: recorded === undefined ? 'none' : progress.documentsRead.includes(recorded) ? 'heard' : 'waiting',
+    desk:
+      device.kind === 'signing-desk'
+        ? signingDeskState(content.terms ?? [], device, progress, content, sequenceOwed)
+        : NO_DESK,
   }
 }
+
+/** What is asked of a desk with nothing brought to it, and of whatever is no desk. */
+const NO_DESK: SigningDeskState = { state: 'empty' }
 
 /**
  * What a device answers the crosshair with, and so what its prompt says and
@@ -420,6 +449,11 @@ export type DeviceIntent =
    * would play is a recording already heard out. `play`: anything else.
    */
   | { readonly kind: 'voice'; readonly intent: 'dead' | 'play' | 'again' | 'skip' }
+  /**
+   * A desk where terms are signed, with what it stands at (`termRules.ts`):
+   * nothing brought, a term that waits, a term a held press signs, all signed.
+   */
+  | { readonly kind: 'desk'; readonly state: SigningDeskState }
 
 export function deviceIntent(device: DeviceData, input: DeviceInput): DeviceIntent {
   switch (device.kind) {
@@ -442,6 +476,10 @@ export function deviceIntent(device: DeviceData, input: DeviceInput): DeviceInte
       // dials, and what he was saying is still owed.
       if (input.voicing) return { kind: 'voice', intent: 'skip' }
       return { kind: 'voice', intent: input.recording === 'heard' ? 'again' : 'play' }
+    case 'signing-desk':
+      // Asked with nothing but the power (the scan that lists what can be
+      // aimed at), a desk answers as one with nothing brought to it.
+      return { kind: 'desk', state: input.desk ?? NO_DESK }
   }
 }
 
@@ -500,6 +538,11 @@ export function deviceLive(intent: DeviceIntent): boolean {
       return true
     case 'voice':
       return intent.intent !== 'dead'
+    case 'desk':
+      // A term that can be signed takes the press, held; one that cannot yet
+      // answers it with a buzz, like a door that will not open. A desk with
+      // nothing on it, or nothing left, only says so.
+      return intent.state.state === 'ready' || intent.state.state === 'blocked'
   }
 }
 
@@ -516,7 +559,7 @@ export function aimableDevices(
       // Asked of the rule itself, with the house lit and nothing done yet:
       // what a kind answers may change with power and with the save, but
       // whether it ever answers does not.
-      deviceIntent(device, { powered: true, carried: false, speaking: false, set: false, voicing: false, recording: 'none' })
+      deviceIntent(device, { powered: true, carried: false, speaking: false, set: false, voicing: false, recording: 'none', desk: NO_DESK })
         .kind === 'none'
         ? []
         : [{ room, device }],
@@ -531,4 +574,12 @@ export function aimableDevices(
  */
 export function radioLineSeconds(text: string) {
   return Math.min(9, Math.max(3.2, 1.6 + text.length / 18))
+}
+
+/**
+ * Whether E on it has to be held rather than tapped: a desk with a term
+ * ready. The one thing in the house a slip of the finger must not do.
+ */
+export function deviceHeld(intent: DeviceIntent): boolean {
+  return intent.kind === 'desk' && intent.state.state === 'ready'
 }

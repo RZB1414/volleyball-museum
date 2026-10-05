@@ -1813,12 +1813,51 @@ test('the porter by milestone and the hour of the night: each rule of the gate, 
     ],
   }))
   spares('radio-hint-coverage', 'a radio with a hint for the term', gate(withTerm(covered)))
-  // Signed (here by a trigger, as the lectern will), the night has nothing left: the last hint is the right one.
-  const signed: MuseumContent = {
+  // Signed, the night has nothing left: the last hint is the right one. Signed
+  // is the signature in the save (`termsSigned`), made at a desk: the lectern
+  // of the hall, here, made one for the purpose. Until this slice the rule
+  // read the flag, which a trigger of the test set by itself; a house whose
+  // flag is set and whose term nobody signed is still owed the signature.
+  const lectern = MUSEUM.rooms.find((room) => room.id === 'atrium')?.kit.find((placement) => placement.part === 'atrium-lectern')
+  assert.ok(lectern, 'the hall has a lectern to make a desk of')
+  const withDesk = (content: MuseumContent): MuseumContent => ({
+    ...content,
+    rooms: content.rooms.map((room) =>
+      room.id === 'atrium'
+        ? {
+            ...room,
+            kit: room.kit.filter((placement) => placement !== lectern),
+            devices: [
+              ...(room.devices ?? []),
+              {
+                kind: 'signing-desk' as const,
+                id: 'atrium-lectern',
+                part: 'atrium-lectern' as const,
+                position: lectern.position,
+                rotationY: lectern.rotationY,
+                titleKey: 'device.atrium-podium.title',
+                emptyNoticeKey: 'device.atrium-podium.notice',
+                termIds: [term.id],
+                holdSeconds: 1.2,
+              },
+            ],
+          }
+        : room,
+    ),
+  })
+  const signed = withDesk(withTerm(covered))
+  assert.deepEqual(simulateProgress(signed).final.termsSigned, [term.id], 'the exhaustive player signs at the lectern')
+  spares('radio-hint-coverage', 'a house whose term is signed, with a hint for it until then', gate(signed))
+  // With the desk and no hint for it, there is a moment the rule is for: the
+  // rooms lit, the drawer open, the term on the lectern, and a porter who
+  // says there is nothing left to do.
+  proves('radio-hint-coverage', 'office-radio', gate(withDesk(withTerm(MUSEUM))))
+  // And a flag that sets itself is not a signature.
+  const flagOnly: MuseumContent = {
     ...withTerm(MUSEUM),
-    triggers: [{ id: 'signed-for-the-test', when: term.when, effects: [{ kind: 'set-flag', flag: 'teste-assinado' }] }],
+    triggers: [{ id: 'flag-for-the-test', when: term.when, effects: [{ kind: 'set-flag', flag: 'teste-assinado' }] }],
   }
-  spares('radio-hint-coverage', 'a house whose term is signed', gate(signed))
+  proves('radio-hint-coverage', 'office-radio', gate(flagOnly))
   // A term nobody can sign in this build is owed no hint (it is another accusation's to make).
   spares('radio-hint-coverage', 'a term that cannot be signed', gate(withTerm(MUSEUM, { when: { catalogued: ['net-1897'] } })))
   // And what a term asks is checked like any other condition.

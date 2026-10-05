@@ -77,6 +77,16 @@ export const en = {
   'reader.next': 'Next',
   // Followed by the name of what was taken: "You took — Key to the iron safe".
   'credential.taken': 'You took',
+  // The signing desk. A term is a deed here: "Hold E — Sign: Deed of office".
+  'desk.sign': 'Sign',
+  'desk.hold.keyboard': 'Hold E',
+  'desk.hold.touch': 'Hold Action',
+  'desk.cancel': 'Cancel',
+  'desk.missing.power': 'no light yet in',
+  'desk.missing.document': 'missing',
+  'desk.signed': 'signed',
+  'term.signed': 'Signed by the curator.',
+  'journal.terms.heading': 'Deeds signed',
 
   'map.title': 'Museum plan',
   'map.state.unlit': 'No power',

@@ -14,6 +14,7 @@ import { FRESH_RADIO_MEMORY, useMuseum } from '../state/store.ts'
 import { museumAudio } from './audio.ts'
 import { nextRadioCall, radioDevices, radioIsLive, transmissionLapsed, type RadioDevice } from './deviceRules.ts'
 import { deadAirFor, porterAnswer, radioCallBlocked } from './radioPatience.ts'
+import { skipSequenceStepOn } from './sequenceDirector.ts'
 
 /** What a press of the call button reads of a content: its radios, and what their conditions name. */
 type RadioContent = Pick<MuseumContent, 'rooms' | 'exhibits'>
@@ -54,11 +55,14 @@ export function takeDeskRadio(deviceId: string) {
 /**
  * One press of the call button, from wherever the player stands.
  *
- * In order: while he is talking the press moves him on a line (and is not a
- * call); a content call that is due is said first, always, so pressing in the
- * seconds after the lamp can never put a hint before his introduction; while
- * he has hung up only static answers; otherwise his answer, as his patience
- * allows. Neither a skip, a content call nor static counts against him.
+ * In order: while a directed sequence is on screen the press moves that on a
+ * step, and calls nobody (it speaks in the radio's own lettering, and the
+ * button that skips one skips the other); while he is talking the press
+ * moves him on a line (and is not a call); a content call that is due is
+ * said first, always, so pressing in the seconds after the lamp can never
+ * put a hint before his introduction; while he has hung up only static
+ * answers; otherwise his answer, as his patience allows. Neither a skip, a
+ * content call nor static counts against him.
  */
 export function placeRadioCall(deviceId: string, now = Date.now(), random: () => number = Math.random) {
   return placeRadioCallOn(useMuseum, MUSEUM, deviceId, now, random)
@@ -79,6 +83,7 @@ export function placeRadioCallOn(
   now: number,
   random: () => number,
 ) {
+  if (skipSequenceStepOn(store)) return true
   const device = radiosOf(content).get(deviceId)
   const state = store.getState()
   if (!device || radioCallBlocked(state)) return false

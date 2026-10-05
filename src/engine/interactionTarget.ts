@@ -16,9 +16,17 @@
  * and power controls) sit side by side, so between them the nearest wins.
  */
 
-import type { DeviceData, MuseumContent, RoomData } from '../content/schema'
+import type { DeviceData, RoomData } from '../content/schema'
 import { isModalOpen, type MuseumStore } from '../state/store.ts'
-import { aimableDevices, deviceInputOf, deviceIntent, deviceLive, type DeviceWorld } from './deviceRules.ts'
+import {
+  aimableDevices,
+  deviceHeld,
+  deviceInputOf,
+  deviceIntent,
+  deviceLive,
+  type DeviceContent,
+  type DeviceWorld,
+} from './deviceRules.ts'
 import { isRoomPowered } from './power.ts'
 
 /** How far each system's ray reaches. Shared with the headless proof. */
@@ -126,7 +134,11 @@ export type FocusState = Pick<
   | 'focusedPowerControl'
   | 'focusedPowerControlDistance'
   | 'radio'
-> & {
+> &
+  // What is on screen by itself: a desk offers nothing under the card of a
+  // term just signed. Optional, so a snapshot made before there were
+  // sequences still asks.
+  Partial<Pick<MuseumStore, 'sequence'>> & {
   /**
    * The save, as far as a device reads it: the rooms with power, and beside
    * them whatever its kind asks (a radio whether it is carried, a clock its
@@ -136,8 +148,8 @@ export type FocusState = Pick<
   readonly progress: DeviceWorld['progress']
 }
 
-/** The rooms, and what a device's conditions may name beside them. */
-type InteractionContent = Pick<MuseumContent, 'rooms' | 'exhibits'>
+/** The rooms, and what a device's conditions may name beside them: pieces, terms, sequences. */
+type InteractionContent = DeviceContent
 
 type Lookups = {
   readonly devices: ReadonlyMap<string, DeviceData>
@@ -259,4 +271,33 @@ export function shouldCapturePointer(input: {
   readonly modal: boolean
 }) {
   return input.button === 0 && !input.locked && !input.modal
+}
+
+/**
+ * Whether the press the winner would take has to be HELD: a desk with a term
+ * ready to be signed.
+ *
+ * The touch button asks before deciding when to act. Everything else acts
+ * on the click, as it always did; a press that has to be held is taken as
+ * the pointer goes down, because a click says neither when the press began
+ * nor when it ended. Asked of the same arbitration the key handlers and the
+ * prompts ask, so the button cannot hold on one thing while E works another.
+ */
+export function interactionHeldOf(state: FocusState, content: InteractionContent): boolean {
+  return interactionHeldIdOf(state, content) !== null
+}
+
+/**
+ * The thing a press would be held on, by id, or null: the device that owns
+ * the crosshair, while a press on it has to be held. It is what a hold in
+ * progress may go on for. Under a modal, with the aim on anything else, or
+ * once the desk no longer offers a term a hold would sign (it was signed in
+ * another tab, a room went dark, the card came up), it is nothing, and the
+ * hold ends there rather than close its ring on a thing that will not answer.
+ */
+export function interactionHeldIdOf(state: FocusState, content: InteractionContent): string | null {
+  const winner = interactionWinnerOf(state, content)
+  if (winner?.kind !== 'device' || !winner.live) return null
+  const device = lookupsFor(content).devices.get(winner.id)
+  return device !== undefined && deviceHeld(deviceIntent(device, deviceInputOf(device, state, content))) ? winner.id : null
 }

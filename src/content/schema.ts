@@ -411,6 +411,8 @@ export type ProgressCondition = {
   readonly roomsUnvisited?: readonly EraId[]
   /** Ids of physical doors: the portal that declares the leaf. */
   readonly doorsReleased?: readonly string[]
+  /** All of these terms are signed. A signature is never taken back. */
+  readonly termsSigned?: readonly string[]
   /**
    * At least one of these holds; every other requirement here still must.
    * With none listed it never holds: "one of nothing" is not a way through.
@@ -475,7 +477,13 @@ export type ChecklistItem = {
  * scrolls a letter that was written to fit a page.
  */
 export type NotebookPage = {
-  readonly style: 'printed' | 'handwritten' | 'checklist'
+  readonly style: 'printed' | 'handwritten' | 'checklist' | 'term'
+  /**
+   * `term`: the page is that term, as it stands in the book: its title, its
+   * body and its signature line, which is filled once the save holds the
+   * signature. The words are the term's own, written once.
+   */
+  readonly termId?: string
   readonly headingKey?: string
   readonly bodyKey?: string
   readonly signatureKey?: string
@@ -941,7 +949,9 @@ type DevicePlacement = {
  * lit device needs `<part>__led`, and a radio the player carries away needs
  * `<part>__handset` (with its `__handset-*` families) to leave its cradle.
  * A notice asks nothing of its recipe: it is whatever stands there. Nor
- * does a voice, unless it shows a waiting message (`messageLamp`).
+ * does a voice, unless it shows a waiting message (`messageLamp`). A signing
+ * desk needs `<part>__led` (drawn while a term waits on it) and
+ * `<part>__book` (drawn once one has been signed).
  *
  * A device is solid by whatever collider its recipe carries in the bake
  * manifest, like a container or a power control.
@@ -1025,6 +1035,22 @@ export type DeviceData =
        */
       readonly utterances: readonly VoiceUtterance[]
     })
+  | (DevicePlacement & {
+      /**
+       * Where terms are signed. It names the oldest term brought to it and
+       * not yet signed, says what that term still waits for, and takes a
+       * press that is HELD: a signature is the one thing in the house that
+       * must not happen by a slip of the finger (D11).
+       */
+      readonly kind: 'signing-desk'
+      readonly titleKey: string
+      /** What it says while no term has been brought to it. */
+      readonly emptyNoticeKey: string
+      /** The terms signed here. Offered in the order the content lists its terms: oldest first. */
+      readonly termIds: readonly string[]
+      /** How long the press is held, in seconds. */
+      readonly holdSeconds: number
+    })
 
 /**
  * One thing a voice device says: lines of its own, or a recording.
@@ -1071,10 +1097,13 @@ export type NightClock = {
 /**
  * Something the curator signs: the deed of office, and later the reopening.
  *
- * The lectern that signs it arrives with the lot's later slices. It is in
- * the schema from this one because a rule already speaks of it: while a term
- * can be signed and has not been, the porter has something left to point at,
- * and the gate holds his hints to that (`radio-hint-coverage`).
+ * Signed at a signing desk (`DeviceData`), by a press that is held. The
+ * signature is what the save records (`termsSigned`); the flag it sets
+ * follows from it as a trigger (`term:<id>:signed`, `engine/triggers.ts`),
+ * so a save that holds the signature and not the flag is given the flag.
+ * While a term can be signed and has not been, the porter has something
+ * left to point at, and the gate holds his hints to that
+ * (`radio-hint-coverage`).
  */
 export type Term = {
   readonly id: string
@@ -1082,11 +1111,45 @@ export type Term = {
   readonly bodyKey: string
   /** From here on the signing desk names it. Positive. */
   readonly presentedWhen: ProgressCondition
-  /** What signing asks. Positive, with every id named. Asks everything `presentedWhen` asks. */
+  /**
+   * What signing asks. Positive, with every id named. Asks everything
+   * `presentedWhen` asks, and beyond that only for rooms with power and
+   * papers read: those are what a desk can name as missing.
+   */
   readonly when: ProgressCondition
   /** The flag the signature sets. */
   readonly grants: string
   /** Ids of the build the term sends the player to. */
+  readonly mentions: readonly string[]
+}
+
+/**
+ * One step of a directed sequence: a card in the middle of the screen, held
+ * for its seconds, or a line somebody says, held for the time it takes to
+ * read (`radioLineSeconds`). A line may say the hour (`{hora}`).
+ */
+export type SequenceStep =
+  | { readonly kind: 'card'; readonly titleKey: string; readonly seconds: number }
+  | { readonly kind: 'line'; readonly speakerKey: string; readonly lineKey: string }
+
+/**
+ * Something the game shows by itself, once: the card that says a term was
+ * signed, and the lines that close the night.
+ *
+ * It is not a call of the porter's on purpose. A call needs the radio within
+ * earshot, and a player may reach the end of the night having never picked
+ * it up: what closes the night has to be heard with or without it. A
+ * sequence takes the air from the radio while it plays (a call it cuts off
+ * was not heard, and comes back), and is recorded as seen only at its last
+ * step, so one cut off by a closed tab starts over.
+ */
+export type DirectedSequence = {
+  readonly id: string
+  /** Once this holds the sequence is owed, until it has been seen to its last step. Positive. */
+  readonly when: ProgressCondition
+  /** Never empty. */
+  readonly steps: readonly SequenceStep[]
+  /** Ids of the build its lines send the player to. */
   readonly mentions: readonly string[]
 }
 
@@ -1179,6 +1242,8 @@ export type MuseumContent = {
   readonly nightClock?: NightClock
   /** What the curator signs, oldest first. None until the lectern is a signing desk. */
   readonly terms?: readonly Term[]
+  /** What the game shows by itself, once each, in this order when two are owed. */
+  readonly sequences?: readonly DirectedSequence[]
   /** Every credential the house hands out or asks for, with the name it is announced by. */
   readonly credentials?: readonly CredentialData[]
 }

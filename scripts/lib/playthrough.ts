@@ -58,11 +58,14 @@ import {
   radioWithinEarshot,
 } from '../../src/engine/deviceRules.ts'
 import { examineReach } from '../../src/engine/examineReach.ts'
+import { HOLD_IDLE, holdStep } from '../../src/engine/holdAction.ts'
 import { attemptLock } from '../../src/engine/lockRules.ts'
 import { isContainerTaken } from '../../src/engine/notebook.ts'
 import { isRoomPowered } from '../../src/engine/power.ts'
 import { clockGrant, containerGrant, doorGrant, hotspotGrant } from '../../src/engine/progressGrants.ts'
 import { placeRadioCallOn } from '../../src/engine/radioCall.ts'
+import { startDueSequenceOn } from '../../src/engine/sequenceDirector.ts'
+import { pressSigningDeskOn, signAtDeskOn } from '../../src/engine/signingDesk.ts'
 import { operateVoiceOn } from '../../src/engine/voiceDevice.ts'
 import {
   buildTransitionDoorSpecs,
@@ -99,6 +102,8 @@ export function describe(action: PlayerAction): string {
       return `set ${action.deviceId}`
     case 'voice':
       return `hear ${action.deviceId}`
+    case 'sign':
+      return `sign ${action.termId} at ${action.deviceId}`
   }
 }
 
@@ -292,6 +297,45 @@ export function press(page: GamePage, world: MuseumContent, action: PlayerAction
       for (let line = 0; line < 64 && page.state().radio?.deviceId === device.id; line += 1) page.state().advanceRadio()
       return
     }
+
+    // `Devices.tsx`, `operateDevice`, and then the hold. The press is the one
+    // function the component calls; if the desk asks for it to be held, the
+    // hand holds it by the reducer the key and the touch button both drive, a
+    // frame at a time with the desk under the crosshair, and when the gesture
+    // fires it does what the component's listener does. So this hand is the
+    // handler, the gesture and the listener, and a copy of none of them.
+    case 'sign': {
+      const device = (room.devices ?? []).find((candidate) => candidate.id === action.deviceId)
+      if (!device || device.kind !== 'signing-desk') return
+      // The player reads the prompt first: the term it names is the one she means to sign, or she walks on.
+      const intent = deviceIntent(device, deviceInputOf(device, state, world))
+      const offered = intent.kind === 'desk' && intent.state.state === 'ready' ? intent.state.term.id : null
+      const answer = pressSigningDeskOn(page.store.useMuseum, world, device.id)
+      if (typeof answer === 'boolean') return
+      // Another term is on the desk: she lets go at once. A press let go of
+      // writes nothing, so there is nothing more for this hand to do.
+      if (offered !== action.termId) return
+      let gesture = holdStep(HOLD_IDLE, { kind: 'press', request: answer })
+      for (let frame = 0; frame < 4096 && gesture.gesture.phase === 'holding'; frame += 1) {
+        gesture = holdStep(gesture.gesture, { kind: 'tick', seconds: 1 / 60, aimed: device.id })
+      }
+      if (gesture.fired === device.id) signAtDeskOn(page.store.useMuseum, world, device.id)
+      return
+    }
+  }
+}
+
+/**
+ * What the HUD does by itself, after a press and after a load: whatever
+ * directed sequence the save is owed is put on screen and seen to its last
+ * step, one after another (`SequenceOverlay.tsx` starts each with this very
+ * function, and its timer moves the steps on). The robot waits them out, as
+ * a player who does not skip does. Not a press, and nothing it records is an
+ * atom of the graph; with no sequence in the museum it does nothing at all.
+ */
+export function watchOwed(page: GamePage, world: MuseumContent): void {
+  for (let turn = 0; turn < 64 && startDueSequenceOn(page.store.useMuseum, world, false); turn += 1) {
+    for (let step = 0; step < 256 && page.state().sequence !== null; step += 1) page.state().advanceSequence()
   }
 }
 
@@ -342,6 +386,10 @@ export function everyPress(
     if (device.kind === 'radio' && device.carriedOnUse) presses.push({ kind: 'take', deviceId: device.id })
     if (device.kind === 'clock' && device.setFlag !== undefined) presses.push({ kind: 'set-clock', deviceId: device.id })
     if (device.kind === 'voice') presses.push({ kind: 'voice', deviceId: device.id })
+    // E held on a desk, meaning each of the terms it signs in turn.
+    if (device.kind === 'signing-desk') {
+      for (const termId of device.termIds) presses.push({ kind: 'sign', deviceId: device.id, termId })
+    }
   }
   return presses
 }
@@ -486,6 +534,7 @@ export async function playToEnd(
 ): Promise<Playthrough> {
   let page = start
   if (!page.state().started) page.state().start()
+  watchOwed(page, world)
   listen(page)
   const log: string[] = []
   let presses = 0
@@ -499,6 +548,8 @@ export async function playToEnd(
     const room = page.state().currentRoom
     const before = page.progress()
     press(page, world, action)
+    // What the game shows by itself because of it: seen before the next press.
+    watchOwed(page, world)
     const after = page.progress()
     presses += 1
     if (after === before) wasted += 1
@@ -562,6 +613,7 @@ export async function playToEnd(
         page = await reload(page)
         reloads += 1
         log.push('— the tab is closed and opened again —')
+        watchOwed(page, world)
         listen(page)
         continue
       }

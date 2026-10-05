@@ -104,3 +104,46 @@ export function hiddenInScene(object: Object3D | null) {
 export function placeHandset(handset: Object3D | null, carried: boolean) {
   if (handset) handset.visible = !carried
 }
+
+const DESK_LAMP_GROUP = 'desk-lamp'
+const DESK_BOOK_GROUP = 'desk-book'
+
+/** The two things a signing desk draws or does not: its lamp, and the Book on it. */
+export type DeskNodes = { readonly lamp: Group | null; readonly book: Group | null }
+
+/** The children of an assembly whose names begin so, under one named group; null when there are none. */
+function gather(instance: Object3D, groupName: string, prefix: string): Group | null {
+  const existing = instance.getObjectByName(groupName)
+  if (existing instanceof Group) return existing
+  const nodes = instance.children.filter((child) => child.name.startsWith(prefix))
+  if (nodes.length === 0) return null
+  const group = new Group()
+  group.name = groupName
+  instance.add(group)
+  for (const node of nodes) group.add(node)
+  return group
+}
+
+/**
+ * Gathers a signing desk's `<part>__led*` nodes under one group and its
+ * `<part>__book*` nodes under another, so that each can be drawn or not as a
+ * whole: the lamp while a term waits on the desk, the Book once one has been
+ * signed. In a room at its draw ceiling that is the point: neither is paid
+ * for while it has nothing to say.
+ *
+ * Groups at the assembly's identity, as for the handset and for its reasons:
+ * each node keeps the transform that undoes quantisation, and a hidden group
+ * hides its lenses from the ray that switches meshes back on. Idempotent.
+ */
+export function prepareDeskNodes(instance: Object3D, part: string): DeskNodes {
+  return {
+    lamp: gather(instance, DESK_LAMP_GROUP, `${part}__led`),
+    book: gather(instance, DESK_BOOK_GROUP, `${part}__book`),
+  }
+}
+
+/** Draws the lamp and the Book of a desk, or not. */
+export function showDeskNodes(nodes: DeskNodes, lamp: boolean, book: boolean) {
+  if (nodes.lamp) nodes.lamp.visible = lamp
+  if (nodes.book) nodes.book.visible = book
+}

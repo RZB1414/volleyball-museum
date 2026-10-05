@@ -108,7 +108,7 @@ na fatia F5.
 | DL3-9 | quando um documento conta como lido | ao abrir o container, todos, como hoje; o leitor é que mostra um por vez | a ação `container:holyoke-cabinet-a` está no registro de L2 concedendo os dois documentos e o fato; conceder por página seria `grant-removed` (R1) |
 | DL3-10 | o gesto de segurar | um redutor puro (`holdStep`) com quatro eventos: pressionar, quadro, soltar, cancelar. Soltar antes de 0,3 s abre «Assinar / Cancelar»; soltar depois, e antes do fim, cancela; 1,2 s assina; perder a mira cancela | D11 e S18. O tempo conta por quadro, com o mesmo teto de passo do relógio (0,25 s), para uma aba congelada não assinar sozinha |
 | DL3-11 | o que a assinatura grava | o verbo grava `termsSigned`; a flag do termo (`posse-signed`) é um gatilho compilado do termo (`term:<id>:signed`) | «o verbo grava o que o jogador FEZ; o que segue é gatilho» (`progressGrants.ts`). O gatilho alcança um save que tenha o termo sem a flag |
-| DL3-12 | a sequência dirigida | lista própria do conteúdo (`sequences`), tocada pelo HUD; corta o rádio com `stopRadio` (a chamada cortada não conta como ouvida e volta depois); só entra em `sequencesSeen` no último passo | M42. Uma chamada de rádio com `directed: true` dependeria do aparelho; a sequência não tem aparelho |
+| DL3-12 | a sequência dirigida | lista própria do conteúdo (`sequences`), tocada pelo HUD; tira o rádio do ar ao começar (no mesmo `set` do store que a põe na tela, §15.4; a chamada cortada não conta como ouvida e volta depois); só entra em `sequencesSeen` no último passo | M42. Uma chamada de rádio com `directed: true` dependeria do aparelho; a sequência não tem aparelho |
 | DL3-13 | o recado gravado | toca pelo mesmo canal de legenda do rádio; as linhas faladas **são** a transcrição do documento (`DocumentData.lineKeys`), sem texto em dobro; o documento entra em `documentsRead` quando a última linha termina | o dicionário viaja com a tela de título: 1,2 kB de recado duas vezes não |
 | DL3-14 | fala presa à chuva | `radio.deadAir.rain` ganha `when: { flagsUnset: ['basement-drained'] }`. A flag só é posta em L12 (a bomba): `flag-never-set` vira dívida datada até L12 | o plano mestre (2.2) diz que a chuva para «depois da bomba». Em L3 chove a noite inteira, e a condição já é a que L12 precisa; um `when` que perguntasse outra coisa seria só para calar o lint |
 | DL3-15 | quando `CONTENT_LOT` passa a 3 | na última fatia (F5), junto com a medição dos dez pontos, o rascunho de `L3.graph.json` e a última dívida paga. Cada dívida sai da tabela no commit que a paga (`known-debt-stale` obriga) | F1 a F4 não mudam o que uma sala desenha a ponto de pedir medição, e o registro de L2 continua sendo o juiz delas |
@@ -330,8 +330,13 @@ export function deviceIntent(device: DeviceData, input: DeviceInput): DeviceInte
 export function deviceLive(intent: DeviceIntent): boolean
 /** Every device the crosshair may rest on, with its room. */
 export function aimableDevices(content: Pick<MuseumContent, 'rooms'>): readonly { room: RoomData; device: DeviceData }[]
+/** F4. A press on it has to be held: a desk with a term ready. */
+export function deviceHeld(intent: DeviceIntent): boolean
 /** F3. The input, read off the save and the air, against the content (a voice asks its conditions of it). */
-export function deviceInputOf(device: DeviceData, world: DeviceWorld, content: Pick<MuseumContent, 'rooms' | 'exhibits'>): DeviceInput
+export type DeviceContent = Pick<MuseumContent, 'rooms' | 'exhibits' | 'terms' | 'sequences'>   // F4: + terms, sequences
+export function deviceInputOf(device: DeviceData, world: DeviceWorld, content: DeviceContent): DeviceInput
+/** F4. Something speaks or shows on the air: a transmission, or a directed sequence. */
+export function airTaken(state: { readonly radio: object | null; readonly sequence?: object | null }): boolean
 /** F3. What a voice would say now: the first utterance whose `when` holds. */
 export function voiceUtterance(device: Pick<VoiceDevice, 'utterances'>, progress: ConditionProgress, content): VoiceUtterance | null
 /** F3. Whether the message lamp shows now: it blinks while a recording waits unheard, with the mains on. */
@@ -339,7 +344,11 @@ export function messageLampLit(device: Pick<VoiceDevice, 'messageLamp'>, input: 
 ```
 
 `DeviceInput` (F1: `powered`, `carried`, `speaking`; F2: `set`) ganha em F3 `voicing` (a transmissão
-no ar é a deste aparelho) e `recording: 'none' | 'waiting' | 'heard'` (o que ele tocaria agora).
+no ar é a deste aparelho) e `recording: 'none' | 'waiting' | 'heard'` (o que ele tocaria agora), e
+em F4 `desk: SigningDeskState` (o que a mesa oferece agora; de um dispositivo que não é mesa,
+`empty`). `DeviceWorld` ganha `sequence?` (a sequência no ar): com uma sequência devida ou tocando,
+`deviceInputOf` pergunta a mesa com `held` (3.10) e ela não oferece o termo seguinte. Uma mesa não
+tem sala de energia (`devicePowerRoom` → `null`): o que a segura é o termo, não a luz dela.
 
 `PROXY_MINIMUM` ganha `device: [0.3, 0.2, 0.3]`, o mínimo de todo dispositivo que não é rádio.
 
@@ -516,9 +525,24 @@ export type SigningDeskState =
   | { readonly state: 'empty' }                                             // nothing brought, nothing signed
   | { readonly state: 'blocked'; readonly term: Term; readonly blockers: ReturnType<typeof termBlockers> }
   | { readonly state: 'ready'; readonly term: Term }
-  | { readonly state: 'signed' }                                            // every presented term is signed
-export function signingDeskState(...): SigningDeskState
+  | { readonly state: 'signed'; readonly term: Term }                       // every presented term is signed; the last of them
+/** `held`: the sequence a signature is followed by is still owed or on screen, and the desk offers nothing further (S26). */
+export function signingDeskState(terms, desk, progress, content, held = false): SigningDeskState
+/** The terms a desk signs, and the ones the save holds a signature for, in the content's order. */
+export function deskTerms(terms: readonly Term[], desk: Pick<SigningDesk, 'termIds'>): readonly Term[]
+export function signedTerms(terms: readonly Term[], progress: Pick<ConditionProgress, 'termsSigned'>): readonly Term[]
+/** DL3-7, as a rule: the lamp while a term waits (blocked or ready), the Book once one of the desk's own is signed. */
+export function deskShows(state: SigningDeskState, desk, progress): { readonly lamp: boolean; readonly book: boolean }
+
+// signingDesk.ts — no React; what E does at a desk, for the game and for a store made for a test.
+/** Ready: asks for the press to be held. Blocked: the buzz of a lock, and the press is taken. Otherwise declines. */
+export function pressSigningDeskOn(store, content, deviceId: string): boolean | HoldRequest
+/** The hold came to its end: asks the desk again, and signs what it offers now (one write, one chime). */
+export function signAtDeskOn(store, content, deviceId: string): boolean
 ```
+
+(F4, §15.4: `signed` leva o termo, porque o prompt o nomeia, «Púlpito — Termo de posse · assinado
+✓»; e `held` é como S26 se cumpre sem a mesa conhecer o HUD.)
 
 ```ts
 // holdAction.ts — pure.
@@ -535,12 +559,16 @@ export type HoldEvent =
   | { readonly kind: 'release' }
   | { readonly kind: 'cancel' }
 export function holdStep(gesture: HoldGesture, event: HoldEvent): { readonly gesture: HoldGesture; readonly fired: string | null }
+export function isHoldRequest(answer: boolean | HoldRequest): answer is HoldRequest
+/** The gesture as one string, for a React selector: it changes with the phase and the target, never with the frames. */
+export function holdMark(gesture: HoldGesture): string        // 'idle' | 'holding:<seconds>:<id>' | 'confirming:<id>'
+export function readHoldMark(mark: string): HoldView
 ```
 
 | Estado | `press` | `tick` | `release` | `cancel` |
 |---|---|---|---|---|
 | `idle` | `holding` em 0 | fica | fica | fica |
-| `holding` | ignorado (a mesma entrada não desce duas vezes) | mira em outro alvo → `idle`; `held` ≥ `seconds` → `idle` e **dispara**; senão soma o passo, limitado a 0,25 s | `held` < 0,3 s → `confirming`; senão `idle` | `idle` |
+| `holding` | ignorado (a mesma entrada não desce duas vezes) | mira em outro alvo → `idle`; senão **soma o passo**, limitado a 0,25 s, e com a soma ≥ `seconds` → `idle` e **dispara**: o quadro que completa o tempo é o que assina (um passo de zero devolve o mesmo gesto) | `held` < 0,3 s → `confirming`; senão `idle` | `idle` |
 | `confirming` | mesmo id → `idle` e **dispara**; outro id → `holding` nele | mira em outro alvo → `idle` | fica | `idle` |
 
 ```ts
@@ -549,17 +577,41 @@ export function holdStep(gesture: HoldGesture, event: HoldEvent): { readonly ges
 export type PrimaryActionHandler = () => boolean | HoldRequest
 /** The input went down: at most one handler answers. */
 export function pressPrimaryAction(): 'none' | 'acted' | 'holding'
+/** A press whose handler was already asked (the keyboard asks its own `interact`) goes on through the same gesture. */
+export function beginPrimaryHold(request: HoldRequest): 'acted' | 'holding'
 /** The input came up. */
 export function releasePrimaryAction(): void
 export function cancelPrimaryHold(): void
 /** One frame of a hold in progress, with what is under the crosshair now. */
 export function tickPrimaryHold(seconds: number, aimed: string | null): void
 export function primaryHold(): HoldGesture
+export function primaryHoldMark(): string
 export function subscribePrimaryHold(listener: () => void): () => void
 export function onPrimaryHoldFired(listener: (id: string) => void): () => void
 /** A press and its release at once: what a click is. Kept for whatever cannot tell down from up. */
 export function triggerPrimaryAction(): boolean
+export function isInteractKey(event): boolean      // E, claimed or not: its coming up is the release
+export function isHoldCancelKey(event): boolean    // Escape
+
+// mobileControls.ts — pure; what the touch buttons remember of a pointer, so that a touch acts once.
+export const POINTER_CLICK_ECHO_MS = 700
+/** A click is the press itself unless a pointer that already pressed made it (detail > 0, inside the echo window). */
+export function clickIsThePress(detail: number, msSincePointer: number): boolean
+export type ActionPointer = { readonly pressed: boolean; readonly at: number }
+export const NO_ACTION_POINTER: ActionPointer
+/** A pointer going down starts over: whatever an earlier one left behind is forgotten. */
+export function actionPointerDown(press: boolean, at: number): ActionPointer
+export function actionPointerUp(pointer: ActionPointer, at: number): { readonly pointer: ActionPointer; readonly release: boolean }
+export function actionClick(pointer: ActionPointer, detail: number, at: number): { readonly pointer: ActionPointer; readonly press: boolean }
+
+// interactionTarget.ts
+/** Whether what owns the crosshair asks for its press to be held, and its id (what a hold in progress must stay on). */
+export function interactionHeldOf(state: FocusState, content: InteractionContent): boolean
+export function interactionHeldIdOf(state: FocusState, content: InteractionContent): string | null
 ```
+
+Os ouvintes de `subscribePrimaryHold` só são avisados quando a marca muda (`holdMark`): o anel é uma
+animação de CSS com a duração do pedido, e nenhum quadro de uma espera acorda o React.
 
 ### 3.11 Sequência dirigida (`schema.ts`; `src/engine/sequenceRules.ts`, novo; `store.ts`)
 
@@ -583,10 +635,22 @@ export function dueSequence(sequences: readonly DirectedSequence[], progress: Co
 // store.ts — session, never saved.
 type SequencePlaying = { readonly id: string; readonly index: number; readonly steps: number; readonly serial: number }
 // MuseumStore: + sequence: SequencePlaying | null
-//              + startSequence(id: string, steps: number): void   also stops the radio
-//              + advanceSequence(): void                           the last step grants { sequencesSeen: [id] }
+//              + startSequence(id: string, steps: number): void   also takes the air from the radio, in the same set
+//              + advanceSequence(): void                           the last step grants { sequencesSeen: [id] }, in one write
 //              + stopSequence(): void                              records nothing
+
+// sequenceDirector.ts — no React; what the HUD and the R key ask, for the game and for a store made for a test.
+/** Starts what is owed, unless it is held (a modal, a hidden tab, the scene not ready), the game has not started, or one plays. */
+export function startDueSequenceOn(store, content, held: boolean): boolean
+/** Moves the one on screen a step on. Not under a modal. False when none plays. */
+export function skipSequenceStepOn(store): boolean
+/** A card stays its own seconds; a line stays as long as a line of the radio of that length (`radioLineSeconds`). */
+export function sequenceStepSeconds(step: SequenceStep, text: string): number
 ```
+
+A sequência é da sessão e do jogo: `takeInOtherTabs` a encerra quando outra aba começa um jogo novo
+(o que tocava era da noite que acabou), e um reload a perde sem gravar nada, de modo que ela toca
+de novo do começo.
 
 `RadioTransmission` ganha `grantOnEnd?: ProgressGrant` (F3): o que o fim da transmissão grava,
 ao lado de `callId`. É como o recado entra em `documentsRead`.
@@ -603,6 +667,14 @@ export type PlayerAction =
 
 `ATOM_PREFIX` ganha `termsSigned: 'term'` e `sequencesSeen: null`. `saveIdsByField` ganha as duas
 linhas; `ID_COLLECTIONS` ganha `terms: ['termsSigned']` e `sequences: ['sequencesSeen']`.
+
+(F4, §15.4.) O registro de uma assinatura é `sign:<mesa>:<termo>`. A jogadora exaustiva **assiste**
+o que o jogo mostra sozinho: a cada assentamento, toda sequência devida entra em `sequencesSeen`,
+uma por vez, como o HUD a toca para quem espera; assim um cartão nunca segura dela a mesa. E há
+uma segunda jogadora, a **apressada** (`play(…, eager)`), que assina cada termo no primeiro
+instante em que a mesa o oferece, antes de qualquer outra coisa ao alcance: é por ela que o portão
+sabe o que uma assinatura tira da mesa (`post-ending-disables-action`), porque a primeira faz todo
+o resto antes e nunca notaria.
 
 ```ts
 export type GraphSnapshot = {
@@ -1079,20 +1151,39 @@ e a soma da altura dele com a margem numa tela baixa.
 1. `schema.ts`: `Term`, `signing-desk`, página `term` (3.9, 3.10); `ProgressCondition.termsSigned`.
 2. `progressFields.ts`: `termsSigned`, `sequencesSeen` (3.1). `triggers.ts:48-62`: `compileTriggers`
    acrescenta `term:<id>:signed` (`when: { termsSigned: [id] }`, `set-flag`).
-3. `src/engine/termRules.ts` (novo). `deviceRules.ts`: `deviceIntent` de `signing-desk`.
+3. `src/engine/termRules.ts` (novo). `deviceRules.ts`: `deviceIntent` de `signing-desk`;
+   `deviceLive` em `ready` e em `blocked` (o que não pode ser assinado ainda responde com o
+   zumbido, como uma porta trancada); `deviceHeld` só em `ready`.
 4. `Devices.tsx`: `SigningDeskView` (o `__led` num grupo visível só em `blocked` e `ready`; o
-   `__book` num grupo visível só quando `termsSigned` tem algum termo desta mesa; DL3-7); `interact`
-   devolve um `HoldRequest` em `ready`, o zumbido em `blocked`, `false` em `empty` e `signed`.
-5. `Hud.tsx`: `DevicePrompt` para a mesa: `empty` → «Púlpito — {aviso}»; `blocked` → «Púlpito —
-   Assinar: {termo} · falta luz em: {salas}» (e «falta: {documentos}»); `ready` → «Segure E —
-   Assinar: {termo}»; `signed` → «Púlpito — {termo} · assinado ✓». `Journal.tsx`: «Termos
-   assinados» na aba Caderno. `Notebook.tsx`: página `term`.
+   `__book` num grupo visível só quando `termsSigned` tem algum termo desta mesa; DL3-7, pela regra
+   `deskShows`; os dois grupos são de `deviceNodes.ts`, `prepareDeskNodes` e `showDeskNodes`, que
+   não movem nó nenhum). **A lâmpada é verde em `ready` e vermelha em `blocked`** (`led-green`,
+   `led-red`, os materiais que o quadro de força já usa): o plano não dava a cor. `interact`
+   devolve um `HoldRequest` em `ready`, o zumbido em `blocked`, `false` em `empty` e `signed`
+   (`src/engine/signingDesk.ts`, novo e sem React: `pressSigningDeskOn`, `signAtDeskOn`; a mão do
+   robô chama as mesmas duas).
+5. `promptRules.ts` e `Hud.tsx`: `DevicePrompt` para a mesa: `empty` → «Púlpito — {aviso}» (a
+   forma `notice`, sem tecla nem botão); `blocked` → «Púlpito — Assinar: {termo} · falta luz em:
+   {salas}» (e «falta: {documentos}»; `deskMissingText`); `ready` → «Segure E — Assinar: {termo}»
+   (no toque, «Segure Ação — …»); `signed` → «Púlpito — {termo} · assinado ✓». `Journal.tsx`:
+   «Termos assinados» na aba Caderno. `Notebook.tsx`: página `term`, com a linha da assinatura
+   preenchida quando o termo está assinado.
 6. `simulate.ts`: ação `sign`; `term-unsignable` (o `when` nunca vale), `ending-unreachable`
-   (nenhuma mesa alcançável assina o termo), `term-presented-late` (`presentedWhen` pede algo que
-   `when` não pede), `post-ending-disables-action` (depois de cada termo, toda ação que estava
-   disponível continua). `gate-uses-negative-condition` e `gate-uses-all-condition` passam a ler
-   `Term.when` e `presentedWhen`. `additive.ts`: termos no instantâneo (3.12).
-7. `validate.ts`: `device-node-missing` pede `__led` e `__book` à mesa; `term-desk-missing`.
+   (nenhuma mesa alcançável assina o termo, ou um termo mais antigo espera para sempre na frente
+   dele), `term-presented-late` (`presentedWhen` pede algo que `when` não pede),
+   **`term-blocker-unnamed`** (o `when` pede, além do que o `presentedWhen` pede, algo que não é
+   sala acesa nem papel lido: a mesa recusaria sem dizer por quê), `post-ending-disables-action`
+   (pela jogadora apressada de 3.12: toda ação oferecida antes de uma assinatura continua depois,
+   ou o que ela dava está no save, ou o resto da noite dá por outro caminho). `radio-hint-coverage`
+   passa a ler `termsSigned` (um termo assinável e por assinar é objetivo aberto: sem dica acima
+   dele, acusa). `additive.ts`: termos no instantâneo (3.12).
+7. `validate.ts`: `device-node-missing` pede `__led` e `__book` à mesa; `condition-term-missing`
+   (uma condição cita um termo que não existe); `notebook-term-missing` (a página de um termo que
+   não existe); e `validateEnding` (nova, chamada por `validateContent`): `term-duplicate`,
+   `term-desk-missing`, `gate-uses-negative-condition` e `gate-uses-all-condition` para
+   `Term.when` e `presentedWhen` (são do portão estático, não da simulação), `desk-hold-seconds`
+   (um tempo de segurar que não é maior que o toque de 0,3 s, ou não é número: a mesa nunca
+   assinaria, ou assinaria num toque).
 
 **Teste.** Em `test:ending` (T17), `test:save` e `test:triggers`:
 
@@ -1118,24 +1209,35 @@ todo `keydown` descarta `event.repeat` (`Devices.tsx:392`, e os outros quatro).
 1. `src/engine/holdAction.ts` (novo) e `primaryAction.ts` (3.10). Um manipulador que devolve
    `HoldRequest` também reivindica a tecla.
 2. `Devices.tsx`: `keydown` de `E` (não repetido, não reivindicado) → `interact()`; se veio um
-   pedido, `pressPrimaryAction` segue com ele; `keyup` de `E` → `releasePrimaryAction()`; `Escape`,
-   `blur` e `visibilitychange` → `cancelPrimaryHold()`; `useFrame` → `tickPrimaryHold(delta,
-   mesa na mira ou null)`; `onPrimaryHoldFired` → `state.grant(termGrant(termo))` e o som.
-3. `MobileControls.tsx:266-280`: `onPointerDown` → `pressPrimaryAction()` (e marca que o ponteiro
-   já agiu); `onPointerUp`, `onPointerCancel`, `onLostPointerCapture` → `releasePrimaryAction()`;
-   `onClick` só age quando nenhum ponteiro desceu antes (ativação por teclado). Em `confirming` o
-   botão de Ação dá lugar a «Assinar» e «Cancelar».
-4. `Hud.tsx`: `HoldPrompt` (`useSyncExternalStore` sobre `primaryHold`): anel em volta da tecla e
-   do botão enquanto `holding` (animação de CSS com a duração do pedido, sem escrita por quadro no
-   store); em `confirming`, «E Assinar · Esc Cancelar». `styles/museum.css`: `.prompt-key.is-
-   holding`, `.mobile-action-button.is-holding`, `.hold-confirm`.
+   pedido, `beginPrimaryHold(pedido)` segue com ele pelo mesmo gesto que o botão de toque conduz;
+   `keyup` de `E` → `releasePrimaryAction()`; `Escape`, `blur` e `visibilitychange` (aba oculta)
+   → `cancelPrimaryHold()`; `useFrame` → `tickPrimaryHold(delta, interactionHeldIdOf(state,
+   MUSEUM))`, **antes** do teste de modal (sob um modal nada tem a mira, e é isso que encerra a
+   espera); `onPrimaryHoldFired(signAtDesk)`, que pergunta a mesa de novo e grava
+   `termGrant(termo)` com o som.
+3. `MobileControls.tsx`: **só a pressão que tem de ser segurada desce no ponteiro.** O botão de
+   Ação tem `onPointerDown` → `pressPrimaryAction()` apenas quando o que está na mira pede para
+   ser segurado (`interactionHeldOf`); `onPointerUp`, `onPointerCancel`, `onLostPointerCapture` →
+   `releasePrimaryAction()` só do ponteiro que pressionou; e **toda ação comum continua no
+   `onClick`**, como sempre foi. O `onClick` é julgado por `actionClick` (`mobileControls.ts`,
+   3.10): age, a não ser que seja o eco de um ponteiro que já pressionou. Em `confirming` o botão
+   de Ação dá lugar a «Assinar» (à esquerda) e «Cancelar» (onde a Ação estava: o clique que sobra
+   do toque cai no que não assina). [O plano mandava agir no ponteiro para tudo; ver §15.4, 1.]
+4. `Hud.tsx`: `HoldPrompt` (`useSyncExternalStore` sobre `primaryHoldMark`): anel em volta da
+   tecla e do botão enquanto `holding` (animação de CSS com a duração do pedido, `--hold-seconds`,
+   sem escrita por quadro no store nem no React); em `confirming`, «E Assinar: {termo} · Esc
+   Cancelar». `styles/museum.css`: `.prompt-key.is-holding`, `.mobile-action-button.is-holding`,
+   `.hold-cancel`, `.hold-confirm-buttons`.
 5. `scripts/lib/runtimeWiring.ts`: `holdWiringProblems` (a fiação acima, linha por linha).
 
 **Teste.** `test:mobile-controls`: a tabela de `holdStep` inteira; segurar 1,2 s dispara uma vez;
 soltar a 0,6 s cancela e não dispara; soltar a 0,1 s abre a confirmação, «Assinar» dispara,
 «Cancelar» não; perder a mira no meio cancela; um quadro de 5 s conta como 0,25 s; com dois
 manipuladores registrados, um pedido de segurar impede o de prioridade menor de agir (um `E`, uma
-ação). `test:opening-flow` (`:343-373`): todo arquivo com `E` continua pedindo a guarda comum, e a
+ação); e, evento por evento, o que o botão lembra de um ponteiro: um toque comum age uma vez (no
+clique), o clique que segue uma pressão segurada é eco e não age, um clique de teclado age, e um
+ponteiro que desce começa do zero (o caso do toque engolido depois de uma assinatura segurada).
+`test:opening-flow` (`:343-373`): todo arquivo com `E` continua pedindo a guarda comum, e a
 fiação do gesto está nos dois caminhos.
 
 **Vermelho hoje.** `pressPrimaryAction` não existe; e a regra que S18 nomeia: com
@@ -1147,14 +1249,21 @@ fiação do gesto está nos dois caminhos.
 
 **Mudança.** `schema.ts` e `sequenceRules.ts` (3.11); `store.ts`: `sequence`, `startSequence`,
 `advanceSequence`, `stopSequence`, com linha em `sessionDefaults` e em
-`scripts/lib/storeActions.ts`; `src/ui/SequenceOverlay.tsx` (novo, no HUD): diretor (quando
-`dueSequence` devolve uma e nada toca: `startSequence`, que cala o rádio), cartão centrado e
-legenda com quem fala, botão «Pular» por passo; fica retida sob modal e com a aba oculta, pela
-regra `radioHeld`. `Devices.tsx:486-491`: `onAir` passa a contar a sequência. `radioCallBlocked`
-(`radioPatience.ts:232`): `R` durante uma sequência avança o passo e não chama. A legenda do
-cartão preenche `{hora}` por `fillHour`, como a do rádio já faz desde F2 (`RadioSubtitles`, pelo
-gancho `useNightPhraseKey`; §15.2). `validate.ts`: `sequence-not-positive`,
-`sequence-empty`; `simulate.ts`: `sequence-never-plays`.
+`scripts/lib/storeActions.ts`; `src/engine/sequenceDirector.ts` (novo, sem React: começar o que
+é devido e avançar um passo, para o jogo e para um store de teste) e `src/ui/SequenceOverlay.tsx`
+(novo, no HUD): diretor (quando `dueSequence` devolve uma e nada toca: `startSequence`, que tira
+o ar do rádio), cartão centrado e legenda com quem fala, botão «Pular» por passo; fica retida sob
+modal e com a aba oculta, pela regra `radioHeld`, e até a cena estar pronta. `Devices.tsx`:
+`onAir` passa a contar a sequência (`airTaken`, 3.5). **`R` durante uma sequência avança o passo e
+não chama, com ou sem rádio no bolso:** `placeRadioCallOn` (`radioCall.ts`) começa por
+`skipSequenceStepOn`, e o `keydown` de `R` em `Devices.tsx` pergunta `skipSequenceStep()` antes de
+olhar se há rádio [o plano punha isso em `radioCallBlocked`, que só é perguntado com rádio]. A
+legenda preenche `{hora}` por `fillHour`, como a do rádio já faz desde F2; o gancho
+`useNightPhraseKey` passou a ter arquivo próprio (`src/ui/useNightPhraseKey.ts`), porque dois
+componentes o usam. No toque a legenda da sequência fica na faixa de cima: embaixo ela cobria o
+prompt (§15.4). `validate.ts` (`validateEnding`): `sequence-not-positive`, `sequence-empty`,
+`sequence-duplicate`; as linhas de uma sequência são falas (`spokenKeys`) e os `mentions` dela são
+conferidos; `simulate.ts`: `sequence-never-plays`.
 
 **Teste.** `test:ending` (T17).
 
@@ -1174,9 +1283,19 @@ gancho `useNightPhraseKey`; §15.2). `validate.ts`: `sequence-not-positive`,
 - o rádio na mesa: a sequência toca; uma chamada no ar é cortada, não conta como ouvida e volta
   depois;
 - `term-unsignable`, `ending-unreachable`, `term-presented-late`, `post-ending-disables-action`,
-  `sequence-never-plays` em casas quebradas de propósito;
+  `sequence-never-plays` em casas quebradas de propósito (e, com eles, os códigos que a fatia
+  acrescentou: `term-blocker-unnamed`, `term-duplicate`, `term-desk-missing`,
+  `desk-hold-seconds`, `gate-uses-negative-condition`, `gate-uses-all-condition`,
+  `condition-term-missing`, `notebook-term-missing`, `sequence-empty`, `sequence-duplicate`,
+  `sequence-not-positive`, `device-node-missing` da mesa);
 - o instantâneo de uma casa com termos os grava, e mudar o `when` de um deles é
-  `term-condition-changed`.
+  `term-condition-changed`;
+- [§15.4] a jogadora exaustiva assina os três, na ordem em que a mesa os oferece, e a casa não é
+  acusada de nada; duas abas vivas (uma assina e assiste, a outra ouve; nenhuma repete o que foi
+  visto, e as duas se calam); os dois grupos de nós da mesa (`prepareDeskNodes`,
+  `showDeskNodes`) sobre três objetos de verdade; e `endingWiringProblems`
+  (`runtimeWiring.ts`): cada componente pergunta essas regras, com uma mutação em memória por
+  linha de fiação.
 
 Em F5, sobre o museu: a rota canônica chega a `flag:posse-signed`; o cartão e as duas falas tocam;
 o save de produção com a gaveta aberta (T20).
@@ -1649,6 +1768,14 @@ Sem dependência nova: tudo é `node --experimental-strip-types`.
 | `scripts/test-playthrough.ts` («what the rules answer is offered…») | no escuro o escritório oferece a luminária, a gaveta e o caderno | e o telefone (`hear office-telephone`), em toda lista, aceso ou não; é oferecido e não concede nada | F3 |
 | `scripts/test-desk-top.ts` («every object on the desk is found») | o telefone é `kit:desk-telephone` | é `device:office-telephone`, no mesmo apoio e com a mesma folga | F3 |
 | `scripts/test-opening.ts`, `scripts/test-opening-flow.ts`, `scripts/lib/runtimeWiring.ts` (toda chamada de `deviceInputOf`) | o terceiro argumento é uma função `roomById` | é o conteúdo; as três asserções de fiação de F1 citam `MUSEUM` e `content` | F3 |
+| `scripts/test-save.ts` («an alias that points at an id the content does not have…») | quatro listas sem alias conferido: `credentials`, `flags`, `hintsShown`, `triggersFired` | seis: entram `sequencesSeen` e `termsSigned`; um alias para qualquer uma das duas é acusado no museu de verdade (não há termo nem sequência até F5) e passa num museu que os tem | F4 |
+| `scripts/test-save.ts` (`laterWrite`, «a tab that was open before another tab wrote…», caso D, as três abas que diferem em todo campo) | `termsSigned` é o campo que a aba velha não conhece e não pode apagar | esse campo é `ribbonsCut`; a escrita mais tardia leva, além dele, um termo assinado e uma sequência vista, como campos da tabela | F4 |
+| `scripts/test-save.ts` (casos A e B, C e E) | o save trazido para a frente é o de L2 mais as notícias velhas e as alturas | mais os dois campos, vazios; e o caso E registra a perda de um rollback: um save que passou por L1 não assinou nem viu nada, e a mesa pede o termo de novo | F4 |
+| `scripts/test-playthrough.ts` (o campo do save que muda de dono, `save-field-changed`) | o caso usava `termsSigned` como campo que o registro não conhece | usa `ribbonsCut`; `termsSigned` passou a ser campo com ids (`NOW.ids.terms`, `NOW.ids.sequences`) | F4 |
+| `scripts/test-qa-save.ts` («the new game L2 left…»; «a save the lot in the tree wrote loads as itself») | as chaves de um jogo novo de L2 são as da tabela deste build; a carga é idêntica mais as notícias velhas | são as da tabela **menos** as duas que L3 acrescentou (`ADDED_BY_L3`), que a carga dá vazias, depois de todo campo que o registro tem | F4 |
+| `scripts/test-triggers.ts` («every action of the store either leaves the save alone or leaves it settled») | as ações de F3 | entram `advanceSequence` (assenta: o último passo grava `sequencesSeen`), `startSequence` e `stopSequence` (são da sessão) | F4 |
+| `scripts/test-opening.ts` (`radio-hint-coverage`, a casa «signed») | assinada era a flag do termo, que um gatilho do teste punha sozinho | assinada é a assinatura no save (`termsSigned`), feita numa mesa (o púlpito, feito mesa para o caso); **uma flag que se põe sozinha não é assinatura**, e uma mesa com o termo e sem dica acima dele é acusada | F4 |
+| `scripts/test-opening-flow.ts` e `scripts/lib/runtimeWiring.ts` (a fiação do toque e do diretor) | o botão de Ação age em `onClick={() => triggerPrimaryAction()}`; `onAir` é `state.radio !== null`; o gancho da hora mora em `Hud.tsx` | o clique é julgado por `actionClick` e a pressão segurada desce no ponteiro; `onAir` é `airTaken`; o gancho mora em `ui/useNightPhraseKey.ts`; o mundo de um dispositivo é `{ progress, radio, sequence }` | F4 |
 
 `scripts/test-opening.ts:422` (a lanterna nunca alcança o teto do átrio) e
 `scripts/test-navigation.ts` (`reciprocalPairs.size === 3`) não mudam.
@@ -1664,9 +1791,9 @@ título: toda fatia que escreve texto sobe esse teto.
 | título | 12 chaves e a carta maior | +0,4 kB | F1 |
 | título | cerca de 45 chaves de fala; `hintHeight`; `prePosse` | +1,6 kB; **[medido em F2: 35 chaves novas, 8 a menos, 5 reescritas; +1.165 bytes, 31.478; teto 31.630]** | F2 |
 | título | 8 chaves | +0,2 kB; **[medido em F3: 8 chaves novas, as regras do leitor na folha de estilos e `grantOnEnd` no store; +249 bytes, 31.727; teto 31.880]** | F3 |
-| título | 9 chaves; `termsSigned`, `sequencesSeen` | +0,3 kB | F4 |
+| título | 9 chaves; `termsSigned`, `sequencesSeen` | +0,3 kB; **[medido em F4: +1.025 bytes, 32.752; teto 32.910. A previsão não contava a folha de estilos, que viaja com o título e é sete décimos disso (de 4.676 para 5.404, arquivo por arquivo contra um build do commit anterior: o anel, as duas respostas, o cartão e a legenda da sequência, a página do termo, a lista de termos); o resto é o pedaço que os dicionários e o store dividem (de 22.466 para 22.764: as 9 chaves em cada língua, os dois campos e a sequência no store)]** | F4 |
 | título | cerca de 60 chaves (dois documentos longos, o recado, falas) ; o alias | +2,4 kB | F5 |
-| jogo | `checklist.ts`, dispositivos miráveis, `nightClock.ts`, `readingQueue.ts`, `voiceDevice.ts`, `containerNodes.ts`, `termRules.ts`, `holdAction.ts`, `sequenceRules.ts`, `SequenceOverlay.tsx`, o conteúdo novo | +6 a +9 kB no lote; **[medido: F1 +1.151 (392.146), F2 +1.649 (393.795), F3 +1.632 (395.427); teto 395.760 desde F2, com 333 bytes de folga depois de F3: F4 sobe]** | F1 a F5 |
+| jogo | `checklist.ts`, dispositivos miráveis, `nightClock.ts`, `readingQueue.ts`, `voiceDevice.ts`, `containerNodes.ts`, `termRules.ts`, `holdAction.ts`, `sequenceRules.ts`, `SequenceOverlay.tsx`, o conteúdo novo | +6 a +9 kB no lote; **[medido: F1 +1.151 (392.146), F2 +1.649 (393.795), F3 +1.632 (395.427), F4 +3.478 (398.905); teto 395.760 desde F2 e 400.890 desde F4: 7.910 bytes no lote até aqui, e F5 ainda traz o conteúdo]** | F1 a F5 |
 
 Tudo [previsto]. Cada teto sobe **no commit da fatia que precisa**, para o medido mais meio por
 cento, com o motivo em `BUNDLE_PATH_CEILINGS`. Os dois orçamentos do papel ficam longe: 93 kB antes
@@ -2186,3 +2313,228 @@ telefone. O motor das três é provado com museus feitos para o teste.
   passar pelas outras. É a regra que o caderno já tinha.
 - A nota «Será arquivado no caderno do curador…» passa a duas linhas em 1280 × 720 quando há
   paginação ao lado (418 px de 683). Cabe; não rola.
+
+### 15.4 F4 — Assinar: termos, o gesto de segurar e a sequência dirigida (2026-10-05)
+
+T14 a T17 feitas. `npm run check` (35 passos: entra `test:ending`) e `npm run build` verdes.
+`CONTENT_LOT` continua 2; `docs/releases/L2.graph.json` não foi tocado e `validateAdditive` contra
+ele não acusa nada («graph: held to L2's snapshot · 42 actions it gave»). `SAVE_VERSION` 1. **O
+save ganha dois campos**, `termsSigned` e `sequencesSeen` (3.1): listas, com `stringList` e junção
+por união; todo save do corpus e de produção carrega com as duas vazias e sem perder nada do que
+tinha (casos A a E de `test:save`). **Nenhum conteúdo de história:** `MUSEUM.terms` e
+`MUSEUM.sequences` não existem, o púlpito continua no `kit` e nenhum dispositivo é `signing-desk`
+(`test:ending` afirma as três coisas sobre o museu de verdade; F5 muda essas linhas). O jogo de
+verdade não muda para o jogador: o que muda por baixo é que o clique de um botão de ação do toque
+passa por `actionClick` antes de agir (e age uma vez, como antes), e que o save leva duas listas
+vazias. O motor é provado com uma casa feita para o teste (`scripts/test-ending.ts`: saguão, porão
+e sótão; uma mesa e um rádio no saguão; três termos e duas sequências).
+
+**Vermelho visto antes do conserto** (as suítes escritas primeiro, rodadas contra a fonte de
+`3adc4fd`):
+
+| Suíte | Como reprovou |
+|---|---|
+| `test:ending` | erro de importação: `runtimeWiring.ts` não exporta `endingWiringProblems`, e os módulos que a suíte pergunta (`termRules.ts`, `sequenceRules.ts`, `signingDesk.ts`, `sequenceDirector.ts`) não existem. A suíte inteira, como T17 dizia |
+| `test:mobile-controls` | `ERR_MODULE_NOT_FOUND`: `src/engine/holdAction.ts` (e `pressPrimaryAction` não existe) |
+| `test:save` | 56 de 63. As amostras e a tabela não batem (`termsSigned` e `sequencesSeen` têm amostra e não têm linha); «termsSigned has no line in the table of the save»; a lista do que conta para «Novo jogo»; nas abas vivas, a assinatura não põe flag nem gatilho; casos A e B, C e E (`undefined !== []`) |
+| `test:triggers` | 27 de 31. Um campo do schema sem caso; «a list the asker does not hold answers no» (`true !== false`: o avaliador ignorava `termsSigned`, e a condição valia para quem não assinou); a tabela de classes; `compileTriggers` não dá `term:<id>:signed` |
+| `endingWiringProblems` e `holdWiringProblems` (novas), contra a fonte de então | 38 e 32 fragmentos em falta, um por linha de fiação |
+| navegador, 844 × 390, a fatia já verde | ver «o toque engolido», abaixo: um erro que nenhuma suíte via, e que ganhou a regra e o caso dele |
+
+**Mutações que provam que as asserções mordem.**
+
+- `endingWiringProblems` (`runtimeWiring.ts`, chamada por `test:ending`): 37 refatorações em
+  memória, todas pegas. A mesa: `E` tomado sem pedir para segurar; o que `E` faz decidido fora do
+  prompt; a recusa em silêncio; a espera que termina e não assina; a assinatura que põe a flag à
+  mão; ninguém ouvindo a espera terminar; o termo seguinte oferecido debaixo do cartão; a lâmpada
+  por regra própria, nunca escondida, ou sem saber do cartão; o tempo de segurar inventado no
+  componente; um termo sem gatilho; os nós nunca juntados; a mesa que ninguém desenha. As
+  palavras: o que falta escrito no componente; o Caderno sem a lista; a página que nunca fica
+  assinada. A sequência: diretor com regra própria, por cima de um modal, na tela de título; o
+  rádio que não se cala; vista no primeiro passo; nunca gravada; `{hora}` impresso cru; um passo
+  avançado pelo temporizador de outro; tempo próprio; o ar que é só do rádio; ninguém montando;
+  o Jorge falando por cima; o diretor do rádio que não ouve o fim; `R` chamando por cima; `R` sem
+  efeito para quem não tem rádio; o cartão do jogo velho sobre um jogo novo.
+- `holdWiringProblems` (chamada por `test:opening-flow`): 41. O teclado: `E` que não começa a
+  espera; que reivindica o que recusou; soltar que não solta; `Escape`, perda de foco e aba
+  oculta que deixam a espera correr; nenhum quadro contando; a espera que segue qualquer coisa na
+  mira, que segue sem mira, ou numa mesa que deixou de oferecer; o pedido tomado por ação feita.
+  O toque: o botão que pressiona ao pousar o dedo sobre qualquer coisa, ou nunca; o ponteiro
+  inacabado de uma assinatura guardado; o dedo levantado que não solta, ou que sempre solta; o
+  toque comum tomado por eco; o clique que age venha de onde vier; o botão de volta ao clique
+  cru; sem pergunta no vidro; «Cancelar» que não cancela; o menu do navegador num toque longo. O
+  HUD e a folha de estilos: prompt que não segue o gesto; tecla e botão sem anel; anel com tempo
+  próprio. E as três interações que já existiam (a luminária, a porta, a peça): cada uma continua
+  reivindicando a própria tecla pela guarda comum.
+- `test:ending`: uma casa quebrada para cada código do portão desta fatia (a lista está em T17), e
+  a casa sã não é acusada de nada.
+- `test:save`, abas vivas, com duas e com três abas: uma assina (a assinatura, a flag e o gatilho
+  são um aviso e uma escrita); a outra, noutra sala, ouve e não é levada à mesa; assinar o mesmo
+  termo de novo não escreve; uma aba sem regras que grava um ajuste não apaga termo nem flag; um
+  build que conhece a assinatura e não a consequência grava um segundo termo, e a flag é
+  assentada aqui, numa escrita, por uma aba que tem a regra; uma sequência vista até o fim numa
+  aba está vista em todas (uma escrita, e nenhuma antes do último passo).
+- `test:triggers`: o gatilho do termo dispara uma vez; sessenta ordens das duas assinaturas entre
+  tudo o mais que a casa oferece terminam no mesmo save; um save que chega assinado e sem a flag
+  a ganha no registro do conteúdo e na carga; a assinatura de um termo que este build não tem
+  fica, e não põe nada.
+- `test:mobile-controls`: a tabela de `holdStep`, célula por célula, e o ponteiro do botão,
+  evento por evento.
+
+**O que saiu diferente do plano** (o texto acima já está corrigido onde se diz).
+
+1. **No toque, só a pressão que tem de ser segurada desce no ponteiro** (T15, corrigido). O plano
+   mandava o botão de Ação agir em `onPointerDown` para tudo e deixar o `onClick` para o teclado.
+   Agindo quando o dedo pousa, uma ação que abre um painel (o caderno, um armário, o painel de
+   uma tranca) o abriria debaixo do dedo, e o clique do mesmo toque cairia no painel. Então toda
+   ação comum continua no clique, como sempre foi, e o ponteiro só é tomado quando o que está na
+   mira pede para ser segurado (`interactionHeldOf`). O clique que sobra de uma pressão segurada
+   é eco e não age (`clickIsThePress`: `detail` 0 é teclado e age; dentro de 700 ms de um
+   ponteiro que pressionou, não). **O toque engolido:** depois de uma assinatura segurada a mesa
+   deixa de oferecer, o botão some debaixo do dedo antes de o dedo subir, e não chega nem o
+   `pointerup` nem o clique; o «ponteiro pressionado» ficava guardado e o toque seguinte, em
+   qualquer coisa, era tomado por eco e não fazia nada. Visto no navegador (o toque no telefone
+   depois de assinar). O que o botão lembra de um ponteiro virou três regras puras
+   (`actionPointerDown`, `actionPointerUp`, `actionClick`): um ponteiro que desce começa do zero.
+2. **`holdStep` soma o passo e depois confere** (3.10, corrigido): o quadro que completa o tempo
+   é o que assina. Como estava escrito (confere, depois soma), a assinatura sairia um quadro
+   depois do anel fechar.
+3. **`signed` leva o termo, e a mesa tem `held`** (3.10, corrigido). O prompt nomeia o termo
+   assinado. `held` é S26: enquanto a sequência que segue uma assinatura é devida ou está na
+   tela, `deviceInputOf` pergunta a mesa com `held` e ela não oferece o termo seguinte; o cartão
+   fecha, e só então o prompt muda. A lâmpada e o prompt saem da mesma pergunta.
+4. **A espera só segue o que ainda pede para ser segurado.** O quadro pergunta
+   `interactionHeldIdOf`, não «o que está na mira»: uma mesa que deixou de oferecer no meio da
+   espera (outra aba assinou; uma sala apagou) a encerra, como perder a mira.
+5. **Dois módulos sem React** que o plano não nomeava: `signingDesk.ts` (o que `E` faz numa mesa
+   e o que o fim da espera grava) e `sequenceDirector.ts` (começar o que é devido, avançar um
+   passo). A mão do robô (`scripts/lib/playthrough.ts`) chama as mesmas funções que a tecla
+   chama, passa os quadros pelo próprio `holdStep` e assiste a sequência pelo diretor; o que ela
+   não prova, o `case` e o ouvinte em `Devices.tsx`, é de `endingWiringProblems`.
+6. **`R` avança a sequência com ou sem rádio** (T16, corrigido): a sequência não tem aparelho.
+7. **A sequência tira o ar do rádio no mesmo `set`** que a põe na tela (DL3-12 dizia
+   `stopRadio`: seriam dois avisos). A chamada cortada não é gravada como ouvida e volta quando a
+   sequência acaba, pelo que F3 deixou: o diretor do rádio olha o ar, e o ar agora é `airTaken`.
+8. **A sequência é da sessão e do jogo:** um reload a perde sem gravar (toca de novo do cartão), e
+   `takeInOtherTabs` a encerra quando outra aba começa um jogo novo.
+9. **A simulação assiste e tem uma segunda jogadora** (3.12, corrigido). Sem assistir, uma casa
+   com dois termos na mesma mesa pararia no primeiro: a mesa fica retida enquanto a sequência é
+   devida. E `post-ending-disables-action` só pode ser perguntado a quem assina cedo.
+10. **Códigos a mais no portão** (T14 e T16, corrigidos): `term-blocker-unnamed`,
+    `term-duplicate`, `desk-hold-seconds`, `condition-term-missing`, `notebook-term-missing`,
+    `sequence-duplicate`. As duas regras de condição de um termo (`gate-uses-negative-condition`,
+    `gate-uses-all-condition`) são do portão estático (`validateEnding`), não da simulação.
+11. **`radio-hint-coverage` lê a assinatura, não a flag** (9.2). Uma flag que um gatilho põe
+    sozinho não é assinatura; e um termo assinável, por assinar e sem dica acima dele é o Jorge
+    dizendo que não há mais nada a fazer. **F5 precisa de uma dica para o termo.**
+12. **A lâmpada tem cor** (T14, corrigido): vermelha enquanto o termo espera por algo, verde
+    quando segurar assina.
+13. **No toque a legenda da sequência fica na faixa de cima** [não previsto]. Embaixo, em
+    844 × 390, ela cobria o prompt da mesa. Medido depois: legenda de 54 a 135 px, prompt de 237
+    a 271, a legenda do rádio de 329 a 376. Em 1280 × 720 fica logo acima da legenda do rádio.
+14. **`sequencesSeen` não conta como progresso** (3.1 já dizia) e **`useNightPhraseKey` tem
+    arquivo próprio** (`src/ui/useNightPhraseKey.ts`): o HUD e a sequência o usam.
+15. **O título cresceu três vezes o previsto** (§10, corrigido): a folha de estilos viaja com
+    ele.
+16. **Mais testes mudaram de sentido do que 9.2 previa**: as oito linhas novas da tabela.
+17. **Formas que o plano deixou em aberto.** `deskTerms`, `signedTerms`, `deskShows`,
+    `TermBlockers` (`termRules.ts`); `SequenceProgress` (`sequenceRules.ts`); `HOLD_IDLE`,
+    `isHoldRequest`, `holdMark`, `readHoldMark` (`holdAction.ts`); `beginPrimaryHold`,
+    `primaryHoldMark`, `isInteractKey`, `isHoldCancelKey` (`primaryAction.ts`);
+    `POINTER_CLICK_ECHO_MS = 700`, `clickIsThePress`, `ActionPointer`, `NO_ACTION_POINTER`,
+    `actionPointerDown`, `actionPointerUp`, `actionClick` (`mobileControls.ts`); `deviceHeld`,
+    `airTaken`, `DeviceContent` (`deviceRules.ts`); `interactionHeldOf`, `interactionHeldIdOf`
+    (`interactionTarget.ts`); `DeskNodes`, `prepareDeskNodes`, `showDeskNodes`
+    (`deviceNodes.ts`); `deskMissingText` e as formas `desk`, `hold` e `signed` do prompt
+    (`promptRules.ts`); `validateEnding` (`validate.ts`); `startDueSequenceOn`,
+    `skipSequenceStepOn`, `sequencePlaying`, `sequenceStepSeconds` (`sequenceDirector.ts`);
+    `pressSigningDeskOn`, `signAtDeskOn` (`signingDesk.ts`).
+
+**Medido.**
+
+- Bundle (gzip, pelo próprio portão; as partes, arquivo por arquivo contra um build de
+  `3adc4fd` feito à parte, que deu os 31.727 e 395.427 de F3): documento 63.239 (teto 63.600);
+  título 32.752 (era 31.727; teto de 31.880 para 32.910); jogo 398.905 (era 395.427; teto de
+  395.760 para 400.890). Os dois tetos são o medido mais meio por cento, com o motivo em
+  `BUNDLE_PATH_CEILINGS`. Antes do clique 95,99 kB de 250; no jogo 494,90 kB de 600: o «perto
+  de 98 e 500» de §10 para o fim do lote fica apertado, porque F5 ainda traz 2,4 kB de texto e
+  o conteúdo.
+- Suítes: `test:ending` 19 (nova), `test:mobile-controls` 22 (eram 14), `test:save` 63 (61),
+  `test:triggers` 31 (30), `test:playthrough` 38 (37), `test:opening-flow` 53 (52); `test:opening`
+  39 e `test:qa-save` 27, os mesmos, com asserções a mais. As 500 noites: 20.531 teclas, 2.610
+  delas para nada, **iguais** às de F3 (o museu de verdade não ganhou ação nenhuma).
+- Lotes, draws e triângulos: nada mudou (nenhum conteúdo, nenhum bake).
+- `test:playthrough`, o caso novo: sobre a cadeia de F3 (a chave, o cofre) com o púlpito feito
+  mesa, um termo e uma sequência, a simulação e o robô chegam ao mesmo fim. O Livro em N5, o
+  termo, a flag e o gatilho em N6: **sete níveis, como o plano dá para F5.** Quem nunca assina
+  termina um nível antes e não deve nada; quem assina no primeiro instante termina onde todos
+  terminam.
+
+**Navegador** (servidor reiniciado depois da última edição; pt-BR e inglês; 1280 × 720 pelo
+teclado e 844 × 390 pelos botões). O museu de verdade não tem mesa, então a parte da assinatura foi
+exercitada com um **remendo temporário do conteúdo, que não está no commit**: o púlpito feito
+mesa, dois termos e uma sequência (cartão e duas falas, uma com `{hora}`), com chaves de texto
+provisórias. Desfeito ao fim; `museum.ts` e os dois dicionários conferidos contra o que a fatia
+grava.
+
+- Jogo de verdade (de novo ao fim, com o conteúdo do commit e o servidor reiniciado), pt-BR: o
+  save de um jogo novo tem `termsSigned: []` e `sequencesSeen: []`. `E` na luminária, uma
+  escrita, e um segundo `E` nenhuma; `E` no telefone corta o Jorge, «TELEFONE · Linha muda.», e
+  `porter-hello` volta depois do silêncio (o diretor do rádio continua ouvindo o ar, agora por
+  `airTaken`). Em inglês: *E · Dial · Telephone*, *TELEPHONE · The line is dead.*. Em
+  844 × 390, um toque de verdade no botão de Ação (`pointerdown`, `pointerup`, `click` com
+  `detail` 1) disca uma vez; sobre o caderno, abre-o uma vez e ele fica na página «1 / 3»: o
+  clique do toque não cai no «Turn the page →» que aparece debaixo do dedo.
+- Um save que traz um termo e uma sequência que este build não tem (o que o remendo deixou no
+  navegador): «Continuar» carrega, as duas listas ficam como vieram, nada toca. E «Novo jogo»
+  pede confirmação por causa dele: uma assinatura conta como progresso.
+- A mesa vazia: «Púlpito — falta o Livro de Termos», sem tecla nem botão; `E` não faz nada.
+- Bloqueada: «Púlpito — Assinar: Termo de posse · falta luz em: Átrio, Ala 1 · Holyoke»; `E`
+  zumbe e nada é gravado.
+- Pronta: «E Segure E — Assinar: Termo de posse». Segurando: a tecla ganha `is-holding`, o anel
+  fecha em 1,2 s (o primeiro quadro, depois de uma aba parada, contou 0,25 s). Soltar a 0,77 s
+  cancela. Um toque na tecla: «E Assinar: Termo de posse · Esc Cancelar»; `Escape`, olhar para
+  fora e a janela perder o foco cancelam; `E` de novo assina. Segurar até o fim assina: uma
+  escrita (o termo, a flag e o gatilho juntos).
+- A sequência: o cartão «Termo de posse assinado · Pular ›» por 4,0 s, depois as falas (5,1 s e
+  3,2 s, pelo comprimento), com a hora por extenso no lugar de `{hora}`. Enquanto ela está na
+  tela a mesa diz «Púlpito — Termo de posse · assinado ✓» e não oferece o segundo termo; fechado
+  o cartão, oferece. `R` sem rádio avança um passo; sob o caderno a sequência fica retida e `R`
+  não a move. No Caderno: «TERMOS ASSINADOS · Termo de posse · Assinado pelo curador.».
+- Aba oculta: a sequência devida não começa; mostrada a aba, começa, e corta `porter-hello` que
+  estava no ar (`radioCalls` continua vazio); terminada a sequência, `porter-hello` volta.
+  Recarregar no terceiro passo: ao continuar, ela toca de novo do cartão.
+- Inglês: *Lectern — Sign: Deed of office · no light yet in: Wing 1 · Holyoke*; *E Hold E —
+  Sign: Deed of office*; *E Sign: Deed of office · Esc Cancel*; *Lectern — Deed of office ·
+  signed ✓*; *Deed of office signed · Skip ›*.
+- 844 × 390: «Segure Ação — Assinar: …»; o botão segurado mostra o anel e assina (uma escrita);
+  meio caminho cancela; um toque troca o botão por «ASSINAR» e «CANCELAR», com «Cancelar» onde a
+  Ação estava, e o clique que sobra do toque não assina; «Cancelar» cancela, «Assinar» assina
+  (uma escrita). Depois de uma assinatura segurada, o toque seguinte no telefone age. Sem
+  rolagem horizontal.
+- Console sem erro nem aviso novo (só o `THREE.Clock` de sempre).
+- **Não visto no navegador:** a lâmpada e o Livro. O púlpito do bake não tem `__led` nem
+  `__book` (T18, F5); os dois grupos são provados sobre três objetos de verdade em `test:ending`.
+
+**F5 herda.**
+
+- A mesa pede `<part>__led` e `<part>__book` no bake (`device-node-missing`), e a lente da
+  lâmpada é pintada com `led-green` e `led-red`.
+- O `when` de um termo só pode pedir, além do que o `presentedWhen` pede, sala acesa ou papel
+  lido (`term-blocker-unnamed`); e o termo precisa de uma dica do rádio acima da última.
+- As frases da hora começam por maiúscula («Passa das oito»): uma fala de sequência tem de pôr
+  `{hora}` no começo de uma frase.
+- Três suítes afirmam o museu de verdade como esta fatia o deixa, e são as linhas que F5 muda
+  ao trazer `termo-posse` e `seq-posse`: `test:ending` (sem termo, sem sequência, sem mesa),
+  `test:save` (um alias para `termsSigned` ou `sequencesSeen` é acusado: o conteúdo não tem os
+  ids) e `test:playthrough` (`NOW.terms`, `NOW.ids.terms` e `NOW.ids.sequences` vazios). E o
+  púlpito, ao virar dispositivo, entra na conta dos miráveis de `test:opening-flow` e
+  `test:radio` (hoje quatro).
+
+**Visto de passagem, sem conserto nesta fatia.**
+
+- O título de uma sala pode ter « · » («Ala 1 · Holyoke»), o mesmo sinal que separa as partes do
+  prompt da mesa: «… · falta luz em: Átrio, Ala 1 · Holyoke». Lê-se; as salas são separadas por
+  vírgula.
+- `resetProgress()` chamado com a cena montada deixa o `currentRoom` do store fora de passo com
+  o jogador. Só o console chega a isso; o jogo começa um jogo novo pela tela de título.

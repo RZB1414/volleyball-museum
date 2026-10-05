@@ -8,7 +8,7 @@
  * lives in 3D; text that belongs to the PLAYER lives here.
  */
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties } from 'react'
 
 // The content's rules reach the store as this module is evaluated, before
 // anything here renders. The HUD is a chunk of its own and may arrive ahead
@@ -24,15 +24,17 @@ import type { ExhibitData } from '../content/schema'
 import type { TranslationKey } from '../content/i18n/pt-BR'
 import { museumAudio } from '../engine/audio'
 import { aimableDevices, deviceInputOf, deviceIntent, deviceSetFlag, radioLineSeconds } from '../engine/deviceRules'
+import { readHoldMark } from '../engine/holdAction'
 import {
   interactionWinnerKey,
   parseInteractionWinnerKey,
   type InteractionKind,
 } from '../engine/interactionTarget'
 import { lockStatus } from '../engine/lockRules'
-import { fillHour, nightPhraseKey, nightPoints } from '../engine/nightClock'
+import { fillHour } from '../engine/nightClock'
 import { containerById, isNotebook, journalUnlocked } from '../engine/notebook'
 import { isRoomPowered } from '../engine/power'
+import { primaryHoldMark, subscribePrimaryHold } from '../engine/primaryAction'
 import { credentialKey } from '../engine/progressCondition'
 import { placeRadioCall, releaseHeldRadio } from '../engine/radioCall'
 import { heldRadioId } from '../engine/radioPatience'
@@ -54,9 +56,11 @@ import {
 import { LockPanel } from './LockPanel'
 import { MobileControls } from './MobileControls'
 import { NotebookPageView, NotebookPanel } from './Notebook'
-import { clockJustSet, containerPrompt, credentialsTaken, devicePrompt } from './promptRules'
+import { clockJustSet, containerPrompt, credentialsTaken, deskMissingText, devicePrompt } from './promptRules'
+import { SequenceOverlay } from './SequenceOverlay'
 import { useCoarsePointer } from './useCoarsePointer'
 import { useDocumentHidden } from './useDocumentHidden'
+import { useNightPhraseKey } from './useNightPhraseKey'
 import { useReaderKeys } from './useReaderKeys'
 import { isModalOpen, useMuseum } from '../state/store'
 
@@ -234,17 +238,53 @@ function TransitionDoorPrompt() {
  * the hall, until the lot that gives it its use) is drawn as its name and
  * its notice, with no key: there is nothing to press. A thing that speaks
  * (the telephone) is worded by what it would do: dial, listen, listen again.
+ * A desk where terms are signed says what it stands at: nothing brought to
+ * it, a term that still waits and for what, a term to hold E on, all signed.
  */
 function DevicePrompt() {
   const focused = useWinner('device')?.id ?? null
   const progress = useMuseum((state) => state.progress)
   const radio = useMuseum((state) => state.radio)
+  const sequence = useMuseum((state) => state.sequence)
   const t = useTranslate()
 
   const device = focused === null ? undefined : devicesById.get(focused)
   if (!device) return null
-  const view = devicePrompt(device, deviceIntent(device, deviceInputOf(device, { progress, radio }, MUSEUM)))
+  const view = devicePrompt(device, deviceIntent(device, deviceInputOf(device, { progress, radio, sequence }, MUSEUM)))
   if (!view) return null
+
+  if (view.form === 'hold') return <HoldPrompt holdId={view.holdId} termKey={view.termKey} />
+  if (view.form === 'desk') {
+    // «Púlpito — Assinar: Termo de posse · falta luz em: Átrio». The rule
+    // names what is missing by id; the names are the content's own.
+    const missing = deskMissingText(
+      {
+        rooms: view.missing.rooms.map((id) => t((MUSEUM.rooms.find((room) => room.id === id)?.titleKey ?? id) as never)),
+        documents: view.missing.documents.map((id) => t((MUSEUM.documents.find((doc) => doc.id === id)?.titleKey ?? id) as never)),
+      },
+      { power: t('desk.missing.power'), document: t('desk.missing.document') },
+    )
+    return (
+      <div className="prompt is-long" role="status">
+        <span className="prompt-title">{t(view.titleKey as never)}</span>
+        <span className="prompt-label">
+          — {t('desk.sign')}: {t(view.termKey as never)}
+          {missing ? ` · ${missing}` : ''}
+        </span>
+      </div>
+    )
+  }
+  if (view.form === 'signed') {
+    return (
+      <div className="prompt is-long" role="status">
+        <span className="prompt-title">{t(view.titleKey as never)}</span>
+        <span className="prompt-label">
+          — {t(view.termKey as never)} · {t('desk.signed')}
+        </span>
+        <span className="prompt-done">✓</span>
+      </div>
+    )
+  }
 
   return (
     <div className="prompt" role="status">
@@ -265,13 +305,48 @@ function DevicePrompt() {
 }
 
 /**
- * What the porter calls the hour as the save stands: the key of the phrase,
- * or null before the night has one. One reading for the subtitle and for the
- * toast of the clock, so the two cannot name two hours.
+ * The prompt of a press that is held: «Segure E — Assinar: Termo de posse».
+ *
+ * What it draws of the hold is read off the shared gesture
+ * (`primaryAction.ts`), as one string that changes when the phase does and
+ * never frame by frame: while the key is down a ring closes round it, by a
+ * CSS animation as long as the hold itself; after a tap, the question, «E
+ * Assinar · Esc Cancelar». On a touch screen the key glyphs are hidden and
+ * the Action button carries the ring and the two answers (`MobileControls`).
  */
-function useNightPhraseKey() {
-  return useMuseum((state) =>
-    MUSEUM.nightClock ? nightPhraseKey(MUSEUM.nightClock, nightPoints(MUSEUM.nightClock, state.progress, MUSEUM)) : null,
+function HoldPrompt({ holdId, termKey }: { readonly holdId: string; readonly termKey: string }) {
+  const hold = readHoldMark(useSyncExternalStore(subscribePrimaryHold, primaryHoldMark, () => 'idle'))
+  const coarse = useCoarsePointer()
+  const t = useTranslate()
+  const mine = hold.phase !== 'idle' && hold.id === holdId ? hold : null
+
+  if (mine?.phase === 'confirming') {
+    return (
+      <div className="prompt hold-confirm" role="status">
+        <span className="prompt-key">E</span>
+        <span className="prompt-label">{t('desk.sign')}:</span>
+        <span className="prompt-title">{t(termKey as never)}</span>
+        <span className="hold-cancel">
+          <span className="prompt-key">Esc</span>
+          <span className="prompt-label">{t('desk.cancel')}</span>
+        </span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="prompt" role="status">
+      <span
+        className={mine ? 'prompt-key is-holding' : 'prompt-key'}
+        style={mine ? ({ '--hold-seconds': `${mine.seconds}s` } as CSSProperties) : undefined}
+      >
+        E
+      </span>
+      <span className="prompt-label">
+        {t(coarse ? 'desk.hold.touch' : 'desk.hold.keyboard')} — {t('desk.sign')}:
+      </span>
+      <span className="prompt-title">{t(termKey as never)}</span>
+    </div>
   )
 }
 
@@ -994,6 +1069,7 @@ export function Hud() {
       )}
       <LookHint />
       <RadioSubtitles />
+      <SequenceOverlay />
       <ExaminePanel />
       <DocumentPanel />
       <LockPanel />

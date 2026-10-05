@@ -21,6 +21,7 @@ import { formatCreditEntry } from '../content/credit'
 import { MUSEUM } from '../content/museum'
 import { checklistPageOf, journalUnlocked } from '../engine/notebook'
 import { transcriptText } from '../engine/readingQueue'
+import { signedTerms } from '../engine/termRules'
 import { useTranslate } from '../i18n'
 import { useMuseum, type JournalTab } from '../state/store'
 import { closeLabel, JOURNAL_HOME_TAB } from './hudRules'
@@ -35,15 +36,38 @@ type Tab = JournalTab
  * desk, drawn by the same component, so it ticks and counts here as it does
  * there. It is the notebook's first tab because it is what the player comes
  * back for between rooms: what is left to do before nine.
+ *
+ * Under it, once there is one, the terms the curator has signed: the record
+ * of what the night has settled, in the order the house keeps them.
  */
 function NotebookTab() {
   const page = checklistPageOf(MUSEUM)
-  if (!page) return null
+  const progress = useMuseum((state) => state.progress)
+  const t = useTranslate()
+  const signed = signedTerms(MUSEUM.terms ?? [], progress)
+  if (!page && signed.length === 0) return null
 
   return (
-    <div className="notebook-sheet is-inline">
-      <NotebookPageView page={page} />
-    </div>
+    <>
+      {page ? (
+        <div className="notebook-sheet is-inline">
+          <NotebookPageView page={page} />
+        </div>
+      ) : null}
+      {signed.length > 0 ? (
+        <section className="journal-terms">
+          <h3>{t('journal.terms.heading')}</h3>
+          <ul>
+            {signed.map((term) => (
+              <li key={term.id}>
+                <span className="journal-term-title">{t(term.titleKey as never)}</span>
+                <span className="journal-term-signed">{t('term.signed')}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </>
   )
 }
 

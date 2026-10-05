@@ -49,6 +49,8 @@ import { isContainerTaken } from '../engine/notebook.ts'
 import { isRoomPowered } from '../engine/power.ts'
 import { conditionClass, credentialKey, progressConditionMet } from '../engine/progressCondition.ts'
 import { clockGrant, containerGrant, doorGrant, hotspotGrant, recordingGrant } from '../engine/progressGrants.ts'
+import { dueSequence } from '../engine/sequenceRules.ts'
+import { termGrant, type SigningDesk } from '../engine/termRules.ts'
 import {
   buildTransitionDoorSpecs,
   transitionDoorBlock,
@@ -103,10 +105,14 @@ export const ATOM_PREFIX = {
   flags: 'flag',
   triggersFired: 'fired',
   devicesCarried: 'carried',
+  termsSigned: 'term',
   // What the porter said and which lessons the HUD gave are told to the
   // player, not done by her: no rule of progress reads either.
   radioCalls: null,
   hintsShown: null,
+  // Nor is what the game showed her by itself: a sequence is watched, and
+  // nothing waits on its having been.
+  sequencesSeen: null,
 } as const satisfies Record<ListField, string | null>
 
 const ATOM_FIELDS = (Object.entries(ATOM_PREFIX) as [ListField, string | null][]).flatMap(([field, prefix]) =>
@@ -140,6 +146,8 @@ export type PlayerAction =
   | { readonly kind: 'set-clock'; readonly deviceId: string }
   /** A thing that speaks, worked and heard to its last line: a dead line, a recording. */
   | { readonly kind: 'voice'; readonly deviceId: string }
+  /** A term signed at its desk: E held on it for the desk's whole time. */
+  | { readonly kind: 'sign'; readonly deviceId: string; readonly termId: string }
 
 /** What an action asks of the save and gives to it, as atoms. */
 export type ActionRecord = {
@@ -273,7 +281,8 @@ function containerBehind(content: MuseumContent, lockId: string): ContainerData 
  * the rules ignore is not: a door barred from this side, a switch whose room
  * already has power, a detail already seen, a detail no hand can turn to the
  * camera, a notebook that has left its desk, a radio without charge, a clock
- * with no mains or already put right, a machine with no mains. A thing that
+ * with no mains or already put right, a machine with no mains, a desk with
+ * no term on it or with one that still waits for something. A thing that
  * speaks is in the list whenever it would answer, whether or not what it
  * says leaves anything in the save: a dead line is answered, and gives
  * nothing.
@@ -340,6 +349,13 @@ export function availableActions(content: MuseumContent, progress: Progress, roo
       }
       continue
     }
+    if (device.kind === 'signing-desk') {
+      // The term the desk offers, when a held press would sign it. A desk
+      // that buzzes is answered too, and writes nothing: it is not a move.
+      const term = readyTerm(content, device, progress)
+      if (term) actions.push({ kind: 'sign', deviceId: device.id, termId: term.id })
+      continue
+    }
     if (device.kind !== 'radio') continue
     const intent = deskRadioIntent(device, {
       live: radioIsLive(content, device.id, progress.roomsPowered),
@@ -370,6 +386,26 @@ function voiceOf(content: MuseumContent, deviceId: string): VoiceDevice | undefi
     }
   }
   return undefined
+}
+
+/** The desk an action is aimed at, wherever it stands. */
+function deskOf(content: MuseumContent, deviceId: string): SigningDesk | undefined {
+  for (const room of content.rooms) {
+    for (const device of room.devices ?? []) {
+      if (device.id === deviceId && device.kind === 'signing-desk') return device
+    }
+  }
+  return undefined
+}
+
+/**
+ * The term a held press on this desk would sign in this save, by the desk's
+ * own rule (the one its prompt is worded by), or null. With nothing on
+ * screen: this player watches what she is owed as it comes (`play`).
+ */
+function readyTerm(content: MuseumContent, desk: SigningDesk, progress: Progress) {
+  const intent = deviceIntent(desk, deviceInputOf(desk, { progress, radio: null, sequence: null }, content))
+  return intent.kind === 'desk' && intent.state.state === 'ready' ? intent.state.term : null
 }
 
 /** The recording a voice would play to this save, if what it would say is one. */
@@ -425,6 +461,13 @@ export function actionGrant(content: MuseumContent, progress: Progress, action: 
       const recording = voice ? recordingOf(content, voice, progress) : undefined
       return recording === undefined ? {} : recordingGrant(content, recording)
     }
+    case 'sign': {
+      // The signature, and only of the term the desk offers now: the flag it
+      // sets is the trigger's to give.
+      const desk = deskOf(content, action.deviceId)
+      const term = desk ? readyTerm(content, desk, progress) : null
+      return term && term.id === action.termId ? termGrant(term) : {}
+    }
   }
 }
 
@@ -432,7 +475,7 @@ export function actionGrant(content: MuseumContent, progress: Progress, action: 
 // The same actions, written down
 // ---------------------------------------------------------------------------
 
-const atom = (field: Exclude<keyof typeof ATOM_PREFIX, 'radioCalls' | 'hintsShown'>, id: string) =>
+const atom = (field: Exclude<keyof typeof ATOM_PREFIX, 'radioCalls' | 'hintsShown' | 'sequencesSeen'>, id: string) =>
   `${ATOM_PREFIX[field]}:${id}`
 
 const grantAtoms = (grant: ProgressGrant) => atomsOf(grant)
@@ -476,6 +519,7 @@ const CONDITION_ATOMS: {
   roomsVisited: (rooms) => rooms.map((id) => atom('roomsVisited', id)),
   roomsUnvisited: (rooms) => rooms.map((id) => `not(${atom('roomsVisited', id)})`),
   doorsReleased: (doors) => doors.map((id) => atom('doorsReleased', id)),
+  termsSigned: (terms) => terms.map((id) => atom('termsSigned', id)),
   anyOf: (branches, content) => [
     `any(${branches
       .map((branch) => conditionAtoms(branch, content).join('+'))
@@ -655,6 +699,22 @@ function voiceRecord(
   )
 }
 
+/**
+ * A term signed at a desk: the room the desk stands in, what the term asks,
+ * and the signature it leaves. One record to each term of each desk.
+ *
+ * What brings the term to the desk (`presentedWhen`) is not written: the
+ * gate holds it to asking nothing the signature does not (`term-presented-
+ * late`), so it is in what the term asks already.
+ */
+function signRecord(content: MuseumContent, room: RoomData, desk: SigningDesk, term: NonNullable<MuseumContent['terms']>[number]) {
+  return record(
+    `sign:${desk.id}:${term.id}`,
+    [atom('roomsVisited', room.id), ...conditionAtoms(term.when, content)],
+    grantAtoms(termGrant(term)),
+  )
+}
+
 function triggerRecord(content: MuseumContent, trigger: Trigger): ActionRecord {
   return record(`trigger:${trigger.id}`, conditionAtoms(trigger.when, content), [
     atom('triggersFired', trigger.id),
@@ -690,6 +750,11 @@ export function contentActions(content: MuseumContent): readonly ActionRecord[] 
       if (device.kind === 'voice') {
         for (const utterance of device.utterances) {
           if (utterance.documentId !== undefined) records.push(voiceRecord(topology, content, room, device, utterance))
+        }
+      }
+      if (device.kind === 'signing-desk') {
+        for (const term of content.terms ?? []) {
+          if (device.termIds.includes(term.id)) records.push(signRecord(content, room, device, term))
         }
       }
     }
@@ -769,6 +834,13 @@ export function actionRecord(
       // What it says to this save: a recording has a record, a line of its own has none.
       return utterance?.documentId !== undefined ? voiceRecord(topology, content, room, device, utterance) : null
     }
+    case 'sign': {
+      const device = (room.devices ?? []).find((candidate) => candidate.id === action.deviceId)
+      const term = (content.terms ?? []).find((candidate) => candidate.id === action.termId)
+      return device?.kind === 'signing-desk' && term && device.termIds.includes(term.id)
+        ? signRecord(content, room, device, term)
+        : null
+    }
   }
 }
 
@@ -785,6 +857,9 @@ export const SIMULATION_PASS_LIMIT = 64
 
 type ReturnProblem = { readonly roomId: string; readonly code: 'no-return-path' | 'one-way-trap' }
 
+/** An action that was offered until a term was signed, and what it would have given that the save did not hold. */
+type Disabled = { readonly termId: string; readonly recordId: string; readonly lost: readonly string[] }
+
 type Play = {
   readonly progress: Progress
   /** The save after every action she took, in order, from the one she began with. */
@@ -794,6 +869,8 @@ type Play = {
   readonly met: readonly ActionRecord[]
   readonly returnProblems: readonly ReturnProblem[]
   readonly converged: boolean
+  /** Only of a play that signs eagerly: what each signature took off the table. */
+  readonly disabled: readonly Disabled[]
 }
 
 /**
@@ -840,10 +917,31 @@ function returnProblem(topology: Topology, progress: Progress, roomId: string, h
  *
  * A session always begins at the spawn, whatever the save says of where the
  * player stopped.
+ *
+ * What the game shows her by itself she watches as it comes: a directed
+ * sequence owed is seen, at the settling of every write, as the HUD plays it
+ * to a player who waits. So a desk is never held from her by a card.
+ *
+ * `eager` is another player: one who signs every term at the first moment
+ * its desk offers it, before anything else in reach. She is how the gate
+ * learns what a signature takes off the table (`post-ending-disables-
+ * action`): the first player does everything else first, and would never
+ * notice.
  */
-function play(content: MuseumContent, topology: Topology, from: Progress): Play {
+function play(content: MuseumContent, topology: Topology, from: Progress, eager = false): Play {
   const home: string = content.spawn.room
-  const settle = (progress: Progress) => settleTriggers(progress, topology.triggers, content).progress
+  const sequences = content.sequences ?? []
+  const watched = (progress: Progress): Progress => {
+    let seen = progress
+    // One at a time, as the director starts them; each one owed is seen once.
+    for (let turn = 0; turn < sequences.length; turn += 1) {
+      const due = dueSequence(sequences, seen, content)
+      if (!due) break
+      seen = grantProgress(seen, { sequencesSeen: [due.id] })
+    }
+    return seen
+  }
+  const settle = (progress: Progress) => watched(settleTriggers(progress, topology.triggers, content).progress)
   const records = new Map(contentActions(content).map((entry) => [entry.id, entry]))
 
   const met = new Map<string, ActionRecord>()
@@ -870,7 +968,48 @@ function play(content: MuseumContent, topology: Topology, from: Progress): Play 
   let known = new Set(atomsOf(from))
   let converged = false
 
+  /** Every record a press would realise now, from any room she can stand in. */
+  const offered = () => {
+    const now = new Map<string, ActionRecord>()
+    for (const roomId of reachable) {
+      for (const action of availableActions(content, progress, roomId)) {
+        const entry = actionRecord(content, progress, roomId, action)
+        if (entry) now.set(entry.id, entry)
+      }
+    }
+    return now
+  }
+  const disabled: Disabled[] = []
+  /** The eager player signs whatever a desk in reach offers, until none offers anything. */
+  const signEagerly = () => {
+    if (!eager) return
+    for (let turn = 0; turn < SIMULATION_PASS_LIMIT; turn += 1) {
+      const sign = [...reachable]
+        .flatMap((roomId) => availableActions(content, progress, roomId).map((action) => ({ roomId, action })))
+        .find((candidate) => candidate.action.kind === 'sign')
+      if (!sign || sign.action.kind !== 'sign') return
+      const own = actionRecord(content, progress, sign.roomId, sign.action)
+      const before = progress
+      const offeredBefore = offered()
+      progress = settle(grantProgress(progress, actionGrant(content, progress, sign.action)))
+      if (progress === before) return
+      if (own) met.set(own.id, own)
+      meetConsequences(before, progress)
+      steps.push(progress)
+      // What was on the table a moment ago and is not now, other than the
+      // signature itself, with what it would have given that she lacks.
+      const offeredAfter = offered()
+      const held = atomsOf(progress)
+      for (const [id, entry] of offeredBefore) {
+        if (id === own?.id || offeredAfter.has(id)) continue
+        const lost = entry.grants.filter((granted) => !held.includes(granted))
+        if (lost.length > 0) disabled.push({ termId: sign.action.termId, recordId: id, lost })
+      }
+    }
+  }
+
   for (let pass = 0; pass < SIMULATION_PASS_LIMIT; pass += 1) {
+    signEagerly()
     const began = progress
     const entered: string[] = []
 
@@ -878,6 +1017,7 @@ function play(content: MuseumContent, topology: Topology, from: Progress): Play 
       const room = topology.rooms.get(roomId)
       if (!room) continue
       for (const action of availableActions(content, began, roomId)) {
+        signEagerly()
         const entry = actionRecord(content, progress, roomId, action)
         if (entry) met.set(entry.id, entry)
 
@@ -906,7 +1046,12 @@ function play(content: MuseumContent, topology: Topology, from: Progress): Play 
     levels.push(gained)
   }
 
-  return { progress, steps, reachable, levels, met: [...met.values()], returnProblems, converged }
+  // Lost for good is what the rest of her night never gave her another way.
+  const end = atomsOf(progress)
+  const lostForGood = disabled
+    .map((entry) => ({ ...entry, lost: entry.lost.filter((granted) => !end.includes(granted)) }))
+    .filter((entry) => entry.lost.length > 0)
+  return { progress, steps, reachable, levels, met: [...met.values()], returnProblems, converged, disabled: lostForGood }
 }
 
 // ---------------------------------------------------------------------------
@@ -947,6 +1092,9 @@ function conditionsOf(content: MuseumContent, topology: Topology): readonly Prog
     if ('when' in milestone) conditions.push(milestone.when)
   }
   for (const term of content.terms ?? []) conditions.push(term.presentedWhen, term.when)
+  // What makes a sequence owed reads the save like anything else: usually the
+  // flag a term's signature sets.
+  for (const sequence of content.sequences ?? []) conditions.push(sequence.when)
   // A branch asks like any other condition.
   const withBranches = (condition: ProgressCondition): ProgressCondition[] => [
     condition,
@@ -1121,23 +1269,86 @@ export function simulateProgress(content: MuseumContent, from: Progress = emptyP
     if (!flagsRead.has(flag)) error('flag-never-read', flag, `An effect sets flag "${flag}", and no condition ever asks for it.`)
   }
 
+  // --- the ending --------------------------------------------------------------
+  // A term is signable when what it asks is met at the fixed point, and
+  // signed when the play signed it: she holds E on every desk that offers one.
+  const terms = content.terms ?? []
+  const signable = terms.filter((term) => progressConditionMet(term.when, final, content))
+  for (const term of terms) {
+    if (!signable.includes(term)) {
+      error(
+        'term-unsignable',
+        term.id,
+        `Term "${term.id}" can never be signed: what it asks (${conditionAtoms(term.when, content).join(', ') || 'nothing'}) is never all true in any play.`,
+      )
+    } else if (!final.termsSigned.includes(term.id)) {
+      error(
+        'ending-unreachable',
+        term.id,
+        `Term "${term.id}" could be signed and no play signs it: no desk a player reaches offers it, or an older term on its desk waits for ever in front of it.`,
+      )
+    }
+    // The desk names a term from `presentedWhen` on, and says what it still
+    // waits for. So what brings it to the desk is part of what signing asks,
+    // and whatever signing asks beyond that is a room or a paper: the two
+    // things a desk has words for.
+    const asked = conditionAtoms(term.when, content)
+    const brought = conditionAtoms(term.presentedWhen, content)
+    const late = brought.filter((entry) => !asked.includes(entry))
+    if (late.length > 0) {
+      error(
+        'term-presented-late',
+        term.id,
+        `Term "${term.id}" is brought to the desk by ${late.join(', ')}, which signing it does not ask for: \`when\` asks everything \`presentedWhen\` asks.`,
+      )
+    }
+    const unnamed = asked.filter((entry) => !brought.includes(entry) && !/^(?:power|doc):/.test(entry))
+    if (unnamed.length > 0) {
+      error(
+        'term-blocker-unnamed',
+        term.id,
+        `Term "${term.id}" waits on the desk for ${unnamed.join(', ')}, and a desk can only say which room is dark and which paper is unread: ` +
+          `the player would be refused with no reason given. Ask for it in \`presentedWhen\` too, so the term comes to the desk with it done.`,
+      )
+    }
+  }
+  // Signing takes nothing away. Asked of the player who signs each term the
+  // moment its desk offers it: every action on the table before a signature
+  // is still there after it, or what it gave is in the save, or the rest of
+  // her night gives it another way.
+  if (terms.length > 0) {
+    for (const entry of play(content, topology, from, true).disabled) {
+      error(
+        'post-ending-disables-action',
+        entry.termId,
+        `Signing "${entry.termId}" takes "${entry.recordId}" away: a player who signs first never gets ${entry.lost.join(', ')}.`,
+      )
+    }
+  }
+  for (const sequence of content.sequences ?? []) {
+    if (!final.sequencesSeen.includes(sequence.id)) {
+      error(
+        'sequence-never-plays',
+        sequence.id,
+        `Sequence "${sequence.id}" never plays: no play ever meets what it waits for (${conditionAtoms(sequence.when, content).join(', ') || 'nothing'}).`,
+      )
+    }
+  }
+
   // --- the porter still has something to point at ------------------------------
   // While a term can be signed and has not been, the night is not over, and
   // the last hint («nothing left but checking») would be a lie: at every
-  // step of the play, some hint above it has to hold. A term is signable when
-  // its `when` is met at the fixed point, and signed when the flag its
-  // signature sets is in the save.
-  const signable = (content.terms ?? []).filter((term) => progressConditionMet(term.when, final, content))
+  // step of the play, some hint above it has to hold.
   if (signable.length > 0) {
     for (const { device } of radioDevices(content)) {
       if (device.hints.length === 0) continue
       const uncovered = steps.find((step) => {
-        const owed = signable.some((term) => !step.flags.includes(term.grants))
+        const owed = signable.some((term) => !step.termsSigned.includes(term.id))
         const index = radioHintIndex(device, step, content)
         return owed && (index < 0 || index === device.hints.length - 1)
       })
       if (!uncovered) continue
-      const owed = signable.filter((term) => !uncovered.flags.includes(term.grants)).map((term) => `"${term.id}"`)
+      const owed = signable.filter((term) => !uncovered.termsSigned.includes(term.id)).map((term) => `"${term.id}"`)
       error(
         'radio-hint-coverage',
         device.id,

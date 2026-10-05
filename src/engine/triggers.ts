@@ -24,7 +24,7 @@ import { grantProgress, type Progress, type ProgressGrant } from '../state/progr
 import { credentialKey, progressConditionMet } from './progressCondition.ts'
 
 /** What the triggers of a content are made of, and what their conditions and effects read. */
-export type TriggerContent = Pick<MuseumContent, 'rooms' | 'exhibits' | 'documents' | 'locks' | 'triggers'>
+export type TriggerContent = Pick<MuseumContent, 'rooms' | 'exhibits' | 'documents' | 'locks' | 'triggers' | 'terms'>
 
 /**
  * Passes of the fixed point one settle may run.
@@ -39,11 +39,13 @@ export const TRIGGER_PASS_LIMIT = 64
 /**
  * Every trigger of the content: the authored ones, then `exhibit:<id>:catalogued`
  * for each piece with `unlocks`, then `lock:<id>:opened` for each lock with
- * `onOpen`.
+ * `onOpen`, then `term:<id>:signed` for each term.
  *
- * The two derived kinds are why an exhibit's effects and a lock's are not
- * applied by the verb that catalogues or opens: as triggers they fire once,
- * and reach a save that catalogued or opened before the effect existed.
+ * The derived kinds are why an exhibit's effects, a lock's and a term's are
+ * not applied by the verb that catalogues, opens or signs: as triggers they
+ * fire once, and reach a save that catalogued, opened or signed before the
+ * effect existed. A term's trigger asks for the signature alone; what the
+ * desk asked before letting it be made is the desk's business.
  */
 export function compileTriggers(content: TriggerContent): readonly Trigger[] {
   return [
@@ -57,6 +59,13 @@ export function compileTriggers(content: TriggerContent): readonly Trigger[] {
       lock.onOpen?.length
         ? [{ id: `lock:${lock.id}:opened`, when: { locksOpened: [lock.id] }, effects: lock.onOpen }]
         : [],
+    ),
+    ...(content.terms ?? []).map(
+      (term): Trigger => ({
+        id: `term:${term.id}:signed`,
+        when: { termsSigned: [term.id] },
+        effects: [{ kind: 'set-flag', flag: term.grants }],
+      }),
     ),
   ]
 }

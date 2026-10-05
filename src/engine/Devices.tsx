@@ -1,7 +1,8 @@
 /**
  * The working objects of a room: clocks, door readers, the porter's radio,
- * a thing that only has something to say, a thing that speaks when worked —
- * and, once it leaves the desk, the radio in the player's hand.
+ * a thing that only has something to say, a thing that speaks when worked,
+ * the desk a term is signed at — and, once it leaves the desk, the radio in
+ * the player's hand.
  *
  * Each device is a kit recipe cloned per placement — never instanced, because
  * every one carries its own state: a clock turns its own hands, a reader
@@ -34,6 +35,7 @@ import { clockCount, type ClockStore } from './clockCount'
 import type { CollisionWorld } from './collision'
 import {
   aimableDevices,
+  airTaken,
   clockFaceAngles,
   deviceInputOf,
   deviceIntent,
@@ -53,19 +55,36 @@ import {
   hiddenInScene,
   paintLenses,
   placeHandset,
+  prepareDeskNodes,
   prepareHandset,
+  showDeskNodes,
 } from './deviceNodes'
+import { isHoldRequest, type HoldRequest } from './holdAction'
 import { PROXY_MATERIAL_PROPS, paddedProxy } from './interactionProxy'
-import { deviceProxyMinimum, INTERACTION_REACH, interactionWinnerOf } from './interactionTarget'
+import { deviceProxyMinimum, INTERACTION_REACH, interactionHeldIdOf, interactionWinnerOf } from './interactionTarget'
 import { cloneKitPart, disposeKitPart, registerKitColliders } from './kitPart'
 import type { MaterialLibrary } from './materials'
 import { setClockMinutes } from './nightClock'
 import { isRoomPowered } from './power'
 import { playerPosition } from './playerPosition'
-import { isUnclaimedInteractKey, subscribePrimaryAction } from './primaryAction'
+import {
+  beginPrimaryHold,
+  cancelPrimaryHold,
+  isHoldCancelKey,
+  isInteractKey,
+  isUnclaimedInteractKey,
+  onPrimaryHoldFired,
+  primaryHold,
+  releasePrimaryAction,
+  subscribePrimaryAction,
+  tickPrimaryHold,
+} from './primaryAction'
 import { clockGrant } from './progressGrants'
 import { placeRadioCall, takeDeskRadio } from './radioCall'
 import { hangUpDelayMs, hangUpStarted, heldRadioId, isRadioCallKey } from './radioPatience'
+import { skipSequenceStep } from './sequenceDirector'
+import { pressSigningDesk, signAtDesk } from './signingDesk'
+import { deskShows, type SigningDesk } from './termRules'
 import { operateVoice } from './voiceDevice'
 
 const CENTRE = new Vector2(0, 0)
@@ -312,6 +331,44 @@ function VoiceDeviceView({
 }
 
 // ---------------------------------------------------------------------------
+// A desk where terms are signed
+// ---------------------------------------------------------------------------
+
+/**
+ * The lamp of a signing desk and the Book on it (DL3-7).
+ *
+ * The lamp is drawn only while a term waits on the desk: red while the term
+ * still waits for something, green once a held press would sign it. The Book
+ * is drawn only once a term of this desk has been signed. What is drawn is
+ * the rule's to say (`deskShows`), asked of what the desk stands at, which
+ * is the very thing its prompt is worded by; this only hides and shows the
+ * two groups of nodes. Neither costs a draw while it has nothing to say,
+ * which in the hall is the difference between fitting its ceiling and not.
+ */
+function SigningDeskView({
+  device,
+  instance,
+  materials,
+}: {
+  device: SigningDesk
+  instance: Object3D
+  materials: MaterialLibrary
+}) {
+  const nodes = useMemo(() => prepareDeskNodes(instance, device.part), [device.part, instance])
+  const progress = useMuseum((state) => state.progress)
+  const sequence = useMuseum((state) => state.sequence)
+  const intent = deviceIntent(device, deviceInputOf(device, { progress, radio: null, sequence }, MUSEUM))
+  const state = intent.kind === 'desk' ? intent.state : null
+  const { lamp, book } = state ? deskShows(state, device, progress) : { lamp: false, book: false }
+  useLensMaterial(instance, device.part, materials, state?.state === 'ready' ? 'led-green' : 'led-red')
+
+  // Before paint, so neither flashes for a frame on a desk with nothing on it.
+  useLayoutEffect(() => showDeskNodes(nodes, lamp, book), [book, lamp, nodes])
+
+  return null
+}
+
+// ---------------------------------------------------------------------------
 // The volume the crosshair finds
 // ---------------------------------------------------------------------------
 
@@ -412,6 +469,9 @@ function Device({
       {device.kind === 'voice' && device.messageLamp ? (
         <VoiceDeviceView device={device} instance={instance} materials={materials} />
       ) : null}
+      {device.kind === 'signing-desk' ? (
+        <SigningDeskView device={device} instance={instance} materials={materials} />
+      ) : null}
       {AIMABLE_BY_ID.has(device.id) ? (
         <DeviceProxy device={device} instance={instance} hidden={carried} />
       ) : null}
@@ -462,11 +522,13 @@ export function DeviceLayer({
  * otherwise the same press as the call button — skip a line, or call him. A
  * stopped clock is put right, which records its flag (`clockGrant`) and no
  * more: what it shows from then on follows from the save. A thing that
- * speaks says what this night makes it say (`voiceDevice.ts`). A notice
- * has said all it has to say in the prompt: it declines the press, and the
- * key goes to whatever else is waiting for it.
+ * speaks says what this night makes it say (`voiceDevice.ts`). A desk with
+ * a term ready asks for the press to be held, and hands that request back
+ * (`signingDesk.ts`); the signature is made when the hold ends, not here. A
+ * notice has said all it has to say in the prompt: it declines the press,
+ * and the key goes to whatever else is waiting for it.
  */
-function operateDevice(deviceId: string) {
+function operateDevice(deviceId: string): boolean | HoldRequest {
   const entry = AIMABLE_BY_ID.get(deviceId)
   if (!entry) return false
   const intent = deviceIntent(entry.device, deviceInputOf(entry.device, useMuseum.getState(), MUSEUM))
@@ -481,6 +543,8 @@ function operateDevice(deviceId: string) {
       return true
     case 'voice':
       return operateVoice(deviceId)
+    case 'desk':
+      return pressSigningDesk(deviceId)
     case 'notice':
     case 'none':
       return false
@@ -515,17 +579,42 @@ export function DeviceTargeting() {
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
+      if (isHoldCancelKey(event)) cancelPrimaryHold()
       if (event.repeat || !isUnclaimedInteractKey(event)) return
-      if (interact()) event.preventDefault()
+      const answer = interact()
+      if (answer === false) return
+      event.preventDefault()
+      // A press that has to be held goes on through the one gesture the
+      // touch button drives too: the key coming up, below, is its release.
+      if (isHoldRequest(answer)) beginPrimaryHold(answer)
+    }
+    const onKeyUp = (event: KeyboardEvent) => {
+      if (isInteractKey(event)) releasePrimaryAction()
+    }
+    // A key that comes up while the window is elsewhere never says so: a
+    // hold must not go on, and sign, behind the player's back.
+    const dropHold = () => cancelPrimaryHold()
+    const dropHoldWhenHidden = () => {
+      if (document.visibilityState === 'hidden') cancelPrimaryHold()
     }
 
     window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', dropHold)
+    document.addEventListener('visibilitychange', dropHoldWhenHidden)
+    // The hold came to its end, by key or by finger: the term is signed.
+    const stopSigning = onPrimaryHoldFired(signAtDesk)
     // Between furniture (200) and the room's own power control (100): the
     // radio sits on the same desk as the lamp and must win when aimed at.
     const unsubscribe = subscribePrimaryAction(interact, 150)
     return () => {
       unsubscribe()
+      stopSigning()
+      cancelPrimaryHold()
       window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', dropHold)
+      document.removeEventListener('visibilitychange', dropHoldWhenHidden)
     }
   }, [])
 
@@ -538,6 +627,11 @@ export function DeviceTargeting() {
 
   useFrame((_, delta) => {
     const state = useMuseum.getState()
+    // A hold counts its time here, frame by frame, and only while the thing
+    // it is on still owns the crosshair and still asks to be held
+    // (`interactionHeldIdOf`). Asked before the modal check: under a modal
+    // nothing owns the crosshair, and that is what ends the hold.
+    if (primaryHold().phase !== 'idle') tickPrimaryHold(delta, interactionHeldIdOf(state, MUSEUM))
     if (isModalOpen(state)) {
       if (state.focusedDevice) state.setFocusedDevice(null)
       return
@@ -596,11 +690,13 @@ export function DeviceTargeting() {
  * What is owed is asked again whenever the air changes hands, and not only
  * when the save changes: a call cut off by something else that took the air
  * (the telephone, dialled over the porter) was not heard and wrote nothing,
- * so no change of the save would ever bring it back.
+ * so no change of the save would ever bring it back. A directed sequence
+ * takes the air the same way (`airTaken`): he waits while it plays, and what
+ * it cut off is asked for again when it ends.
  */
 export function RadioDirector() {
   const progress = useMuseum((state) => state.progress)
-  const onAir = useMuseum((state) => state.radio !== null)
+  const onAir = useMuseum(airTaken)
   const timersRef = useRef(new Map<string, number>())
 
   useEffect(() => {
@@ -618,7 +714,7 @@ export function RadioDirector() {
         // first call). Otherwise it waits for its turn, the air, every
         // modal and a visible tab.
         const step = radioDeliveryStep(radioCallReady(device, call.id, state.progress, MUSEUM), {
-          onAir: state.radio !== null,
+          onAir: airTaken(state),
           modal: isModalOpen(state),
           hidden: document.visibilityState === 'hidden',
           away: !radioWithinEarshot(device, room.id, state.progress.devicesCarried, state.currentRoom),
@@ -665,6 +761,12 @@ export function RadioHandset() {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (!isRadioCallKey(event)) return
+      // A directed sequence is moved on by R whether or not there is a radio
+      // in the pocket: it needs none to play, and none to be skipped.
+      if (skipSequenceStep()) {
+        event.preventDefault()
+        return
+      }
       const id = heldRadioId(useMuseum.getState().progress.devicesCarried, MUSEUM)
       if (id && placeRadioCall(id)) event.preventDefault()
     }

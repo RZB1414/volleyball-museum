@@ -16,6 +16,7 @@
 import type { TranslationKey } from '../content/i18n/pt-BR'
 import type { ContainerData, DeviceData, Lock } from '../content/schema'
 import type { DeskRadioIntent, DeviceIntent } from '../engine/deviceRules'
+import type { TermBlockers } from '../engine/termRules'
 import { listGrew } from './hudRules.ts'
 
 /** How a container's prompt is worded: as a shut lock, or as something to read. */
@@ -107,6 +108,17 @@ export type DevicePromptView =
   | { readonly form: 'action'; readonly key: boolean; readonly labelKey: TranslationKey; readonly titleKey: string }
   /** «title — notice»: a thing that only says something. Never a key. */
   | { readonly form: 'notice'; readonly titleKey: string; readonly noticeKey: string }
+  /**
+   * «title — Assinar: term · falta luz em: …»: a desk with a term on it that
+   * cannot be signed yet. E is answered with a buzz, so no key is drawn: a
+   * door that will not open draws none either. What is missing comes as ids,
+   * and `deskMissingText` words it once they have names.
+   */
+  | { readonly form: 'desk'; readonly titleKey: string; readonly termKey: string; readonly missing: TermBlockers }
+  /** «Segure E — Assinar: term»: the press is held, on `holdId`, for `seconds`. */
+  | { readonly form: 'hold'; readonly holdId: string; readonly seconds: number; readonly termKey: string }
+  /** «title — term · assinado ✓»: every term brought to the desk is signed. */
+  | { readonly form: 'signed'; readonly titleKey: string; readonly termKey: string }
 
 /**
  * What the prompt of a device says, from the intent E acts on
@@ -153,5 +165,42 @@ export function devicePrompt(device: DeviceData, intent: DeviceIntent): DevicePr
             titleKey: device.titleKey,
           }
         : null
+    case 'desk':
+      return device.kind === 'signing-desk' ? deskPrompt(device, intent.state) : null
   }
+}
+
+/** A signing desk's prompt, from what it stands at. */
+function deskPrompt(
+  device: Extract<DeviceData, { readonly kind: 'signing-desk' }>,
+  state: Extract<DeviceIntent, { readonly kind: 'desk' }>['state'],
+): DevicePromptView {
+  switch (state.state) {
+    // Nothing brought to it: it says so, like any thing that only says something.
+    case 'empty':
+      return { form: 'notice', titleKey: device.titleKey, noticeKey: device.emptyNoticeKey }
+    case 'blocked':
+      return { form: 'desk', titleKey: device.titleKey, termKey: state.term.titleKey, missing: state.blockers }
+    case 'ready':
+      return { form: 'hold', holdId: device.id, seconds: device.holdSeconds, termKey: state.term.titleKey }
+    case 'signed':
+      return { form: 'signed', titleKey: device.titleKey, termKey: state.term.titleKey }
+  }
+}
+
+/**
+ * What a term on a desk still waits for, in words: «falta luz em: Átrio,
+ * Ala 1 · falta: Livro de Termos». The rooms first, then the papers; the
+ * names are handed in already translated, and so are the two phrases
+ * (`desk.missing.power`, `desk.missing.document`). Empty when nothing a desk
+ * can name is missing.
+ */
+export function deskMissingText(
+  missing: { readonly rooms: readonly string[]; readonly documents: readonly string[] },
+  say: { readonly power: string; readonly document: string },
+): string {
+  return [
+    ...(missing.rooms.length > 0 ? [`${say.power}: ${missing.rooms.join(', ')}`] : []),
+    ...(missing.documents.length > 0 ? [`${say.document}: ${missing.documents.join(', ')}`] : []),
+  ].join(' · ')
 }

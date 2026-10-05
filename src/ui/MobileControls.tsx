@@ -3,19 +3,34 @@ import {
   useEffect,
   useRef,
   useState,
+  useSyncExternalStore,
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
 } from 'react'
 
 import { MUSEUM } from '../content/museum'
-import { interactionWinnerKey, parseInteractionWinnerKey } from '../engine/interactionTarget'
+import { readHoldMark } from '../engine/holdAction'
+import { interactionHeldOf, interactionWinnerKey, parseInteractionWinnerKey } from '../engine/interactionTarget'
 import {
+  actionClick,
+  actionPointerDown,
+  actionPointerUp,
   beginDirectionalPadSession,
   createDirectionalPadSession,
+  NO_ACTION_POINTER,
   ownsDirectionalPadPointer,
   resetDirectionalPadSession,
   sampleDirectionalDrag,
 } from '../engine/mobileControls'
-import { triggerPrimaryAction } from '../engine/primaryAction'
+import {
+  cancelPrimaryHold,
+  pressPrimaryAction,
+  primaryHoldMark,
+  releasePrimaryAction,
+  subscribePrimaryHold,
+  triggerPrimaryAction,
+} from '../engine/primaryAction'
 import { useTranslate } from '../i18n'
 import { useMuseum, type DirectionalInput } from '../state/store'
 import { doorActionAvailable } from './hudRules'
@@ -208,8 +223,63 @@ export function MobileControls() {
   const openedContainer = useMuseum((state) => state.openedContainer)
   const activeLock = useMuseum((state) => state.activeLock)
   const journalTab = useMuseum((state) => state.journalTab)
+  // The press that is held (a term being signed): a ring on the button while
+  // it is down, and the two answers in its place after a tap.
+  const hold = readHoldMark(useSyncExternalStore(subscribePrimaryHold, primaryHoldMark, () => 'idle'))
   const t = useTranslate()
   const [resetEpoch, setResetEpoch] = useState(0)
+  /**
+   * Whether the press the button would make has to be held: a desk with a
+   * term ready. Asked of the same arbitration the handlers ask, so the
+   * button and the key cannot disagree about what is under the crosshair.
+   */
+  const held = useMuseum((state) => interactionHeldOf(state, MUSEUM))
+  /**
+   * What the action buttons remember of the pointer between its events:
+   * whether it was itself a press, and when it last did something. The three
+   * rules that read and write it are `engine/mobileControls.ts`'s, where a
+   * suite runs them; the three buttons below share this one memory, because
+   * the tap that asks the question lands its click on the button that
+   * answers it.
+   */
+  const pointerRef = useRef(NO_ACTION_POINTER)
+
+  /**
+   * A pointer went down on an action button. `press` is what it does if it
+   * is itself the press (something held, or one of the two answers), and
+   * null where the click is still the press. The pointer that presses is
+   * captured, so that its release reaches the button even if the thumb
+   * slides off it: that is how a held press knows it was let go.
+   */
+  const pointerDown = useCallback((event: ReactPointerEvent<HTMLButtonElement>, press: (() => void) | null) => {
+    event.preventDefault()
+    event.stopPropagation()
+    pointerRef.current = actionPointerDown(press !== null, event.timeStamp)
+    if (press === null) return
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId)
+    } catch {
+      // Without capture a release outside the button is lost; looking away
+      // still ends a hold, and the window losing focus cancels it.
+    }
+    press()
+  }, [])
+  /** The pointer came up, or was taken away: for one that pressed, the release of a held press. */
+  const pointerUp = useCallback((event: ReactPointerEvent<HTMLButtonElement>) => {
+    const up = actionPointerUp(pointerRef.current, event.timeStamp)
+    pointerRef.current = up.pointer
+    if (up.release) releasePrimaryAction()
+  }, [])
+  /**
+   * A click is the press unless a pointer already was: the click a tap
+   * leaves behind would act a second time, and lands on whatever the tap put
+   * under the finger.
+   */
+  const clicked = useCallback((event: ReactMouseEvent<HTMLButtonElement>, act: () => void) => {
+    const click = actionClick(pointerRef.current, event.detail, event.timeStamp)
+    pointerRef.current = click.pointer
+    if (click.press) act()
+  }, [])
 
   const resetAllPads = useCallback(() => {
     resetTouch()
@@ -263,17 +333,54 @@ export function MobileControls() {
         resetEpoch={resetEpoch}
       />
 
-      {actionVisible ? (
+      {actionVisible && hold.phase === 'confirming' ? (
+        // A tap on something that has to be held asks first. «Cancelar» takes
+        // the place the Action button had, under the thumb that tapped: a
+        // second tap by reflex must not be the signature.
+        <div className="hold-confirm-buttons" data-mobile-control="confirm">
+          <button
+            className="mobile-action-button is-confirm"
+            type="button"
+            onClick={(event) => clicked(event, triggerPrimaryAction)}
+            onContextMenu={(event) => event.preventDefault()}
+            onPointerDown={(event) => pointerDown(event, pressPrimaryAction)}
+            onPointerUp={pointerUp}
+            onPointerCancel={pointerUp}
+          >
+            {t('desk.sign')}
+          </button>
+          <button
+            className="mobile-action-button is-cancel"
+            type="button"
+            onClick={(event) => clicked(event, cancelPrimaryHold)}
+            onContextMenu={(event) => event.preventDefault()}
+            onPointerDown={(event) => pointerDown(event, cancelPrimaryHold)}
+            onPointerUp={pointerUp}
+            onPointerCancel={pointerUp}
+          >
+            {t('desk.cancel')}
+          </button>
+        </div>
+      ) : actionVisible ? (
         <button
-          className="mobile-action-button"
+          className={hold.phase === 'holding' ? 'mobile-action-button is-holding' : 'mobile-action-button'}
+          style={hold.phase === 'holding' ? ({ '--hold-seconds': `${hold.seconds}s` } as CSSProperties) : undefined}
           data-mobile-control="action"
           type="button"
           aria-label={t('mobile.action')}
-          onClick={triggerPrimaryAction}
-          onPointerDown={(event) => {
-            event.preventDefault()
-            event.stopPropagation()
-          }}
+          // Everything but a signature acts on the click, as it always did:
+          // acting as the finger lands would open a panel under it, and the
+          // click of that same tap would then press whatever the panel put
+          // there. A press that has to be held cannot wait for a click, which
+          // says neither when it began nor when it ended: that one, and only
+          // that one, is taken as the pointer goes down.
+          onClick={(event) => clicked(event, triggerPrimaryAction)}
+          // A long press must not bring up the browser's menu and cancel the pointer.
+          onContextMenu={(event) => event.preventDefault()}
+          onPointerDown={(event) => pointerDown(event, held ? pressPrimaryAction : null)}
+          onPointerUp={pointerUp}
+          onPointerCancel={pointerUp}
+          onLostPointerCapture={pointerUp}
         >
           {t('mobile.action')}
         </button>

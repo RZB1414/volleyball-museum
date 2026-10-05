@@ -915,7 +915,7 @@ export function deviceWiringProblems(read: SourceReader): string[] {
   // The prompt is worded by the same intent, and a notice is drawn with no key.
   need(
     'ui/Hud.tsx',
-    'const view = devicePrompt(device, deviceIntent(device, deviceInputOf(device, { progress, radio }, MUSEUM)))',
+    'const view = devicePrompt(device, deviceIntent(device, deviceInputOf(device, { progress, radio, sequence }, MUSEUM)))',
     'the prompt of a device is worded by the component, apart from what E does',
   )
   need(
@@ -961,7 +961,7 @@ export function deviceWiringProblems(read: SourceReader): string[] {
     'the toast of the clock is no longer decided by the rule: it would greet a Continue, or any flag at all',
   )
   need(
-    'ui/Hud.tsx',
+    'ui/useNightPhraseKey.ts',
     'MUSEUM.nightClock ? nightPhraseKey(MUSEUM.nightClock, nightPoints(MUSEUM.nightClock, state.progress, MUSEUM)) : null',
     'the hour the HUD says is no longer the one the night stands at',
   )
@@ -1050,7 +1050,7 @@ export function officeAnswersWiringProblems(read: SourceReader): string[] {
   // ask again when the air falls silent: the save will not tell it to.
   need(
     'engine/Devices.tsx',
-    'const onAir = useMuseum((state) => state.radio !== null)',
+    'const onAir = useMuseum(airTaken)',
     'the director no longer watches the air: a call cut off by a telephone dialled over it waits for some other change of the save to come back',
   )
   need(
@@ -1265,6 +1265,400 @@ export function clockWiringProblems(read: SourceReader): string[] {
   for (const specifier of [...staticSpecifiers(count), ...dynamicSpecifiers(count)]) {
     if (/state\/store|^react|^zustand/.test(specifier)) {
       problems.push(`engine/clockCount.ts imports "${specifier}": the count is handed its store, or no suite can give it a tab's own`)
+    }
+  }
+  return problems
+}
+
+/**
+ * The ending (L3, F4): a desk a term is signed at, and the sequence that
+ * follows a signature.
+ *
+ * The rules are pure modules the suite of the ending proves on a house made
+ * for it (`termRules.ts`, `sequenceRules.ts`), and two React-free modules
+ * make the presses (`signingDesk.ts`, `sequenceDirector.ts`): the suite and
+ * the robot call those very functions. What nothing in Node reaches is the
+ * line in each component that calls them: the `case` that hands E to the
+ * desk, the listener that signs when a hold fires, the lamp and the Book,
+ * the words of the prompt, the overlay that starts and plays a sequence,
+ * the radio that waits under it. These hold each component to the call.
+ */
+export function endingWiringProblems(read: SourceReader): string[] {
+  const problems: string[] = []
+  const need = (path: string, fragment: string, without: string) => {
+    if (!squeezed(read(path)).includes(fragment)) problems.push(`${path} no longer has \`${fragment}\`: ${without}`)
+  }
+
+  // --- the desk: the press, and the signature a held press makes -----------------
+  need(
+    'engine/Devices.tsx',
+    "case 'desk': return pressSigningDesk(deviceId)",
+    'E on a signing desk is taken and asks for no hold: the prompt says to hold a key that does nothing',
+  )
+  need(
+    'engine/signingDesk.ts',
+    'const intent = deviceIntent(desk, deviceInputOf(desk, store.getState(), content))',
+    'what a desk does on E is decided apart from the intent its prompt is worded by',
+  )
+  need(
+    'engine/signingDesk.ts',
+    "if (found.state.state === 'ready') return { id: deviceId, seconds: found.desk.holdSeconds }",
+    'a term ready to be signed no longer asks for the press to be held, for the time its own desk gives',
+  )
+  need(
+    'engine/signingDesk.ts',
+    "if (found.state.state !== 'blocked') return false museumAudio.lockDenied() return true",
+    'a desk whose term still waits takes the press in silence, or leaves it to whatever stands behind',
+  )
+  need(
+    'engine/signingDesk.ts',
+    "if (state?.state !== 'ready') return false store.getState().grant(termGrant(state.term))",
+    'a hold that fires signs nothing, or signs a term the desk is not offering',
+  )
+  need(
+    'engine/termRules.ts',
+    'return { termsSigned: [term.id] }',
+    'a signature records something other than itself: the flag it sets is the trigger\'s to give, once',
+  )
+  need(
+    'engine/triggers.ts',
+    "(term): Trigger => ({ id: `term:${term.id}:signed`, when: { termsSigned: [term.id] }, effects: [{ kind: 'set-flag', flag: term.grants }], }),",
+    'a term no longer compiles the trigger that sets its flag: a signed term changes nothing in the night',
+  )
+  need(
+    'engine/Devices.tsx',
+    'const stopSigning = onPrimaryHoldFired(signAtDesk)',
+    'nobody listens for a hold that fires: the ring closes and no term is signed',
+  )
+  // The next term is not offered under the card of the one just signed.
+  need(
+    'engine/deviceRules.ts',
+    'const sequenceOwed = (world.sequence ?? null) !== null || dueSequence(content.sequences ?? [], progress, content) !== null',
+    'a desk no longer knows that a sequence is on screen or owed',
+  )
+  need(
+    'engine/deviceRules.ts',
+    'signingDeskState(content.terms ?? [], device, progress, content, sequenceOwed)',
+    'a desk offers its next term while the card of the last one is still up',
+  )
+
+  // --- its lamp and its Book --------------------------------------------------------
+  need(
+    'engine/Devices.tsx',
+    'const nodes = useMemo(() => prepareDeskNodes(instance, device.part), [device.part, instance])',
+    'the lamp and the Book of a desk are never gathered: both are drawn always',
+  )
+  need(
+    'engine/Devices.tsx',
+    'const intent = deviceIntent(device, deviceInputOf(device, { progress, radio: null, sequence }, MUSEUM))',
+    'what a desk draws is asked of something other than what its prompt says it stands at',
+  )
+  need(
+    'engine/Devices.tsx',
+    'const { lamp, book } = state ? deskShows(state, device, progress) : { lamp: false, book: false }',
+    'the lamp and the Book are drawn by a rule of the component\'s own',
+  )
+  need(
+    'engine/Devices.tsx',
+    'useLayoutEffect(() => showDeskNodes(nodes, lamp, book), [book, lamp, nodes])',
+    'the lamp and the Book are never hidden or shown',
+  )
+  need(
+    'engine/Devices.tsx',
+    "{device.kind === 'signing-desk' ? ( <SigningDeskView device={device} instance={instance} materials={materials} /> ) : null}",
+    'a signing desk is never given its lamp and its Book to work',
+  )
+
+  // --- the words ---------------------------------------------------------------------
+  need(
+    'ui/Hud.tsx',
+    'const view = devicePrompt(device, deviceIntent(device, deviceInputOf(device, { progress, radio, sequence }, MUSEUM)))',
+    'the prompt of a desk does not know of the card on screen, and offers what E will not take',
+  )
+  need(
+    'ui/Hud.tsx',
+    "if (view.form === 'hold') return <HoldPrompt holdId={view.holdId} termKey={view.termKey} />",
+    'a term ready to be signed is drawn as an ordinary prompt: nothing says the key has to be held',
+  )
+  need('ui/Hud.tsx', 'const missing = deskMissingText(', 'what a term still waits for is worded by the component, apart from the rule a suite asks')
+  need(
+    'ui/Journal.tsx',
+    'const signed = signedTerms(MUSEUM.terms ?? [], progress)',
+    'the notebook no longer lists the terms the save says were signed',
+  )
+  need(
+    'ui/Notebook.tsx',
+    'const isSigned = signedTerms(MUSEUM.terms ?? [], progress).some((term) => term.id === page.termId)',
+    'the signature line of a term in the book is filled, or left empty, whatever the save says',
+  )
+
+  // --- the sequence: started, played, recorded ------------------------------------------
+  need(
+    'ui/SequenceOverlay.tsx',
+    'const owed = useMuseum((state) => dueSequence(MUSEUM.sequences ?? [], state.progress, MUSEUM)?.id ?? null)',
+    'the overlay no longer watches the save for a sequence that is owed',
+  )
+  need(
+    'ui/SequenceOverlay.tsx',
+    'const held = radioHeld({ modal, hidden }) || !sceneReady',
+    'a sequence starts and counts under a modal, in a hidden tab or before the scene is there: it plays to nobody and is recorded as seen',
+  )
+  need(
+    'ui/SequenceOverlay.tsx',
+    'if (owed !== null && playing === null) startDueSequence(held)',
+    'nothing starts the sequence a signature is followed by',
+  )
+  need(
+    'engine/sequenceDirector.ts',
+    'if (held || !state.started || state.sequence !== null) return false const due = dueSequence(content.sequences ?? [], state.progress, content) if (!due) return false state.startSequence(due.id, due.steps.length) return true',
+    'the director starts a sequence by a rule of its own: over another, on the title screen, or one the save is not owed',
+  )
+  need(
+    'ui/SequenceOverlay.tsx',
+    'if (current?.serial === playing.serial && current.index === playing.index) advance()',
+    'a step of a sequence is moved on by a timer that belongs to another step',
+  )
+  need('ui/SequenceOverlay.tsx', 'sequenceStepSeconds(step, text) * 1000', 'a step of a sequence stays up for a time of the component\'s own')
+  need(
+    'ui/SequenceOverlay.tsx',
+    'fillHour(t(step.lineKey as never), hourKey ? t(hourKey as never) : null)',
+    'a line of a sequence that says the hour would show the token as it was typed',
+  )
+  if (!/\n\s*<SequenceOverlay \/>/.test(read('ui/Hud.tsx'))) {
+    problems.push('ui/Hud.tsx no longer mounts SequenceOverlay: a term is signed and nothing follows')
+  }
+  need(
+    'state/store.ts',
+    'set({ sequence: { id, index: 0, steps, serial: sequenceSerial }, radio: null })',
+    'a sequence starts under the porter\'s voice: the two speak on the same line of the screen',
+  )
+  need(
+    'state/store.ts',
+    'if (sequence.index + 1 < sequence.steps) { set({ sequence: { ...sequence, index: sequence.index + 1 } }) return }',
+    'a sequence is over, and on record, before its last step was shown',
+  )
+  need(
+    'state/store.ts',
+    'commitProgress((progress) => grantProgress(progress, { sequencesSeen: [sequence.id] }), { sequence: null })',
+    'a sequence seen to its end is not recorded, or is recorded in another write than the one that ends it: it plays again at every load',
+  )
+  need(
+    'state/store.ts',
+    'if (anotherGame && mine.sequence) taken.sequence = null',
+    'a card of the erased game stays up in a tab that took the new one, and is recorded as seen in it',
+  )
+
+  // --- the radio under it ----------------------------------------------------------------
+  need(
+    'engine/Devices.tsx',
+    'const onAir = useMuseum(airTaken)',
+    'the director of the radio does not hear a sequence end: a call it cut off waits for some other change of the save',
+  )
+  need('engine/Devices.tsx', 'onAir: airTaken(state),', 'a call of the porter\'s is delivered over a sequence that is playing')
+  need(
+    'engine/deviceRules.ts',
+    'return state.radio !== null || (state.sequence ?? null) !== null',
+    'the air is the radio\'s alone again: a sequence on screen is not something a call waits for',
+  )
+  need('engine/radioCall.ts', 'if (skipSequenceStepOn(store)) return true', 'the call button places a call over a sequence instead of moving it on')
+  need(
+    'engine/Devices.tsx',
+    'if (skipSequenceStep()) { event.preventDefault() return }',
+    'R skips a step of a sequence only for a player who carries the radio',
+  )
+  need(
+    'engine/sequenceDirector.ts',
+    'if (state.sequence === null || isModalOpen(state)) return false state.advanceSequence() return true',
+    'a key moves a sequence on while a modal holds it hidden',
+  )
+  return problems
+}
+
+/**
+ * The press that is held (L3, F4), on its two paths: the E key and the touch
+ * button.
+ *
+ * The gesture is one reducer (`holdAction.ts`) kept in one place
+ * (`primaryAction.ts`), and `test:mobile-controls` runs both. What it cannot
+ * run is the wiring that feeds the reducer its four events from a keyboard
+ * and from a pointer: the key going down and coming up, Escape, the window
+ * losing focus, the frame that counts, the pointer on the button. With any
+ * of those lines gone the hold never begins, never ends, or signs by itself.
+ *
+ * And one thing it must leave alone: every other press in the museum. On
+ * the touch button only a press that has to be held is taken as the pointer
+ * goes down; everything else still acts on the click, once.
+ */
+export function holdWiringProblems(read: SourceReader): string[] {
+  const problems: string[] = []
+  const need = (path: string, fragment: string, without: string) => {
+    if (!squeezed(read(path)).includes(fragment)) problems.push(`${path} no longer has \`${fragment}\`: ${without}`)
+  }
+
+  // --- the reducer, and where it is kept ----------------------------------------------
+  need('engine/primaryAction.ts', 'const next = holdStep(gesture, event)', 'the shared gesture is stepped by a rule other than the one the suite runs')
+  need(
+    'engine/primaryAction.ts',
+    "return isHoldRequest(answer) ? beginPrimaryHold(answer) : 'acted'",
+    'a handler that asks for a hold is taken to have acted: nothing is held, and nothing ever signs',
+  )
+  need(
+    'engine/primaryAction.ts',
+    'if (answer === false) continue',
+    'a handler that declines stops the press, or one that asks for a hold lets it go on to the handlers below',
+  )
+  need(
+    'engine/primaryAction.ts',
+    'if (holdMark(gesture) !== before) for (const listener of [...holdListeners]) listener()',
+    'the HUD is told of a hold frame by frame, or not at all',
+  )
+  need(
+    'engine/primaryAction.ts',
+    'if (next.fired !== null) for (const listener of [...firedListeners]) listener(next.fired)',
+    'a hold that fires tells nobody',
+  )
+
+  // --- the keyboard ----------------------------------------------------------------------
+  need(
+    'engine/Devices.tsx',
+    'const answer = interact() if (answer === false) return event.preventDefault()',
+    'E on a device no longer claims the press it took, or claims one it declined',
+  )
+  need(
+    'engine/Devices.tsx',
+    'if (isHoldRequest(answer)) beginPrimaryHold(answer)',
+    'E on a desk with a term ready begins no hold',
+  )
+  need('engine/Devices.tsx', 'if (isInteractKey(event)) releasePrimaryAction()', 'E coming up is not the release: a tap never asks, and letting go never cancels')
+  need("engine/Devices.tsx", "window.addEventListener('keyup', onKeyUp)", 'nobody hears E come up')
+  need('engine/Devices.tsx', 'if (isHoldCancelKey(event)) cancelPrimaryHold()', 'Escape no longer drops a hold, or the question after a tap')
+  need(
+    'engine/Devices.tsx',
+    "window.addEventListener('blur', dropHold)",
+    'a window that loses focus with E down goes on holding: the key that comes up elsewhere never says so',
+  )
+  need(
+    'engine/Devices.tsx',
+    "if (document.visibilityState === 'hidden') cancelPrimaryHold()",
+    'a tab hidden with E down goes on holding',
+  )
+  need("engine/Devices.tsx", "document.addEventListener('visibilitychange', dropHoldWhenHidden)", 'nobody hears the tab being hidden')
+  need(
+    'engine/Devices.tsx',
+    "if (primaryHold().phase !== 'idle') tickPrimaryHold(delta, interactionHeldIdOf(state, MUSEUM))",
+    'no frame counts the hold, or it goes on for something other than the thing a press is held on: the ring closes and nothing fires, or fires with the aim elsewhere',
+  )
+  need(
+    'engine/interactionTarget.ts',
+    "if (winner?.kind !== 'device' || !winner.live) return null",
+    'a hold goes on for whatever is under the crosshair, or under a modal',
+  )
+
+  // --- the touch button --------------------------------------------------------------------
+  need(
+    'ui/MobileControls.tsx',
+    'const held = useMuseum((state) => interactionHeldOf(state, MUSEUM))',
+    'the touch button no longer asks whether the press has to be held',
+  )
+  need(
+    'engine/interactionTarget.ts',
+    'return device !== undefined && deviceHeld(deviceIntent(device, deviceInputOf(device, state, content))) ? winner.id : null',
+    'whether a press has to be held is asked of something other than the intent E acts on',
+  )
+  need(
+    'engine/interactionTarget.ts',
+    'return interactionHeldIdOf(state, content) !== null',
+    'the touch button and the frame that counts a hold no longer ask one question about what is held',
+  )
+  need(
+    'ui/MobileControls.tsx',
+    'onPointerDown={(event) => pointerDown(event, held ? pressPrimaryAction : null)}',
+    'the touch button presses as the pointer goes down for everything (a panel opens under the finger and takes the click), or for nothing (a term cannot be signed on glass)',
+  )
+  // What the buttons remember of a pointer is three rules of `mobileControls.ts`,
+  // which `test:mobile-controls` runs event by event; the component keeps
+  // what they hand back and decides nothing.
+  need(
+    'ui/MobileControls.tsx',
+    'pointerRef.current = actionPointerDown(press !== null, event.timeStamp)',
+    'a pointer going down does not start over: a hold that signed, and took its button away before the finger lifted, makes the next tap on anything its own echo',
+  )
+  need(
+    'engine/mobileControls.ts',
+    'return press ? { pressed: true, at } : NO_ACTION_POINTER',
+    'a pointer that pressed nothing leaves a time behind: the click of an ordinary tap is taken for its echo, and the button stops acting',
+  )
+  need(
+    'ui/MobileControls.tsx',
+    'onPointerUp={pointerUp} onPointerCancel={pointerUp} onLostPointerCapture={pointerUp}',
+    'a finger lifted from the Action button does not release the hold',
+  )
+  need(
+    'ui/MobileControls.tsx',
+    'const up = actionPointerUp(pointerRef.current, event.timeStamp) pointerRef.current = up.pointer if (up.release) releasePrimaryAction()',
+    'a finger lifted is no release, or the lifting of one that never pressed is taken for one',
+  )
+  need(
+    'ui/MobileControls.tsx',
+    'const click = actionClick(pointerRef.current, event.detail, event.timeStamp) pointerRef.current = click.pointer if (click.press) act()',
+    'a click on an action button is judged by something other than the rule, or acts whatever it says: an ordinary action acts twice, or a tap signs',
+  )
+  need(
+    'engine/mobileControls.ts',
+    'return { pointer: NO_ACTION_POINTER, press: clickIsThePress(detail, at - pointer.at) }',
+    'a click is no longer asked whether a pointer made it',
+  )
+  // Three buttons, each acting on the click through the rule: Action, «Assinar», «Cancelar».
+  const controls = squeezed(read('ui/MobileControls.tsx'))
+  const throughTheRule = controls.split('onClick={(event) => clicked(event,').length - 1
+  if (throughTheRule !== 3 || /onClick=\{(?!\(event\) => clicked\(event,)/.test(controls)) {
+    problems.push(
+      `ui/MobileControls.tsx has ${throughTheRule} button(s) whose click goes through \`clicked\`, of the three there are: one of them acts on a click whoever made it`,
+    )
+  }
+  need(
+    'ui/MobileControls.tsx',
+    "{actionVisible && hold.phase === 'confirming' ? (",
+    'a tap on something held leaves the Action button where it was: the question has no answers on glass',
+  )
+  need('ui/MobileControls.tsx', 'pointerDown(event, cancelPrimaryHold)', '«Cancelar» does not cancel')
+  need(
+    'ui/MobileControls.tsx',
+    "className={hold.phase === 'holding' ? 'mobile-action-button is-holding' : 'mobile-action-button'}",
+    'the Action button shows nothing while it is held',
+  )
+  need(
+    'ui/MobileControls.tsx',
+    'onContextMenu={(event) => event.preventDefault()}',
+    'a long press on the Action button brings up the browser\'s menu, which cancels the pointer half way through a signature',
+  )
+
+  // --- what the player sees of it ------------------------------------------------------------
+  need(
+    'ui/Hud.tsx',
+    "const hold = readHoldMark(useSyncExternalStore(subscribePrimaryHold, primaryHoldMark, () => 'idle'))",
+    'the prompt of a held press does not follow the gesture',
+  )
+  need('ui/Hud.tsx', "className={mine ? 'prompt-key is-holding' : 'prompt-key'}", 'the key shows nothing while it is held')
+  need('ui/Hud.tsx', "if (mine?.phase === 'confirming') {", 'a tap on a desk shows no question')
+  const css = read('styles/museum.css').replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/\s+/g, ' ')
+  for (const [fragment, without] of [
+    ['.prompt-key.is-holding::after, .mobile-action-button.is-holding::after {', 'no ring is drawn round the key or the button while it is held'],
+    ['animation: hold-ring var(--hold-seconds, 1.2s) linear forwards;', 'the ring does not close in the time the hold takes'],
+    ['.hold-confirm-buttons {', 'the two answers have no place on a touch screen'],
+  ] as const) {
+    if (!css.includes(fragment)) problems.push(`styles/museum.css no longer has \`${fragment}\`: ${without}`)
+  }
+
+  // --- and every other E in the museum is still a tap -----------------------------------------
+  for (const path of ['engine/Containers.tsx', 'engine/PowerControls.tsx', 'engine/Interaction.tsx', 'engine/TransitionDoors.tsx']) {
+    const code = squeezed(read(path))
+    // In whichever of its two shapes: the guard and then the act, or both in one condition.
+    if (!/isUnclaimedInteractKey\(event\)(?:\) return if \(| && )interact\(\)\) event\.preventDefault\(\)/.test(code)) {
+      problems.push(`${path} no longer acts on E going down, once, and claims the press: an ordinary interaction waits for a hold nobody asked for`)
+    }
+    if (/\b(?:beginPrimaryHold|releasePrimaryAction|tickPrimaryHold)\b/.test(code)) {
+      problems.push(`${path} drives the held press: the gesture has one keyboard path, in engine/Devices.tsx`)
     }
   }
   return problems

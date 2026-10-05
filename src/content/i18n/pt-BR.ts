@@ -92,6 +92,21 @@ export const ptBR = {
   'reader.next': 'Próximo',
   // Followed by the name of what was taken: «Você pegou — Chave do cofre de ferro».
   'credential.taken': 'Você pegou',
+  // The signing desk. «Segure E — Assinar: Termo de posse»; on a touch
+  // screen the Action button is held instead. A tap asks first: «Assinar /
+  // Cancelar». While the term still waits: «…Assinar: Termo de posse ·
+  // falta luz em: Átrio · falta: Livro de Termos»; once signed: «Termo de
+  // posse · assinado ✓».
+  'desk.sign': 'Assinar',
+  'desk.hold.keyboard': 'Segure E',
+  'desk.hold.touch': 'Segure Ação',
+  'desk.cancel': 'Cancelar',
+  'desk.missing.power': 'falta luz em',
+  'desk.missing.document': 'falta',
+  'desk.signed': 'assinado',
+  // The signature line of a term, in the book and in the notebook's list.
+  'term.signed': 'Assinado pelo curador.',
+  'journal.terms.heading': 'Termos assinados',
 
   // Map
   'map.title': 'Planta do museu',

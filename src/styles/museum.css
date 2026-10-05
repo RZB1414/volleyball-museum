@@ -1501,3 +1501,224 @@
     max-height: 84vh;
   }
 }
+
+/* --- a prompt that is a sentence ------------------------------------------ */
+
+/* A desk saying what a term still waits for is a sentence, not a label: it
+   may wrap rather than run off a narrow screen. */
+.prompt.is-long {
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: min(46rem, 88vw);
+  text-align: center;
+  white-space: normal;
+}
+
+/* --- a press that is held ------------------------------------------------- */
+
+/* The ring closes round the key, and round the Action button, in the time
+   the hold itself takes (`--hold-seconds`, set by whoever draws it): a CSS
+   animation, so the frames that count the hold write nothing to the page.
+   Where a custom property cannot be animated the ring only brightens, which
+   still says the press is being counted. */
+@property --hold-turn {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0turn;
+}
+
+.prompt-key.is-holding {
+  position: relative;
+}
+
+.prompt-key.is-holding::after,
+.mobile-action-button.is-holding::after {
+  content: '';
+  position: absolute;
+  inset: -9px;
+  padding: 3px;
+  border-radius: 50%;
+  background: conic-gradient(#f0dfb8 var(--hold-turn), rgb(240 223 184 / 20%) 0);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  animation: hold-ring var(--hold-seconds, 1.2s) linear forwards;
+  pointer-events: none;
+}
+
+.mobile-action-button.is-holding::after {
+  inset: -7px;
+  border-radius: 999px;
+}
+
+@keyframes hold-ring {
+  from {
+    --hold-turn: 0turn;
+    opacity: 0.45;
+  }
+  to {
+    --hold-turn: 1turn;
+    opacity: 1;
+  }
+}
+
+/* After a tap: «E Assinar: … · Esc Cancelar». */
+.hold-cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  margin-left: 0.5rem;
+}
+
+@media (any-pointer: coarse),
+  (max-width: 900px) and (orientation: landscape) {
+  /* On glass the two answers are buttons, where the Action button was. */
+  .hold-cancel {
+    display: none;
+  }
+
+  .hold-confirm-buttons {
+    position: absolute;
+    z-index: 2;
+    right: calc(env(safe-area-inset-right) + 116px);
+    bottom: calc(env(safe-area-inset-bottom) + 144px);
+    display: flex;
+    gap: 10px;
+  }
+
+  .hold-confirm-buttons .mobile-action-button {
+    position: static;
+  }
+
+  .mobile-action-button.is-confirm {
+    border-color: rgb(190 232 190 / 60%);
+    background: rgb(52 96 58 / 90%);
+  }
+
+  .mobile-action-button.is-cancel {
+    border-color: rgb(255 255 255 / 30%);
+    background: rgb(10 12 14 / 74%);
+  }
+}
+
+@media (any-pointer: coarse) and (max-height: 420px),
+  (max-width: 900px) and (orientation: landscape) and (max-height: 420px) {
+  .hold-confirm-buttons {
+    right: calc(env(safe-area-inset-right) + 100px);
+    bottom: calc(env(safe-area-inset-bottom) + 124px);
+  }
+}
+
+/* --- a directed sequence -------------------------------------------------- */
+
+/* The card that says a term was signed: across the upper third, clear of
+   the crosshair and of the prompt under it. Nothing is held behind it. */
+.sequence-card {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.9rem;
+  max-width: min(34rem, 80vw);
+  padding: 1.15rem 1.9rem;
+  transform: translateX(-50%);
+  border-top: 2px solid #a98a52;
+  border-bottom: 2px solid #a98a52;
+  background: rgb(10 12 16 / 88%);
+  color: #f2ead9;
+  font-family: Georgia, serif;
+  font-size: 1.35rem;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+/* Its lines speak a little above where the radio does: a telephone dialled
+   meanwhile says its own line under them. */
+.radio-subtitle.is-sequence {
+  bottom: 10.8rem;
+  border-left-color: #a98a52;
+}
+
+.radio-subtitle.is-sequence .radio-speaker {
+  color: #e2c88f;
+}
+
+@media (any-pointer: coarse),
+  (max-width: 900px) and (orientation: landscape) {
+  .sequence-card {
+    top: calc(env(safe-area-inset-top) + 3.4rem);
+    padding: 0.7rem 1.2rem;
+    font-size: 1.08rem;
+    gap: 0.5rem;
+  }
+
+  /* A phone held sideways has 390 px of height, and between the crosshair
+     and the radio's own line there is room for the prompt and for nothing
+     else. The lines of a sequence go where its card was: the top. */
+  .radio-subtitle.is-sequence {
+    top: calc(env(safe-area-inset-top) + 3.4rem);
+    bottom: auto;
+  }
+}
+
+/* --- a term, in the book and in the notebook ------------------------------ */
+
+.notebook-page.is-term {
+  font-size: 1.02rem;
+  line-height: 1.6;
+}
+
+/* The signature line: a rule until the term is signed, then what was written on it. */
+.notebook-term-line {
+  min-height: 1.7rem;
+  margin: 1.6rem 0 0 40%;
+  border-bottom: 1px solid rgb(44 36 26 / 55%);
+  font-style: italic;
+  text-align: right;
+}
+
+.journal-terms {
+  margin-top: 1.4rem;
+}
+
+.journal-terms h3 {
+  margin: 0 0 0.6rem;
+  color: #c9bfa9;
+  font-size: 0.95rem;
+  font-weight: 400;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.journal-terms ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.journal-terms li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.2rem 0.9rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid rgb(220 200 160 / 14%);
+}
+
+.journal-term-title {
+  color: #f2ead9;
+}
+
+.journal-term-signed {
+  color: #8fb98a;
+  font-size: 0.9rem;
+  font-style: italic;
+}

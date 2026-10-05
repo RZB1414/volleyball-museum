@@ -306,6 +306,19 @@ export type RadioTransmission = {
   readonly grantOnEnd?: ProgressGrant
 }
 
+/**
+ * The directed sequence on screen: which one, the step it is at and how many
+ * it has. The steps themselves are the content's; the store only counts
+ * them (it imports no content), and whoever starts one says how many.
+ */
+export type SequencePlaying = {
+  readonly id: string
+  readonly index: number
+  readonly steps: number
+  /** Unique per start, so a sequence started over restarts its own timing. */
+  readonly serial: number
+}
+
 export type MuseumStore = {
   // --- settings -----------------------------------------------------------
   settings: Settings
@@ -361,6 +374,11 @@ export type MuseumStore = {
    * Session state: a reload is a fresh night, and a fresh mood is cheap.
    */
   radioHungUpUntil: number | null
+  /**
+   * The directed sequence playing, if any. Session state: a sequence cut off
+   * by a reload starts over, because only its last step is recorded.
+   */
+  sequence: SequencePlaying | null
 
   start: () => void
   setPointerLocked: (locked: boolean) => void
@@ -401,6 +419,21 @@ export type MuseumStore = {
   dropRadio: () => void
   stopRadio: () => void
   clearRadioHangUp: () => void
+  /**
+   * Puts a directed sequence on screen, from its first step, and takes the
+   * air from the radio: a call it cuts off was not heard to its end, is not
+   * recorded, and is delivered again. Nothing starts for a sequence with no
+   * step.
+   */
+  startSequence: (id: string, steps: number) => void
+  /**
+   * The next step, or the end. The last step is what records the sequence
+   * as seen (`sequencesSeen`), in the write that takes it off the screen.
+   * Takes no argument, like `advanceRadio`, and for its reason.
+   */
+  advanceSequence: () => void
+  /** Takes the sequence off the screen and records nothing: it is still owed. */
+  stopSequence: () => void
 
   // --- progress -----------------------------------------------------------
   progress: Progress
@@ -500,6 +533,7 @@ export function contributeToSave(contribute: () => void) {
 
 export const useMuseum = create<MuseumStore>((set, get) => {
   let radioSerial = 0
+  let sequenceSerial = 0
 
   // Autosave on room change and on any progress mutation. No typewriter ritual:
   // for a web museum, silent autosave plus an explicit "Continue" on the title
@@ -620,6 +654,9 @@ export const useMuseum = create<MuseumStore>((set, get) => {
       // recorded as heard when its last line ends: heard out here, it would
       // be one the new game never places. It goes with the game it was of.
       if (anotherGame && mine.radio) taken.radio = null
+      // And so does a card on screen: seen out here, it would be on record
+      // as shown in a game that never showed it.
+      if (anotherGame && mine.sequence) taken.sequence = null
       if (Object.keys(taken).length > 0) set(taken)
     } catch {
       // A disk that cannot be read is not a reason to stop the game.
@@ -893,6 +930,25 @@ export const useMuseum = create<MuseumStore>((set, get) => {
     clearRadioHangUp: () => {
       if (get().radioHungUpUntil !== null) set({ radioHungUpUntil: null })
     },
+    startSequence: (id, steps) => {
+      if (!(steps >= 1)) return
+      sequenceSerial += 1
+      // One notification: nobody sees the card up with the porter still talking under it.
+      set({ sequence: { id, index: 0, steps, serial: sequenceSerial }, radio: null })
+    },
+    advanceSequence: () => {
+      const sequence = get().sequence
+      if (!sequence) return
+      if (sequence.index + 1 < sequence.steps) {
+        set({ sequence: { ...sequence, index: sequence.index + 1 } })
+        return
+      }
+      // Seen to its last step: on record, in the write that ends it.
+      commitProgress((progress) => grantProgress(progress, { sequencesSeen: [sequence.id] }), { sequence: null })
+    },
+    stopSequence: () => {
+      if (get().sequence !== null) set({ sequence: null })
+    },
 
     progress: loaded,
     grant,
@@ -987,6 +1043,7 @@ function sessionDefaults() {
     journalTab: null,
     radio: null,
     radioHungUpUntil: null,
+    sequence: null,
   } satisfies Partial<MuseumStore>
 }
 

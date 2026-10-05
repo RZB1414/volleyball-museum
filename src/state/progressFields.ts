@@ -127,6 +127,14 @@ export type Progress = {
   devicesCarried: string[]
   /** How each radio's voice feels about being called, by device id. */
   radioMemory: Record<string, RadioMemory>
+  /**
+   * Terms the curator signed, by id. A signature is never taken back. The
+   * flag a term sets is not written by the signature: it follows from this
+   * list, as a trigger.
+   */
+  termsSigned: string[]
+  /** Directed sequences shown to their last step; each plays once. */
+  sequencesSeen: string[]
   lastRoom: string
 }
 
@@ -311,6 +319,12 @@ export const PROGRESS_FIELDS = {
     counts: false,
     join: (disk, tab) => joinRecords(disk, tab, laterCall),
   },
+  // Signed in either tab is signed: a union, like every list here. Were it
+  // "the tab's", a tab left on the title screen would write the signature
+  // away with its first change of a setting.
+  termsSigned: { ...idList, counts: true },
+  // What was already shown, not something done: like `triggersFired`.
+  sequencesSeen: { ...idList, counts: false },
   lastRoom: {
     fresh: (): string => SPAWN.room,
     read: (raw) => (typeof raw === 'string' ? raw : null),

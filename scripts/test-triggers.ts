@@ -194,6 +194,7 @@ const FIELD_CASES: Record<string, { ask: Condition; empty: boolean; turnedBy: Ra
   roomsVisited: { ask: { roomsVisited: ['attic'] }, empty: false, turnedBy: { roomsVisited: ['attic'] } },
   roomsUnvisited: { ask: { roomsUnvisited: ['attic'] }, empty: true, turnedBy: { roomsVisited: ['attic'] } },
   doorsReleased: { ask: { doorsReleased: ['hall-to-cellar'] }, empty: false, turnedBy: { doorsReleased: ['hall-to-cellar'] } },
+  termsSigned: { ask: { termsSigned: ['term-keys'] }, empty: false, turnedBy: { termsSigned: ['term-keys'] } },
   anyOf: { ask: { anyOf: [{ flags: ['a'] }, { flags: ['b'] }] }, empty: false, turnedBy: { flags: ['b'] } },
 }
 
@@ -260,7 +261,7 @@ await test('a list the asker does not hold answers no, and never throws', () => 
   // The checklist and the radio ask with whatever they were handed: a save
   // without the list is a save in which none of it happened.
   const bare = { roomsPowered: [], locksOpened: [], documentsRead: [], catalogued: [] }
-  for (const field of ['hotspotsSeen', 'credentials', 'flags', 'roomsVisited', 'doorsReleased', 'carried']) {
+  for (const field of ['hotspotsSeen', 'credentials', 'flags', 'roomsVisited', 'doorsReleased', 'carried', 'termsSigned']) {
     assert.equal(ask(FIELD_CASES[field].ask, bare), false, field)
   }
   // And a list of another shape, which is what a save written by a later
@@ -780,6 +781,97 @@ await test('a save that already met a condition fires when the content registers
   assert.equal(settled.savedText(), late.savedText())
 })
 
+await test("a term's signature sets its flag as a trigger: once, in any order, and for a save that arrives signed and without the flag (L3)", async () => {
+  // The verb that signs records the signature and nothing else; the flag the
+  // term sets is compiled from the term, like a lock's `onOpen`. So it fires
+  // once, whoever signed (this tab, another, a build that knew the verb and
+  // not the consequence), and what waits on the flag follows in the same write.
+  const SIGNING = {
+    ...HOUSE,
+    terms: [
+      { id: 'term-keys', titleKey: 'term.keys', bodyKey: 'term.keys.body', presentedWhen: {}, when: {}, grants: 'keys-signed', mentions: [] },
+      { id: 'term-house', titleKey: 'term.house', bodyKey: 'term.house.body', presentedWhen: {}, when: { powered: ['cellar'] }, grants: 'house-signed', mentions: [] },
+    ],
+    triggers: [...(HOUSE.triggers ?? []), { id: 'house-opens-the-night', when: { flags: ['house-signed'], termsSigned: ['term-keys'] }, effects: [{ kind: 'set-flag', flag: 'night-open' }] }],
+  } as unknown as Content & typeof MUSEUM
+  const compiled = compileTriggers(SIGNING)
+  assert.deepEqual(
+    compiled.map((trigger) => trigger.id),
+    [...HOUSE.triggers!.map((trigger) => trigger.id), 'house-opens-the-night', 'exhibit:key-hook:catalogued', 'lock:hatch:opened', 'term:term-keys:signed', 'term:term-house:signed'],
+  )
+  const derived = Object.fromEntries(compiled.map((trigger) => [trigger.id, trigger]))
+  // The trigger asks for the signature, not for what the desk asked before letting it be made.
+  assert.deepEqual(derived['term:term-house:signed'], { id: 'term:term-house:signed', when: { termsSigned: ['term-house'] }, effects: [{ kind: 'set-flag', flag: 'house-signed' }] })
+  for (const trigger of compiled) assert.equal(conditionClass(trigger.when), 'positive', trigger.id)
+  // A house with no term compiles none.
+  assert.ok(!HOUSE_TRIGGERS.some((trigger) => trigger.id.startsWith('term:')))
+
+  // Pure: one signature, the flag; both, and what waits on the two of them.
+  const one = settleTriggers({ ...emptyProgress(), termsSigned: ['term-house'] }, compiled, SIGNING)
+  assert.deepEqual(one.fired, ['term:term-house:signed'])
+  assert.deepEqual(one.progress.flags, ['house-signed'])
+  const both = settleTriggers({ ...one.progress, termsSigned: ['term-house', 'term-keys'] }, compiled, SIGNING)
+  // In the order written: the authored trigger already has what it waited for.
+  assert.deepEqual(both.fired, ['house-opens-the-night', 'term:term-keys:signed'])
+  assert.deepEqual(both.progress.flags, ['house-signed', 'night-open', 'keys-signed'])
+  assert.equal(settleTriggers(both.progress, compiled, SIGNING).progress, both.progress, 'settled is settled')
+
+  // In the store: the signature, the flag and what follows are one write, and a second signature is none.
+  register(SIGNING)
+  const page = await openGame()
+  assert.equal(page.notifications(() => page.state().grant({ termsSigned: ['term-keys'] })), 1)
+  assert.deepEqual(page.progress().flags, ['keys-signed'])
+  assert.deepEqual(page.progress().triggersFired, ['term:term-keys:signed'])
+  assert.equal(page.notifications(() => page.state().grant({ termsSigned: ['term-keys'] })), 0, 'a term signed twice told somebody')
+  assert.equal(page.notifications(() => page.state().grant({ termsSigned: ['term-house'] })), 1)
+  assert.deepEqual(page.progress().flags, ['keys-signed', 'house-signed', 'night-open'])
+  assert.equal(count(page.progress().triggersFired, 'term:term-house:signed'), 1)
+  page.leave()
+  const back = await openGame(page.savedText()!)
+  assert.deepEqual(back.progress().triggersFired, page.progress().triggersFired, 'the trigger fired again on the way through the disk')
+  assert.deepEqual(back.progress().flags, ['keys-signed', 'house-signed', 'night-open'])
+
+  // Any order of the two signatures among everything else the house offers: the same end.
+  const moves: Record<string, (state: StoreState) => void> = {
+    ...PLAY,
+    'sign for the keys': (state) => state.grant({ termsSigned: ['term-keys'] }),
+    'sign for the house': (state) => state.grant({ termsSigned: ['term-house'] }),
+  }
+  const random = seeded(1897)
+  const ends = new Set<string>()
+  for (let run = 0; run < 60; run += 1) {
+    back.state().resetProgress()
+    for (const name of shuffled(Object.keys(moves), random)) {
+      moves[name](back.state())
+      assert.deepEqual(dueTriggers(compiled, back.progress(), SIGNING), [], `after "${name}" a trigger was still owed`)
+    }
+    const end = atomsOf(back.progress())
+    assert.deepEqual(end.flags, ['attic-found', 'either-way', 'hatch-open', 'house-signed', 'keys-signed', 'night-open'], `order ${run}`)
+    assert.deepEqual(end.termsSigned, ['term-house', 'term-keys'])
+    for (const id of back.progress().triggersFired) assert.equal(count(back.progress().triggersFired, id), 1, id)
+    ends.add(JSON.stringify(end))
+  }
+  assert.equal(ends.size, 1, 'the order of the signatures changed where the night ends')
+
+  // A save that arrives signed and without the flag: at the registration, and at the load.
+  registerNoTriggers()
+  const signedElsewhere = saveOf({ version: 1, radioCalls: [], termsSigned: ['term-keys', 'a-term-this-build-never-had'] })
+  const waiting = await openGame(signedElsewhere)
+  assert.deepEqual(waiting.progress().flags, [])
+  assert.equal(waiting.notifications(() => register(SIGNING)), 1)
+  assert.deepEqual(waiting.progress().flags, ['keys-signed'])
+  assert.deepEqual(waiting.progress().triggersFired, ['term:term-keys:signed'])
+  // A signature of a term this build does not have stays, and sets nothing.
+  assert.deepEqual(waiting.progress().termsSigned, ['term-keys', 'a-term-this-build-never-had'])
+  const late = await openGame(signedElsewhere)
+  assert.deepEqual(late.progress().flags, ['keys-signed'], 'a store created after the content never gave the flag')
+  // And the other way round: the flag and the trigger on record with the
+  // signature gone (a save that went through a build from before the field).
+  // Nothing is taken back, and nothing fires.
+  const flagOnly = await openGame(saveOf({ version: 1, radioCalls: [], flags: ['keys-signed'], triggersFired: ['term:term-keys:signed'] }))
+  assert.deepEqual([flagOnly.progress().flags, flagOnly.progress().termsSigned, flagOnly.progress().triggersFired], [['keys-signed'], [], ['term:term-keys:signed']])
+})
+
 await test('the limit holds in the store too: the rest fires with the next commit', async () => {
   const long = chainOf(TRIGGER_PASS_LIMIT + 6)
   register(long)
@@ -879,6 +971,8 @@ await test('every action of the store either leaves the save alone or leaves it 
   // By name, so that an action moving from one list to the other is a decision.
   assert.deepEqual(settledBy.sort(), [
     'advanceRadio',
+    // The last step of a directed sequence records it as seen (L3).
+    'advanceSequence',
     'carryDevice',
     'dropRadio',
     'grant',
@@ -916,7 +1010,10 @@ await test('every action of the store either leaves the save alone or leaves it 
     'setTouchMove',
     'setVisibleRooms',
     'startRadio',
+    // Putting a sequence on screen, and taking it off unseen, are the session's.
+    'startSequence',
     'stopRadio',
+    'stopSequence',
     'toggleFlashlight',
   ])
 

@@ -13,6 +13,7 @@
 
 import { contentsNodeName, isDoorNode } from '../engine/containerNodes.ts'
 import { devicePowerRoom } from '../engine/deviceRules.ts'
+import { HOLD_TAP_SECONDS } from '../engine/holdAction.ts'
 import { lockCredentialKeys } from '../engine/lockRules.ts'
 import { HOUR_TOKEN } from '../engine/nightClock.ts'
 import { conditionClass, conditionClasses, credentialKey } from '../engine/progressCondition.ts'
@@ -683,6 +684,7 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
     content.exhibits.flatMap((exhibit) => exhibit.hotspots.map((hotspot) => `${exhibit.id}:${hotspot.id}`)),
   )
   const doorIds = doorIdsOf(content)
+  const termIds = new Set((content.terms ?? []).map((term) => term.id))
   const triggers = compileTriggers(content)
   // A credential exists for a condition when something hands it out. One that
   // only a lock asks for is that lock's problem, and never becomes true here.
@@ -786,6 +788,11 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
         )
       }
     }
+    for (const termId of condition.termsSigned ?? []) {
+      if (!termIds.has(termId)) {
+        error('condition-term-missing', `${where} waits for term "${termId}" to be signed, and the content has no such term.`, termId)
+      }
+    }
     // A branch is a condition like any other, and a typo in one is as silent.
     for (const [index, branch] of (condition.anyOf ?? []).entries()) {
       checkCondition(branch, `${where}, branch ${index + 1}`)
@@ -796,6 +803,7 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
     checkCondition(term.presentedWhen, `Term "${term.id}" (to be presented)`)
     checkCondition(term.when, `Term "${term.id}"`)
   }
+  for (const sequence of content.sequences ?? []) checkCondition(sequence.when, `Sequence "${sequence.id}"`)
 
   // --- notebooks -------------------------------------------------------------
   for (const doc of content.documents) {
@@ -804,7 +812,16 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
       if (page.style === 'checklist' && !(page.items && page.items.length > 0)) {
         error('notebook-checklist-empty', `${where} is a checklist with no items.`)
       }
-      if (page.style !== 'checklist' && !page.bodyKey && !page.headingKey) {
+      if (page.style === 'term') {
+        // Its words are the term's own: without the term the page is blank.
+        if (page.termId === undefined || !termIds.has(page.termId)) {
+          error(
+            'notebook-term-missing',
+            `${where} is the page of a term and names ${page.termId === undefined ? 'none' : `"${page.termId}", which the content does not have`}.`,
+            page.termId ?? doc.id,
+          )
+        }
+      } else if (page.style !== 'checklist' && !page.bodyKey && !page.headingKey) {
         error('notebook-page-empty', `${where} has neither a heading nor a body.`)
       }
       for (const item of page.items ?? []) {
@@ -1200,6 +1217,92 @@ export function validateTriggers(content: MuseumContent): ValidationIssue[] {
 }
 
 /**
+ * The ending: terms, the desks that sign them, and the sequences that follow.
+ *
+ * What can be read off the content without playing it (whether a term can
+ * in fact be signed, and what signing it takes away, is the play's to say:
+ * `simulate.ts`). Every one of these compiles and loads. A term no desk
+ * signs is an ending nobody reaches; a desk that names a term the house does
+ * not have offers nothing, for ever; two terms under one id are one
+ * signature. A term or a sequence that waits on something that can stop
+ * being true is signed, or shown, or not, by the order the player did things
+ * in; a sequence with no step is over before it starts; and a desk whose
+ * hold is no longer than a tap signs by a slip of the finger.
+ */
+export function validateEnding(content: MuseumContent): ValidationIssue[] {
+  const issues: ValidationIssue[] = []
+  const error = (code: string, id: string, message: string) => issues.push({ severity: 'error', code, id, message })
+  const terms = content.terms ?? []
+  const desks = content.rooms.flatMap((room) => (room.devices ?? []).flatMap((device) => (device.kind === 'signing-desk' ? [device] : [])))
+
+  const termIds = new Set<string>()
+  for (const term of terms) {
+    if (termIds.has(term.id)) {
+      error('term-duplicate', term.id, `Term id "${term.id}" is used twice: the save records a signature by id, so the two would be one.`)
+    }
+    termIds.add(term.id)
+    if (!desks.some((desk) => desk.termIds.includes(term.id))) {
+      error('term-desk-missing', term.id, `Term "${term.id}" is signed at no desk: no \`signing-desk\` lists it in its \`termIds\`.`)
+    }
+    // A signature is for good, and so is being offered one: what brings a
+    // term to the desk and what signing it asks may only be things that stay
+    // true, with every id named.
+    for (const [asks, condition] of [['is brought to the desk', term.presentedWhen], ['is signed', term.when]] as const) {
+      const classes = conditionClasses(condition)
+      if (classes.has('negative')) {
+        error(
+          'gate-uses-negative-condition',
+          term.id,
+          `Term "${term.id}" ${asks} on something that can stop being true: whether it ever is would depend on the order the player did things in.`,
+        )
+      }
+      if (classes.has('all')) {
+        error(
+          'gate-uses-all-condition',
+          term.id,
+          `Term "${term.id}" ${asks} on "all rooms" or "all catalogued": the next lot's room or piece would change what was signed for. Name the ids.`,
+        )
+      }
+    }
+  }
+  for (const desk of desks) {
+    for (const termId of desk.termIds) {
+      if (!termIds.has(termId)) {
+        error('term-desk-missing', termId, `Desk "${desk.id}" signs term "${termId}", and the content has no such term.`)
+      }
+    }
+    if (!(desk.holdSeconds > HOLD_TAP_SECONDS)) {
+      error(
+        'desk-hold-seconds',
+        desk.id,
+        `Desk "${desk.id}" asks for a press held ${desk.holdSeconds} s, which is no longer than a tap (${HOLD_TAP_SECONDS} s): a signature would be made by a slip of the finger.`,
+      )
+    }
+  }
+
+  const sequenceIds = new Set<string>()
+  for (const sequence of content.sequences ?? []) {
+    if (sequenceIds.has(sequence.id)) {
+      error('sequence-duplicate', sequence.id, `Sequence id "${sequence.id}" is used twice: the save records one as seen by id, so the second would never play.`)
+    }
+    sequenceIds.add(sequence.id)
+    if (sequence.steps.length === 0) {
+      error('sequence-empty', sequence.id, `Sequence "${sequence.id}" has no step: it would be owed for ever and never shown.`)
+    }
+    // Owed until seen: what makes it owed has to stay true, or a player who
+    // looked away at the wrong moment never sees it.
+    if (conditionClass(sequence.when) !== 'positive') {
+      error(
+        'sequence-not-positive',
+        sequence.id,
+        `Sequence "${sequence.id}" waits on something that can stop being true, or on "all" of something a later lot adds to: it has to be owed from the moment it is until it has been seen.`,
+      )
+    }
+  }
+  return issues
+}
+
+/**
  * A renamed id has to lead somewhere.
  *
  * An alias whose new id the content does not have carries the player's
@@ -1375,6 +1478,28 @@ type BakedBundleLike = { readonly name: string; readonly parts: readonly BakedPa
  * (`runtimePlacedParts.ts`), except where that base is not what the object
  * stands on.
  */
+/**
+ * The named nodes each kind of device works by, as suffixes of its recipe's
+ * name. A switch over every kind, so a kind added to the schema has to say
+ * here what it needs of the bake before the build goes on.
+ */
+function deviceNodeSuffixes(device: DeviceData): readonly string[] {
+  switch (device.kind) {
+    case 'notice':
+      return []
+    case 'voice':
+      return device.messageLamp ? ['__led'] : []
+    case 'signing-desk':
+      return ['__led', '__book']
+    case 'clock':
+      return ['__dial', '__hand-hour', '__hand-minute', '__hand-second']
+    case 'radio':
+      return device.carriedOnUse ? ['__led', '__handset'] : ['__led']
+    case 'power-indicator':
+      return ['__led']
+  }
+}
+
 function mountBasePart(mount: ExhibitMount): string | null {
   // Tower cases and built-in shelves expose an internal deck, not their top.
   // Those exhibits declare supportY from the procedural recipe's datum.
@@ -1608,20 +1733,10 @@ export function validateBake(
       // A carried radio leaves its cradle by hiding the handset's own nodes;
       // without them the whole charger would vanish, or nothing would. A
       // notice animates and relights nothing: it is whatever stands there.
-      // Nor does a voice, unless it has a lamp for a waiting message.
-      const required =
-        device.kind === 'notice'
-          ? []
-          : device.kind === 'voice'
-            ? device.messageLamp
-              ? ['__led']
-              : []
-            : device.kind === 'clock'
-              ? ['__dial', '__hand-hour', '__hand-minute', '__hand-second']
-              : device.kind === 'radio' && device.carriedOnUse
-                ? ['__led', '__handset']
-                : ['__led']
-      for (const suffix of required) {
+      // Nor does a voice, unless it has a lamp for a waiting message. A
+      // signing desk shows a lamp while a term waits on it and the Book once
+      // one is signed: without the nodes both would be drawn always, or never.
+      for (const suffix of deviceNodeSuffixes(device)) {
         if (!partNames.has(`${device.part}${suffix}`)) {
           issues.push({
             severity: 'error',
@@ -2264,6 +2379,11 @@ function spokenKeys(content: MuseumContent): Map<string, number> {
       }
     }
   }
+  // What a directed sequence says is said of the night it is in, on the
+  // radio's own line of the screen: the same measure, the same rules.
+  for (const sequence of content.sequences ?? []) {
+    for (const step of sequence.steps) if (step.kind === 'line') say(step.lineKey, SPEECH_LINE_MAX)
+  }
   return keys
 }
 
@@ -2407,6 +2527,7 @@ export function validateSpeech(content: MuseumContent, dictionaries: Dictionarie
     }
   }
   for (const term of content.terms ?? []) mentioned.push({ by: `Term "${term.id}"`, ids: term.mentions })
+  for (const sequence of content.sequences ?? []) mentioned.push({ by: `Sequence "${sequence.id}"`, ids: sequence.mentions })
   for (const { by, ids } of mentioned) {
     for (const id of ids) {
       if (known.has(id)) continue
@@ -2472,6 +2593,7 @@ export function validateContent(
     ...validateOpening(content),
     ...validateDeferred(content, extras.knownDebt?.lot),
     ...validateTriggers(content),
+    ...validateEnding(content),
     ...validatePortals(content),
     ...validateWallMounts(content),
     ...validatePacing(content),

@@ -90,7 +90,7 @@ import {
   type ActionRecord,
   type PlayerAction,
 } from '../src/content/simulate.ts'
-import { validateContent, type ValidationIssue } from '../src/content/validate.ts'
+import { validateContent, validateEnding, type ValidationIssue } from '../src/content/validate.ts'
 import { checklistRows } from '../src/engine/checklist.ts'
 import {
   EXAMINE_HOLD_DISTANCE,
@@ -100,6 +100,7 @@ import {
   examineReach,
 } from '../src/engine/examineReach.ts'
 import { toolSpent } from '../src/engine/lockRules.ts'
+import { startDueSequenceOn } from '../src/engine/sequenceDirector.ts'
 import { emptyProgress, grantProgress, PROGRESS_FIELDS, type Progress, type ProgressGrant } from '../src/state/progressFields.ts'
 import { registerProgressRules } from '../src/state/progressRules.ts'
 import { migrateProgress } from '../src/state/saveMigrations.ts'
@@ -996,7 +997,7 @@ function saveHolding(atoms: readonly string[]): Progress {
   }
   return grantProgress(emptyProgress(), grant as ProgressGrant)
 }
-const isPress = (entry: ActionRecord) => /^(?:power|door|hotspot|container|touch|code|take|set-clock|voice):/.test(entry.id)
+const isPress = (entry: ActionRecord) => /^(?:power|door|hotspot|container|touch|code|take|set-clock|voice|sign):/.test(entry.id)
 const standingIn = (entry: ActionRecord) => (entry.requires.find((asked) => asked.startsWith('room:')) ?? '').slice('room:'.length)
 /** The press that realises this record for a player who holds `atoms`, if the rules offer one. */
 const pressFor = (content: MuseumContent, entry: ActionRecord, atoms: readonly string[]) => {
@@ -1213,6 +1214,176 @@ await test('the chain of the Posse, on the museum with it added: the key from th
     assert.deepEqual(withoutLuck(endOf(night.page.progress())), END.filter((entry) => entry !== 'doc:doc-test-tape'))
   } finally {
     // The museum's own rules back in the slot, for every store opened from here on.
+    registerProgressRules(progressRulesFor(MUSEUM))
+  }
+})
+
+await test('the end of that chain, on the museum with it added: the Book brings the term to the lectern, a held press signs it, and the sequence follows', async () => {
+  // The rest of what the Posse needs and the real museum has none of yet: a
+  // term the Book in the safe brings to the lectern, signable with light in
+  // the three rooms, and the sequence its signature is followed by. On the
+  // chain of the test above (the key, the safe), with the lectern made a
+  // signing desk and the porter given something to point at while it waits.
+  const KEY = { kind: 'tool', id: 'service-key' } as const
+  const LIT = ['office', 'atrium', 'holyoke'] as const
+  const ending: MuseumContent = {
+    ...withRooms((room) =>
+      room.id === 'office'
+        ? {
+            ...room,
+            kit: room.kit.filter((placement) => placement.part !== 'office-safe'),
+            containers: [
+              ...(room.containers ?? []),
+              { id: 'office-safe', part: 'office-safe', position: [2.55, 0, 2.45], rotationY: -Math.PI / 2, titleKey: 'container.office.title', lockId: 'office-safe' },
+            ],
+            devices: (room.devices ?? []).map((device) =>
+              device.kind === 'radio'
+                ? {
+                    ...device,
+                    hints: [
+                      ...device.hints.slice(0, -1),
+                      { when: { flagsUnset: ['posse-signed'] }, targetId: 'atrium-lectern', heightKeys: ['radio.hint.rest'], mentions: ['atrium-lectern'] },
+                      ...device.hints.slice(-1),
+                    ],
+                  }
+                : device,
+            ),
+          }
+        : room.id === 'atrium'
+          ? {
+              ...room,
+              kit: room.kit.filter((placement) => placement.part !== 'atrium-lectern'),
+              devices: [
+                ...(room.devices ?? []),
+                {
+                  kind: 'signing-desk',
+                  id: 'atrium-lectern',
+                  part: 'atrium-lectern',
+                  position: [-7.15, 0, 2.2],
+                  rotationY: Math.PI / 2,
+                  titleKey: 'device.atrium-podium.title',
+                  emptyNoticeKey: 'device.atrium-podium.notice',
+                  termIds: ['termo-posse'],
+                  holdSeconds: 1.2,
+                },
+              ],
+            }
+          : room,
+    ),
+    documents: [
+      ...MUSEUM.documents,
+      { id: 'doc-test-book', era: 'office', kind: 'letter', titleKey: 'document.welcome.title', bodyKey: 'document.welcome.summary', containerId: 'office-safe', lockId: 'office-safe' },
+    ],
+    locks: [
+      ...MUSEUM.locks.map((lock) => (lock.id === 'office-drawer' ? { ...lock, onOpen: [{ kind: 'grant-credential', credential: KEY } as const] } : lock)),
+      { kind: 'tool', id: 'office-safe', requires: 'service-key', consumesTool: true, mapLabelKey: 'lock.office-drawer.mapLabel' },
+    ],
+    credentials: [{ credential: KEY, titleKey: 'container.office.title', icon: 'key' }],
+    terms: [
+      {
+        id: 'termo-posse',
+        titleKey: 'document.welcome.title',
+        bodyKey: 'document.welcome.summary',
+        presentedWhen: { documentsRead: ['doc-test-book'] },
+        when: { documentsRead: ['doc-test-book'], powered: [...LIT] },
+        grants: 'posse-signed',
+        mentions: ['atrium-lectern'],
+      },
+    ],
+    sequences: [
+      {
+        id: 'seq-posse',
+        when: { flags: ['posse-signed'] },
+        steps: [
+          { kind: 'card', titleKey: 'document.welcome.title', seconds: 4 },
+          { kind: 'line', speakerKey: 'radio.speaker.porter', lineKey: 'radio.hint.rest' },
+        ],
+        mentions: [],
+      },
+    ],
+  }
+  const result = simulateProgress(ending)
+  const added = sorted([
+    'seen:office-safe',
+    'cred:tool:service-key',
+    'fired:lock:office-drawer:opened',
+    'lock:office-safe',
+    'doc:doc-test-book',
+    'term:termo-posse',
+    'flag:posse-signed',
+    'fired:term:termo-posse:signed',
+  ])
+  const END = sorted([...MAXIMUM_END, ...added])
+  assert.deepEqual(endOf(result.final), END)
+  // Nothing the real museum is not accused of: the ending is sound, the
+  // porter has the lectern to point at until it is signed, and signing takes
+  // nothing away.
+  assert.deepEqual(
+    sorted(result.issues.map((issue) => `${issue.code} ${issue.id}`)),
+    sorted(played.issues.map((issue) => `${issue.code} ${issue.id}`)),
+  )
+  assert.deepEqual(codesOf(validateEnding(ending)), [])
+  // The script gains two levels: the safe a level after the key, the
+  // signature a level after the Book. The Posse is the last thing in it.
+  const levelOf = (entry: string) => result.levels.findIndex((level) => level.includes(entry))
+  assert.equal(result.levels.length, played.levels.length + 2)
+  assert.deepEqual(
+    ['doc:doc-test-book', 'term:termo-posse', 'flag:posse-signed', 'fired:term:termo-posse:signed'].map((entry) => `${entry} N${levelOf(entry)}`),
+    ['doc:doc-test-book N5', 'term:termo-posse N6', 'flag:posse-signed N6', 'fired:term:termo-posse:signed N6'],
+  )
+  assert.deepEqual(sorted(result.levels.at(-1) ?? []), sorted(['term:termo-posse', 'flag:posse-signed', 'fired:term:termo-posse:signed']))
+  assert.deepEqual(result.final.termsSigned, ['termo-posse'])
+  assert.deepEqual(result.final.sequencesSeen, ['seq-posse'], 'she watches what she is owed')
+
+  // Written down, and what the rules do for a player who holds exactly what it asks.
+  const records = Object.fromEntries(result.actions.map((entry) => [entry.id, entry]))
+  const signing = records['sign:atrium-lectern:termo-posse']
+  assert.deepEqual(signing, {
+    id: 'sign:atrium-lectern:termo-posse',
+    requires: ['doc:doc-test-book', 'power:atrium', 'power:holyoke', 'power:office', 'room:atrium'],
+    grants: ['term:termo-posse'],
+  })
+  assert.ok(pressFor(ending, signing, signing.requires), 'not offered to a player who holds what it asks')
+  for (const guard of signing.requires.filter((asked) => !asked.startsWith('room:'))) {
+    assert.equal(pressFor(ending, signing, signing.requires.filter((asked) => asked !== guard)), null, `still offered without ${guard}`)
+  }
+  // Not from another room, and not twice.
+  assert.ok(!availableActions(ending, saveHolding([...signing.requires, 'room:office']), 'office').some((action) => action.kind === 'sign'))
+  assert.ok(!availableActions(ending, saveHolding([...signing.requires, 'term:termo-posse']), 'atrium').some((action) => action.kind === 'sign'))
+
+  // The robot, with the content's own rules in the store. Its hand for the
+  // desk is the handler the key calls, the gesture's own reducer and the
+  // listener's function; and what the game then shows by itself it watches.
+  registerProgressRules(progressRulesFor(ending))
+  try {
+    for (const seed of [3, 30, 47, 300, 1896]) {
+      const night = await playToEnd(await openGame(), ending, seeded(seed))
+      assert.deepEqual(withoutLuck(endOf(night.page.progress())), END, `seed ${seed}`)
+      assert.deepEqual(night.page.progress().termsSigned, ['termo-posse'], `seed ${seed}`)
+      assert.deepEqual(night.page.progress().sequencesSeen, ['seq-posse'], `seed ${seed}: the sequence was never seen to its end`)
+      assert.equal(night.page.state().sequence, null, `seed ${seed}: a card was left on screen`)
+      assert.ok(night.log.some((line) => line.includes('sign termo-posse at atrium-lectern') && !line.endsWith('(nothing)')), `seed ${seed}: the term was never signed by the hand`)
+      // Through the disk: signed, shown, and nothing owed.
+      const back = await reload(night.page)
+      assert.deepEqual([back.progress().termsSigned, back.progress().sequencesSeen, back.progress().flags.includes('posse-signed')], [['termo-posse'], ['seq-posse'], true], `seed ${seed}`)
+      assert.equal(startDueSequenceOn(back.store.useMuseum, ending, false), false, `seed ${seed}: the sequence played again after a reload`)
+    }
+    // The player who never signs ends a level short, and is owed nothing.
+    const unsigned: RobotProfile = { ...ORDINARY, skips: (action) => action.kind === 'sign' }
+    const night = await playToEnd(await openGame(), ending, seeded(11), unsigned)
+    assert.deepEqual(
+      withoutLuck(endOf(night.page.progress())),
+      END.filter((entry) => !['term:termo-posse', 'flag:posse-signed', 'fired:term:termo-posse:signed'].includes(entry)),
+    )
+    assert.deepEqual(night.page.progress().sequencesSeen, [])
+    // And the one who signs the moment she can (before the pieces, before the
+    // shortcut) ends where everybody ends: signing took nothing away.
+    const eager: RobotProfile = { ...ORDINARY, prefers: (action) => action.kind === 'sign' }
+    for (const seed of [5, 50]) {
+      const hasty = await playToEnd(await openGame(), ending, seeded(seed), eager)
+      assert.deepEqual(withoutLuck(endOf(hasty.page.progress())), END, `seed ${seed}, signing first`)
+    }
+  } finally {
     registerProgressRules(progressRulesFor(MUSEUM))
   }
 })
@@ -1655,7 +1826,11 @@ await test('the content against its own snapshot is accused of nothing', () => {
     { id: 'notebook.todo.vault', doneWhen: null, deferredUntilLot: 12 },
   ])
   assert.deepEqual(graphSnapshot(ALL_OF_THEM, CONTENT_LOT).checklist, NOW.checklist, '"all of them" is written as the ids it means today')
+  // No term and no sequence until the slice that brings the Book: the two
+  // collections are there, and empty.
   assert.deepEqual(NOW.terms, [])
+  assert.deepEqual([NOW.ids.terms, NOW.ids.sequences], [[], []])
+  assert.deepEqual([NOW.saveFields.termsSigned, NOW.saveFields.sequencesSeen], ['list', 'list'])
   assert.deepEqual(NOW.ids.rooms, ['atrium', 'holyoke', 'office'])
   assert.deepEqual(NOW.ids.doors, [SHORTCUT, 'atrium-to-holyoke', 'atrium-to-office'])
   assert.deepEqual(NOW.ids.locks, ['office-drawer'])
@@ -1760,7 +1935,9 @@ await test('each way of taking something away, on a snapshot made for the purpos
   // A term a player signed.
   assert.deepEqual(additive({ ...NOW, terms: [{ id: 'termo-posse', when: ['doc:doc-termos', 'power:office'] }] }, MUSEUM), ['term-condition-changed termo-posse'])
   // A field of the save that left the table, and one that changed its type.
-  assert.deepEqual(additive({ ...NOW, saveFields: { ...NOW.saveFields, termsSigned: 'list' } }, MUSEUM), ['save-field-changed termsSigned'])
+  // (It was `termsSigned` until L3 gave that field a line in the table.)
+  assert.deepEqual(additive({ ...NOW, saveFields: { ...NOW.saveFields, ribbonsCut: 'list' } }, MUSEUM), ['save-field-changed ribbonsCut'])
+  assert.deepEqual(additive({ ...NOW, saveFields: { ...NOW.saveFields, termsSigned: 'record' } }, MUSEUM), ['save-field-changed termsSigned'])
   assert.deepEqual(additive({ ...NOW, saveFields: { ...NOW.saveFields, clockSeconds: 'list' } }, MUSEUM), ['save-field-changed clockSeconds'])
 })
 

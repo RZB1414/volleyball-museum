@@ -51,6 +51,18 @@ export const STORE_ACTIONS: Record<string, (state: StoreState) => void> = {
   },
   stopRadio: (state) => state.stopRadio(),
   clearRadioHangUp: (state) => state.clearRadioHangUp(),
+  // A directed sequence: put on screen, seen to its last step (the write
+  // that records it as shown), and taken off with steps unseen (no record).
+  startSequence: (state) => state.startSequence('sequence-started', 2),
+  advanceSequence: (state) => {
+    state.startSequence('sequence-seen-out', 1)
+    state.advanceSequence()
+  },
+  stopSequence: (state) => {
+    state.startSequence('sequence-cut-short', 2)
+    state.advanceSequence()
+    state.stopSequence()
+  },
   recordHotspot: (state) => state.recordHotspot('handbook-1897', 'innings'),
   recordCatalogued: (state) => state.recordCatalogued('handbook-1897'),
   recordDocument: (state) => state.recordDocument('doc-rule-changes'),
@@ -82,6 +94,7 @@ export const STORE_ACTIONS: Record<string, (state: StoreState) => void> = {
       roomsPowered: ['effect-room'],
       documentsRead: ['effect-document'],
       flags: ['effect-flag'],
+      termsSigned: ['signed-term'],
     }),
 }
 
@@ -103,4 +116,7 @@ export const STORE_ACTIONS_LEAVE = {
   flags: ['effect-flag'],
   devicesCarried: ['spare-radio'],
   hintsShown: ['torch-used'],
+  termsSigned: ['signed-term'],
+  // Only the one seen to its last step: started, or cut short, is not shown.
+  sequencesSeen: ['sequence-seen-out'],
 } as const

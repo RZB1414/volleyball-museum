@@ -221,6 +221,10 @@ const SAMPLES = {
   clockSeconds: { 'office-clock': 612, 'atrium-clock': 0.5 },
   hintsShown: ['journal-taken', 'radio-taken'],
   devicesCarried: ['office-radio', 'pocket-torch'],
+  // What L3 added: the terms the curator signed, and the directed sequences
+  // already shown to their last step.
+  termsSigned: ['termo-posse', 'termo-reabertura'],
+  sequencesSeen: ['seq-posse', 'seq-reabertura'],
   radioMemory: {
     'office-radio': {
       calls: 4,
@@ -241,7 +245,8 @@ const SAMPLE_SAVE: Raw = { version: 1, ...SAMPLES }
 
 /** Fields another build wrote: this one has no line for them in its table. */
 const UNKNOWN = {
-  termsSigned: ['termo-posse'],
+  // It was `termsSigned` until L3 gave that field a line in the table.
+  ribbonsCut: ['ala-4'],
   socketsFilled: ['curator'],
   wiresJoined: { 'holyoke-hero': { from: 'net-1897', to: 'handbook-1897' } },
   nightsWorked: 3,
@@ -409,8 +414,42 @@ await test('what is valid inside a damaged field is kept, in order', () => {
   )
 })
 
+await test('the terms signed and the sequences shown are fields of the table: read as lists, joined by union, and only the signature counts (L3)', () => {
+  // Until this lot `termsSigned` was this suite's example of a field the
+  // build does not know, carried through untouched. It has a line now, with a
+  // sanitiser and a rule for two copies, and so has `sequencesSeen`.
+  for (const field of ['termsSigned', 'sequencesSeen'] as const) {
+    assert.ok(fields.includes(field), `${field} has no line in the table of the save`)
+    assert.deepEqual(PROGRESS_FIELDS[field].fresh(), [], field)
+    assert.deepEqual(emptyProgress()[field], [], `a new game has ${field}`)
+    // Two tabs: the disk's, then what this tab has that it lacks. Nothing twice, nothing gone.
+    assert.deepEqual(PROGRESS_FIELDS[field].join(['a', 'b'], ['b', 'c']), ['a', 'b', 'c'], `${field}: the rule for two copies is not a union`)
+    assert.deepEqual(PROGRESS_FIELDS[field].join([], ['only-here']), ['only-here'])
+    assert.deepEqual(PROGRESS_FIELDS[field].join(['only-there'], []), ['only-there'])
+  }
+  // The lot plan's case I: junk in, a valid list out, and the rest of the save stands.
+  const junk = migrateProgress({ version: 1, radioCalls: ['porter-hello'], termsSigned: 'x', sequencesSeen: [1, 'seq-posse'], catalogued: ['ball-spalding'] })
+  assert.deepEqual(junk.termsSigned, [])
+  assert.deepEqual(junk.sequencesSeen, ['seq-posse'])
+  assert.deepEqual(junk.catalogued, ['ball-spalding'])
+  // A save from before the fields existed gets them empty: every save of the corpus.
+  for (const id of fixtureIds) {
+    const loaded = migrateProgress(throughJson(rawFixture(id)))
+    assert.deepEqual([loaded.termsSigned, loaded.sequencesSeen], [[], []], id)
+  }
+  // "New game" asks before erasing a signature, and does not ask for what was only shown.
+  assert.equal(PROGRESS_FIELDS.termsSigned.counts, true)
+  assert.equal(PROGRESS_FIELDS.sequencesSeen.counts, false)
+  assert.equal(hasSavedProgress({ ...emptyProgress(), termsSigned: ['termo-posse'] }), true)
+  assert.equal(hasSavedProgress({ ...emptyProgress(), sequencesSeen: ['seq-posse'] }), false)
+  // A grant may name them, like any list of the save.
+  const signed = grantProgress(emptyProgress(), { termsSigned: ['termo-posse'], sequencesSeen: ['seq-posse'] })
+  assert.deepEqual([signed.termsSigned, signed.sequencesSeen], [['termo-posse'], ['seq-posse']])
+  assert.equal(grantProgress(signed, { termsSigned: ['termo-posse'] }), signed, 'a term signed twice is a new save')
+})
+
 await test('a grant only adds, in order, and hands back the same save when it adds nothing', () => {
-  const before = deepFreeze(migrateProgress({ version: 1, radioCalls: [], documentsRead: ['doc-welcome'], termsSigned: ['termo-posse'] }))
+  const before = deepFreeze(migrateProgress({ version: 1, radioCalls: [], documentsRead: ['doc-welcome'], ribbonsCut: ['ala-4'] }))
   assert.equal(grantProgress(before, {}), before)
   assert.equal(grantProgress(before, { documentsRead: ['doc-welcome'], catalogued: [] }), before, 'nothing new is no new save')
 
@@ -418,7 +457,7 @@ await test('a grant only adds, in order, and hands back the same save when it ad
   assert.deepEqual(after.documentsRead, ['doc-welcome', 'doc-halstead'])
   assert.deepEqual(after.catalogued, ['ball-spalding'])
   assert.equal(after.hotspots, before.hotspots, 'a list the grant does not name is the same list')
-  assert.deepEqual((after as Progress & Raw).termsSigned, ['termo-posse'], 'a grant dropped a field it does not know')
+  assert.deepEqual((after as Progress & Raw).ribbonsCut, ['ala-4'], 'a grant dropped a field it does not know')
   assert.deepEqual(before.documentsRead, ['doc-welcome'], 'the save it was given was written to')
 })
 
@@ -619,6 +658,9 @@ await test('"New game" is offered by the table: every field that counts is enoug
       'locksSeen',
       'radioCalls',
       'roomsPowered',
+      // A signature is something done; the list of sequences already shown is
+      // the record of it having been shown, like `triggersFired`.
+      'termsSigned',
     ],
   )
   // A field from a later build is not this build's to judge.
@@ -1054,7 +1096,10 @@ await test('an alias that points at an id the content does not have fails the co
   // an alias into either list leads nowhere yet.
   const listFields = fields.filter((field) => Array.isArray(PROGRESS_FIELDS[field].fresh()))
   const unchecked = listFields.filter((field) => !good.some((alias) => alias.field === field))
-  assert.deepEqual(unchecked.sort(), ['credentials', 'flags', 'hintsShown', 'triggersFired'])
+  assert.deepEqual(unchecked.sort(), ['credentials', 'flags', 'hintsShown', 'sequencesSeen', 'termsSigned', 'triggersFired'])
+  // Nor has it a term or a sequence until the slice that brings the Book.
+  assert.deepEqual(codes([{ sinceLot: 3, field: 'termsSigned', from: 'old', to: 'termo-posse' }]), ['legacy-save-alias termsSigned:old'])
+  assert.deepEqual(codes([{ sinceLot: 3, field: 'sequencesSeen', from: 'old', to: 'seq-posse' }]), ['legacy-save-alias sequencesSeen:old'])
   assert.deepEqual(codes([{ sinceLot: 3, field: 'flags', from: 'old', to: 'posse-signed' }]), ['legacy-save-alias flags:old'])
   assert.deepEqual(codes([{ sinceLot: 3, field: 'triggersFired', from: 'old', to: 'lock:office-drawer:opened' }]), [
     'legacy-save-alias triggersFired:old',
@@ -1068,6 +1113,22 @@ await test('an alias that points at an id the content does not have fails the co
     validateSaveAliases(withConsequences, [
       { sinceLot: 3, field: 'flags', from: 'old', to: 'posse-signed' },
       { sinceLot: 3, field: 'triggersFired', from: 'old', to: 'lock:office-drawer:opened' },
+    ]),
+    [],
+  )
+  // And with a museum that has a term and a sequence, an alias into each list of theirs leads somewhere too:
+  // to the term, to the flag its signature sets, to the trigger that sets it, to the sequence.
+  const withAnEnding = {
+    ...MUSEUM,
+    terms: [{ id: 'termo-posse', titleKey: 'x', bodyKey: 'x', presentedWhen: {}, when: {}, grants: 'posse-signed', mentions: [] }],
+    sequences: [{ id: 'seq-posse', when: { flags: ['posse-signed'] }, steps: [{ kind: 'card' as const, titleKey: 'x', seconds: 4 }], mentions: [] }],
+  }
+  assert.deepEqual(
+    validateSaveAliases(withAnEnding, [
+      { sinceLot: 3, field: 'termsSigned', from: 'old', to: 'termo-posse' },
+      { sinceLot: 3, field: 'sequencesSeen', from: 'old', to: 'seq-posse' },
+      { sinceLot: 3, field: 'flags', from: 'old', to: 'posse-signed' },
+      { sinceLot: 3, field: 'triggersFired', from: 'old', to: 'term:termo-posse:signed' },
     ]),
     [],
   )
@@ -1136,7 +1197,10 @@ const laterWrite = (settings: Raw = {}, more: Raw = {}) => ({
     documentsRead: [...(OLD_TAB_PROGRESS.documentsRead as string[]), 'doc-predecessor'],
     roomsVisited: ['office', 'atrium', 'holyoke'],
     triggersFired: ['lock:office-drawer:opened'],
+    ribbonsCut: ['ala-4'],
+    // And a night that went on to its end there: signed, and shown.
     termsSigned: ['termo-posse'],
+    sequencesSeen: ['seq-posse'],
     lastRoom: 'holyoke',
     ...more,
   } as Raw,
@@ -1154,7 +1218,7 @@ await test('a tab that was open before another tab wrote does not put its older 
 
   const disk = old.savedProgress()!
   assert.equal(disk.contentLot, CONTENT_LOT + 1, 'the old tab stamped the save down: the later lot would migrate it a second time')
-  assert.deepEqual(disk.termsSigned, ['termo-posse'], 'a field the old tab does not know was written over')
+  assert.deepEqual(disk.ribbonsCut, ['ala-4'], 'a field the old tab does not know was written over')
   assert.deepEqual(disk.triggersFired, ['lock:office-drawer:opened'], 'a trigger that fired in the other tab would fire again')
   assert.deepEqual(shrunk(later.progress, disk), [], 'what the other tab did is gone from the disk')
   // And what the old tab did is there with it.
@@ -1199,7 +1263,7 @@ await test("nor when all it has is a clock's time to add as it is hidden", async
 
   const disk = old.savedProgress()!
   assert.equal(disk.contentLot, CONTENT_LOT + 1)
-  assert.deepEqual(disk.termsSigned, ['termo-posse'])
+  assert.deepEqual(disk.ribbonsCut, ['ala-4'])
   assert.deepEqual(shrunk(later.progress, disk), [])
   // A clock never runs backwards: the longer of the two times, clock by clock.
   assert.deepEqual(disk.clockSeconds, { 'office-clock': 900, 'atrium-clock': 12 })
@@ -1440,7 +1504,7 @@ await test('joining two copies of a save only adds, field by field, and joining 
   // What this build does not know: the disk's copy, and the tab's only where the disk has none.
   assert.equal(joined.nightsWorked, 4)
   assert.deepEqual(joined.wiresJoined, { 'paris-hero': { from: 'a', to: 'b' } })
-  assert.deepEqual(joined.termsSigned, UNKNOWN.termsSigned)
+  assert.deepEqual(joined.ribbonsCut, UNKNOWN.ribbonsCut)
   assert.deepEqual(joined.onlyOurs, ['kept'])
 
   assert.deepEqual(joinProgress(joined, ours), joined, 'a second join added something')
@@ -1701,7 +1765,7 @@ await test('every field of the table, different in each of three tabs: they fall
     assert.equal((disk.radioMemory as Record<string, Raw>)['office-radio'].calls, 11, 'the porter remembers the call that came last')
     // What this build does not know is the disk's, and the first tab's where
     // the disk had none: rule 1 holds with three tabs alive as with one.
-    for (const field of ['termsSigned', 'socketsFilled', 'wiresJoined'] as const) {
+    for (const field of ['ribbonsCut', 'socketsFilled', 'wiresJoined'] as const) {
       assert.deepEqual(disk[field], UNKNOWN[field], `${field}: a field no tab knows went missing between them`)
     }
     assert.equal(disk.nightsWorked, 5, 'a field this build does not know is as the last tab to load found it')
@@ -1859,6 +1923,107 @@ await test('a recording heard to its end in one live tab is filed in every tab, 
     assert.equal(browser.writes.length, filed)
   } finally {
     browser.close()
+  }
+})
+
+await test('a term signed in one live tab is signed in every tab, with its flag and its trigger, and the tabs fall silent (L3)', async () => {
+  // The verb records the signature and nothing else (`termsSigned`); the flag
+  // the term sets is a trigger compiled from the term, so it is settled by
+  // whichever tab has the content's rules. The rules here are the game's own
+  // functions over a content with two terms, and not the registry module:
+  // that one would hand the real museum's rules to every page of this suite.
+  const { compileTriggers, settleTriggers } = await import('../src/engine/triggers.ts')
+  const term = (id: string, grants: string) => ({ id, titleKey: id, bodyKey: id, presentedWhen: {}, when: {}, grants, mentions: [] })
+  const content = { rooms: [], exhibits: [], documents: [], locks: [], terms: [term('termo-posse', 'posse-signed'), term('termo-reabertura', 'reopening-declared')] }
+  const triggers = compileTriggers(content as never)
+  assert.deepEqual(triggers.map((trigger) => trigger.id), ['term:termo-posse:signed', 'term:termo-reabertura:signed'])
+  const rules = { settle: (progress: Progress) => settleTriggers(progress, triggers, content as never).progress }
+  const night = SAVE_FIXTURES['l2-shortcut-released'].save
+  assert.deepEqual([night.progress.flags, night.progress.triggersFired], [[], []], 'the case needs a save nobody has signed for')
+
+  for (const count of [2, 3]) {
+    const browser = openBrowser(night)
+    try {
+      const signing = await browser.open('the tab at the desk')
+      const elsewhere = await browser.open('the tab in the wing', 'idle')
+      const titled = count === 3 ? await browser.open('this build, on the title screen') : null
+      for (const tab of [signing, elsewhere]) {
+        tab.act((state) => state.start())
+        tab.registerRules(rules)
+      }
+      elsewhere.act((state) => state.setCurrentRoom('holyoke'))
+      leftAlone(browser, `${count} tabs, two of them in the game`)
+      const writers = (since: number) => browser.writes.slice(since).map((write) => write.by)
+      const signedEverywhere = (when: string, terms: readonly string[], flags: readonly string[]) => {
+        const holders: (readonly [string, Raw])[] = [...browser.tabs.map((tab) => [tab.name, tab.progress()] as const), ['the disk', browser.disk()!.progress!]]
+        for (const [who, progress] of holders) {
+          assert.deepEqual(progress.termsSigned, terms, `${count} tabs, ${when}: ${who} does not hold the signature`)
+          assert.deepEqual(progress.flags, flags, `${count} tabs, ${when}: ${who} does not hold the flag it sets`)
+          assert.deepEqual(progress.triggersFired, terms.map((id) => `term:${id}:signed`), `${count} tabs, ${when}: ${who} does not hold the trigger`)
+        }
+        agreed(browser, `${count} tabs, ${when}`)
+      }
+
+      // One tab signs: the signature, the flag and the trigger are one
+      // notification there, and one write. The tab in another room hears it.
+      let written = browser.writes.length
+      let told = 0
+      const stop = signing.store.useMuseum.subscribe(() => {
+        told += 1
+      })
+      signing.act((state) => state.grant({ termsSigned: ['termo-posse'] }))
+      stop()
+      assert.equal(told, 1, 'a signature and the flag that follows from it were two notifications')
+      assert.deepEqual(signing.progress().flags, ['posse-signed'])
+      assert.deepEqual(elsewhere.progress().termsSigned, [], 'the other tab has not heard of it yet')
+      leftAlone(browser, `${count} tabs, and one signed`)
+      assert.deepEqual(writers(written), [signing.name], `${count} tabs: a signature is one write, and nobody answers it`)
+      signedEverywhere('after one tab signed', ['termo-posse'], ['posse-signed'])
+      assert.equal(elsewhere.progress().lastRoom, 'holyoke', 'the tab that heard was moved to the desk')
+
+      // The other tab signs the same term: there is nothing to sign twice.
+      written = browser.writes.length
+      elsewhere.act((state) => state.grant({ termsSigned: ['termo-posse'] }))
+      assert.deepEqual(leftAlone(browser, `${count} tabs, and the other signed the same term`), [])
+      assert.equal(browser.writes.length, written)
+
+      // A tab with no rules that writes (the title screen, a setting changed)
+      // rewrites the save from what it holds: the term and the flag are in it.
+      written = browser.writes.length
+      const writer = titled ?? elsewhere
+      writer.act((state) => state.setSetting('brightness', 1.2))
+      leftAlone(browser, `${count} tabs, and one changed a setting`)
+      assert.deepEqual(writers(written), [writer.name])
+      signedEverywhere('after a setting changed', ['termo-posse'], ['posse-signed'])
+
+      // A build that knows the signature and not what follows from it writes
+      // a second term: the flag is settled here, in one write more, by one
+      // of the tabs that has the rule, and the other has nothing to add.
+      written = browser.writes.length
+      const disk = browser.disk()!
+      browser.anotherBuildWrites({ ...disk, progress: { ...disk.progress, termsSigned: ['termo-posse', 'termo-reabertura'] } })
+      leftAlone(browser, `${count} tabs, and another build signed a second term`)
+      assert.equal(writers(written).length, 1, `${count} tabs: what follows from another build's signature is one write (got: ${writers(written).join(', ')})`)
+      assert.ok([signing.name, elsewhere.name].includes(writers(written)[0]), 'a tab with no rules settled a trigger')
+      signedEverywhere('after another build signed', ['termo-posse', 'termo-reabertura'], ['posse-signed', 'reopening-declared'])
+
+      // A sequence seen to its end in one tab is seen in all of them: one
+      // write, and nothing else the tabs hold is touched by it.
+      written = browser.writes.length
+      signing.act((state) => {
+        state.startSequence('seq-posse', 2)
+        state.advanceSequence()
+      })
+      assert.deepEqual(leftAlone(browser, `${count} tabs, and a sequence half shown`), [], 'a sequence wrote to the save before its last step')
+      signing.act((state) => state.advanceSequence())
+      leftAlone(browser, `${count} tabs, and a sequence shown to its end`)
+      assert.deepEqual(writers(written), [signing.name])
+      for (const tab of browser.tabs) assert.deepEqual(tab.progress().sequencesSeen, ['seq-posse'], `"${tab.name}" would show it again`)
+      assert.equal(elsewhere.state().sequence, null, "what is on screen is its own tab's")
+      signedEverywhere('after the sequence', ['termo-posse', 'termo-reabertura'], ['posse-signed', 'reopening-declared'])
+    } finally {
+      browser.close()
+    }
   }
 })
 
@@ -3070,6 +3235,9 @@ const addedByTheLot = (raw: Raw) => ({
 const addedByThePosse = (loadedByL2: Raw) => ({
   radioCalls: [...(loadedByL2.radioCalls as string[]), ...oldNewsOf(loadedByL2)],
   radioMemory: withHeights(loadedByL2.radioMemory),
+  // And the two fields the lot gave the save: nothing signed, nothing shown.
+  termsSigned: [],
+  sequencesSeen: [],
 })
 
 await test('case A and B: production saves come out as they went in, plus the lot', async () => {
@@ -3162,6 +3330,8 @@ await test('case C: the pre-opening save is brought forward as before, plus the 
     hintsShown: [PRE_OPENING_SAVE.journalHintId],
     devicesCarried: [],
     radioMemory: {},
+    termsSigned: [],
+    sequencesSeen: [],
     ...addedByTheLot(raw),
   })
 })
@@ -3172,7 +3342,7 @@ await test('case D: a save from a later lot keeps its lot and every field this b
     contentLot: 7,
     radioCalls: ['porter-first-call'],
     locksOpened: ['office-drawer'],
-    termsSigned: ['termo-posse'],
+    ribbonsCut: ['ala-4'],
     socketsFilled: ['curator'],
     // A lock this build has never heard of, in a list it may or may not know yet.
     locksSeen: ['office-drawer', 'holyoke-hero-seal'],
@@ -3182,7 +3352,7 @@ await test('case D: a save from a later lot keeps its lot and every field this b
   const page = await openGame(saveOf(later))
   const kept = (progress: Raw, when: string) => {
     assert.equal(progress.contentLot, 7, when)
-    assert.deepEqual(progress.termsSigned, ['termo-posse'], when)
+    assert.deepEqual(progress.ribbonsCut, ['ala-4'], when)
     assert.deepEqual(progress.socketsFilled, ['curator'], when)
     for (const lock of later.locksSeen) assert.ok((progress.locksSeen as string[]).includes(lock), `${when}: locksSeen lost ${lock}`)
     for (const door of later.doorsReleased) {
@@ -3227,6 +3397,12 @@ await test('case E: back from L1, the save is production\'s again and nothing L1
   assert.deepEqual(back.progress().locksSeen, SAMPLES.locksOpened)
   assert.deepEqual(back.progress().flags, [])
   assert.deepEqual(back.progress().triggersFired, [])
+  // And, since L3, the signatures: a save that went through L1 has signed
+  // nothing and seen nothing, and the desk asks for the term again (the lot
+  // plan's case G: the loss of a rollback to before L2, on record).
+  assert.deepEqual(written.termsSigned, SAMPLES.termsSigned, 'the save that went to L1 had no term to lose')
+  assert.deepEqual(back.progress().termsSigned, [])
+  assert.deepEqual(back.progress().sequencesSeen, [])
 })
 
 await test('case F: junk in a field is that field\'s default, and the rest of the save stands', () => {

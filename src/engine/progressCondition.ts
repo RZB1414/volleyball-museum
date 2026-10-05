@@ -32,6 +32,7 @@ export type ConditionProgress = {
   readonly flags?: readonly string[]
   readonly roomsVisited?: readonly string[]
   readonly doorsReleased?: readonly string[]
+  readonly termsSigned?: readonly string[]
 }
 
 type ConditionContent = Pick<MuseumContent, 'rooms' | 'exhibits'>
@@ -119,6 +120,7 @@ export function progressConditionMet(
   if (!holdsAll(progress.roomsVisited, condition.roomsVisited)) return false
   if (!holdsNone(progress.roomsVisited, condition.roomsUnvisited)) return false
   if (!holdsAll(progress.doorsReleased, condition.doorsReleased)) return false
+  if (!holdsAll(progress.termsSigned, condition.termsSigned)) return false
   // `some` of nothing is false, which is the rule: with no branch to take,
   // there is no way through.
   if (condition.anyOf && !condition.anyOf.some((branch) => progressConditionMet(branch, progress, content))) {
@@ -160,6 +162,7 @@ export const CONDITION_FIELD_CLASS = {
   roomsVisited: 'positive',
   roomsUnvisited: 'negative',
   doorsReleased: 'positive',
+  termsSigned: 'positive',
   // By itself: what it is worth is what its branches are, read below.
   anyOf: 'positive',
 } as const satisfies Record<keyof ProgressCondition, ConditionClass>

@@ -551,6 +551,8 @@ test('the save L1 left is the end of its route, and holds nothing production\'s 
 // What L2 added to a save, in the order its migration appends it to a save
 // that had none of it.
 const ADDED_BY_L2 = ['contentLot', 'locksSeen', 'doorsReleased', 'flags', 'triggersFired']
+/** The fields L3 gave the save: no record from before it has them, and a load gives them empty, at the end. */
+const ADDED_BY_L3 = ['termsSigned', 'sequencesSeen']
 const SHORTCUT = 'atrium-from-holyoke-shortcut'
 
 test('the route L2 walked from L1\'s save ends with the shortcut released, and nothing of L1 touched', () => {
@@ -584,8 +586,17 @@ test('the route L2 walked from L1\'s save ends with the shortcut released, and n
 test('the new game L2 left has a lock touched and still shut, and a wing not yet walked', () => {
   const id = 'l2-new-game-drawer-touched'
   const raw = rawProgress(id)
-  // A new game of this lot is written in the order of the lot's own table.
-  assert.deepEqual(Object.keys(raw), Object.keys(loaded.get(id)!.store.EMPTY_PROGRESS))
+  // A new game of L2 was written in the order of L2's own table: the table
+  // of this build, less what the lots since have added to it.
+  assert.deepEqual(
+    Object.keys(raw),
+    Object.keys(loaded.get(id)!.store.EMPTY_PROGRESS).filter((field) => !ADDED_BY_L3.includes(field)),
+  )
+  assert.deepEqual(
+    ADDED_BY_L3.map((field) => (loaded.get(id)!.state.progress as RawProgress)[field]),
+    [[], []],
+    'a save from before the terms loads with nothing signed and nothing shown',
+  )
   assert.equal(raw.contentLot, 2)
   // Touched, not opened: the state no save before L2 can hold, and the one
   // the plan exists to name.
@@ -619,7 +630,9 @@ test('a save the lot in the tree wrote loads as itself', () => {
   // with the last slice), and carries a migration of a lot the stamp has not
   // reached. A record with the tree's stamp was written by the lot before,
   // and that migration runs on it. What it adds is said here by name (the
-  // porter's old news, in `radioCalls`) and nothing else may move.
+  // porter's old news, in `radioCalls`) and nothing else may move; and the
+  // two fields the lot gave the save arrive empty, after every field the
+  // record has (`ADDED_BY_L3`).
   const ahead = SAVE_MIGRATIONS.filter((migration) => migration.lot > CONTENT_LOT).map((migration) => migration.lot)
   assert.ok(ahead.every((lot) => lot === CONTENT_LOT + 1), `a migration more than one lot ahead of the tree: ${ahead.join(', ')}`)
   const oldNews = (progress: RawProgress): string[] =>
@@ -631,7 +644,14 @@ test('a save the lot in the tree wrote loads as itself', () => {
       .map((news) => news.callId)
   const asThisBuildReads = (save: (typeof SAVE_FIXTURES)[FixtureId]['save']) =>
     ahead.includes(3)
-      ? { ...save, progress: { ...save.progress, radioCalls: [...(save.progress.radioCalls as readonly string[]), ...oldNews(save.progress)] } }
+      ? {
+          ...save,
+          progress: {
+            ...save.progress,
+            radioCalls: [...(save.progress.radioCalls as readonly string[]), ...oldNews(save.progress)],
+            ...Object.fromEntries(ADDED_BY_L3.map((field) => [field, []])),
+          },
+        }
       : save
   const own = fixtureIds.filter((id) => fixtureLot(SAVE_FIXTURES[id]) === CONTENT_LOT)
   for (const id of own) {

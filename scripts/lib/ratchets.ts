@@ -346,11 +346,43 @@ export const BUNDLE_BUDGETS = {
  *     a voice as a device and the press that works it, the queue a cabinet
  *     is read by, a door on a hinge, a key that is spent, the toast of a
  *     credential); the document did not move (63,235).
+ *   - `title` +1,030 bytes, on 32,752 measured (it was 31,880 on 31,727).
+ *     The fourth slice is the signing, with no story in it yet, and 1,025
+ *     bytes of it are before the click; the plan foresaw 300 and had not
+ *     counted the style sheet, which ships with the title and is seven
+ *     tenths of this (4,676 to 5,404, file by file against a build of the
+ *     commit before): the ring that closes around a key or a button while it
+ *     is held, the two answers a tap leaves on the glass («Assinar» and
+ *     «Cancelar», the second where Action was), the card and the line of a
+ *     directed sequence, the page of a term in the notebook with its line
+ *     for the signature, the list of what was signed. The rest is the chunk
+ *     the dictionaries and the store share (22,466 to 22,764). Nine keys in
+ *     each language: the verb, «Segure E» and «Segure Ação», «Cancelar», the
+ *     two things a desk can say are missing, «assinado», and the notebook's
+ *     heading and line. And in the store two lists of the save,
+ *     `termsSigned` and `sequencesSeen`, each with its sanitiser and its
+ *     join, and the sequence that is playing, which is the session's and
+ *     ends with its game.
+ *   - `game` +5,130 bytes, on 398,905 measured (it was 395,760 on 395,427).
+ *     3,478 bytes, by the chunk they landed in. +1,237 in the rules the HUD
+ *     and the canvas share (the chunk named after `mobileControls`): the
+ *     press that is held as a reducer and the one press both paths drive
+ *     (`holdAction.ts`, `primaryAction.ts`), what a pointer on the Action
+ *     button is remembered by so that a touch acts once, the desk among the
+ *     devices, a sequence owed and started. +1,117 in the HUD: the prompt's
+ *     three new forms and the ring, the two answers on the glass, the
+ *     sequence on screen (`SequenceOverlay.tsx`). +598 in the canvas: the
+ *     desk drawn, its lamp and its Book, the key held and let go
+ *     (`signingDesk.ts`). +329 in the other chunk they share: what a desk
+ *     stands at and what it still waits for (`termRules.ts`). And the
+ *     notebook's page of a term and the journal's list (+111, +95). The
+ *     ceiling is the measure plus half a per cent. The document did not
+ *     move (63,239).
  */
 export const BUNDLE_PATH_CEILINGS = {
   document: 63_600,
-  title: 31_880,
-  game: 395_760,
+  title: 32_910,
+  game: 400_890,
 } as const
 
 /** Strings that only the content set and the bake manifest contain. */

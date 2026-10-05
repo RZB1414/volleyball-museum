@@ -1,18 +1,43 @@
 import assert from 'node:assert/strict'
 
 import {
+  HOLD_IDLE,
+  HOLD_MAX_STEP_SECONDS,
+  HOLD_TAP_SECONDS,
+  holdMark,
+  holdStep,
+  readHoldMark,
+  type HoldEvent,
+  type HoldGesture,
+} from '../src/engine/holdAction.ts'
+import {
+  actionClick,
+  actionPointerDown,
+  actionPointerUp,
   beginDirectionalPadSession,
+  clickIsThePress,
   createDirectionalPadSession,
   dampTouchLookAxis,
   MOBILE_PAD_DEAD_ZONE,
+  NO_ACTION_POINTER,
   ownsDirectionalPadPointer,
+  POINTER_CLICK_ECHO_MS,
   resetDirectionalPadSession,
   sampleDirectionalDrag,
   sampleDirectionalPad,
   type DirectionalPadBounds,
 } from '../src/engine/mobileControls.ts'
 import {
+  cancelPrimaryHold,
+  isInteractKey,
+  onPrimaryHoldFired,
+  pressPrimaryAction,
+  primaryHold,
+  primaryHoldMark,
+  releasePrimaryAction,
   subscribePrimaryAction,
+  subscribePrimaryHold,
+  tickPrimaryHold,
   triggerPrimaryAction,
 } from '../src/engine/primaryAction.ts'
 import {
@@ -215,6 +240,326 @@ await test('the Action button shows before every door that answers a press', () 
     assert.equal(doorActionAvailable(door(status, true)), false, `${status}, armed`)
   }
   assert.equal(doorActionAvailable(null), false, 'no door in the sights')
+})
+
+// ---------------------------------------------------------------------------
+// A press that is held (L3): the gesture a term is signed with
+// ---------------------------------------------------------------------------
+
+const DESK = { id: 'hall-desk', seconds: 1.2 } as const
+const HOLDING = (held: number): HoldGesture => ({ phase: 'holding', id: DESK.id, seconds: DESK.seconds, held })
+const CONFIRMING: HoldGesture = { phase: 'confirming', id: DESK.id }
+const press = (request: { id: string; seconds: number } = DESK): HoldEvent => ({ kind: 'press', request })
+const tick = (seconds: number, aimed: string | null = DESK.id): HoldEvent => ({ kind: 'tick', seconds, aimed })
+const RELEASE: HoldEvent = { kind: 'release' }
+const CANCEL: HoldEvent = { kind: 'cancel' }
+/** A run of events from idle: the gesture it ends in, and every id it fired on the way. */
+function gesture(...events: HoldEvent[]) {
+  const fired: string[] = []
+  let current: HoldGesture = HOLD_IDLE
+  for (const event of events) {
+    const step = holdStep(current, event)
+    current = step.gesture
+    if (step.fired !== null) fired.push(step.fired)
+  }
+  return { gesture: current, fired }
+}
+/** So many seconds of frames at twenty a second, aimed at the desk. */
+const frames = (seconds: number, aimed: string | null = DESK.id) =>
+  Array.from({ length: Math.round(seconds * 20) }, () => tick(0.05, aimed))
+/** The same gesture, with the float of its count rounded off: what is asked is the state, not the last bit. */
+const rounded = (current: HoldGesture): HoldGesture =>
+  current.phase === 'holding' ? { ...current, held: Math.round(current.held * 1000) / 1000 } : current
+
+await test('the table of the held press: every state against every event', () => {
+  assert.equal(HOLD_TAP_SECONDS, 0.3)
+  assert.equal(HOLD_MAX_STEP_SECONDS, 0.25)
+  // Idle: only a press starts anything.
+  assert.deepEqual(holdStep(HOLD_IDLE, press()), { gesture: HOLDING(0), fired: null })
+  for (const event of [tick(0.1), RELEASE, CANCEL]) assert.deepEqual(holdStep(HOLD_IDLE, event), { gesture: HOLD_IDLE, fired: null }, event.kind)
+
+  // Holding. The same input does not go down twice.
+  assert.deepEqual(holdStep(HOLDING(0.5), press()), { gesture: HOLDING(0.5), fired: null })
+  assert.deepEqual(holdStep(HOLDING(0.5), press({ id: 'another-desk', seconds: 9 })), { gesture: HOLDING(0.5), fired: null })
+  // A frame adds its time; the frame that completes the hold fires it, and the gesture is over.
+  assert.deepEqual(rounded(holdStep(HOLDING(0.5), tick(0.1)).gesture), HOLDING(0.6))
+  assert.equal(holdStep(HOLDING(0.5), tick(0.1)).fired, null)
+  assert.deepEqual(holdStep(HOLDING(1.15), tick(0.1)), { gesture: HOLD_IDLE, fired: DESK.id })
+  // The crosshair on anything else, or on nothing, ends it without a word.
+  assert.deepEqual(holdStep(HOLDING(1.19), tick(0.1, 'hall-radio')), { gesture: HOLD_IDLE, fired: null })
+  assert.deepEqual(holdStep(HOLDING(1.19), tick(0.1, null)), { gesture: HOLD_IDLE, fired: null })
+  // Let go at once: a tap, which asks to confirm. Let go later: nothing.
+  assert.deepEqual(holdStep(HOLDING(0.1), RELEASE), { gesture: CONFIRMING, fired: null })
+  assert.deepEqual(holdStep(HOLDING(0.29), RELEASE), { gesture: CONFIRMING, fired: null })
+  assert.deepEqual(holdStep(HOLDING(0.3), RELEASE), { gesture: HOLD_IDLE, fired: null })
+  assert.deepEqual(holdStep(HOLDING(0.6), RELEASE), { gesture: HOLD_IDLE, fired: null })
+  assert.deepEqual(holdStep(HOLDING(0.6), CANCEL), { gesture: HOLD_IDLE, fired: null })
+
+  // Confirming: the same thing pressed again is the answer; another thing starts its own hold.
+  assert.deepEqual(holdStep(CONFIRMING, press()), { gesture: HOLD_IDLE, fired: DESK.id })
+  assert.deepEqual(holdStep(CONFIRMING, press({ id: 'another-desk', seconds: 2 })), {
+    gesture: { phase: 'holding', id: 'another-desk', seconds: 2, held: 0 },
+    fired: null,
+  })
+  assert.deepEqual(holdStep(CONFIRMING, tick(0.1)), { gesture: CONFIRMING, fired: null })
+  assert.deepEqual(holdStep(CONFIRMING, tick(0.1, null)), { gesture: HOLD_IDLE, fired: null })
+  assert.deepEqual(holdStep(CONFIRMING, RELEASE), { gesture: CONFIRMING, fired: null })
+  assert.deepEqual(holdStep(CONFIRMING, CANCEL), { gesture: HOLD_IDLE, fired: null })
+
+  // The reducer writes into nothing it is handed.
+  const frozen = Object.freeze(HOLDING(0.2))
+  assert.doesNotThrow(() => holdStep(frozen, tick(0.1)))
+  assert.equal(frozen.phase === 'holding' && frozen.held, 0.2)
+})
+
+await test('holding for the whole time signs once; letting go early cancels; a tap asks first', () => {
+  // 1.2 s held: one signature, and nothing more however long the key stays down.
+  assert.deepEqual(gesture(press(), ...frames(1.25)).fired, [DESK.id])
+  assert.deepEqual(gesture(press(), ...frames(4)), { gesture: HOLD_IDLE, fired: [DESK.id] })
+  assert.deepEqual(gesture(press(), ...frames(1.1)).fired, [], 'signed before the time was up')
+  // Let go at 0.6 s: cancelled, and the rest of the frames sign nothing.
+  assert.deepEqual(gesture(press(), ...frames(0.6), RELEASE, ...frames(2)), { gesture: HOLD_IDLE, fired: [] })
+  // Let go at 0.1 s: «Assinar / Cancelar». «Assinar» signs, «Cancelar» does not.
+  const tapped = gesture(press(), ...frames(0.1), RELEASE)
+  assert.deepEqual(tapped, { gesture: CONFIRMING, fired: [] })
+  assert.deepEqual(gesture(press(), ...frames(0.1), RELEASE, press()), { gesture: HOLD_IDLE, fired: [DESK.id] })
+  assert.deepEqual(gesture(press(), ...frames(0.1), RELEASE, CANCEL, ...frames(2)), { gesture: HOLD_IDLE, fired: [] })
+  // The question waits as long as the player looks at the desk, and goes when they look away.
+  assert.deepEqual(gesture(press(), ...frames(0.1), RELEASE, ...frames(30)).gesture, CONFIRMING)
+  assert.deepEqual(gesture(press(), ...frames(0.1), RELEASE, ...frames(1), tick(0.05, null), press()).gesture, HOLDING(0))
+  // Losing the desk half way cancels, and looking back does not pick the hold up again.
+  assert.deepEqual(gesture(press(), ...frames(0.6), tick(0.05, null), ...frames(2)), { gesture: HOLD_IDLE, fired: [] })
+})
+
+await test('a frozen tab does not sign by itself: one frame counts a quarter of a second at the most', () => {
+  // The first frame after a hidden tab carries the whole absence.
+  assert.deepEqual(holdStep(HOLDING(0), tick(5)), { gesture: HOLDING(0.25), fired: null })
+  assert.deepEqual(gesture(press(), tick(5), tick(5), tick(5), tick(5)).fired, [], 'four frames of five seconds signed')
+  assert.deepEqual(gesture(press(), tick(5), tick(5), tick(5), tick(5), tick(5)).fired, [DESK.id])
+  // And a frame that is no time at all, or no number, counts nothing.
+  for (const junk of [0, -3, Number.NaN, Number.NEGATIVE_INFINITY]) {
+    assert.deepEqual(holdStep(HOLDING(0.5), tick(junk)), { gesture: HOLDING(0.5), fired: null }, String(junk))
+  }
+})
+
+await test('what the HUD is told of a hold is one string, and changes only when the gesture does', () => {
+  assert.equal(holdMark(HOLD_IDLE), 'idle')
+  assert.equal(holdMark(HOLDING(0)), holdMark(HOLDING(0.9)), 'a frame of holding re-rendered the HUD')
+  assert.notEqual(holdMark(HOLDING(0)), holdMark(CONFIRMING))
+  assert.deepEqual(readHoldMark(holdMark(HOLD_IDLE)), { phase: 'idle' })
+  assert.deepEqual(readHoldMark(holdMark(HOLDING(0.4))), { phase: 'holding', id: DESK.id, seconds: 1.2 })
+  assert.deepEqual(readHoldMark(holdMark(CONFIRMING)), { phase: 'confirming', id: DESK.id })
+  // Ids may carry colons themselves.
+  const odd: HoldGesture = { phase: 'holding', id: 'desk:of:the:hall', seconds: 0.5, held: 0 }
+  assert.deepEqual(readHoldMark(holdMark(odd)), { phase: 'holding', id: 'desk:of:the:hall', seconds: 0.5 })
+  assert.deepEqual(readHoldMark('nonsense'), { phase: 'idle' })
+})
+
+await test('the shared action carries the hold: down, frames, up, and whoever listens is told once', () => {
+  const fired: string[] = []
+  let told = 0
+  const stopFired = onPrimaryHoldFired((id) => fired.push(id))
+  const stopTold = subscribePrimaryHold(() => {
+    told += 1
+  })
+  const unsubscribe = subscribePrimaryAction(() => DESK, 150)
+  try {
+    assert.equal(primaryHoldMark(), 'idle')
+    // Down: the handler asks for a hold, and nothing is done yet.
+    assert.equal(pressPrimaryAction(), 'holding')
+    assert.deepEqual(primaryHold(), HOLDING(0))
+    assert.equal(told, 1)
+    for (let frame = 0; frame < 4; frame += 1) tickPrimaryHold(0.25, DESK.id)
+    assert.deepEqual(fired, [])
+    assert.equal(told, 1, 'the frames of a hold were told to the HUD one by one')
+    tickPrimaryHold(0.25, DESK.id)
+    assert.deepEqual(fired, [DESK.id])
+    assert.equal(primaryHoldMark(), 'idle')
+    assert.equal(told, 2)
+    // The key is still down, and comes up: nothing more.
+    for (let frame = 0; frame < 8; frame += 1) tickPrimaryHold(0.25, DESK.id)
+    releasePrimaryAction()
+    assert.deepEqual(fired, [DESK.id])
+
+    // A tap: down and up. The question is on screen, and the same press again answers it.
+    assert.equal(pressPrimaryAction(), 'holding')
+    tickPrimaryHold(0.1, DESK.id)
+    releasePrimaryAction()
+    assert.deepEqual(primaryHold(), CONFIRMING)
+    assert.equal(pressPrimaryAction(), 'acted')
+    assert.deepEqual(fired, [DESK.id, DESK.id])
+    releasePrimaryAction()
+    assert.equal(primaryHoldMark(), 'idle')
+    // «Cancelar», Escape, the window losing focus: the question goes, unanswered.
+    assert.equal(pressPrimaryAction(), 'holding')
+    releasePrimaryAction()
+    assert.deepEqual(primaryHold(), CONFIRMING)
+    cancelPrimaryHold()
+    assert.equal(primaryHoldMark(), 'idle')
+    // Half way and let go; half way and looked away.
+    pressPrimaryAction()
+    tickPrimaryHold(0.25, DESK.id)
+    tickPrimaryHold(0.25, DESK.id)
+    releasePrimaryAction()
+    pressPrimaryAction()
+    tickPrimaryHold(0.25, DESK.id)
+    tickPrimaryHold(0.25, null)
+    for (let frame = 0; frame < 8; frame += 1) tickPrimaryHold(0.25, DESK.id)
+    assert.deepEqual(fired, [DESK.id, DESK.id])
+    assert.equal(primaryHoldMark(), 'idle')
+    // A click cannot tell down from up: on something held it is a tap, and asks first.
+    assert.equal(triggerPrimaryAction(), true)
+    assert.deepEqual(primaryHold(), CONFIRMING)
+    assert.deepEqual(fired, [DESK.id, DESK.id])
+    cancelPrimaryHold()
+    // With nothing held, the frames and the release do nothing and tell nobody.
+    const quiet = told
+    tickPrimaryHold(0.25, DESK.id)
+    releasePrimaryAction()
+    cancelPrimaryHold()
+    assert.equal(told, quiet)
+  } finally {
+    unsubscribe()
+    stopFired()
+    stopTold()
+    cancelPrimaryHold()
+  }
+})
+
+await test('one press, one action: a handler that asks for a hold keeps the press from the ones below it', () => {
+  const calls: string[] = []
+  const unsubscribeLamp = subscribePrimaryAction(() => {
+    calls.push('lamp')
+    return true
+  }, 100)
+  const unsubscribeDesk = subscribePrimaryAction(() => {
+    calls.push('desk')
+    return DESK
+  }, 150)
+  const unsubscribeDoor = subscribePrimaryAction(() => {
+    calls.push('door')
+    return false
+  }, 400)
+  try {
+    // The door declines, the desk asks to be held, and the lamp behind it is never asked.
+    assert.equal(pressPrimaryAction(), 'holding')
+    assert.deepEqual(calls, ['door', 'desk'])
+    releasePrimaryAction()
+    cancelPrimaryHold()
+    // With the desk gone the same press reaches the lamp, and acts at once: no hold is left over.
+    unsubscribeDesk()
+    calls.length = 0
+    assert.equal(pressPrimaryAction(), 'acted')
+    assert.deepEqual(calls, ['door', 'lamp'])
+    assert.equal(primaryHoldMark(), 'idle')
+    releasePrimaryAction()
+    // And an ordinary action still acts once for a press and its release together.
+    calls.length = 0
+    assert.equal(triggerPrimaryAction(), true)
+    assert.deepEqual(calls, ['door', 'lamp'])
+  } finally {
+    unsubscribeLamp()
+    unsubscribeDesk()
+    unsubscribeDoor()
+    cancelPrimaryHold()
+  }
+  assert.equal(pressPrimaryAction(), 'none')
+  releasePrimaryAction()
+})
+
+await test('on glass the press is the pointer going down, and the click that echoes it does nothing', () => {
+  // A click made by a keyboard (or a switch) has no pointer behind it: it is the press.
+  assert.equal(clickIsThePress(0, Number.POSITIVE_INFINITY), true)
+  assert.equal(clickIsThePress(0, 12), true)
+  // A click that follows a pointer is that pointer's echo: the action was taken as it went down.
+  assert.equal(clickIsThePress(1, 0), false, 'an ordinary action acted twice on touch: at the pointer and at its click')
+  assert.equal(clickIsThePress(1, 180), false)
+  assert.equal(clickIsThePress(2, POINTER_CLICK_ECHO_MS), false)
+  // The button that replaces Action under the same finger («Assinar») gets
+  // the echo of the tap that asked the question: it must not answer it.
+  assert.equal(clickIsThePress(1, 40), false)
+  // A click with nothing before it, from whatever cannot send a pointer: taken.
+  assert.equal(clickIsThePress(1, POINTER_CLICK_ECHO_MS + 1), true)
+  assert.equal(clickIsThePress(1, Number.POSITIVE_INFINITY), true)
+  assert.ok(POINTER_CLICK_ECHO_MS >= 500 && POINTER_CLICK_ECHO_MS <= 1500)
+
+  // E is told apart from every other key in one place, going down or coming up.
+  assert.equal(isInteractKey({ code: 'KeyE' }), true)
+  assert.equal(isInteractKey({ code: 'KeyR' }), false)
+})
+
+await test('a touch on the Action button, event by event: an ordinary thing acts once, on its click; a held one never on it', () => {
+  // What the three buttons do with a pointer, as the component does it: the
+  // rules are these three functions, and it only keeps what they hand back.
+  type Touch = readonly ['down', boolean, number] | readonly ['up', number] | readonly ['click', number, number]
+  /** What a run of events did: every press taken, release sent and click acted on, in order. */
+  const run = (...events: Touch[]) => {
+    const did: string[] = []
+    let pointer = NO_ACTION_POINTER
+    for (const event of events) {
+      if (event[0] === 'down') {
+        pointer = actionPointerDown(event[1], event[2])
+        if (event[1]) did.push('press')
+      } else if (event[0] === 'up') {
+        const up = actionPointerUp(pointer, event[1])
+        pointer = up.pointer
+        if (up.release) did.push('release')
+      } else {
+        const click = actionClick(pointer, event[1], event[2])
+        pointer = click.pointer
+        if (click.press) did.push('click acts')
+      }
+    }
+    return did
+  }
+  const ORDINARY = false
+  const HELD = true
+
+  // A lamp, a door, a drawer: the finger lands and lifts, and the click is the press. Once.
+  assert.deepEqual(run(['down', ORDINARY, 1000], ['up', 1080], ['click', 1, 1085]), ['click acts'])
+  // Twice in a row, as fast as a thumb goes: twice.
+  assert.deepEqual(
+    run(['down', ORDINARY, 1000], ['up', 1080], ['click', 1, 1085], ['down', ORDINARY, 1300], ['up', 1380], ['click', 1, 1385]),
+    ['click acts', 'click acts'],
+  )
+  // A desk with a term ready: the pointer is the press and its lifting the release; the click of that tap is its echo.
+  assert.deepEqual(run(['down', HELD, 1000], ['up', 1100], ['click', 1, 1105]), ['press', 'release'])
+  // Held to the end (1.2 s) and lifted: still no click taken, however late the browser sends it.
+  assert.deepEqual(run(['down', HELD, 1000], ['up', 2400], ['click', 1, 2405]), ['press', 'release'])
+
+  // The defect this is here for. A hold that signs takes its button away
+  // before the finger lifts: no release and no click are heard. The next
+  // tap, on anything, has to act.
+  assert.deepEqual(
+    run(['down', HELD, 1000], /* signed at 2200; the button is gone */ ['down', ORDINARY, 9000], ['up', 9080], ['click', 1, 9085]),
+    ['press', 'click acts'],
+    'the tap after a signature did nothing: the pointer that signed was never heard to lift',
+  )
+  // Even at once, with no time for anything to wear off.
+  assert.deepEqual(run(['down', HELD, 1000], ['down', ORDINARY, 2300], ['up', 2310], ['click', 1, 2315]), ['press', 'click acts'])
+  // The tap that asks («Assinar / Cancelar») and the answer, each with its echo
+  // landing on whatever is under the finger by then: two presses, no click.
+  assert.deepEqual(
+    run(['down', HELD, 1000], ['up', 1100], ['click', 1, 1105], ['down', HELD, 1600], ['up', 1700], ['click', 1, 1705]),
+    ['press', 'release', 'press', 'release'],
+  )
+  // Then a lamp, straight after the answer: its own click, taken.
+  assert.deepEqual(
+    run(['down', HELD, 1600], ['up', 1700], ['click', 1, 1705], ['down', ORDINARY, 1900], ['up', 1980], ['click', 1, 1985]),
+    ['press', 'release', 'click acts'],
+  )
+  // A hold cancelled by looking away, the finger lifted over something else:
+  // the click of that long press is still the echo of a press, and does not
+  // work whatever the crosshair has drifted onto.
+  assert.deepEqual(run(['down', HELD, 1000], ['up', 1500], ['click', 1, 1505]), ['press', 'release'])
+  // A keyboard on the button, any time: a press of its own.
+  assert.deepEqual(run(['click', 0, 500]), ['click acts'])
+  assert.deepEqual(run(['down', HELD, 1000], ['up', 1100], ['click', 0, 1105]), ['press', 'release', 'click acts'])
+  // A pointer that lifts without having pressed is nobody's release.
+  assert.deepEqual(run(['up', 100]), [])
+  assert.deepEqual(actionPointerUp(NO_ACTION_POINTER, 100), { pointer: NO_ACTION_POINTER, release: false })
+  // One echo to a pointer: a second click after the same press is a press of its own.
+  assert.deepEqual(run(['down', HELD, 1000], ['up', 1100], ['click', 1, 1105], ['click', 1, 1200]), ['press', 'release', 'click acts'])
 })
 
 console.log(`\n${passed}/${passed} mobile-control checks passed.\n`)

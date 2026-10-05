@@ -98,6 +98,8 @@ export function saveIdsByField(content: MuseumContent): Record<ListField, Readon
     devicesCarried: new Set(
       devices.flatMap((device) => (device.kind === 'radio' && device.carriedOnUse ? [device.id] : [])),
     ),
+    termsSigned: new Set((content.terms ?? []).map((term) => term.id)),
+    sequencesSeen: new Set((content.sequences ?? []).map((sequence) => sequence.id)),
   }
 }
 
@@ -124,6 +126,10 @@ const ID_COLLECTIONS = {
   radioCalls: ['radioCalls'],
   devices: ['devicesCarried'],
   triggers: ['triggersFired'],
+  // A term renamed is a signature lost; a sequence renamed plays again to
+  // everybody who has seen it.
+  terms: ['termsSigned'],
+  sequences: ['sequencesSeen'],
 } as const satisfies Record<string, readonly ListField[]>
 
 type IdCollection = keyof typeof ID_COLLECTIONS
@@ -144,9 +150,12 @@ export type GraphSnapshot = {
     readonly doneWhen: readonly string[] | null
     readonly deferredUntilLot?: number
   }[]
-  /** The terms the player signs. None until the lectern is one (L3). */
+  /** The terms the player signs, each with what signing it asks, as atoms. None until a desk signs one (L3). */
   readonly terms: readonly { readonly id: string; readonly when: readonly string[] }[]
-  /** Every id a save can hold, by collection. */
+  /**
+   * Every id a save can hold, by collection. A record written before a
+   * collection existed does not have it, and is read as holding none of it.
+   */
   readonly ids: Readonly<Record<IdCollection, readonly string[]>>
   /** The save's field table: the name and kind of every field this lot knows. */
   readonly saveFields: Readonly<Record<string, SaveFieldKind>>
@@ -176,6 +185,8 @@ function idsOf(content: MuseumContent): GraphSnapshot['ids'] {
       ]),
     ].sort(),
     triggers: collected('triggers').sort(),
+    terms: collected('terms').sort(),
+    sequences: collected('sequences').sort(),
   }
 }
 
@@ -200,6 +211,11 @@ function checklistOf(content: MuseumContent): GraphSnapshot['checklist'] {
     .sort(byId)
 }
 
+/** Each term, with what signing it asks: what a signature a save holds was given for. */
+function termsOf(content: MuseumContent): GraphSnapshot['terms'] {
+  return (content.terms ?? []).map((term) => ({ id: term.id, when: conditionAtoms(term.when, content) })).sort(byId)
+}
+
 /**
  * The graph of a content, as the lot that closes writes it down.
  *
@@ -211,7 +227,7 @@ export function graphSnapshot(content: MuseumContent, lot: number): GraphSnapsho
     lot,
     actions: [...simulateProgress(content).actions].sort(byId),
     checklist: checklistOf(content),
-    terms: [],
+    terms: termsOf(content),
     ids: idsOf(content),
     saveFields: saveFieldsOf(),
   }
@@ -411,9 +427,23 @@ export function validateAdditive(
       )
     }
   }
-  // No content has terms yet, so any term a snapshot holds has been lost.
+  // A signature in a save was given for what the term asked then. A term
+  // that is gone leaves that signature meaning nothing; one that asks for
+  // something else (more, less or other) makes it mean something it did not.
+  const terms = new Map(termsOf(content).map((term) => [term.id, term.when]))
   for (const term of previous.terms) {
-    error('term-condition-changed', term.id, `Term "${term.id}" is gone ${since}, or no longer signed on what it was: ${term.when.join(', ')}.`)
+    const before = term.when.map(renamed.atom)
+    const now = terms.get(term.id)
+    if (now === undefined) {
+      error('term-condition-changed', term.id, `Term "${term.id}" is gone ${since}: a player signed it for ${before.join(', ') || 'nothing'}, and the content no longer has it.`)
+    } else if (!sameList(before, now)) {
+      error(
+        'term-condition-changed',
+        term.id,
+        `Term "${term.id}" is signed on something else ${since}: it asked for ${before.join(', ') || 'nothing'}, and asks for ${now.join(', ') || 'nothing'} now. ` +
+          `A signature a player gave would stand for what they never signed.`,
+      )
+    }
   }
 
   // --- the save ---------------------------------------------------------------
