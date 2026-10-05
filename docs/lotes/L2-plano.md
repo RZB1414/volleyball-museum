@@ -303,9 +303,13 @@ export function settleTriggers(
 ): { readonly progress: Progress; readonly fired: readonly string[]; readonly exhausted: boolean }
 
 // engine/contentRegistry.ts — imports the museum; imported for its effect by MuseumCanvas.tsx.
-export function progressRulesFor(content: MuseumContent): ProgressRules
+export function progressRulesFor(content: TriggerContent): ProgressRules
 registerProgressRules(progressRulesFor(MUSEUM))
 ```
+
+`TriggerContent` é `Pick<MuseumContent, 'rooms' | 'exhibits' | 'documents' | 'locks' | 'triggers'>`:
+o que os gatilhos, as condições e os efeitos leem, e o que uma suíte precisa montar para registrar
+uma casa feita para o teste.
 
 `effectGrant`: `grant-credential` → `credentials`; `open-lock` → `locksOpened` e `locksSeen`;
 `power-room` → `roomsPowered`; `reveal-document` → `documentsRead` e o `factsKnown` que o documento
@@ -646,13 +650,20 @@ avaliador ignora o campo que não conhece. É o caso do teste.
    (recarga a quente; o robô) assenta o `progress` inicial na criação.
 5. `Interaction.tsx:375-397`: no lugar das três gravações e do laço de efeitos, uma chamada:
    `state.grant(hotspotGrant(exhibit, hotspot.id, state.progress.hotspots))`.
-6. Tabela: `flags` e `triggersFired`. `validate.ts`: `trigger-duplicate`, `effect-target-missing`
-   (para `set-flag` não há alvo; para as outras quatro, o id), `gate-uses-negative-condition`,
-   `gate-uses-all-condition` sobre o `when` de todo gatilho compilado.
-7. `scripts/lib/runtimeWiring.ts`: `progressWiringProblems(read)` — `Interaction.tsx` chama
-   `hotspotGrant(` e `.grant(` e não contém `applyUnlockEffect`, `recordCatalogued(` nem
-   `recordFact(`; `MuseumCanvas.tsx` importa `contentRegistry`; `state/store.ts` não importa nada
-   de `content/museum` nem de `engine/`.
+6. Tabela: `flags` e `triggersFired`. `validate.ts` (`validateTriggers`, sobre a lista compilada):
+   `trigger-duplicate`, `effect-target-missing`, `gate-uses-negative-condition` e
+   `gate-uses-all-condition` sobre o `when` de todo gatilho. `effect-target-missing` confere os
+   três efeitos que nomeiam conteúdo (`open-lock`, `power-room`, `reveal-document`) e substitui os
+   três códigos que `validateReferences` tinha só para `exhibit.unlocks`. `set-flag` não tem alvo.
+   **`grant-credential` também não, neste lote**: a credencial é um membro das uniões do schema
+   (o compilador confere o id) e só vira dado com registro em L3 (M7a); a chave que ninguém pede é
+   `credential-orphan`, e a que ninguém dá é `credential-unobtainable`, os dois de T10.
+7. `scripts/lib/runtimeWiring.ts`: `progressWiringProblems(read, components)` — `components` é a
+   lista de todo `.tsx` de `src/`, porque duas das regras são sobre o que **nenhum** componente
+   pode fazer. `Interaction.tsx` chama `.grant(hotspotGrant(` e não contém `applyUnlockEffect`,
+   `recordHotspot(`, `recordCatalogued(` nem `recordFact(`; `MuseumCanvas.tsx` importa
+   `contentRegistry`; `state/store.ts` não importa nada de `content/museum` nem de `engine/`, nem
+   com `import()`, e sai do registro quando o Vite o troca (`forgetRules()` no `dispose`).
 
 **Teste.** `npm run test:triggers` (novo, `scripts/test-triggers.ts`), com conteúdo feito para o
 teste registrado por `progressRulesFor`, sobre o store real:
@@ -711,10 +722,12 @@ reprova (`Interaction.tsx:395` chama `applyUnlockEffect`).
 5. `MuseumMap.tsx:216-234`: `LockList` lista `pendingLocks(MUSEUM.locks, progress)`. (T8 leva a
    lista para dentro de `mapModel`.)
 6. `Hud.tsx:112`: `lockStatus(container.lockId, progress) === 'closed'`.
-7. `runtimeWiring.ts`: `Containers.tsx`, `PowerControls.tsx` e `LockPanel.tsx` chamam
-   `attemptLock(`; `setActiveLock(` com valor só aparece depois de `outcome === 'ask'`; nenhum
-   componente chama `openLock(` nem compara `locksOpened.includes(` para decidir abrir;
-   `Containers.tsx` e `LockPanel.tsx` gravam por `containerGrant(`.
+7. `runtimeWiring.ts` (a mesma `progressWiringProblems`): `Containers.tsx`, `PowerControls.tsx` e
+   `LockPanel.tsx` chamam `attemptLock(`; `setActiveLock(` com valor só aparece depois de
+   `outcome === 'ask'`; nenhum componente chama `openLock(` nem lê `locksOpened.includes(`;
+   `Containers.tsx` e `LockPanel.tsx` gravam por `.grant(containerGrant(`; o ramo `refused` do
+   armário e do quadro toca `museumAudio.lockDenied()`; `MuseumMap.tsx` lista `pendingLocks(` e
+   `Hud.tsx` pergunta a `lockStatus(`.
 
 **Teste.** `npm run test:locks` (novo, `scripts/test-locks.ts`), v1:
 
@@ -727,8 +740,10 @@ reprova (`Interaction.tsx:395` chama `applyUnlockEffect`).
 - «abrir pelo teclado grava o mesmo que abrir a gaveta já destrancada»: documentos **e** fatos;
 - «`Lock.onOpen` vira gatilho»: dispara ao abrir e, num save que já tinha a tranca aberta, quando
   o conteúdo se registra;
-- os saves do corpus: `production-drawer-open` carrega com `locksSeen: ['office-drawer']`; os
-  outros, com a lista vazia;
+- os saves do corpus: cada um carrega com `locksSeen` igual ao seu `locksOpened`, que é
+  `['office-drawer']` em `production-drawer-open` e em `l1-route-end` (o save de L1 termina com a
+  gaveta aberta; ele entrou no corpus em F1, depois de este plano ser escrito) e a lista vazia nos
+  outros quatro;
 - a fiação (item 7), por mutação.
 
 **Vermelho hoje.** Com a regra extraída nos valores de hoje (toda tranca fechada abre modal),
@@ -1114,7 +1129,7 @@ chave `volleyball-museum:v1`; «depois» é o que `migrateProgress` devolve no f
 
 | # | Save | Antes | Depois |
 |---|---|---|---|
-| A | `production-drawer-open` | sem `contentLot`, `locksSeen`, `doorsReleased`, `flags`, `triggersFired`; `locksOpened: ['office-drawer']` | `contentLot: 2`, `locksSeen: ['office-drawer']`, `doorsReleased: []`, `flags: []`, `triggersFired: []` |
+| A | `production-drawer-open`, `l1-route-end` | sem `contentLot`, `locksSeen`, `doorsReleased`, `flags`, `triggersFired`; `locksOpened: ['office-drawer']` | `contentLot: 2`, `locksSeen: ['office-drawer']`, `doorsReleased: []`, `flags: []`, `triggersFired: []` |
 | B | `production-drawer-closed`, `production-catalogued-unturned`, `production-radio-on-desk` | idem, `locksOpened: []` | `contentLot: 2` e as quatro listas vazias. A gaveta sai da planta até ser tocada (DL2-4); o atalho pede mais uma saída (DL2-3) |
 | C | `production-pre-opening` | sem `radioCalls`, `clockSeconds`, `hintsShown`, `devicesCarried`, `radioMemory` | como hoje (`doc-welcome` concedido, `porter-first-call` ouvida, `journal-taken` em `hintsShown`), mais `contentLot: 2` e as quatro listas vazias |
 | D | de um lote futuro: `{ version: 1, contentLot: 7, termsSigned: ['termo-posse'], socketsFilled: ['curator'], locksSeen: ['office-drawer', 'holyoke-hero-seal'], … }` | — | `contentLot: 7`; `termsSigned` e `socketsFilled` como vieram; `locksSeen` com os dois ids, mesmo o que este build não conhece. Igual depois de qualquer ação e de regravar |
@@ -1198,6 +1213,7 @@ nova: tudo é `node --experimental-strip-types`.
 | `scripts/test-qa-save.ts:142-161` | cinco saves que nunca saem | seis, com `l1-route-end` | F1 |
 | `scripts/test-opening-flow.ts:218-220`, `scripts/test-radio.ts:811` | save de outra versão vira jogo novo | **igual** (DL2-5); só a razão muda de «descartar é mais barato» para «ninguém escreveu esse formato» | — |
 | `scripts/test-power.ts:99-118` | os quatro efeitos aplicados por `store.applyUnlockEffect` | os mesmos quatro, no mesmo formato de chave, por `effectGrant` e `grant` | F2 |
+| `scripts/test-save.ts` (a tabela `ACTIONS`) | toda função do store roda contra um save de um build posterior; a tabela morava na suíte | a mesma tabela, em `scripts/lib/storeActions.ts`, lida também por `test:triggers`; sai `applyUnlockEffect`, entra `grant`; `openLock` deixa também `locksSeen` | F2 |
 | `scripts/test-transition-door.ts:426-447` | o atalho não fica aberto: nada grava a liberação | a folha não grava nada; o save grava, e aí o saguão abre | F3 |
 | `scripts/test-transition-door.ts:419-423`, `scripts/test-opening.ts:253-265` | as duas regras com dois e três argumentos | com a lista de portas liberadas | F3 |
 | `scripts/test-navigation.ts:325-366` | o atalho num sentido | nos dois | F3 |
@@ -1214,9 +1230,9 @@ jogo 388.248 (teto 390.200). **A folga do título é de 147 bytes.**
 | Caminho | O que entra | Previsto | Fatia |
 |---|---|---|---|
 | título | `progressFields.ts`, `saveMigrations.ts`, `contentLot.ts`, `SAVE_ALIASES` (o store é importado pela tela de título) | +0,5 a +0,8 kB; **[medido em F1: +293 bytes, 28.646; teto 28.800]** | F1 |
-| título | `progressRules.ts` e `commitProgress`; duas linhas da tabela | +0,2 kB | F2 |
+| título | `progressRules.ts` e `commitProgress`; três linhas da tabela | +0,2 kB; **[medido em F2: +0 bytes, 28.646; o teto fica em 28.800]** (o que entrou coube no que saiu: `applyUnlockEffect` e os dez verbos escritos por extenso) | F2 |
 | título | as quatro chaves novas e as duas mudadas de 6, nas duas línguas (os dicionários viajam com o título) | +0,2 kB | F3 |
-| jogo | `triggers.ts`, `contentRegistry.ts`, `progressGrants.ts`, `lockRules.ts` | +1,5 a +2 kB | F2 |
+| jogo | `triggers.ts`, `contentRegistry.ts`, `progressGrants.ts`, `lockRules.ts` | +1,5 a +2 kB; **[medido em F2: +1.250 bytes, 389.477; o teto fica em 390.200, com 723 bytes de folga]** | F2 |
 | jogo | `mapModel.ts`, o toast, `doorGrant` | +1 kB | F3 |
 | jogo | `examineReach.ts` | +0,2 kB | F4 |
 
@@ -1391,3 +1407,135 @@ mantém o idioma. Console sem erro nem aviso novo.
 `SAMPLES` e outra em `ADDED_BY_THE_LOT` (`test:save`), uma em `saveIdsByField` (`validate.ts`, senão
 não compila) e a lista de campos que contam. O caso D já carrega um `locksSeen` com um id que o
 conteúdo não tem.
+
+### F2 — Uma porta só para o progresso (2026-10-04; commit local, sem push)
+
+T4, T5 e T6 inteiros. O que o jogador vê: a planta só lista a tranca que ele já tocou (a gaveta
+fechada de um save antigo some da lista até o primeiro `E`), e uma tranca que recusa responde com o
+zumbido em vez de silêncio. O conteúdo real não compila gatilho nenhum: `triggersFired` e `flags`
+ficam vazios em todo save.
+
+**Vermelho primeiro** (§9.1, passo 2), em dois tempos.
+
+Com as suítes escritas e a árvore de F1: `test:triggers` e `test:locks` nem carregavam
+(`progressGrants.ts` e `contentRegistry.ts` não existiam), e `test:save` reprovava 8 de 29 (sem
+`grant`, sem `progressRules.ts` na lista de módulos do store, sem `locksSeen`).
+
+Depois, com a infraestrutura nova no lugar (o slot, os gatilhos, `commitProgress`) e **as três
+regras extraídas nos valores de hoje** (o avaliador de condições intocado; `hotspotGrant`
+devolvendo os efeitos da peça sempre que os obrigatórios estão completos; `attemptLock` abrindo o
+modal para toda tranca fechada e `pendingLocks` listando toda tranca fechada; os componentes
+intocados):
+
+- `test:triggers`, 11 de 30. «an empty save has "ball-spalding" catalogued: the evaluator ignores
+  the field»; e por causa disso «half a condition fired the trigger»: com o avaliador de hoje,
+  **todo** gatilho que pergunta por um campo novo dispara num save vazio. «An optional detail found
+  later does not repeat the piece's effect (S11)»: «a detail wrote what only the piece's effect may
+  write: `credentials`». A fiação acusou 22 problemas, o segundo deles «engine/Interaction.tsx calls
+  `applyUnlockEffect`»;
+- `test:locks`, 6 de 14. «No kind of lock without a panel ever answers "ask" (S1)»: abriram modal
+  `badge`, `medallion-plinth`, `ritual` e `tool`. «A lock nobody touched is on the plan», e o save
+  `production-drawer-closed` listava a gaveta nunca tocada;
+- `test:opening`: os oito códigos novos, todos com «does not accuse».
+
+Com tudo verde, 38 mutações foram aplicadas uma a uma (o arquivo voltava ao original depois de
+cada uma) e cada uma reprovou pelo menos o caso que a nomeia: o commit sem assentar; o commit que
+sempre escreve; o store que não escuta o registro, que não assenta na criação, ou que assenta e não
+agenda a escrita; gatilho disparado e não anotado; ponto fixo sem limite; `open-lock` e `openLock`
+sem `locksSeen`; `anyOf` valendo como «todos»; o avaliador ignorando `flags`; o detalhe esquecendo
+o que foi visto antes; a chave gasta abrindo de graça; um código mais longo abrindo; a planta
+listando toda tranca fechada; sem o migrador do lote 2; `onOpen` não compilado; o rádio, a entrada e
+a troca de sala em duas escritas; «Novo jogo» por fora da porta; a classe de uma condição ignorando
+os ramos; o validador sem olhar o `when` dos gatilhos nem os ramos; qualquer portal contando como
+porta; o museu sem se registrar; um save de build posterior fazendo o avaliador lançar.
+
+**Onde a execução se afastou do plano.**
+
+- **`commitProgress(update, session?)`**: sem mudança no save, não há `set` do `progress` nem
+  `persist`; mas o `session` sai mesmo assim (o fim de uma transmissão que não é chamada tem de
+  tirar o rádio do ar). Para «sem mudança» valer, quem atualiza tem de devolver o próprio objeto:
+  os verbos `record*`, `powerRoom`, `openLock`, `grantCredential`, `carryDevice` e `recordHint`
+  viraram `grant` com a lista nomeada (antes, regravar um documento já lido notificava todo
+  mundo). `start` passou a ser uma notificação só (eram duas), e entrar de novo na mesma sala não
+  faz um save novo.
+- **`openLock` do store concede `locksSeen` junto.** É o que mantém `locksOpened ⊆ locksSeen` por
+  qualquer porta, inclusive a das suítes.
+- **`conditionClasses`** (o conjunto) existe ao lado de `conditionClass` (a pior): o validador diz
+  as duas acusações de uma vez. A classe de cada campo é a tabela `CONDITION_FIELD_CLASS`, tipada
+  contra `keyof ProgressCondition`: campo novo no schema sem classe não compila. Pior é
+  `negative`, depois `all`.
+- **Campo que o save não tem responde «não» sem lançar**: o avaliador confere `Array.isArray`. Um
+  save de build posterior traz, num campo que este build não sanitiza, o que aquele build gravou.
+- **`credentialKey` mora em `progressCondition.ts` e `lockCredentialKeys` em `lockRules.ts`**;
+  `validate.ts` importa as duas em vez de ter cópias. O grafo que o portão prova é escrito pelas
+  funções que o jogo usa.
+- **Os códigos de condição levam `id`** (o id que falta), inclusive os quatro que já existiam.
+  `condition-credential-missing` acusa a credencial que nenhum efeito do conteúdo concede.
+  `roomsVisited` com sala desconhecida é `condition-room-missing`. Não há código para `flags`
+  (`flag-never-set` é de T10).
+- **`effect-target-missing` e as credenciais**: ver T5, item 6, reescrito. Os três códigos antigos
+  de `validateReferences` (`power-effect-room-missing`, `open-effect-lock-missing`,
+  `reveal-effect-document-missing`) saíram; nenhuma suíte nem dívida os citava.
+- **`Lock`** virou `LockBase & { … }` por variante: `id`, `mapLabelKey` e `onOpen` num lugar só.
+- **`attemptLock`**: tranca de conhecimento cujo fato não existe devolve `refused: 'unsupported'`
+  (um teclado sem resposta nunca fecharia pelo código certo). E o componente que encontra um
+  `lockId` que o conteúdo não tem recusa com o som, sem chamar a regra.
+- **`settleTriggers`** pula, dentro da passada, o gatilho cujo id já está anotado: dois gatilhos
+  com o mesmo id são um só para o save (o validador acusa o segundo).
+- **`saveIdsByField`**: `locksSeen` são as trancas; `flags`, as que algum efeito põe;
+  `triggersFired`, os ids compilados. Com o conteúdo de hoje as duas últimas são vazias, e um alias
+  para elas é recusado.
+- **`progressWiringProblems(read, components)`** (ver T5 e T6, item 7).
+- **Bibliotecas de teste novas**: `scripts/lib/storeActions.ts` (a tabela de toda função do store,
+  que morava em `test-save.ts`) e `scripts/lib/storePage.ts` (o store carregado como o navegador
+  carrega, com `slip` para pôr algo no save por fora das ações, `notifications`, `timersAsked` e
+  `idleAfterBirth`). **Função nova no store entra em `STORE_ACTIONS`**, senão `test:save` e
+  `test:triggers` reprovam; e entra, por nome, numa das duas listas de `test:triggers` («assenta»
+  ou «não toca no save»).
+- **`?qaPower`** (`PlayerController.tsx`, só em DEV) continua escrevendo o `progress` por
+  `setState`, por fora de `commitProgress`: é a ponte do harness, não um verbo do jogo. Nada o
+  assenta até a ação seguinte.
+
+**Medições.** Título 28.646 bytes de gzip (igual a F1), documento 63.236, jogo 389.477 (+1.250).
+Nenhum teto mudou; a folga do jogo é de 723 bytes. `npm run check` e `npm run build` verdes;
+`test:qa-save` (21), `test:opening-flow` (44) e `test:radio` (27) verdes sem nenhuma edição.
+`test:triggers` tem 30 casos e `test:locks`, 14.
+
+**No navegador, depois do verde** (servidor `museum-dev` reiniciado; 1280 × 720, painel visível):
+
+- `?qaSave=production-drawer-closed`, «Continuar»: o registro de regras está preenchido depois do
+  clique (o chunk do canvas o importa); a planta **não lista tranca nenhuma**. Diante da gaveta o
+  prompt diz «Trancado»; o `E` abre o teclado e `locksSeen` ganha `office-drawer`; `Esc`; a planta
+  lista «Gaveta com segredo — 4 dígitos» (em inglês, “Combination drawer — 4 digits”). `1895` nos
+  botões do teclado: «errado», nada abre, nada mais é escrito. `1896`: a gaveta abre, o bilhete
+  aparece, a tranca sai da planta, e o disco tem `locksOpened` e `locksSeen` com a gaveta e
+  `triggersFired` vazio. Tocada e deixada fechada, a tranca continua na planta depois de recarregar
+  sem o parâmetro;
+- `?qaSave=production-drawer-open`: carrega com `locksSeen: ['office-drawer']`, a planta sem
+  tranca, o prompt «Ler», e reler a gaveta não faz um save novo (o mesmo objeto);
+- `?qaSave=production-catalogued-unturned`, no saguão: pegar a bola de oito gomos grava o detalhe
+  opcional numa escrita; girá-la grava o detalhe obrigatório **e** a ficha na mesma escrita;
+- 844 × 390, pelos botões de toque: «Ação» diante da gaveta abre o teclado, «Fechar» fecha, o
+  caderno abre pelo botão e a planta lista a tranca (abaixo da dobra, dentro da rolagem do
+  caderno, onde a lista já ficava);
+- jogo novo (com o servidor reiniciado outra vez, depois da última edição do store): «Entrar no
+  museu» grava `roomsVisited: ['office']`; a luminária acende pelo `E`; a porta abre pelo `E` e a
+  travessia, andada com `W`, chega ao saguão numa notificação só (sala, sala anterior, visitadas e
+  `lastRoom` juntas); a primeira chamada do Jorge, ouvida até o fim em tempo real, entra em
+  `radioCalls` na mesma notificação que tira o rádio do ar;
+- console sem erro, e sem aviso novo. Viewport de volta ao preset desktop, `localStorage` da
+  origem de desenvolvimento vazio.
+
+**Para F3.**
+
+- `PROGRESS_FIELDS` ganha `doorsReleased`: linha em `SAMPLES` e em `addedByTheLot` (`test:save`),
+  em `saveIdsByField` (as portas: o portal que declara a folha, como em `condition-door-missing`) e
+  na lista de campos que contam. `ConditionProgress.doorsReleased` e o caso de `test:triggers` já
+  existem; `doorGrant` entra em `progressGrants.ts`.
+- T8 leva `pendingLocks` para dentro de `mapModel`: a linha de `progressWiringProblems` que pede
+  `pendingLocks(MUSEUM.locks, progress)` em `MuseumMap.tsx`, e a mutação «the plan listing every
+  shut lock» de `test:locks`, mudam junto.
+- O teto `game` tem 723 bytes de folga e `mapModel.ts` mais o toast pesam mais que isso: sobe no
+  commit de F3, com o motivo.
+- `CONTENT_LOT` passa a 2 em F3. O migrador do lote 2 já está na árvore e roda para o save
+  carimbado com 2 (DL2-6), e `test:save` prende isso.

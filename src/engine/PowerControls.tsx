@@ -25,12 +25,14 @@ import type { BakedBundle } from '../content/bake.generated'
 import { MUSEUM } from '../content/museum'
 import type { PowerControlData, RoomData } from '../content/schema'
 import { isModalOpen, useMuseum } from '../state/store'
+import { museumAudio } from './audio'
 import { USE_DRACO, USE_MESHOPT } from './bundleCache'
 import type { CollisionWorld } from './collision'
 import { paintLenses } from './deviceNodes'
 import { PROXY_MATERIAL_PROPS, paddedProxy } from './interactionProxy'
 import { INTERACTION_REACH, interactionWinnerOf, PROXY_MINIMUM } from './interactionTarget'
 import { cloneKitPart, disposeKitPart, registerKitColliders } from './kitPart'
+import { attemptLock } from './lockRules'
 import type { MaterialLibrary } from './materials'
 import { isRoomPowered, powerControlLensMaterial } from './power'
 import { isUnclaimedInteractKey, subscribePrimaryAction } from './primaryAction'
@@ -238,15 +240,28 @@ export function PowerControlTargeting() {
       const record = controlsById.get(winner.id)
       if (!record || isRoomPowered(record.room, state.progress.roomsPowered)) return false
 
-      // A future locked breaker uses the existing lock graph. The current
-      // slice leaves these controls open, so power restoration remains a
-      // discovery beat rather than another keypad.
-      if (
-        record.room.powerLockId &&
-        !state.progress.locksOpened.includes(record.room.powerLockId)
-      ) {
-        state.setActiveLock(record.room.powerLockId)
-        return true
+      // A locked breaker uses the lock graph, by the same rule as a cabinet
+      // (`Containers.tsx`): only `ask` opens a panel, a refusal is a sound.
+      // The content leaves these controls open today, so power restoration
+      // remains a discovery beat rather than another keypad.
+      const lockId = record.room.powerLockId
+      if (lockId) {
+        const lock = MUSEUM.locks.find((candidate) => candidate.id === lockId)
+        if (!lock) {
+          museumAudio.lockDenied()
+          return true
+        }
+        const attempt = attemptLock(lock, MUSEUM.facts, state.progress, { kind: 'touch' })
+        if (attempt.outcome !== 'open') state.grant(attempt.grant)
+        if (attempt.outcome === 'ask') {
+          if (document.pointerLockElement) document.exitPointerLock()
+          state.setActiveLock(lock.id)
+          return true
+        }
+        if (attempt.outcome === 'refused') {
+          museumAudio.lockDenied()
+          return true
+        }
       }
 
       state.powerRoom(record.room.id)

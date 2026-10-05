@@ -81,6 +81,18 @@ export type Progress = {
   roomsVisited: string[]
   roomsPowered: string[]
   locksOpened: string[]
+  /**
+   * Locks the player has touched, open or not: what the plan may name. Every
+   * opened lock is in here too.
+   */
+  locksSeen: string[]
+  /** Story flags, set by triggers and by migrations. */
+  flags: string[]
+  /**
+   * Triggers that have fired; each fires once. An id the content no longer
+   * has, or does not have yet, stays: it is another build's record.
+   */
+  triggersFired: string[]
   /** Radio calls heard to their last line; each one plays exactly once. */
   radioCalls: string[]
   /**
@@ -208,6 +220,10 @@ export const PROGRESS_FIELDS = {
   roomsVisited: { ...idList, counts: false },
   roomsPowered: { ...idList, counts: true },
   locksOpened: { ...idList, counts: true },
+  locksSeen: { ...idList, counts: true },
+  flags: { ...idList, counts: true },
+  // The bookkeeping of what already happened, not something that happened.
+  triggersFired: { ...idList, counts: false },
   radioCalls: { ...idList, counts: true },
   clockSeconds: { fresh: (): Record<string, number> => ({}), read: clockSeconds, counts: false },
   hintsShown: { ...idList, counts: false },

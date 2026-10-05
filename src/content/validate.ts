@@ -11,21 +11,23 @@
  * broken content edit fails loudly instead of at runtime.
  */
 
+import { lockCredentialKeys } from '../engine/lockRules.ts'
+import { conditionClasses, credentialKey } from '../engine/progressCondition.ts'
 import { MOUNT_PARTS, mountPartNames, transitionDoorPartNames } from '../engine/runtimePlacedParts.ts'
 import { buildRoomSignageLayout } from '../engine/signageLayout.ts'
+import { compileTriggers } from '../engine/triggers.ts'
 import type { ListField } from '../state/progressFields.ts'
 import { validateFactCaptures, type FactCaptureSet } from './factCapture.ts'
 import { settleKnownDebt, type KnownDebt } from './knownDebt.ts'
 import { PRE_OPENING_SAVE, SAVE_ALIASES, type SaveAlias } from './legacySave.ts'
 import type {
-  Credential,
   DeviceData,
   ExhibitMount,
   Fact,
-  Lock,
   MuseumContent,
   ProgressCondition,
   RoomData,
+  UnlockEffect,
 } from './schema'
 
 export type ValidationIssue = {
@@ -52,28 +54,9 @@ const SPAWN_CLEARANCE = 0.3
 /** Wall thickness in the bake; a room's plaster face is half of it inside the shell line. */
 const SHELL_WALL = 0.25
 
-function credentialKey(credential: Credential): string {
-  return `${credential.kind}:${credential.id}`
-}
-
-/**
- * A lock's requirements expressed as the credential keys that satisfy it.
- * Knowledge and ritual locks are satisfied by information, not inventory, so
- * they resolve through the fact set instead.
- */
-function lockCredentialKeys(lock: Lock): readonly string[] {
-  switch (lock.kind) {
-    case 'badge':
-      return [`badge:${lock.requires}`]
-    case 'medallion-plinth':
-      return lock.requires.map((id) => `medallion:${id}`)
-    case 'tool':
-      return [`tool:${lock.requires}`]
-    case 'knowledge':
-    case 'ritual':
-      return []
-  }
-}
+// How a credential is spelt, and which ones a lock asks for, are the runtime's
+// own functions (`engine/progressCondition.ts`, `engine/lockRules.ts`): the
+// gate must not prove a lock graph spelt differently from the one that is played.
 
 // ---------------------------------------------------------------------------
 // Referential integrity
@@ -156,26 +139,8 @@ function validateReferences(content: MuseumContent): ValidationIssue[] {
         error('fact-missing', `Exhibit "${exhibit.id}" hotspot "${hotspot.id}" reveals unknown fact "${hotspot.revealsFactId}".`)
       }
     }
-    for (const effect of exhibit.unlocks ?? []) {
-      if (effect.kind === 'power-room' && !roomIds.has(effect.roomId)) {
-        error(
-          'power-effect-room-missing',
-          `Exhibit "${exhibit.id}" powers unknown room "${effect.roomId}".`,
-        )
-      }
-      if (effect.kind === 'open-lock' && !lockIds.has(effect.lockId)) {
-        error(
-          'open-effect-lock-missing',
-          `Exhibit "${exhibit.id}" opens unknown lock "${effect.lockId}".`,
-        )
-      }
-      if (effect.kind === 'reveal-document' && !documentIds.has(effect.documentId)) {
-        error(
-          'reveal-effect-document-missing',
-          `Exhibit "${exhibit.id}" reveals unknown document "${effect.documentId}".`,
-        )
-      }
-    }
+    // What its `unlocks` name is checked with every other effect, wherever it
+    // is written (`validateTriggers`: `effect-target-missing`).
     // The "you must turn it over" rule only bites if such a hotspot exists.
     if (!exhibit.hotspots.some((hotspot) => hotspot.requiredForCatalogue)) {
       issues.push({
@@ -909,13 +874,30 @@ function validateRadioPatience(device: RadioDeviceData, error: Report, warning: 
  */
 export function validateOpening(content: MuseumContent): ValidationIssue[] {
   const issues: ValidationIssue[] = []
-  const error = (code: string, message: string) =>
-    issues.push({ severity: 'error', code, message })
+  const error = (code: string, message: string, id?: string) =>
+    issues.push({ severity: 'error', code, message, ...(id === undefined ? {} : { id }) })
   const warning = (code: string, message: string) =>
     issues.push({ severity: 'warning', code, message })
   const roomIds = new Set<string>(content.rooms.map((room) => room.id))
   const lockIds = new Set(content.locks.map((lock) => lock.id))
   const documentIds = new Set(content.documents.map((doc) => doc.id))
+  const exhibitIds = new Set(content.exhibits.map((exhibit) => exhibit.id))
+  const hotspotKeys = new Set(
+    content.exhibits.flatMap((exhibit) => exhibit.hotspots.map((hotspot) => `${exhibit.id}:${hotspot.id}`)),
+  )
+  // A door is the portal that declares the leaf. The portal facing it across
+  // the same opening has an id too, and is not a door: the save never holds it.
+  const doorIds = new Set(
+    content.rooms.flatMap((room) => room.portals.flatMap((portal) => (portal.transitionDoor ? [portal.id] : []))),
+  )
+  const triggers = compileTriggers(content)
+  // A credential exists for a condition when something hands it out. One that
+  // only a lock asks for is that lock's problem, and never becomes true here.
+  const grantedCredentials = new Set(
+    triggers.flatMap((trigger) =>
+      trigger.effects.flatMap((effect) => (effect.kind === 'grant-credential' ? [credentialKey(effect.credential)] : [])),
+    ),
+  )
   // Only a device the player can take away is ever "carried": a condition
   // naming any other id would wait for something that cannot happen.
   const carriableIds = new Set(
@@ -949,16 +931,20 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
   }
 
   // --- conditions ------------------------------------------------------------
-  const checkCondition = (condition: ProgressCondition, where: string) => {
-    for (const roomId of [...(condition.powered ?? []), ...(condition.unpowered ?? [])]) {
-      if (!roomIds.has(roomId)) error('condition-room-missing', `${where} names unknown room "${roomId}".`)
+  const checkCondition = (condition: ProgressCondition, where: string): void => {
+    for (const roomId of [
+      ...(condition.powered ?? []),
+      ...(condition.unpowered ?? []),
+      ...(condition.roomsVisited ?? []),
+    ]) {
+      if (!roomIds.has(roomId)) error('condition-room-missing', `${where} names unknown room "${roomId}".`, roomId)
     }
     for (const lockId of [...(condition.locksOpened ?? []), ...(condition.locksClosed ?? [])]) {
-      if (!lockIds.has(lockId)) error('condition-lock-missing', `${where} names unknown lock "${lockId}".`)
+      if (!lockIds.has(lockId)) error('condition-lock-missing', `${where} names unknown lock "${lockId}".`, lockId)
     }
     for (const documentId of [...(condition.documentsRead ?? []), ...(condition.documentsUnread ?? [])]) {
       if (!documentIds.has(documentId)) {
-        error('condition-document-missing', `${where} names unknown document "${documentId}".`)
+        error('condition-document-missing', `${where} names unknown document "${documentId}".`, documentId)
       }
     }
     for (const deviceId of condition.carried ?? []) {
@@ -966,10 +952,48 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
         error(
           'condition-device-missing',
           `${where} waits for device "${deviceId}" to be carried, but no device with \`carriedOnUse\` has that id.`,
+          deviceId,
         )
       }
     }
+    for (const exhibitId of condition.catalogued ?? []) {
+      if (!exhibitIds.has(exhibitId)) {
+        error('condition-exhibit-missing', `${where} names unknown exhibit "${exhibitId}".`, exhibitId)
+      }
+    }
+    for (const key of condition.hotspotsSeen ?? []) {
+      if (!hotspotKeys.has(key)) {
+        error(
+          'condition-hotspot-missing',
+          `${where} names "${key}", which is no detail of any exhibit (the save spells one \`exhibitId:hotspotId\`).`,
+          key,
+        )
+      }
+    }
+    for (const doorId of condition.doorsReleased ?? []) {
+      if (!doorIds.has(doorId)) {
+        error(
+          'condition-door-missing',
+          `${where} names "${doorId}", which is not a door: a door is named by the portal that declares its \`transitionDoor\`.`,
+          doorId,
+        )
+      }
+    }
+    for (const key of (condition.credentials ?? []).map(credentialKey)) {
+      if (!grantedCredentials.has(key)) {
+        error(
+          'condition-credential-missing',
+          `${where} waits for credential "${key}", which no effect in the content grants.`,
+          key,
+        )
+      }
+    }
+    // A branch is a condition like any other, and a typo in one is as silent.
+    for (const [index, branch] of (condition.anyOf ?? []).entries()) {
+      checkCondition(branch, `${where}, branch ${index + 1}`)
+    }
   }
+  for (const trigger of content.triggers ?? []) checkCondition(trigger.when, `Trigger "${trigger.id}"`)
 
   // --- notebooks -------------------------------------------------------------
   for (const doc of content.documents) {
@@ -1114,6 +1138,86 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
 }
 
 /**
+ * Triggers: the consequences of a save, each of which fires once and for good.
+ *
+ * All of these compile and run. A trigger sharing an id with another never
+ * fires, because the save has that id on record from the first. An effect
+ * naming a lock, a room or a paper the content does not have writes an id
+ * nothing reads. And a guard that asks "is this still shut?" or "is every
+ * piece catalogued?" makes a one-shot consequence depend on the order the
+ * player did things in, or on how many rooms this lot happens to have.
+ *
+ * Read off the compiled list, so an exhibit's `unlocks` and a lock's `onOpen`
+ * are held to the same rules as an authored trigger.
+ */
+export function validateTriggers(content: MuseumContent): ValidationIssue[] {
+  const issues: ValidationIssue[] = []
+  const error = (code: string, id: string, message: string) =>
+    issues.push({ severity: 'error', code, id, message })
+  const roomIds = new Set<string>(content.rooms.map((room) => room.id))
+  const lockIds = new Set(content.locks.map((lock) => lock.id))
+  const documentIds = new Set(content.documents.map((doc) => doc.id))
+
+  /** What an effect points at in the content; null for one that points at nothing there. */
+  const targetOf = (effect: UnlockEffect): { readonly id: string; readonly known: boolean; readonly what: string } | null => {
+    switch (effect.kind) {
+      case 'open-lock':
+        return { id: effect.lockId, known: lockIds.has(effect.lockId), what: 'lock' }
+      case 'power-room':
+        return { id: effect.roomId, known: roomIds.has(effect.roomId), what: 'room' }
+      case 'reveal-document':
+        return { id: effect.documentId, known: documentIds.has(effect.documentId), what: 'document' }
+      // A flag is made by being set. A credential is a member of the schema's
+      // own unions until credentials are data (L3): the compiler holds its id,
+      // and whether anything asks for it is the simulation's question.
+      case 'set-flag':
+      case 'grant-credential':
+        return null
+    }
+  }
+
+  const seen = new Set<string>()
+  for (const trigger of compileTriggers(content)) {
+    if (seen.has(trigger.id)) {
+      error(
+        'trigger-duplicate',
+        trigger.id,
+        `Trigger id "${trigger.id}" is used twice: the save records a trigger by id, so the second would never fire.`,
+      )
+    }
+    seen.add(trigger.id)
+
+    for (const effect of trigger.effects) {
+      const target = targetOf(effect)
+      if (target && !target.known) {
+        error(
+          'effect-target-missing',
+          target.id,
+          `Trigger "${trigger.id}" has a \`${effect.kind}\` effect on unknown ${target.what} "${target.id}".`,
+        )
+      }
+    }
+
+    const classes = conditionClasses(trigger.when)
+    if (classes.has('negative')) {
+      error(
+        'gate-uses-negative-condition',
+        trigger.id,
+        `Trigger "${trigger.id}" is guarded by something that can stop being true (\`unpowered\`, \`locksClosed\`, \`documentsUnread\`): whether it ever fires would depend on the order the player did things in.`,
+      )
+    }
+    if (classes.has('all')) {
+      error(
+        'gate-uses-all-condition',
+        trigger.id,
+        `Trigger "${trigger.id}" is guarded by "all rooms" or "all catalogued": the next lot's room or piece would change what it means. Name the ids.`,
+      )
+    }
+  }
+  return issues
+}
+
+/**
  * The ids each list of the save holds, as the content defines them; null for
  * a list whose ids the content does not define.
  *
@@ -1123,6 +1227,9 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
 function saveIdsByField(content: MuseumContent): Record<ListField, ReadonlySet<string> | null> {
   const rooms = new Set<string>(content.rooms.map((room) => room.id))
   const devices = content.rooms.flatMap((room) => room.devices ?? [])
+  const locks = new Set(content.locks.map((lock) => lock.id))
+  const triggers = compileTriggers(content)
+  const effects = triggers.flatMap((trigger) => trigger.effects)
   return {
     catalogued: new Set(content.exhibits.map((exhibit) => exhibit.id)),
     hotspots: new Set(
@@ -1130,18 +1237,18 @@ function saveIdsByField(content: MuseumContent): Record<ListField, ReadonlySet<s
     ),
     documentsRead: new Set(content.documents.map((doc) => doc.id)),
     factsKnown: new Set(content.facts.map((fact) => fact.id)),
-    // What a lock asks for and what an exhibit hands out, in the store's own spelling.
+    // What a lock asks for and what an effect hands out, in the store's own spelling.
     credentials: new Set([
       ...content.locks.flatMap(lockCredentialKeys),
-      ...content.exhibits.flatMap((exhibit) =>
-        (exhibit.unlocks ?? []).flatMap((effect) =>
-          effect.kind === 'grant-credential' ? [credentialKey(effect.credential)] : [],
-        ),
-      ),
+      ...effects.flatMap((effect) => (effect.kind === 'grant-credential' ? [credentialKey(effect.credential)] : [])),
     ]),
     roomsVisited: rooms,
     roomsPowered: rooms,
-    locksOpened: new Set(content.locks.map((lock) => lock.id)),
+    locksOpened: locks,
+    locksSeen: locks,
+    // A flag exists by being set: there is no list of them but the effects.
+    flags: new Set(effects.flatMap((effect) => (effect.kind === 'set-flag' ? [effect.flag] : []))),
+    triggersFired: new Set(triggers.map((trigger) => trigger.id)),
     radioCalls: new Set(
       devices.flatMap((device) => (device.kind === 'radio' ? device.calls.map((call) => call.id) : [])),
     ),
@@ -2131,6 +2238,7 @@ export function validateContent(
     ...validateAttribution(content),
     ...validateSolvability(content),
     ...validateOpening(content),
+    ...validateTriggers(content),
     ...validatePortals(content),
     ...validateWallMounts(content),
     ...validatePacing(content),

@@ -22,6 +22,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import { MUSEUM } from '../content/museum'
+import { attemptLock } from '../engine/lockRules'
+import { containerGrant } from '../engine/progressGrants'
 import { useTranslate } from '../i18n'
 import { useMuseum } from '../state/store'
 import { canSubmitCode, closeLabel, lockKeyIntent } from './hudRules'
@@ -34,7 +36,6 @@ const DEFAULT_DIGITS = 4
 export function LockPanel() {
   const lockId = useMuseum((state) => state.activeLock)
   const setActiveLock = useMuseum((state) => state.setActiveLock)
-  const openLock = useMuseum((state) => state.openLock)
   const setOpenedContainer = useMuseum((state) => state.setOpenedContainer)
   const coarse = useCoarsePointer()
   const t = useTranslate()
@@ -104,31 +105,39 @@ export function LockPanel() {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [digits, lockId, setActiveLock])
 
+  // Nothing opens this panel for another kind of lock: the handlers ask
+  // `attemptLock`, and only its `ask` outcome sets `activeLock`.
   if (!lock || lock.kind !== 'knowledge' || !fact) return null
 
   const submit = () => {
     // The button is disabled below a full code; Enter obeys the same rule.
     if (!canSubmitCode(entry, digits)) return
-    if (entry === fact.value) {
-      openLock(lock.id)
-      setActiveLock(null)
-      // Opening it immediately shows what was inside — the reward should not
-      // need a second interaction to collect.
-      const container = MUSEUM.rooms
-        .flatMap((room) => room.containers ?? [])
-        .find((candidate) => candidate.lockId === lock.id)
-      if (container) {
-        for (const doc of MUSEUM.documents.filter((d) => d.containerId === container.id)) {
-          useMuseum.getState().recordDocument(doc.id)
-        }
-        setOpenedContainer(container.id)
-      }
+    const state = useMuseum.getState()
+    // The same rule the world asks when the lock is touched, so the code is
+    // compared in one place and an opened lock is written in one way.
+    const attempt = attemptLock(lock, MUSEUM.facts, state.progress, { kind: 'code', entry })
+    if (attempt.outcome !== 'open') state.grant(attempt.grant)
+    // Anything short of open is a wrong try, and a wrong try costs nothing
+    // but the digits: there is no count in the save to run out of.
+    if (attempt.outcome !== 'open' && attempt.outcome !== 'opened') {
+      setAttempts((current) => current + 1)
+      setWrong(true)
+      setEntry('')
       return
     }
 
-    setAttempts((current) => current + 1)
-    setWrong(true)
-    setEntry('')
+    setActiveLock(null)
+    // Opening it immediately shows what was inside — the reward should not
+    // need a second interaction to collect. Recorded by the grant the cabinet
+    // itself uses (`Containers.tsx`): this used to record the documents and
+    // forget the facts they reveal.
+    const container = MUSEUM.rooms
+      .flatMap((room) => room.containers ?? [])
+      .find((candidate) => candidate.lockId === lock.id)
+    if (container) {
+      state.grant(containerGrant(MUSEUM, container.id))
+      setOpenedContainer(container.id)
+    }
   }
 
   submitRef.current = submit

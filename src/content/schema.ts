@@ -167,53 +167,72 @@ export type HintLadder = {
   readonly revealAfterAttempts: number
 }
 
+/**
+ * What every kind of lock has, whatever opens it.
+ *
+ * `onOpen` is what opening it gives, once. It is compiled into a trigger
+ * (`lock:<id>:opened`), so a save in which the lock was already open when a
+ * lot added the effect receives it on the next load, like any other.
+ */
+type LockBase = {
+  readonly id: string
+  /** Auto-annotated on the map the moment the player touches the lock. */
+  readonly mapLabelKey: string
+  readonly onOpen?: readonly UnlockEffect[]
+}
+
 export type Lock =
-  | {
+  | (LockBase & {
       readonly kind: 'badge'
-      readonly id: string
       readonly requires: BadgeId
-      /** Auto-annotated on the map the moment the player touches the lock. */
-      readonly mapLabelKey: string
-    }
-  | {
+    })
+  | (LockBase & {
       readonly kind: 'medallion-plinth'
-      readonly id: string
       readonly requires: readonly MedallionId[]
-      readonly mapLabelKey: string
-    }
-  | {
+    })
+  | (LockBase & {
       readonly kind: 'tool'
-      readonly id: string
       readonly requires: ToolId
       /** Consumed on use, like RE4R's Small Keys. */
       readonly consumesTool: boolean
-      readonly mapLabelKey: string
-    }
-  | {
+    })
+  | (LockBase & {
       readonly kind: 'knowledge'
-      readonly id: string
       /** Must resolve to a Fact with usedAsCode: true. */
       readonly factId: string
       readonly digits: number
-      readonly mapLabelKey: string
       readonly hints: HintLadder
       /** The exhibit or document where the answer is discoverable in-world. */
       readonly sourceExhibitId: string
-    }
-  | {
+    })
+  | (LockBase & {
       readonly kind: 'ritual'
-      readonly id: string
       /** e.g. 'chronological-order' | 'match-ball-to-decade'. */
       readonly puzzle: string
-      readonly mapLabelKey: string
       readonly hints: HintLadder
-    }
+    })
 
 export type UnlockEffect =
   | { readonly kind: 'grant-credential'; readonly credential: Credential }
   | { readonly kind: 'open-lock'; readonly lockId: string }
   | { readonly kind: 'power-room'; readonly roomId: string }
   | { readonly kind: 'reveal-document'; readonly documentId: string }
+  /** A story flag: something happened that no other list of the save records. */
+  | { readonly kind: 'set-flag'; readonly flag: string }
+
+/**
+ * A consequence: when the save answers `when`, the effects happen, once.
+ *
+ * Once and for good, which is why `when` may only ask what stays true as the
+ * save grows (`conditionClass` in `progressCondition.ts`; the content gate
+ * refuses the rest). A trigger guarded by "this drawer is still shut" would
+ * fire or not by the order the player did things in.
+ */
+export type Trigger = {
+  readonly id: string
+  readonly when: ProgressCondition
+  readonly effects: readonly UnlockEffect[]
+}
 
 // ---------------------------------------------------------------------------
 // Exhibits
@@ -307,6 +326,20 @@ export type ProgressCondition = {
   readonly allRoomsPowered?: boolean
   /** Every exhibit in the museum is catalogued. */
   readonly allCatalogued?: boolean
+  /** All of these exhibits are catalogued. */
+  readonly catalogued?: readonly string[]
+  /** All of these details were seen: `${exhibitId}:${hotspotId}`, as the save keeps them. */
+  readonly hotspotsSeen?: readonly string[]
+  readonly credentials?: readonly Credential[]
+  readonly flags?: readonly string[]
+  readonly roomsVisited?: readonly EraId[]
+  /** Ids of physical doors: the portal that declares the leaf. */
+  readonly doorsReleased?: readonly string[]
+  /**
+   * At least one of these holds; every other requirement here still must.
+   * With none listed it never holds: "one of nothing" is not a way through.
+   */
+  readonly anyOf?: readonly ProgressCondition[]
 }
 
 // ---------------------------------------------------------------------------
@@ -850,4 +883,10 @@ export type MuseumContent = {
   readonly locks: readonly Lock[]
   readonly facts: readonly Fact[]
   readonly media: readonly MediaAsset[]
+  /**
+   * Consequences that belong to no single object. An exhibit's `unlocks` and
+   * a lock's `onOpen` are triggers too, compiled beside these
+   * (`engine/triggers.ts`).
+   */
+  readonly triggers?: readonly Trigger[]
 }

@@ -30,6 +30,7 @@ import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
 
 import { dynamicSpecifiers, staticImportGraph, staticSpecifiers } from './lib/staticImports.ts'
+import { STORE_ACTIONS as ACTIONS, STORE_ACTIONS_LEAVE as ACTED } from './lib/storeActions.ts'
 
 // ---------------------------------------------------------------------------
 // A browser's storage, in place before anything imports the store
@@ -70,7 +71,6 @@ const { migrateProgress, migrateProgressWith, SAVE_MIGRATIONS } = await import('
 const frozenL1 = await import('./lib/frozen/sanitiseProgress.L1.ts')
 
 type StoreModule = typeof import('../src/state/store.ts')
-type StoreState = ReturnType<StoreModule['useMuseum']['getState']>
 type Progress = ReturnType<typeof emptyProgress>
 type Field = keyof typeof PROGRESS_FIELDS
 type Raw = Record<string, unknown>
@@ -170,6 +170,9 @@ const SAMPLES = {
   roomsVisited: ['office', 'atrium'],
   roomsPowered: ['office', 'atrium'],
   locksOpened: ['office-drawer', 'holyoke-hero-seal'],
+  locksSeen: ['office-drawer', 'holyoke-hero-seal', 'atrium-plinth'],
+  flags: ['posse-signed', 'reopening-declared'],
+  triggersFired: ['exhibit:ball-spalding:catalogued', 'lock:office-drawer:opened'],
   radioCalls: ['porter-first-call', 'porter-radio-taken'],
   clockSeconds: { 'office-clock': 612, 'atrium-clock': 0.5 },
   hintsShown: ['journal-taken', 'radio-taken'],
@@ -368,89 +371,9 @@ await test('a radio memory keeps what a later build wrote inside a valid entry',
 // Rule 1: a field this build does not know stays
 // ---------------------------------------------------------------------------
 
-/**
- * Every function of the store, with arguments that make it do its work.
- *
- * All of them and not only the ones that write progress today: the list is
- * checked against the store, so an action added by a later lot cannot reach a
- * player without having been run against a save that holds a field it does
- * not know.
- */
-const ACTIONS: Record<string, (state: StoreState) => void> = {
-  setSetting: (state) => state.setSetting('brightness', 1.2),
-  start: (state) => state.start(),
-  setPointerLocked: (state) => state.setPointerLocked(true),
-  setSceneReady: (state) => state.setSceneReady(true),
-  setCurrentRoom: (state) => state.setCurrentRoom('holyoke'),
-  setVisibleRooms: (state) => state.setVisibleRooms(['holyoke', 'atrium']),
-  setTouchMove: (state) => state.setTouchMove(1, 0),
-  setTouchLook: (state) => state.setTouchLook(0, 1),
-  resetTouch: (state) => state.resetTouch(),
-  setFocusedExhibit: (state) => state.setFocusedExhibit('ball-spalding'),
-  setFocusedContainer: (state) => state.setFocusedContainer('office-notebook', 1),
-  setFocusedPowerControl: (state) => state.setFocusedPowerControl('office-lamp-switch', 1),
-  setFocusedTransitionDoor: (state) =>
-    state.setFocusedTransitionDoor({ id: 'atrium-to-office', targetRoom: 'atrium', status: 'ready', armed: false }),
-  setOpenedContainer: (state) => state.setOpenedContainer('office-notebook'),
-  setActiveLock: (state) => state.setActiveLock('office-drawer'),
-  setExamining: (state) => state.setExamining('ball-spalding'),
-  setFocusedDevice: (state) => state.setFocusedDevice('office-radio', 1),
-  toggleFlashlight: (state) => state.toggleFlashlight(),
-  setNotebookPage: (state) => state.setNotebookPage(2),
-  setJournalTab: (state) => state.setJournalTab('map'),
-  startRadio: (state) =>
-    state.startRadio({ deviceId: 'office-radio', speakerKey: 'radio.speaker.porter', lineKeys: ['a'], callId: 'call-heard-out' }),
-  // The last line of the call above: this is the write that records it as heard.
-  advanceRadio: (state) => state.advanceRadio(),
-  dropRadio: (state) => {
-    state.startRadio({ deviceId: 'office-radio', speakerKey: 'radio.speaker.porter', lineKeys: ['a', 'b'], callId: 'call-cut-short' })
-    state.dropRadio()
-  },
-  stopRadio: (state) => state.stopRadio(),
-  clearRadioHangUp: (state) => state.clearRadioHangUp(),
-  recordHotspot: (state) => state.recordHotspot('handbook-1897', 'innings'),
-  recordCatalogued: (state) => state.recordCatalogued('handbook-1897'),
-  recordDocument: (state) => state.recordDocument('doc-rule-changes'),
-  recordFact: (state) => state.recordFact('first-rulebook'),
-  grantCredential: (state) => state.grantCredential('tool:screwdriver'),
-  powerRoom: (state) => state.powerRoom('holyoke'),
-  openLock: (state) => state.openLock('atrium-plinth'),
-  recordRadioCall: (state) => state.recordRadioCall('call-recorded'),
-  carryDevice: (state) => state.carryDevice('spare-radio'),
-  rememberRadioCall: (state) =>
-    state.rememberRadioCall('office-radio', {
-      calls: 5,
-      temper: 2,
-      lastCallAt: 1791075960000,
-      lastHint: 3,
-      lastReplyId: null,
-      lastOutburstId: 'porter-outburst-kettle',
-    }),
-  recordClockSeconds: (state) => state.recordClockSeconds('office-clock', 700),
-  recordHint: (state) => state.recordHint('torch-used'),
-  applyUnlockEffect: (state) => {
-    state.applyUnlockEffect({ kind: 'grant-credential', credential: { kind: 'badge', id: 'archive' } })
-    state.applyUnlockEffect({ kind: 'open-lock', lockId: 'effect-lock' })
-    state.applyUnlockEffect({ kind: 'power-room', roomId: 'effect-room' })
-    state.applyUnlockEffect({ kind: 'reveal-document', documentId: 'effect-document' })
-  },
-}
-
-/** What the actions above must have left in the save, beyond what it began with. */
-const ACTED = {
-  roomsVisited: ['holyoke'],
-  lastRoom: 'holyoke',
-  radioCalls: ['call-heard-out', 'call-cut-short', 'call-recorded'],
-  hotspots: ['handbook-1897:innings'],
-  catalogued: ['handbook-1897'],
-  documentsRead: ['doc-rule-changes', 'effect-document'],
-  factsKnown: ['first-rulebook'],
-  credentials: ['tool:screwdriver', 'badge:archive'],
-  roomsPowered: ['holyoke', 'effect-room'],
-  locksOpened: ['atrium-plinth', 'effect-lock'],
-  devicesCarried: ['spare-radio'],
-  hintsShown: ['torch-used'],
-} as const
+// Every function of the store, with arguments that make it do its work, is the
+// table in `lib/storeActions.ts`: this suite runs each one against a save from
+// a later build, and `test:triggers` against a save with a consequence owed.
 
 await test('a field this build does not know survives the load, every action and the write', async () => {
   const page = await openGame(saveOf({ ...SAMPLE_SAVE, ...UNKNOWN }))
@@ -560,8 +483,10 @@ await test('"New game" is offered by the table: every field that counts is enoug
       'devicesCarried',
       'documentsRead',
       'factsKnown',
+      'flags',
       'hotspots',
       'locksOpened',
+      'locksSeen',
       'radioCalls',
       'roomsPowered',
     ],
@@ -646,6 +571,7 @@ await test('the store and what it imports statically never reach the content', (
     'src/content/legacySave.ts',
     'src/content/spawn.ts',
     'src/state/progressFields.ts',
+    'src/state/progressRules.ts',
     'src/state/saveMigrations.ts',
     'src/state/store.ts',
   ])
@@ -919,16 +845,41 @@ await test('an alias that points at an id the content does not have fails the co
     { sinceLot: 3, field: 'roomsVisited', from: 'old', to: 'holyoke' },
     { sinceLot: 3, field: 'roomsPowered', from: 'old', to: 'atrium' },
     { sinceLot: 3, field: 'locksOpened', from: 'old', to: 'office-drawer' },
+    { sinceLot: 3, field: 'locksSeen', from: 'old', to: 'office-drawer' },
     { sinceLot: 3, field: 'radioCalls', from: 'old', to: 'porter-first-call' },
     { sinceLot: 3, field: 'devicesCarried', from: 'old', to: 'office-radio' },
   ]
   assert.deepEqual(codes(good), [])
   // The same ids, each in a field that holds another kind: the right id in the wrong list carries nothing.
   const misplaced = good.map((alias, index) => ({ ...alias, to: good[(index + 1) % good.length].to }))
-  // Two neighbours share a kind (the two lists of rooms), so one of the nine is still right.
+  // Two pairs of neighbours share a kind (the two lists of rooms, the two of
+  // locks), so two of the ten are still right.
+  const sameKindAsNext = ['roomsVisited', 'locksOpened']
   assert.deepEqual(
     codes(misplaced),
-    misplaced.filter((alias) => alias.field !== 'roomsVisited').map((alias) => `legacy-save-alias ${alias.field}:${alias.from}`),
+    misplaced.filter((alias) => !sameKindAsNext.includes(alias.field)).map((alias) => `legacy-save-alias ${alias.field}:${alias.from}`),
+  )
+  // Every list of the save has a line in the gate's table of ids, or says it
+  // has none. The museum sets no flag and compiles no trigger in this lot, so
+  // an alias into either list leads nowhere yet.
+  const listFields = fields.filter((field) => Array.isArray(PROGRESS_FIELDS[field].fresh()))
+  const unchecked = listFields.filter((field) => !good.some((alias) => alias.field === field))
+  assert.deepEqual(unchecked.sort(), ['credentials', 'flags', 'hintsShown', 'triggersFired'])
+  assert.deepEqual(codes([{ sinceLot: 3, field: 'flags', from: 'old', to: 'posse-signed' }]), ['legacy-save-alias flags:old'])
+  assert.deepEqual(codes([{ sinceLot: 3, field: 'triggersFired', from: 'old', to: 'lock:office-drawer:opened' }]), [
+    'legacy-save-alias triggersFired:old',
+  ])
+  // With a museum that does set the flag and open the drawer onto something, both lead somewhere.
+  const withConsequences = {
+    ...MUSEUM,
+    locks: MUSEUM.locks.map((lock) => ({ ...lock, onOpen: [{ kind: 'set-flag' as const, flag: 'posse-signed' }] })),
+  }
+  assert.deepEqual(
+    validateSaveAliases(withConsequences, [
+      { sinceLot: 3, field: 'flags', from: 'old', to: 'posse-signed' },
+      { sinceLot: 3, field: 'triggersFired', from: 'old', to: 'lock:office-drawer:opened' },
+    ]),
+    [],
   )
   // A credential nothing in the content grants or asks for, and a list whose
   // ids the content does not define at all (the lessons are the HUD's): an
@@ -950,15 +901,50 @@ await test('an alias that points at an id the content does not have fails the co
 // The migration cases of the lot plan (docs/lotes/L2-plano.md, §5)
 // ---------------------------------------------------------------------------
 
-/** What this lot adds to a save that had none of it. Later slices add their fields here. */
-const ADDED_BY_THE_LOT = { contentLot: CONTENT_LOT }
+/**
+ * What this lot adds to a save that had none of it. Later slices add their
+ * fields here.
+ *
+ * A lock that is open was touched (DL2-4): that is all a save from before
+ * `locksSeen` proves. No flag is inferred and no trigger is taken as fired.
+ */
+const addedByTheLot = (raw: Raw) => ({
+  contentLot: CONTENT_LOT,
+  locksSeen: raw.locksOpened,
+  flags: [],
+  triggersFired: [],
+})
 
 await test('case A and B: production saves come out as they went in, plus the lot', async () => {
   for (const id of ['production-drawer-open', 'production-drawer-closed', 'production-catalogued-unturned', 'production-radio-on-desk'] as const) {
     const raw = rawFixture(id)
     const page = await openGame(SAVE_FIXTURES[id].save)
-    assert.deepEqual(page.progress(), { ...raw, ...ADDED_BY_THE_LOT }, id)
+    assert.deepEqual(page.progress(), { ...raw, ...addedByTheLot(raw) }, id)
   }
+  // By value, so that the helper above cannot agree with a mistake: the open
+  // drawer is on the plan's list of touched locks, the shut one is not yet.
+  assert.deepEqual((await openGame(SAVE_FIXTURES['production-drawer-open'].save)).progress().locksSeen, ['office-drawer'])
+  assert.deepEqual((await openGame(SAVE_FIXTURES['production-drawer-closed'].save)).progress().locksSeen, [])
+})
+
+await test('a save that says what it touched keeps it, and still gains every lock it opened', () => {
+  const said = migrateProgress({
+    version: 1,
+    radioCalls: [],
+    locksOpened: ['office-drawer', 'atrium-plinth'],
+    locksSeen: ['holyoke-hero-seal', 'office-drawer'],
+    flags: ['posse-signed'],
+    triggersFired: ['a-trigger-this-build-never-had'],
+  })
+  assert.deepEqual(said.locksSeen, ['holyoke-hero-seal', 'office-drawer', 'atrium-plinth'])
+  assert.deepEqual(said.flags, ['posse-signed'])
+  // Another build's record of what already happened: this one has no trigger
+  // of that name and no business forgetting that it fired.
+  assert.deepEqual(said.triggersFired, ['a-trigger-this-build-never-had'])
+  // The repair reaches a save this lot already stamped (DL2-6): a slice of the
+  // lot wrote it before the slice that knows about touched locks.
+  const stamped = migrateProgress({ version: 1, radioCalls: [], contentLot: 2, locksOpened: ['office-drawer'] })
+  assert.deepEqual(stamped.locksSeen, ['office-drawer'])
 })
 
 await test('case C: the pre-opening save is brought forward as before, plus the lot', async () => {
@@ -972,7 +958,7 @@ await test('case C: the pre-opening save is brought forward as before, plus the 
     hintsShown: [PRE_OPENING_SAVE.journalHintId],
     devicesCarried: [],
     radioMemory: {},
-    ...ADDED_BY_THE_LOT,
+    ...addedByTheLot(raw),
   })
 })
 
@@ -1027,12 +1013,19 @@ await test('case F: junk in a field is that field\'s default, and the rest of th
     contentLot: 'x',
     catalogued: 'abc',
     locksOpened: [1, 'office-drawer', null],
+    locksSeen: [1, 'holyoke-hero-seal', null],
+    flags: 'abc',
+    triggersFired: { 'lock:office-drawer:opened': true },
     clockSeconds: [12],
     lastRoom: 4,
   })
   assert.equal(junk.contentLot, CONTENT_LOT)
   assert.deepEqual(junk.catalogued, [])
   assert.deepEqual(junk.locksOpened, ['office-drawer'])
+  // What was valid in the list, then the lock the save proves was touched.
+  assert.deepEqual(junk.locksSeen, ['holyoke-hero-seal', 'office-drawer'])
+  assert.deepEqual(junk.flags, [])
+  assert.deepEqual(junk.triggersFired, [])
   assert.deepEqual(junk.clockSeconds, {})
   assert.equal(junk.lastRoom, SPAWN.room)
   assert.deepEqual(junk.radioCalls, ['porter-first-call'])

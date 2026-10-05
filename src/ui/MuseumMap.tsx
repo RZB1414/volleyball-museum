@@ -23,6 +23,7 @@ import { useMemo } from 'react'
 
 import { MUSEUM } from '../content/museum'
 import { useTranslate } from '../i18n'
+import { pendingLocks } from '../engine/lockRules'
 import { playerPosition } from '../engine/playerPosition'
 import { isRoomPowered } from '../engine/power'
 import { useMuseum } from '../state/store'
@@ -217,7 +218,9 @@ function LockList() {
   const progress = useMuseum((state) => state.progress)
   const t = useTranslate()
 
-  const pending = MUSEUM.locks.filter((lock) => !progress.locksOpened.includes(lock.id))
+  // Touched and still shut. This listed every shut lock in the building, which
+  // told the player about a drawer they had not found yet.
+  const pending = pendingLocks(MUSEUM.locks, progress)
   if (pending.length === 0) return null
 
   return (

@@ -85,8 +85,22 @@ function preOpening(loaded: Progress, { raw: saved }: SavedAs): Progress {
   return progress
 }
 
+/**
+ * `locksSeen` (L2): a lock that is open was touched.
+ *
+ * That is all a save from before the list proves. A drawer the player stood
+ * in front of and left shut is not in it, so it leaves the plan until the
+ * next touch: inferring more would be inventing what the player did.
+ */
+function locksSeenFromOpened(progress: Progress): Progress {
+  return grantProgress(progress, { locksSeen: progress.locksOpened })
+}
+
 /** In the order of the lots, which is the order they run in. */
-export const SAVE_MIGRATIONS: readonly SaveMigration[] = [{ lot: 1, migrate: preOpening }]
+export const SAVE_MIGRATIONS: readonly SaveMigration[] = [
+  { lot: 1, migrate: preOpening },
+  { lot: 2, migrate: locksSeenFromOpened },
+]
 
 /** What a build brings to a load. A parameter so that the rules can be proved on lists made for the purpose. */
 export type SaveRules = {

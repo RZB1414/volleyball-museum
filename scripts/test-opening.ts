@@ -902,6 +902,171 @@ test('each validator the gate lacked fails a museum broken on purpose', () => {
   assert.deepEqual(noisy, [], 'and the authored one is not accused of what it does not do')
 })
 
+test('a condition, an effect or a trigger that points at nothing fails the gate (L2)', () => {
+  // Each of these compiles, and fails without a word at runtime: a condition
+  // naming a piece that was renamed never holds, an effect naming a lock that
+  // does not exist opens nothing, and a trigger guarded by "still shut" fires
+  // or not by the order the player did things in.
+  const authored = gate(MUSEUM)
+  const quiet: string[] = []
+  const noisy: string[] = []
+  const NEW_CODES = [
+    'condition-exhibit-missing',
+    'condition-hotspot-missing',
+    'condition-door-missing',
+    'condition-credential-missing',
+    'trigger-duplicate',
+    'effect-target-missing',
+    'gate-uses-negative-condition',
+    'gate-uses-all-condition',
+  ]
+  const proves = (code: string, id: string, broken: readonly ValidationIssue[]) => {
+    assert.ok(NEW_CODES.includes(code), code)
+    if (!accused(broken, code).includes(id)) quiet.push(`${code} does not accuse "${id}"`)
+  }
+  for (const code of NEW_CODES) {
+    if (accused(authored, code).length > 0) noisy.push(`${code} accuses the authored museum: ${accused(authored, code).join(', ')}`)
+  }
+
+  type Condition = NonNullable<MuseumContent['triggers']>[number]['when']
+  type Effects = NonNullable<MuseumContent['triggers']>[number]['effects']
+  const FLAG: Effects = [{ kind: 'set-flag', flag: 'made-for-the-test' }]
+  const when = (condition: Condition): MuseumContent => ({
+    ...MUSEUM,
+    triggers: [{ id: 'made-for-the-test', when: condition, effects: FLAG }],
+  })
+  const doing = (effects: Effects): MuseumContent => ({
+    ...MUSEUM,
+    triggers: [{ id: 'made-for-the-test', when: { roomsVisited: ['atrium'] }, effects }],
+  })
+  const withUnlocks = (effects: Effects): MuseumContent => ({
+    ...MUSEUM,
+    exhibits: MUSEUM.exhibits.map((exhibit) => (exhibit.id === 'ball-spalding' ? { ...exhibit, unlocks: effects } : exhibit)),
+  })
+  const withOnOpen = (effects: Effects): MuseumContent => ({
+    ...MUSEUM,
+    locks: MUSEUM.locks.map((lock) => (lock.id === 'office-drawer' ? { ...lock, onOpen: effects } : lock)),
+  })
+
+  // --- what a condition names ----------------------------------------------
+  proves('condition-exhibit-missing', 'ball-spaulding', gate(when({ catalogued: ['ball-spaulding'] })))
+  proves('condition-hotspot-missing', 'portrait-morgan:signature', gate(when({ hotspotsSeen: ['portrait-morgan:signature'] })))
+  // The detail without its piece is not how the save spells it.
+  proves('condition-hotspot-missing', 'date', gate(when({ hotspotsSeen: ['date'] })))
+  // A door is named by the portal that declares the leaf (DL2-1). The portal
+  // facing it across the same opening is not a door, and is the easy mistake.
+  proves('condition-door-missing', 'holyoke-shortcut', gate(when({ doorsReleased: ['holyoke-shortcut'] })))
+  // Nothing in the museum hands out a badge: the condition would wait for good.
+  proves('condition-credential-missing', 'badge:indoor', gate(when({ credentials: [{ kind: 'badge', id: 'indoor' }] })))
+  // Inside a branch, and in every place a condition is asked from.
+  proves('condition-exhibit-missing', 'in-a-branch', gate(when({ anyOf: [{ flags: ['a'] }, { anyOf: [{ catalogued: ['in-a-branch'] }] }] })))
+  const asked = (condition: Condition) =>
+    withRoom('office', (room) => ({
+      devices: (room.devices ?? []).map((device) =>
+        device.kind === 'radio'
+          ? {
+              ...device,
+              calls: device.calls.map((call, index) => (index === 0 ? { ...call, when: condition } : call)),
+              hints: device.hints.map((hint, index) => (index === 0 ? { ...hint, when: { anyOf: [condition] } } : hint)),
+            }
+          : device,
+      ),
+    }))
+  proves('condition-exhibit-missing', 'asked-by-the-porter', gate(asked({ catalogued: ['asked-by-the-porter'] })))
+  const listed: MuseumContent = {
+    ...MUSEUM,
+    documents: MUSEUM.documents.map((doc) => ({
+      ...doc,
+      pages: doc.pages?.map((page) => ({
+        ...page,
+        items: page.items?.map((item) => ({ ...item, doneWhen: { doorsReleased: ['asked-by-the-list'] } })),
+      })),
+    })),
+  }
+  proves('condition-door-missing', 'asked-by-the-list', gate(listed))
+
+  // --- what an effect names, wherever the effect is written ------------------
+  proves('effect-target-missing', 'no-such-lock', gate(doing([{ kind: 'open-lock', lockId: 'no-such-lock' }])))
+  proves('effect-target-missing', 'cellar', gate(doing([{ kind: 'power-room', roomId: 'cellar' }])))
+  proves('effect-target-missing', 'doc-nowhere', gate(doing([{ kind: 'reveal-document', documentId: 'doc-nowhere' }])))
+  proves('effect-target-missing', 'from-a-piece', gate(withUnlocks([{ kind: 'reveal-document', documentId: 'from-a-piece' }])))
+  proves('effect-target-missing', 'from-a-lock', gate(withOnOpen([{ kind: 'power-room', roomId: 'from-a-lock' }])))
+
+  // --- triggers --------------------------------------------------------------
+  const twice: MuseumContent = {
+    ...MUSEUM,
+    triggers: [
+      { id: 'twice', when: { roomsVisited: ['atrium'] }, effects: FLAG },
+      { id: 'twice', when: { roomsVisited: ['holyoke'] }, effects: FLAG },
+    ],
+  }
+  proves('trigger-duplicate', 'twice', gate(twice))
+  // An authored trigger under the name the compiler gives a piece's own effects.
+  proves(
+    'trigger-duplicate',
+    'exhibit:ball-spalding:catalogued',
+    gate({ ...withUnlocks(FLAG), triggers: [{ id: 'exhibit:ball-spalding:catalogued', when: {}, effects: FLAG }] }),
+  )
+  proves('gate-uses-negative-condition', 'made-for-the-test', gate(when({ locksClosed: ['office-drawer'] })))
+  proves(
+    'gate-uses-negative-condition',
+    'made-for-the-test',
+    gate(when({ anyOf: [{ flags: ['a'] }, { documentsUnread: ['doc-welcome'] }] })),
+  )
+  proves('gate-uses-all-condition', 'made-for-the-test', gate(when({ allCatalogued: true })))
+  // A trigger that does both is told both, not one per run of the gate.
+  const both = gate(when({ unpowered: ['atrium'], allRoomsPowered: true }))
+  proves('gate-uses-negative-condition', 'made-for-the-test', both)
+  proves('gate-uses-all-condition', 'made-for-the-test', both)
+  // The same two questions are fine where nothing fires for good: the porter
+  // asks "still shut?" and the checklist asks "all of them?" today.
+  for (const code of ['gate-uses-negative-condition', 'gate-uses-all-condition']) {
+    if (accused(gate(asked({ locksClosed: ['office-drawer'], allRoomsPowered: true })), code).length > 0) {
+      noisy.push(`${code} accuses a radio call, which is asked again every time and fires nothing for good`)
+    }
+  }
+
+  // --- and a museum that uses all of it properly is accused of none of it ----
+  const sound = gate({
+    ...MUSEUM,
+    exhibits: MUSEUM.exhibits.map((exhibit) =>
+      exhibit.id === 'ball-spalding'
+        ? { ...exhibit, unlocks: [{ kind: 'grant-credential', credential: { kind: 'badge', id: 'indoor' } }] }
+        : exhibit,
+    ),
+    locks: MUSEUM.locks.map((lock) =>
+      lock.id === 'office-drawer'
+        ? { ...lock, onOpen: [{ kind: 'set-flag', flag: 'drawer-open' }, { kind: 'reveal-document', documentId: 'doc-welcome' }] }
+        : lock,
+    ),
+    triggers: [
+      {
+        id: 'sound',
+        when: {
+          catalogued: ['ball-spalding'],
+          hotspotsSeen: ['portrait-morgan:date'],
+          credentials: [{ kind: 'badge', id: 'indoor' }],
+          flags: ['drawer-open'],
+          roomsVisited: ['holyoke'],
+          doorsReleased: ['atrium-from-holyoke-shortcut'],
+          anyOf: [{ powered: ['atrium'] }, { locksOpened: ['office-drawer'], carried: ['office-radio'] }],
+        },
+        effects: [
+          { kind: 'open-lock', lockId: 'office-drawer' },
+          { kind: 'power-room', roomId: 'holyoke' },
+          { kind: 'set-flag', flag: 'sound' },
+        ],
+      },
+    ],
+  })
+  for (const code of NEW_CODES) {
+    if (accused(sound, code).length > 0) noisy.push(`${code} accuses a sound museum: ${accused(sound, code).join(', ')}`)
+  }
+
+  assert.deepEqual(quiet, [], 'every broken museum is caught')
+  assert.deepEqual(noisy, [], 'and a sound one is not accused of what it does not do')
+})
+
 test('what the runtime places by itself is what the validator counts as used', () => {
   // A mount type and a door style become kit recipes in one table
   // (`runtimePlacedParts.ts`), read by the component that draws them and by

@@ -22,6 +22,8 @@
  * and a comment that mentions a call does not satisfy them.
  */
 
+import { dynamicSpecifiers, staticSpecifiers } from './staticImports.ts'
+
 /** Reads a file of `src/`, by its path from there. */
 export type SourceReader = (path: string) => string
 
@@ -96,6 +98,97 @@ export function roomReadinessWiringProblems(read: SourceReader): string[] {
     if (!module.includes(call)) problems.push(`${path} no longer loads its image with \`${call}\``)
     if (/(?<!Media)\bTextureLoader\b/.test(module)) {
       problems.push(`${path} names the plain TextureLoader: an image that fails to load takes the page down`)
+    }
+  }
+  return problems
+}
+
+/**
+ * The one door for progress (S11, S1): what a verb of the player records, and
+ * whether a lock may open a modal, are decided by pure modules. This holds
+ * the components to calling them.
+ *
+ * `components` is every `.tsx` under `src/`, by its path from there: two of
+ * the rules are about what NO component may do, and a list typed here would
+ * stop being every component at the next file.
+ */
+export function progressWiringProblems(read: SourceReader, components: readonly string[]): string[] {
+  const problems: string[] = []
+  const source = (path: string) => squeezed(read(path))
+
+  // --- verbs record through one grant; consequences are triggers ------------
+  const interaction = source('engine/Interaction.tsx')
+  if (!interaction.includes('.grant(hotspotGrant(exhibit, hotspot.id, ')) {
+    problems.push(
+      'engine/Interaction.tsx no longer records a detail with `grant(hotspotGrant(…))`: what an examine writes is decided in the component again, where no suite reaches it',
+    )
+  }
+  for (const call of ['applyUnlockEffect', 'recordHotspot(', 'recordCatalogued(', 'recordFact(']) {
+    if (interaction.includes(call)) {
+      problems.push(
+        `engine/Interaction.tsx calls \`${call.replace('(', '')}\`: an exhibit's effects are a trigger that fires once, and a detail found later must not apply them again (S11)`,
+      )
+    }
+  }
+  if (!/import '\.\.\/engine\/contentRegistry(?:\.ts)?'/.test(source('scenes/MuseumCanvas.tsx'))) {
+    problems.push(
+      'scenes/MuseumCanvas.tsx no longer imports engine/contentRegistry: no rules reach the store, and no trigger ever fires',
+    )
+  }
+  // Node has no hot reload, so no suite can see this one run: a store Vite
+  // replaced that stays in the registry answers the next registration by
+  // committing, and so writing, its own stale save.
+  if (!/import\.meta\.hot\?\.dispose\(\(\) => \{ forgetRules\(\)/.test(source('state/store.ts'))) {
+    problems.push('state/store.ts no longer leaves the rules registry when Vite replaces it: the old store goes on writing its save')
+  }
+  // The store is on the title screen. `test:save` walks everything it reaches;
+  // this names the two imports the registry exists to keep out of it. Not
+  // squeezed: the reader of imports works on the source as written.
+  const store = read('state/store.ts')
+  for (const specifier of [...staticSpecifiers(store), ...dynamicSpecifiers(store)]) {
+    if (/content\/museum/.test(specifier) || /(?:^|\/)engine\//.test(specifier)) {
+      problems.push(`state/store.ts imports "${specifier}": the content and the engine would ship with the title screen`)
+    }
+  }
+
+  // --- a lock opens by `attemptLock`, and only `ask` opens a modal ----------
+  for (const path of ['engine/Containers.tsx', 'engine/PowerControls.tsx', 'ui/LockPanel.tsx']) {
+    if (!source(path).includes('attemptLock(')) {
+      problems.push(`${path} no longer asks attemptLock: it decides by itself whether its lock opens (S1)`)
+    }
+  }
+  for (const path of ['engine/Containers.tsx', 'engine/PowerControls.tsx']) {
+    if (!/outcome === 'refused'\) \{ museumAudio\.lockDenied\(\)/.test(source(path))) {
+      problems.push(`${path}: a lock that refuses no longer answers the press with a sound, and E does nothing at all`)
+    }
+  }
+  for (const path of ['engine/Containers.tsx', 'ui/LockPanel.tsx']) {
+    if (!source(path).includes('.grant(containerGrant(MUSEUM, ')) {
+      problems.push(
+        `${path} no longer records what a container holds with \`grant(containerGrant(…))\`: the keypad and the open drawer would write different saves`,
+      )
+    }
+  }
+  if (!source('ui/MuseumMap.tsx').includes('pendingLocks(MUSEUM.locks, progress)')) {
+    problems.push('ui/MuseumMap.tsx no longer lists pendingLocks: the plan names locks the player never touched')
+  }
+  if (!source('ui/Hud.tsx').includes('lockStatus(')) {
+    problems.push('ui/Hud.tsx no longer asks lockStatus whether a container is locked')
+  }
+  for (const path of components) {
+    const component = source(path)
+    if (/\bopenLock\(/.test(component)) {
+      problems.push(`${path} calls openLock: a lock opens by the grant attemptLock hands back, which records it as seen too`)
+    }
+    if (component.includes('locksOpened.includes(')) {
+      problems.push(`${path} reads locksOpened by itself: whether a lock is open is lockStatus, and whether it opens is attemptLock`)
+    }
+    const opened = component.match(/\bsetActiveLock\((?!null\))/g)?.length ?? 0
+    const asked = component.match(/outcome === 'ask'\) \{[^{}]*\bsetActiveLock\((?!null\))/g)?.length ?? 0
+    if (opened !== asked) {
+      problems.push(
+        `${path} opens the lock panel outside the \`ask\` outcome: a lock with no panel would open a modal with nothing in it (S1)`,
+      )
     }
   }
   return problems

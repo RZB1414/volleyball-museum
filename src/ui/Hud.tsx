@@ -22,6 +22,7 @@ import {
   parseInteractionWinnerKey,
   type InteractionKind,
 } from '../engine/interactionTarget'
+import { lockStatus } from '../engine/lockRules'
 import { containerById, isNotebook, journalUnlocked } from '../engine/notebook'
 import { isRoomPowered } from '../engine/power'
 import { placeRadioCall, releaseHeldRadio } from '../engine/radioCall'
@@ -109,7 +110,7 @@ function ContainerPrompt() {
 
   const inside = MUSEUM.documents.filter((doc) => doc.containerId === focusedContainer)
   const allRead = inside.length > 0 && inside.every((doc) => read.includes(doc.id))
-  const isLocked = Boolean(container.lockId) && !locksOpened.includes(container.lockId as string)
+  const isLocked = container.lockId !== undefined && lockStatus(container.lockId, { locksOpened }) === 'closed'
 
   return (
     <div className="prompt" role="status">

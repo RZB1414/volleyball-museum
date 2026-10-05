@@ -27,6 +27,7 @@ import type { ExhibitData } from '../content/schema'
 import { isModalOpen, useMuseum } from '../state/store'
 import { INTERACTION_REACH, interactionWinnerOf } from './interactionTarget'
 import { isUnclaimedInteractKey, subscribePrimaryAction } from './primaryAction'
+import { hotspotGrant } from './progressGrants'
 
 const CENTRE = new Vector2(0, 0)
 /** How far the player can reach to examine something. */
@@ -360,7 +361,6 @@ export function ExamineView() {
     camera.getWorldPosition(cameraWorld)
     held.getWorldPosition(objectWorld)
 
-    let newlySeen = false
     for (const hotspot of exhibit.hotspots) {
       if (seenRef.current.has(hotspot.id)) continue
 
@@ -374,25 +374,17 @@ export function ExamineView() {
 
       if (outward.dot(toCamera) > HOTSPOT_DOT) {
         seenRef.current.add(hotspot.id)
-        useMuseum.getState().recordHotspot(exhibit.id, hotspot.id)
-        if (hotspot.revealsFactId) {
-          useMuseum.getState().recordFact(hotspot.revealsFactId)
-        }
-        newlySeen = true
-      }
-    }
-
-    // --- cataloguing ---------------------------------------------------------
-    if (newlySeen) {
-      const required = exhibit.hotspots.filter((hotspot) => hotspot.requiredForCatalogue)
-      const complete = required.every((hotspot) => seenRef.current.has(hotspot.id))
-      if (complete) {
-        const state = useMuseum.getState()
-        state.recordCatalogued(exhibit.id)
-        // Unlock effects are content, not exhibit-specific runtime branches.
-        // Applying them here makes every declared effect functional at the
-        // exact moment its exhibit becomes fully catalogued.
-        for (const effect of exhibit.unlocks ?? []) state.applyUnlockEffect(effect)
+        // The detail, the fact it reveals and, with every required detail
+        // seen, the catalogue entry: one write, decided by a pure function.
+        // What the piece unlocks is not applied here. It is a trigger, which
+        // fires once; this loop used to apply it again at every detail found
+        // after the required ones.
+        //
+        // Read again for each detail, not taken from the top of the frame:
+        // two details can show in one frame, and the second has to count the
+        // first as seen.
+        const museum = useMuseum.getState()
+        museum.grant(hotspotGrant(exhibit, hotspot.id, museum.progress.hotspots))
       }
     }
   })

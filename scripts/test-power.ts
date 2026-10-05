@@ -19,6 +19,7 @@ import { paintLenses } from '../src/engine/deviceNodes.ts'
 import { INTERACTION_REACH } from '../src/engine/interactionTarget.ts'
 import { PROXY_MATERIAL_PROPS } from '../src/engine/interactionProxy.ts'
 import { isRoomPowered, powerControlLensMaterial } from '../src/engine/power.ts'
+import { effectGrant } from '../src/engine/triggers.ts'
 import { buildPowerControlLightRig } from '../src/engine/powerControlLightRig.ts'
 import { useMuseum } from '../src/state/store.ts'
 import {
@@ -96,16 +97,17 @@ check(
   useMuseum.getState().progress.roomsPowered.filter((id) => id === unpoweredRoom.id).length === 1,
 )
 
-useMuseum.getState().applyUnlockEffect({ kind: 'power-room', roomId: 'effect-room' })
-useMuseum.getState().applyUnlockEffect({ kind: 'open-lock', lockId: 'effect-lock' })
-useMuseum.getState().applyUnlockEffect({
-  kind: 'grant-credential',
-  credential: { kind: 'tool', id: 'breaker-handle' },
-})
-useMuseum.getState().applyUnlockEffect({
-  kind: 'reveal-document',
-  documentId: 'effect-document',
-})
+// An effect has one implementation, `effectGrant`, and the store one door for
+// what it gives. (The store used to apply each effect itself, one write per
+// effect; who fires them now is a trigger, proved in `test:triggers`.)
+for (const effect of [
+  { kind: 'power-room', roomId: 'effect-room' },
+  { kind: 'open-lock', lockId: 'effect-lock' },
+  { kind: 'grant-credential', credential: { kind: 'tool', id: 'breaker-handle' } },
+  { kind: 'reveal-document', documentId: 'effect-document' },
+] as const) {
+  useMuseum.getState().grant(effectGrant(effect, MUSEUM))
+}
 const progress = useMuseum.getState().progress
 check('power-room unlock effects are applied', progress.roomsPowered.includes('effect-room'))
 check('open-lock unlock effects are applied', progress.locksOpened.includes('effect-lock'))

@@ -10,6 +10,10 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import { Suspense, useEffect, useRef, useState } from 'react'
 
 import { CAMERA_BASE_VERTICAL_FOV_DEGREES } from '../engine/cameraProjection'
+// For its effect: this is where the museum hands the store its rules (the
+// triggers), in the chunk that already carries the content. The store cannot
+// import them itself without dragging the content onto the title screen.
+import '../engine/contentRegistry'
 import {
   advanceAdaptiveScale,
   isSlowFrame,

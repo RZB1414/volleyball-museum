@@ -18,9 +18,11 @@ import { Box3, Mesh, Raycaster, Vector2, type Group, type Object3D } from 'three
 import type { BakedBundle } from '../content/bake.generated'
 import { MUSEUM } from '../content/museum'
 import type { ContainerData, RoomData, Vec3 } from '../content/schema'
+import { museumAudio } from './audio'
 import { USE_DRACO, USE_MESHOPT } from './bundleCache'
 import type { CollisionWorld } from './collision'
 import { cloneKitPart, disposeKitPart, registerKitColliders } from './kitPart'
+import { attemptLock } from './lockRules'
 import type { MaterialLibrary } from './materials'
 import {
   containerById,
@@ -32,6 +34,7 @@ import {
 import { DRAWER_PROXY, PROXY_MATERIAL_PROPS, paddedProxy } from './interactionProxy'
 import { INTERACTION_REACH, interactionWinnerOf, PROXY_MINIMUM } from './interactionTarget'
 import { isUnclaimedInteractKey, subscribePrimaryAction } from './primaryAction'
+import { containerGrant } from './progressGrants'
 import { isModalOpen, useMuseum } from '../state/store'
 import './bvhSetup'
 
@@ -253,26 +256,42 @@ export function ContainerTargeting() {
       const containerId = winner.id
 
       /**
-       * A locked cabinet opens its keypad instead of its contents.
+       * A locked cabinet answers with its lock instead of its contents, and
+       * what the lock answers is `attemptLock`'s to say, not this handler's.
+       *
+       * Only `ask` opens a panel. This used to open the keypad for any shut
+       * lock, and the keypad draws nothing for a lock that is not a code: a
+       * modal with nothing in it and the world deaf to E. A lock that refuses
+       * says so with a sound and keeps the press.
        *
        * Once the lock is open it behaves like any other cabinet, so the drawer
        * stays readable afterwards rather than becoming a one-shot cutscene.
        */
-      const container = MUSEUM.rooms
-        .flatMap((room) => room.containers ?? [])
-        .find((candidate) => candidate.id === containerId)
-
-      if (container?.lockId && !state.progress.locksOpened.includes(container.lockId)) {
-        if (document.pointerLockElement) document.exitPointerLock()
-        state.setActiveLock(container.lockId)
-        return true
+      const lockId = containerById(MUSEUM, containerId)?.lockId
+      if (lockId) {
+        const lock = MUSEUM.locks.find((candidate) => candidate.id === lockId)
+        // A lock the content does not have cannot be opened by anything.
+        if (!lock) {
+          museumAudio.lockDenied()
+          return true
+        }
+        const attempt = attemptLock(lock, MUSEUM.facts, state.progress, { kind: 'touch' })
+        // Touched: that is what puts the lock on the plan.
+        if (attempt.outcome !== 'open') state.grant(attempt.grant)
+        if (attempt.outcome === 'ask') {
+          if (document.pointerLockElement) document.exitPointerLock()
+          state.setActiveLock(lock.id)
+          return true
+        }
+        if (attempt.outcome === 'refused') {
+          museumAudio.lockDenied()
+          return true
+        }
       }
 
-      const documents = MUSEUM.documents.filter((doc) => doc.containerId === containerId)
-      for (const doc of documents) {
-        state.recordDocument(doc.id)
-        if (doc.revealsFactId) state.recordFact(doc.revealsFactId)
-      }
+      // What reading it records is the same grant the keypad uses when it
+      // opens this container itself (`LockPanel.tsx`).
+      state.grant(containerGrant(MUSEUM, containerId))
       // Every reader is used with the mouse as well as with E — a notebook's
       // page buttons, a document's "Close" — and nothing is clickable under
       // pointer lock. The look hint tells the player how to take it back.

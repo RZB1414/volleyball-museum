@@ -12,17 +12,29 @@
  *                content ids being renamed, a lot that adds fields and a tab
  *                still running the lot before. Its shape is the table in
  *                `progressFields.ts`; reading a save is `saveMigrations.ts`.
+ *                Every write of it goes through `commitProgress`, below,
+ *                which settles what follows from the save before anybody is
+ *                told (`progressRules.ts`).
  */
 
 import { create } from 'zustand'
 
-import type { ProgressCondition, UnlockEffect } from '../content/schema'
+import type { ProgressCondition } from '../content/schema'
 // None of these imports anything of the content (the spawn, the lot and the
 // ids of old saves are modules of their own for that reason), so naming the
 // start room and migrating a save here does not pull the content set into
 // the title screen's bundle. `npm run test:save` walks these imports.
 import { SPAWN } from '../content/spawn.ts'
-import { emptyProgress, withValue, type Progress, type RadioMemory } from './progressFields.ts'
+import {
+  emptyProgress,
+  grantProgress,
+  type Progress,
+  type ProgressGrant,
+  type RadioMemory,
+} from './progressFields.ts'
+// The content's rules reach the store through this slot and no import: the
+// triggers and the museum they are compiled from stay behind the button.
+import { onProgressRulesRegistered, progressRules } from './progressRules.ts'
 import { migrateProgress } from './saveMigrations.ts'
 
 // The save's shape moved out of this file; whoever imported it from here still can.
@@ -33,6 +45,7 @@ export {
   sanitiseRadioMemory,
   SAVE_VERSION,
   type Progress,
+  type ProgressGrant,
   type RadioMemory,
 } from './progressFields.ts'
 export { migrateProgress } from './saveMigrations.ts'
@@ -235,6 +248,12 @@ export type MuseumStore = {
 
   // --- progress -----------------------------------------------------------
   progress: Progress
+  /**
+   * What a verb of the player adds to the save, in one write: the door the
+   * pure verbs of `engine/progressGrants.ts` and `engine/lockRules.ts` use.
+   * A grant that adds nothing writes nothing and tells nobody.
+   */
+  grant: (grant: ProgressGrant) => void
   recordHotspot: (exhibitId: string, hotspotId: string) => void
   recordCatalogued: (exhibitId: string) => void
   recordDocument: (documentId: string) => void
@@ -249,7 +268,6 @@ export type MuseumStore = {
   /** Whole seconds a mains clock has run; see `Progress.clockSeconds`. */
   recordClockSeconds: (clockId: string, seconds: number) => void
   recordHint: (hintId: string) => void
-  applyUnlockEffect: (effect: UnlockEffect) => void
   /**
    * A new game: empty progress AND every session field back to its default,
    * written to the save at once. Settings are the player's, and survive.
@@ -388,36 +406,73 @@ export const useMuseum = create<MuseumStore>((set, get) => {
     }, 50)
   }
 
-  // An idle callback may not run before a tab is discarded, so a hidden or
-  // departing page flushes the latest coalesced snapshot itself.
-  if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-    const unbindSaveFlush = bindSaveFlush({ window, document }, flushPersisted)
-    // Vite replaces this module in place during local tuning. Leaving the old
-    // listeners alive lets a stale store overwrite the new snapshot on exit.
-    import.meta.hot?.dispose(() => {
-      unbindSaveFlush()
-      flushPersisted()
-    })
-  }
-
-  const mutateProgress = (update: (progress: Progress) => Progress) => {
-    set((state) => ({ progress: update(state.progress) }))
+  /**
+   * The one way the save changes.
+   *
+   * Applies `update`, then everything that follows from the result (the
+   * content's triggers, once the content has arrived), and only then writes:
+   * one `set`, so a subscriber never sees a catalogued piece without the key
+   * it gives. `session` is what the action changes outside the save, and
+   * leaves in that same notification.
+   *
+   * A save that comes out as the object that went in was not changed: nothing
+   * is set for it and nothing is scheduled to disk. An update that adds
+   * nothing must therefore hand back what it was given, which is what
+   * `grantProgress` does.
+   */
+  const commitProgress = (update: (progress: Progress) => Progress, session?: Partial<MuseumStore>) => {
+    const before = get().progress
+    const updated = update(before)
+    const progress = progressRules()?.settle(updated) ?? updated
+    if (progress === before) {
+      if (session) set(session)
+      return
+    }
+    set({ ...session, progress })
     persist()
   }
+  const grant = (granted: ProgressGrant) => commitProgress((progress) => grantProgress(progress, granted))
+  /** The player is in this room: where they stopped, and one more room seen. */
+  const inRoom = (room: string) => (progress: Progress) =>
+    grantProgress(progress.lastRoom === room ? progress : { ...progress, lastRoom: room }, { roomsVisited: [room] })
+
+  // The content arrives after the save was loaded (it is behind the title
+  // button), and may owe that save something: a lot that makes an open drawer
+  // give a key has to reach the player who opened it last week.
+  const forgetRules = onProgressRulesRegistered(() => commitProgress((progress) => progress))
+
+  // An idle callback may not run before a tab is discarded, so a hidden or
+  // departing page flushes the latest coalesced snapshot itself.
+  const unbindSaveFlush =
+    typeof window !== 'undefined' && typeof document !== 'undefined'
+      ? bindSaveFlush({ window, document }, flushPersisted)
+      : null
+  // Vite replaces this module in place during local tuning. Leaving the old
+  // listeners alive lets a stale store overwrite the new snapshot on exit, or
+  // answer the content's next registration with its own, older, save.
+  import.meta.hot?.dispose(() => {
+    forgetRules()
+    unbindSaveFlush?.()
+    flushPersisted()
+  })
 
   // One write for the end and what it means, so a retry waiting on the radio
   // to fall silent already sees the call as heard.
   const endRadio = (radio: RadioTransmission, hangUp: boolean) => {
     const callId = radio.callId
-    set((state) => ({
+    commitProgress((progress) => (callId ? grantProgress(progress, { radioCalls: [callId] }) : progress), {
       radio: null,
       ...(hangUp && radio.hangsUpFor ? { radioHungUpUntil: Date.now() + radio.hangsUpFor * 1000 } : {}),
-      ...(callId
-        ? { progress: { ...state.progress, radioCalls: withValue(state.progress.radioCalls, callId) } }
-        : {}),
-    }))
-    if (callId) persist()
+    })
   }
+
+  // A store created after the content registered (a hot reload of this
+  // module, the playthrough robot) has nobody to wait for: what it loaded is
+  // settled here. `lastWrittenSnapshot` stays what was loaded, so whatever
+  // settling added is something new to write, and is scheduled like any
+  // other change.
+  const loaded = progressRules()?.settle(initial.progress) ?? initial.progress
+  if (loaded !== initial.progress) persist()
 
   return {
     settings: initial.settings,
@@ -432,32 +487,18 @@ export const useMuseum = create<MuseumStore>((set, get) => {
     ...sessionDefaults(),
 
     start: () => {
-      set({ started: true })
-      const room = get().currentRoom
-      mutateProgress((progress) => ({
-        ...progress,
-        lastRoom: room,
-        roomsVisited: withValue(progress.roomsVisited, room),
-      }))
+      commitProgress(inRoom(get().currentRoom), { started: true })
     },
     setPointerLocked: (pointerLocked) => set({ pointerLocked }),
     setSceneReady: (sceneReady) => {
       if (get().sceneReady !== sceneReady) set({ sceneReady })
     },
     setCurrentRoom: (room) => {
-      if (get().currentRoom === room) return
+      const previousRoom = get().currentRoom
+      if (previousRoom === room) return
       // One external-store notification avoids reconciling the room tree once
       // for session state and again for progress in the same doorway frame.
-      set((state) => ({
-        previousRoom: state.currentRoom,
-        currentRoom: room,
-        progress: {
-          ...state.progress,
-          lastRoom: room,
-          roomsVisited: withValue(state.progress.roomsVisited, room),
-        },
-      }))
-      persist()
+      commitProgress(inRoom(room), { previousRoom, currentRoom: room })
     },
     setVisibleRooms: (rooms) => {
       // Called every frame by the portal walk; skip the store write unless the
@@ -555,56 +596,25 @@ export const useMuseum = create<MuseumStore>((set, get) => {
       if (get().radioHungUpUntil !== null) set({ radioHungUpUntil: null })
     },
 
-    progress: initial.progress,
-    recordHotspot: (exhibitId, hotspotId) =>
-      mutateProgress((progress) => ({
-        ...progress,
-        hotspots: withValue(progress.hotspots, `${exhibitId}:${hotspotId}`),
-      })),
-    recordCatalogued: (exhibitId) =>
-      mutateProgress((progress) => ({
-        ...progress,
-        catalogued: withValue(progress.catalogued, exhibitId),
-      })),
-    recordDocument: (documentId) =>
-      mutateProgress((progress) => ({
-        ...progress,
-        documentsRead: withValue(progress.documentsRead, documentId),
-      })),
-    recordFact: (factId) =>
-      mutateProgress((progress) => ({
-        ...progress,
-        factsKnown: withValue(progress.factsKnown, factId),
-      })),
-    grantCredential: (key) =>
-      mutateProgress((progress) => ({
-        ...progress,
-        credentials: withValue(progress.credentials, key),
-      })),
-    powerRoom: (roomId) =>
-      mutateProgress((progress) => ({
-        ...progress,
-        roomsPowered: withValue(progress.roomsPowered, roomId),
-      })),
-    openLock: (lockId) =>
-      mutateProgress((progress) => ({
-        ...progress,
-        locksOpened: withValue(progress.locksOpened, lockId),
-      })),
-    recordRadioCall: (callId) =>
-      mutateProgress((progress) => ({
-        ...progress,
-        radioCalls: withValue(progress.radioCalls, callId),
-      })),
-    carryDevice: (deviceId) => {
-      if (get().progress.devicesCarried.includes(deviceId)) return
-      mutateProgress((progress) => ({
-        ...progress,
-        devicesCarried: withValue(progress.devicesCarried, deviceId),
-      }))
-    },
+    progress: loaded,
+    grant,
+    // The verbs below are `grant` with the list named. They stay for the
+    // suites and for the systems that record one thing; a verb with rules of
+    // its own (a detail, a container, a lock) goes through `grant` with what
+    // its pure function hands back.
+    recordHotspot: (exhibitId, hotspotId) => grant({ hotspots: [`${exhibitId}:${hotspotId}`] }),
+    recordCatalogued: (exhibitId) => grant({ catalogued: [exhibitId] }),
+    recordDocument: (documentId) => grant({ documentsRead: [documentId] }),
+    recordFact: (factId) => grant({ factsKnown: [factId] }),
+    grantCredential: (key) => grant({ credentials: [key] }),
+    powerRoom: (roomId) => grant({ roomsPowered: [roomId] }),
+    // Open is seen, by whichever door a lock is opened: the plan lists what
+    // was touched and is still shut, and must never be asked about this one.
+    openLock: (lockId) => grant({ locksOpened: [lockId], locksSeen: [lockId] }),
+    recordRadioCall: (callId) => grant({ radioCalls: [callId] }),
+    carryDevice: (deviceId) => grant({ devicesCarried: [deviceId] }),
     rememberRadioCall: (deviceId, memory) =>
-      mutateProgress((progress) => ({
+      commitProgress((progress) => ({
         ...progress,
         radioMemory: { ...progress.radioMemory, [deviceId]: memory },
       })),
@@ -612,35 +622,14 @@ export const useMuseum = create<MuseumStore>((set, get) => {
       if (!Number.isFinite(seconds)) return
       const whole = Math.max(0, Math.floor(seconds))
       if (get().progress.clockSeconds[clockId] === whole) return
-      mutateProgress((progress) => ({
+      commitProgress((progress) => ({
         ...progress,
         clockSeconds: { ...progress.clockSeconds, [clockId]: whole },
       }))
     },
-    recordHint: (hintId) =>
-      mutateProgress((progress) => ({
-        ...progress,
-        hintsShown: withValue(progress.hintsShown, hintId),
-      })),
-    applyUnlockEffect: (effect) => {
-      const state = get()
-      switch (effect.kind) {
-        case 'grant-credential':
-          state.grantCredential(`${effect.credential.kind}:${effect.credential.id}`)
-          break
-        case 'open-lock':
-          state.openLock(effect.lockId)
-          break
-        case 'power-room':
-          state.powerRoom(effect.roomId)
-          break
-        case 'reveal-document':
-          state.recordDocument(effect.documentId)
-          break
-      }
-    },
+    recordHint: (hintId) => grant({ hintsShown: [hintId] }),
     resetProgress: () => {
-      set({ progress: emptyProgress(), ...sessionDefaults() })
+      commitProgress(() => emptyProgress(), sessionDefaults())
       // At once, not on the next idle callback: a reload straight after
       // "New game" must not bring the old save back.
       flushPersisted()
