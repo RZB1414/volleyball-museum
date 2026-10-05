@@ -310,10 +310,15 @@ test('the handset leaves its cradle without moving a node', () => {
 
 test('the scan aims at the devices that answer, never at a radio in hand', () => {
   // What the crosshair may rest on is the content's to say (`aimableDevices`):
-  // the radio on its desk and, since L3, a thing that only says something
-  // and a clock that can be put right. A door reader answers nothing.
+  // the radio on its desk and, since L3, a thing that only says something,
+  // a clock that can be put right, two things that speak and the desk a
+  // deed is signed at. A door reader answers nothing.
   const aimable = new Set(aimableDevices(MUSEUM).map((entry) => entry.device.id))
-  assert.ok(aimable.has(RADIO) && aimable.has('atrium-podium') && aimable.has('office-clock') && !aimable.has('office-door-reader'))
+  assert.deepEqual(
+    [...aimable].sort(),
+    ['atrium-lectern', 'atrium-podium', 'office-answering-machine', 'office-clock', RADIO, 'office-telephone'].sort(),
+  )
+  assert.ok(!aimable.has('office-door-reader'))
   assert.equal(aimableDeviceId(`device:${RADIO}`, aimable, []), RADIO)
   assert.equal(aimableDeviceId(`device:${RADIO}`, aimable, [RADIO]), null, 'its proxy stays off the ray layer')
   assert.equal(aimableDeviceId('device:atrium-podium', aimable, [RADIO]), 'atrium-podium', 'a notice is aimed at like the radio')
@@ -883,7 +888,7 @@ const callOf = (id: string) => {
 }
 const met = (condition: ProgressCondition, progress: Progress) => progressConditionMet(condition, progress, MUSEUM)
 const SHORTCUT = 'atrium-from-holyoke-shortcut'
-test('the porter has eight calls, said in this order, and the id every save knows still means the hall breaker (DL3-2)', () => {
+test('the porter has twelve calls, said in this order, and the id every save knows still means the hall breaker (DL3-2)', () => {
   assert.deepEqual(ALL_CALLS, [
     'porter-hello',
     'porter-first-call',
@@ -893,7 +898,31 @@ test('the porter has eight calls, said in this order, and the id every save know
     'porter-holyoke-lit',
     'porter-first-catalogued',
     'porter-shortcut',
+    // The Posse: the light on the machine, the drawer (one call for the
+    // player who opens it tonight, another for the save that opened it
+    // before it held a key), and the iron safe.
+    'porter-machine-reminder',
+    'porter-drawer-open',
+    'porter-legacy-drawer',
+    'porter-safe-open',
   ])
+  const MARK = PRE_POSSE_SAVE.drawer.flag
+  assert.equal(MARK, 'legacy-pre-L3-drawer')
+  assert.deepEqual(
+    ['porter-machine-reminder', 'porter-drawer-open', 'porter-legacy-drawer', 'porter-safe-open'].map((id) => [callOf(id).when, callOf(id).lapsesWhen, callOf(id).lineKeys]),
+    [
+      [{ powered: ['office', 'atrium'] }, { documentsRead: ['doc-otavio-tape'] }, ['radio.call.machine.1']],
+      [{ locksOpened: ['office-drawer'], flagsUnset: [MARK] }, { locksOpened: ['office-safe'] }, ['radio.call.drawer.1', 'radio.call.drawer.2']],
+      [{ flags: [MARK] }, { locksOpened: ['office-safe'] }, ['radio.call.legacy-drawer.1']],
+      [{ locksOpened: ['office-safe'] }, { flags: ['posse-signed'] }, ['radio.call.safe.1', 'radio.call.safe.2']],
+    ],
+  )
+  // None of the four is old news for a save from before the lot: three wait
+  // on things no earlier save has, and the drawer has a rule of its own.
+  assert.deepEqual(
+    PRE_POSSE_SAVE.oldNews.map((news) => news.callId),
+    ['porter-atrium-service', 'porter-holyoke-lit', 'porter-shortcut', 'porter-first-catalogued'],
+  )
   // `porter-first-call` is in every save, in the opening migration and in
   // the record of L2: it keeps its id and its moment, and is the instruction
   // alone. Who he is, and why the building is dark, is a call of its own.
@@ -917,13 +946,38 @@ test('the porter has eight calls, said in this order, and the id every save know
   assert.deepEqual(callOf('porter-shortcut').when, { doorsReleased: [SHORTCUT] })
 })
 
-test('each milestone has exactly one call that begins with it (ÁT-A4)', () => {
+test('each milestone has its call, and the hall lit has a second one, about the machine (ÁT-A4)', () => {
   const began = (before: Progress, after: Progress) =>
     radio.calls.filter((call) => !met(call.when, before) && met(call.when, after)).map((call) => call.id)
   const office = progressWith()
   const hall = progressWith({ roomsPowered: ['office', 'atrium'] })
   const wing = progressWith({ roomsPowered: ['office', 'atrium', 'holyoke'] })
-  assert.deepEqual(began(office, hall), ['porter-atrium-service'], 'the hall lit')
+  // It was «exactly one call» until the Posse. The hall lit begins two now:
+  // its own, and the word about the light blinking on the answering machine,
+  // for a player who walked out of the office past it. They are said in
+  // that order, and the second is old news once the message has been heard.
+  assert.deepEqual(began(office, hall), ['porter-atrium-service', 'porter-machine-reminder'], 'the hall lit')
+  const heardOut = { ...hall, documentsRead: ['doc-welcome', 'doc-otavio-tape'] }
+  assert.deepEqual(
+    dueRadioCalls(radio, { ...heardOut, radioCalls: ['porter-hello', 'porter-first-call'] }, MUSEUM).map((call) => call.id),
+    ['porter-atrium-service'],
+    'the message heard before the hall was lit: nothing to remind anybody of',
+  )
+  // The drawer open: the call for whoever opens it tonight; in a save marked
+  // as having opened it before it held a key, the other. Never the two.
+  const MARK = PRE_POSSE_SAVE.drawer.flag
+  const drawer = { ...wing, locksOpened: ['office-drawer'] }
+  assert.deepEqual(began(wing, drawer), ['porter-drawer-open'], 'the drawer opened tonight')
+  assert.deepEqual(began(wing, { ...drawer, flags: [MARK] }), ['porter-legacy-drawer'], 'the drawer found open, from another night')
+  for (const night of [drawer, { ...drawer, flags: [MARK] }]) {
+    const about = radio.calls.filter((call) => met(call.when, night) && /drawer/.test(call.id)).map((call) => call.id)
+    assert.equal(about.length, 1, `two calls about the drawer in one night: ${about.join(', ')}`)
+  }
+  // The safe open begins one, and the deed signed none: what follows a
+  // signature is a sequence, which needs no radio to be heard.
+  const safe = { ...drawer, locksOpened: ['office-drawer', 'office-safe'] }
+  assert.deepEqual(began(drawer, safe), ['porter-safe-open'], 'the safe opened')
+  assert.deepEqual(began(safe, { ...safe, termsSigned: ['termo-posse'], flags: ['posse-signed'] }), [], 'the deed signed')
   assert.deepEqual(began(hall, wing), ['porter-holyoke-lit'], 'Wing 1 lit')
   assert.deepEqual(began(wing, { ...wing, doorsReleased: [SHORTCUT] }), ['porter-shortcut'], 'the shortcut pushed from inside')
   // The first piece, whichever of the twelve it is; the second is no news.
@@ -949,7 +1003,7 @@ test('whoever lights the hall before any call still meets the porter, and is not
   assert.equal(nextRadioCall(radio, back, MUSEUM)?.id, 'porter-hello', 'he never introduces himself')
   assert.deepEqual(
     dueRadioCalls(radio, back, MUSEUM).map((call) => call.id),
-    ['porter-hello', 'porter-atrium-service'],
+    ['porter-hello', 'porter-atrium-service', 'porter-machine-reminder'],
   )
   assert.equal(radioCallReady(radio, 'porter-first-call', back, MUSEUM), 'gone', 'the instruction for a breaker already thrown')
 
@@ -963,7 +1017,7 @@ test('whoever lights the hall before any call still meets the porter, and is not
     heard.push(id)
     finishTransmission()
   }
-  assert.deepEqual(heard, ['porter-hello', 'porter-radio-taken', 'porter-atrium-service'])
+  assert.deepEqual(heard, ['porter-hello', 'porter-radio-taken', 'porter-atrium-service', 'porter-machine-reminder'])
   // And the answer that follows is about Wing 1, at the first height.
   assert.deepEqual(hintLinesOf(useMuseum.getState().radio!), ['radio.hint.holyoke.where'])
   finishTransmission()
@@ -1008,10 +1062,20 @@ test('a call plays once, and never to a save that had already passed its moment 
       heard.push(call.id)
       progress = { ...progress, radioCalls: [...progress.radioCalls, call.id] }
     }
-    // Everybody who has not met the porter of this lot meets him, once; and
-    // that is all a save of the corpus hears: each had heard what it was
-    // owed, and what it had already done is not news.
-    if (fixtureLot(fixture) < 3) assert.deepEqual(heard, ['porter-hello'], name)
+    // Everybody who has not met the porter of this lot meets him, once.
+    // After him, two things that are true of the house tonight and were of
+    // no earlier night: the light blinking on the answering machine, for
+    // whoever has the hall lit (every save of the corpus has), and, for a
+    // save that opened the drawer before the drawer held a key, the word
+    // that it holds one now. That is all a save of the corpus hears: each
+    // had heard what it was owed, and what it had already done is not news.
+    // (It was his introduction alone until the Posse.)
+    if (fixtureLot(fixture) < 3) {
+      const marked = progress.flags.includes(PRE_POSSE_SAVE.drawer.flag)
+      assert.equal(marked, ['production-drawer-open', 'l1-route-end', 'l2-shortcut-released'].includes(name), `${name}: marked as a drawer opened before its key`)
+      assert.deepEqual(heard, ['porter-hello', 'porter-machine-reminder', ...(marked ? ['porter-legacy-drawer'] : [])], name)
+    }
+    assert.ok(!heard.includes('porter-drawer-open'), `${name}: asked what was in a drawer it opened on another night`)
     assert.equal(new Set(heard).size, heard.length, `${name}: a call twice`)
     for (const id of (record.radioCalls as string[] | undefined) ?? []) assert.ok(!heard.includes(id), `${name} hears "${id}" again`)
     for (const news of PRE_POSSE_SAVE.oldNews) {
@@ -1040,7 +1104,35 @@ test('a call plays once, and never to a save that had already passed its moment 
   hearAll()
   night = { ...night, catalogued: ['portrait-morgan'], doorsReleased: [SHORTCUT] }
   hearAll()
-  assert.deepEqual(order, ALL_CALLS, 'a new game, played in the order of the house')
+  night = { ...night, locksOpened: ['office-drawer'], credentials: ['tool:service-key'], triggersFired: ['lock:office-drawer:opened'] }
+  hearAll()
+  night = { ...night, locksOpened: ['office-drawer', 'office-safe'], documentsRead: ['doc-welcome', 'doc-termos', 'doc-label-proof-office'] }
+  hearAll()
+  night = { ...night, termsSigned: ['termo-posse'], flags: ['posse-signed'] }
+  hearAll()
+  // Eleven of the twelve, each at its moment: the reminder of the machine
+  // comes with the hall, ahead of where it stands in the list (the list is
+  // the order two calls are said in when both are owed, not the order of
+  // the night), and the call for a drawer of another night is never a new
+  // game's.
+  assert.deepEqual(
+    order,
+    [
+      'porter-hello',
+      'porter-first-call',
+      'porter-notebook-reminder',
+      'porter-radio-taken',
+      'porter-atrium-service',
+      'porter-machine-reminder',
+      'porter-holyoke-lit',
+      'porter-first-catalogued',
+      'porter-shortcut',
+      'porter-drawer-open',
+      'porter-safe-open',
+    ],
+    'a new game, played in the order of the house',
+  )
+  assert.deepEqual([...order].sort(), ALL_CALLS.filter((id) => id !== 'porter-legacy-drawer').sort())
 })
 
 test('the hint climbs: where, what, how, and the fourth call says how again (DL3-16)', () => {
@@ -1048,7 +1140,7 @@ test('the hint climbs: where, what, how, and the fourth call says how again (DL3
     assert.ok(hint.heightKeys.length >= 1 && hint.heightKeys.length <= 3, `${hint.heightKeys[0]} has one to three heights`)
     assert.ok(Array.isArray(hint.mentions))
   }
-  assert.deepEqual(radio.hints.map((hint) => hint.heightKeys.length), [3, 3, 3, 3, 1])
+  assert.deepEqual(radio.hints.map((hint) => hint.heightKeys.length), [3, 3, 3, 3, 3, 3, 1])
 
   const dark = progressWith()
   let memory: RadioMemory = FRESH_RADIO_MEMORY
@@ -1070,8 +1162,23 @@ test('the hint climbs: where, what, how, and the fourth call says how again (DL3
   assert.deepEqual(hintLinesOf(next), ['radio.hint.holyoke.where'])
   assert.equal(next.memory.hintHeight, 0)
   assert.equal(next.memory.lastHint, 2)
-  // A hint with one height says it every time.
-  const done = progressWith({ roomsPowered: ['office', 'atrium', 'holyoke'], locksOpened: ['office-drawer'] })
+  // The key in the hand and the safe shut: the safe, in three heights. The
+  // Book read and the deed unsigned: the lectern. A dark room comes first
+  // either way: the deed asks for light, and the breaker's hint is above it.
+  const lit = { roomsPowered: ['office', 'atrium', 'holyoke'] }
+  const keyed = progressWith({ ...lit, locksOpened: ['office-drawer'], credentials: ['tool:service-key'] })
+  assert.deepEqual(
+    [0, 1, 2].map((height) => radioHintFor(radio, keyed, MUSEUM, height)),
+    [['radio.hint.key.where'], ['radio.hint.key.what'], ['radio.hint.key.how']],
+  )
+  const read = { ...keyed, locksOpened: ['office-drawer', 'office-safe'], documentsRead: ['doc-welcome', 'doc-termos'] }
+  assert.deepEqual(
+    [0, 1, 2].map((height) => radioHintFor(radio, read, MUSEUM, height)),
+    [['radio.hint.posse.where'], ['radio.hint.posse.what'], ['radio.hint.posse.how']],
+  )
+  assert.deepEqual(radioHintFor(radio, { ...read, roomsPowered: ['office', 'atrium'] }, MUSEUM), ['radio.hint.holyoke.where'])
+  // A hint with one height says it every time: the last, for a night with the deed signed.
+  const done = { ...read, termsSigned: ['termo-posse'], flags: ['posse-signed'] }
   let rest: RadioMemory = FRESH_RADIO_MEMORY
   for (let call = 0; call < 3; call += 1) {
     const answer = porterAnswer(radio, done, rest, START + call * 5 * SECOND, fixed(0.99), MUSEUM)
@@ -1115,7 +1222,7 @@ test('the notebook hint is for a player who is still in the office (S25)', () =>
   // Every hint but the last points at something the player can walk up to.
   assert.deepEqual(
     radio.hints.map((hint) => hint.targetId ?? null),
-    ['office-notebook', 'atrium-breaker', 'holyoke-breaker', 'portrait-morgan', null],
+    ['office-notebook', 'atrium-breaker', 'holyoke-breaker', 'portrait-morgan', 'office-safe', 'atrium-lectern', null],
   )
 })
 
@@ -1578,9 +1685,25 @@ test('every line of his exists in both languages and fits a subtitle', () => {
   // A line is heard alone: every one that names Helena says who she is. It
   // was held for two keys; it is held for whichever line names her, and the
   // content gate holds the same (`speech-director-unintroduced`).
-  const everyLine = [...new Set([...radio.calls.flatMap((call) => call.lineKeys), ...HINT_LINES, ...patienceLines])]
+  // Whatever else is said aloud in the house is read too: what a recording
+  // says and what the loudspeaker says after a signature.
+  const everyLine = [
+    ...new Set([
+      ...radio.calls.flatMap((call) => call.lineKeys),
+      ...HINT_LINES,
+      ...patienceLines,
+      ...MUSEUM.documents.flatMap((doc) => doc.lineKeys ?? []),
+      ...(MUSEUM.sequences ?? []).flatMap((sequence) => sequence.steps.flatMap((step) => (step.kind === 'line' ? [step.lineKey] : []))),
+    ]),
+  ]
+  assert.ok(everyLine.includes('tape.otavio.9') && everyLine.includes('sequence.posse.2'))
   const naming = everyLine.filter((key) => /Helena/.test((ptBR as Record<string, string>)[key]) || /Helena/.test((en as Record<string, string>)[key]))
   assert.deepEqual(naming.sort(), ['radio.call.notebook.1', 'radio.hint.notebook.where', 'radio.patience.t4.dark.close'])
+  // And in every key of the dictionary, spoken or printed: the only other
+  // one that names her is her own signature, which says who signs.
+  const anywhere = Object.keys(ptBR).filter((key) => /Helena/.test((ptBR as Record<string, string>)[key]) || /Helena/.test((en as Record<string, string>)[key]))
+  assert.deepEqual(anywhere.sort(), [...naming, 'notebook.welcome.signature'].sort())
+  assert.ok(/diretora/.test(ptBR['notebook.welcome.signature']) && /director/.test(en['notebook.welcome.signature']))
   for (const key of naming) {
     assert.ok(/Helena/.test((ptBR as Record<string, string>)[key]) && /diretora/.test((ptBR as Record<string, string>)[key]), `${key} (pt-BR) introduces her`)
     assert.ok(/Helena/.test((en as Record<string, string>)[key]) && /director/.test((en as Record<string, string>)[key]), `${key} (en) introduces her`)
@@ -1610,7 +1733,10 @@ const HINT_TARGETS: Record<string, { readonly 'pt-BR': readonly string[]; readon
   'radio.hint.atrium.where': { 'pt-BR': ['saguão', 'luzinha vermelha', 'porta'], en: ['the hall', 'little red light', 'door'] },
   'radio.hint.holyoke.where': { 'pt-BR': ['Ala 1', 'quadro', 'luzinha vermelha'], en: ['Wing 1', 'breaker', 'little red light'] },
   'radio.hint.drawer.where': { 'pt-BR': ['gaveta do Otávio', 'Ala 1', 'retrato do Morgan'], en: ["Otávio's drawer", 'Wing 1', "Morgan's portrait"] },
-  'radio.hint.rest': { 'pt-BR': ['subsolo'], en: ['basement'] },
+  'radio.hint.key.where': { 'pt-BR': ['chave', 'cofre de ferro', 'canto do escritório'], en: ['key', 'iron safe', 'corner of the office'] },
+  'radio.hint.posse.where': { 'pt-BR': ['púlpito', 'saguão'], en: ['lectern', 'the hall'] },
+  // The honest close: what is signed, and what is not for tonight.
+  'radio.hint.rest': { 'pt-BR': ['posse assinada', 'caixa-forte'], en: ['signed', 'checking', 'the vault'] },
 }
 
 test('every curt hint names what the first two heights of the full one name', () => {

@@ -66,6 +66,7 @@ import {
   buildVisitorChair,
 } from './bake/parts/officeDecor.mjs'
 import {
+  buildAnsweringMachine,
   buildCuratorNotebook,
   buildDeskRadio,
   buildDeskTelephone,
@@ -828,10 +829,12 @@ async function main() {
       { frame: 'archive-green', boxes: 'canvas', labels: 'paper-aged' },
       'frame',
     ),
+    // A container since it opens: the door is two families the runtime turns
+    // about the hinge, and the papers are drawn only while it stands open.
     ...compoundKitParts(
       'office-safe',
       officeSafe,
-      { body: 'archive-green', hardware: 'brass' },
+      { body: 'archive-green', door: 'archive-green', 'door-hardware': 'brass', papers: 'paper-writing' },
       'body',
     ),
     ...compoundKitParts(
@@ -848,8 +851,8 @@ async function main() {
     ),
 
     // The opening scene's working props. The notebook is a container, the
-    // other three are devices: none is instanced, so each placement clones
-    // its own nodes and the runtime may recolour a lens or turn a hand.
+    // others are devices: none is instanced, so each placement clones its
+    // own nodes and the runtime may recolour a lens or turn a hand.
     ...compoundKitParts(
       'curator-notebook',
       buildCuratorNotebook(),
@@ -887,6 +890,13 @@ async function main() {
       buildDoorAccessPanel(),
       { plate: 'iron-cast', trim: 'brass', led: 'led-red' },
       'plate',
+    ),
+    // The lamp is baked dark: the runtime lights it while a message waits.
+    ...compoundKitParts(
+      'office-answering-machine',
+      buildAnsweringMachine(),
+      { body: 'plastic-black', led: 'led-off', play: 'brass' },
+      'body',
     ),
 
     // Holyoke historical gallery. The wall case is one authored run so its five
@@ -1060,7 +1070,10 @@ async function main() {
     ...compoundKitParts(
       'atrium-lectern',
       atriumLectern,
-      { body: 'walnut-polished', top: 'plaster-dark', brass: 'brass', light: 'atrium-glow' },
+      // A device since deeds are signed at it: `led` is its lamp and `book`
+      // the Book of Deeds, and the runtime draws each only when it has
+      // something to say.
+      { body: 'walnut-polished', top: 'plaster-dark', brass: 'brass', led: 'atrium-glow', book: 'paper-aged' },
       'body',
     ),
     ...compoundKitParts(

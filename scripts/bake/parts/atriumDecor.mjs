@@ -926,16 +926,30 @@ export function buildAtriumSofa({
 }
 
 // ---------------------------------------------------------------------------
-// 7. Low information lectern
+// 7. The lectern: the hall's signing desk
 // Recipe id: atrium-lectern
 // ---------------------------------------------------------------------------
 
 /**
- * A compact dark-timber kiosk with a shallow raked reading surface.
+ * A compact dark-timber lectern with a shallow raked reading surface.
  *
- * It stands on y = 0, faces +Z and fits a 0.72 x 0.34 m runtime information
- * panel centred near (0, 0.995, 0.015). The top descends toward the visitor,
- * while its brass toe and warm reveal repeat the reception desk's vocabulary.
+ * It stands on y = 0 and faces +Z. The top descends toward the visitor,
+ * while its brass toe and warm reveal repeat the reception desk's
+ * vocabulary. It is the desk the curator signs at, and two of its families
+ * are the runtime's to draw or not (`engine/deviceNodes.ts`):
+ *
+ *   led   the reveal under the front of the deck: the lamp, drawn only
+ *         while a deed waits on the lectern, and painted by what it waits
+ *         for. It was the `light` family; the validator asks for this name.
+ *   book  the Book of Deeds, lying open on the reading surface once a deed
+ *         has been signed in it: one material, the two blocks of pages
+ *         swelling from the gutter, the boards showing as a step at the
+ *         fore-edges.
+ *
+ * The Book rests where a book rests on a lectern: flat on the raked top,
+ * its lower edge against the brass rule that runs along the top's front
+ * edge and stands proud of it. `layout` says where that is, in the plane's
+ * own terms, and `test:kit` holds the baked Book and the baked rule to it.
  */
 export function buildAtriumLectern({
   width = 0.90,
@@ -945,7 +959,7 @@ export function buildAtriumLectern({
   const body = []
   const top = []
   const brass = []
-  const light = []
+  const led = []
 
   const footHeight = 0.070
   const shadowHeight = 0.030
@@ -973,6 +987,10 @@ export function buildAtriumLectern({
 
   const rearY = height
   const frontY = height - 0.13
+  // The sweep's bevel carries every face of the wedge this far out from the
+  // profile it was given: the reading surface is not on the line drawn here,
+  // it is `wedgeBevel` above it, along its own normal.
+  const wedgeBevel = 0.004
   const wedge = sweepProfile(
     [
       [-depth / 2, deckBottom],
@@ -981,7 +999,7 @@ export function buildAtriumLectern({
       [depth / 2, deckBottom],
     ],
     width,
-    { bevel: 0.004 },
+    { bevel: wedgeBevel },
   )
   wedge.rotateY(-Math.PI / 2)
   top.push(wedge)
@@ -991,22 +1009,79 @@ export function buildAtriumLectern({
   brass.push(toe)
 
   // The thin top-edge rule is rotated to the same rake as the reading plane.
-  // It masks the sweep's public arris and makes the material transition exact.
+  // It masks the sweep's public arris and makes the material transition
+  // exact; standing proud of the surface, it is also the ledge a book put
+  // down on the lectern comes to rest against.
   const tilt = Math.atan2(rearY - frontY, depth)
-  const topRule = bevelledBox(width - 0.035, 0.018, 0.025, 0.004, 1)
+  const rule = { thickness: 0.018, depth: 0.025, y: frontY + 0.014, z: depth / 2 - 0.012 }
+  const topRule = bevelledBox(width - 0.035, rule.thickness, rule.depth, 0.004, 1)
   topRule.rotateX(tilt)
-  topRule.translate(0, frontY + 0.014, depth / 2 - 0.012)
+  topRule.translate(0, rule.y, rule.z)
   brass.push(topRule)
 
   const reveal = new BoxGeometry(width - 0.22, 0.022, 0.018)
   reveal.translate(0, deckBottom - 0.035, depth / 2 - 0.058)
-  light.push(reveal)
+  led.push(reveal)
+
+  // The reading surface in its own terms: a point on it, the way up out of
+  // it, and the way down it towards the visitor.
+  const up = [0, Math.cos(tilt), Math.sin(tilt)]
+  const down = [0, -Math.sin(tilt), Math.cos(tilt)]
+  const onProfile = [0, (rearY + frontY) / 2, 0]
+  const centre = onProfile.map((value, axis) => value + up[axis] * wedgeBevel)
+  // Where the rule's face that looks up the slope stands, measured down the
+  // slope from that point, and how far the rule rises above the surface.
+  const ruleAlong = (rule.y - centre[1]) * down[1] + (rule.z - centre[2]) * down[2]
+  const ruleAbove = (rule.y - centre[1]) * up[1] + (rule.z - centre[2]) * up[2]
+  const rest = { along: ruleAlong - rule.depth / 2, proud: ruleAbove + rule.thickness / 2 }
+
+  // The Book, authored lying flat and open at its own origin (X across the
+  // two pages, Y up from the boards, Z from head to foot), then laid on the
+  // surface with its foot against the rule. One outline, swept from head to
+  // foot: the boards, the step of each fore-edge, the two blocks of pages
+  // and the gutter between them.
+  const page = { width: 0.2, depth: 0.28, board: 0.004, thickness: 0.022 }
+  const half = [
+    [page.width, 0],
+    [page.width, page.board],
+    [page.width - 0.004, page.board],
+    [page.width - 0.006, 0.013],
+    [0.15, 0.018],
+    [0.1, 0.021],
+    [0.05, page.thickness],
+    [0.02, 0.017],
+    [0.006, 0.01],
+  ]
+  const outline = [
+    [-page.width, 0],
+    ...half,
+    [0, 0.006],
+    ...half
+      .slice(1)
+      .reverse()
+      .map(([x, y]) => [-x, y]),
+  ]
+  const book = sweepProfile(outline, page.depth, { bevel: 0 })
+  const bookAlong = rest.along - page.depth / 2
+  book.rotateX(tilt)
+  book.translate(
+    centre[0] + down[0] * bookAlong,
+    centre[1] + down[1] * bookAlong,
+    centre[2] + down[2] * bookAlong,
+  )
 
   return {
     body: finishBoxes(body, 0.58),
     top: finishMixed(top, 0.48),
     brass: finishBoxes(brass, 0.20),
-    light: finishBoxes(light, 0.18),
+    led: finishBoxes(led, 0.18),
+    book: finishMixed([book], 0.4),
+    layout: {
+      tilt,
+      plane: { centre, up, down },
+      rest,
+      book: { width: page.width * 2, depth: page.depth, thickness: page.thickness, along: bookAlong },
+    },
   }
 }
 

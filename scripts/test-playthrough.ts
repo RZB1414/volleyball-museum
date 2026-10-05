@@ -102,13 +102,14 @@ import {
 import { toolSpent } from '../src/engine/lockRules.ts'
 import { startDueSequenceOn } from '../src/engine/sequenceDirector.ts'
 import { emptyProgress, grantProgress, PROGRESS_FIELDS, type Progress, type ProgressGrant } from '../src/state/progressFields.ts'
-import { registerProgressRules } from '../src/state/progressRules.ts'
 import { migrateProgress } from '../src/state/saveMigrations.ts'
 import { readText } from './lib/readText.ts'
 
 // The museum hands the store its rules as the canvas chunk arrives. Here, now:
-// every store this suite opens is created with them in place.
-const { progressRulesFor } = await import('../src/engine/contentRegistry.ts')
+// every store this suite opens is created with them in place. (Imported for
+// that alone: no case registers a house of its own any more, since the chain
+// of the Posse is the museum's.)
+await import('../src/engine/contentRegistry.ts')
 
 type Room = MuseumContent['rooms'][number]
 type Exhibit = MuseumContent['exhibits'][number]
@@ -322,14 +323,30 @@ await test('the view measures with the ruler, and not with numbers of its own', 
 
 const played = simulateProgress(MUSEUM)
 
-/** The furthest the game of this lot goes, list by list: the lot plan's acceptance. */
+/**
+ * The furthest the game of this lot goes, list by list: the lot plan's
+ * acceptance. Since L3 that is the Posse: the drawer hands over the key of
+ * the iron safe, the safe holds the Book of Deeds and the label proof, and
+ * the deed of office is signed at the lectern of the hall.
+ */
 const MAXIMUM = {
   roomsVisited: ['office', 'atrium', 'holyoke'],
   roomsPowered: ['office', 'atrium', 'holyoke'],
   doorsReleased: ['atrium-from-holyoke-shortcut'],
-  locksOpened: ['office-drawer'],
-  locksSeen: ['office-drawer'],
-  documentsRead: ['doc-welcome', 'doc-invention-date', 'doc-halstead', 'doc-rule-changes', 'doc-predecessor'],
+  locksOpened: ['office-drawer', 'office-safe'],
+  locksSeen: ['office-drawer', 'office-safe'],
+  documentsRead: [
+    'doc-welcome',
+    'doc-invention-date',
+    'doc-halstead',
+    'doc-rule-changes',
+    // The handover sheet, where the predecessor's note was; the Book and the
+    // proof out of the safe; Otávio's message, heard to its last line.
+    'doc-otavio-handover',
+    'doc-termos',
+    'doc-label-proof-office',
+    'doc-otavio-tape',
+  ],
   factsKnown: ['springfield-renaming', 'first-rulebook', 'filipino-spike', 'six-a-side'],
   catalogued: [
     'atrium-ball-laced',
@@ -361,12 +378,16 @@ const MAXIMUM = {
     'guide-1916:census',
     'portrait-morgan:date',
   ],
-  credentials: [],
-  // The first flag the game sets (L3): the clock on the office wall, put
-  // right. Set by a verb of the device, not by a trigger.
-  flags: ['clock-set'],
-  triggersFired: [],
+  // Spent on the safe by the end, and still in the save: the save only grows.
+  credentials: ['tool:service-key'],
+  // The clock on the office wall, put right (a verb of the device), and the
+  // deed of office, signed (the term's own trigger). A new game never holds
+  // the third flag the house knows, `legacy-pre-L3-drawer`: a migration sets
+  // that one, on a save whose drawer was opened before it held a key.
+  flags: ['clock-set', 'posse-signed'],
+  triggersFired: ['lock:office-drawer:opened', 'term:termo-posse:signed'],
   devicesCarried: ['office-radio'],
+  termsSigned: ['termo-posse'],
 } as const satisfies ProgressGrant
 const MAXIMUM_END = endOf(MAXIMUM)
 
@@ -399,11 +420,16 @@ await test('the furthest the game goes today, atom by atom', () => {
     assert.deepEqual(sorted(played.final[field]), sorted(ids), field)
   }
   assert.deepEqual(endOf(played.final), MAXIMUM_END)
-  // In the plan's words: three rooms lit and visited, five documents, four
-  // facts, nine of twelve pieces, the drawer open and seen, the shortcut
-  // released, the office clock set, no credential.
+  // In the plan's words: three rooms lit and visited, eight documents, four
+  // facts, nine of twelve pieces, the drawer and the iron safe open and
+  // seen, the shortcut released, the office clock set, the key of the safe
+  // in the save and spent, and the deed of office signed.
   assert.equal(played.final.catalogued.length, 9)
-  assert.deepEqual(played.final.flags, ['clock-set'])
+  assert.deepEqual(played.final.flags, ['clock-set', 'posse-signed'])
+  assert.deepEqual(played.final.termsSigned, ['termo-posse'])
+  assert.deepEqual(toolSpent(MUSEUM.locks, played.final), ['tool:service-key'])
+  // What the game shows by itself she watched as it came: nothing is owed.
+  assert.deepEqual(played.final.sequencesSeen, ['seq-posse'])
   assert.equal(MUSEUM.exhibits.length, 12)
   assert.deepEqual(
     sorted(MUSEUM.exhibits.map((exhibit) => exhibit.id).filter((id) => !played.final.catalogued.includes(id))),
@@ -417,16 +443,17 @@ await test('the furthest the game goes today, atom by atom', () => {
   assert.equal(played.final.lastRoom, emptyProgress().lastRoom)
 })
 
-await test('the script in levels: the lamp, the atrium, its light and Wing 1, the wing, the drawer', () => {
-  // Without the details and the lock touched, which the printed script counts.
+await test('the script in seven levels: the lamp, the atrium, its light and Wing 1, the wing, the drawer and its key, the iron safe, the Posse', () => {
+  // Without the details and the locks touched, which the printed script counts.
   const told = played.levels.map((level) => sorted(level.filter((entry) => !/^(?:detail|seen):/.test(entry))))
   assert.deepEqual(told, [
     sorted(['room:office', 'power:office', 'doc:doc-welcome']),
     // What the lamp makes possible, a level after the lamp: the door, the
-    // radio off its charger, the clock put right. (The lot plan filed the
+    // radio off its charger, the clock put right, and Otávio's message on
+    // the answering machine, which is on the mains. (The lot plan filed the
     // clock under the lamp's own level. A level is what could be done with
     // what the level before left, and before the lamp the clock has no mains.)
-    sorted(['room:atrium', 'carried:office-radio', 'flag:clock-set']),
+    sorted(['room:atrium', 'carried:office-radio', 'flag:clock-set', 'doc:doc-otavio-tape']),
     sorted([
       'power:atrium',
       'room:holyoke',
@@ -451,15 +478,25 @@ await test('the script in levels: the lamp, the atrium, its light and Wing 1, th
       'cat:guide-1916',
       'cat:portrait-morgan',
     ]),
-    sorted(['lock:office-drawer', 'doc:doc-predecessor']),
+    // The drawer gives way to the year, and hands over what was pinned to
+    // the sheet inside it: the key, by the drawer's own trigger.
+    sorted(['lock:office-drawer', 'doc:doc-otavio-handover', 'cred:tool:service-key', 'fired:lock:office-drawer:opened']),
+    // The key in the hand a level after the drawer gave it: the iron safe,
+    // and the two papers it kept.
+    sorted(['lock:office-safe', 'doc:doc-termos', 'doc:doc-label-proof-office']),
+    // The Book brings the deed to the lectern, and the house is lit: signed.
+    sorted(['term:termo-posse', 'flag:posse-signed', 'fired:term:termo-posse:signed']),
   ])
   assert.deepEqual(
     played.levels.map((level) => level.filter((entry) => entry.startsWith('detail:')).length),
-    [0, 0, 8, 9, 0],
+    [0, 0, 8, 9, 0, 0, 0],
   )
   // The drawer is touched the first time she is in the office, and opened
-  // four levels later: the year is in the wing.
-  assert.ok(played.levels[0].includes('seen:office-drawer'))
+  // four levels later: the year is in the wing. The safe beside it is
+  // touched then too, and refuses: it waits for the key.
+  assert.ok(played.levels[0].includes('seen:office-drawer') && played.levels[0].includes('seen:office-safe'))
+  // The Posse is the last thing in the script, and nothing comes after it.
+  assert.deepEqual(played.levels.findIndex((level) => level.includes('flag:posse-signed')), played.levels.length - 1)
   // Every atom of the end is on exactly one level.
   assert.deepEqual(sorted(played.levels.flat()), MAXIMUM_END)
 
@@ -473,11 +510,13 @@ await test('the script in levels: the lamp, the atrium, its light and Wing 1, th
   assert.deepEqual(endOf(reordered.final), MAXIMUM_END)
 
   const printed = formatScript(played.levels).split('\n')
-  assert.equal(printed.length, 5)
-  assert.match(printed[0], /^ {2}N0 +room:office · power:office · doc:doc-welcome · \(1 locks touched\)$/)
-  assert.match(printed[1], /^ {2}N1 +room:atrium · flag:clock-set · carried:office-radio$/)
+  assert.equal(printed.length, 7)
+  assert.match(printed[0], /^ {2}N0 +room:office · power:office · doc:doc-welcome · \(2 locks touched\)$/)
+  assert.match(printed[1], /^ {2}N1 +room:atrium · doc:doc-otavio-tape · flag:clock-set · carried:office-radio$/)
   assert.match(printed[3], /^ {2}N3 .*fact:springfield-renaming.*\(9 details\)$/)
-  assert.match(printed[4], /^ {2}N4 +lock:office-drawer · doc:doc-predecessor$/)
+  assert.match(printed[4], /^ {2}N4 +lock:office-drawer · doc:doc-otavio-handover · cred:tool:service-key · \(1 triggers\)$/)
+  assert.match(printed[5], /^ {2}N5 +lock:office-safe · doc:doc-termos · doc:doc-label-proof-office$/)
+  assert.match(printed[6], /^ {2}N6 +flag:posse-signed · term:termo-posse · \(1 triggers\)$/)
 })
 
 await test('she accuses the museum of six things, and they are the six that are dated', () => {
@@ -528,39 +567,70 @@ await test('what the rules answer is offered, and what they ignore is not', () =
     availableActions(MUSEUM, saveHolding([`room:${room}`, ...atoms]), room).map(describe)
   const office = (...atoms: string[]) => offered(atoms, 'office')
 
-  // The first minute, in the dark: the lamp, the notebook, the drawer to
-  // touch, and the telephone, whose dead line needs no mains (L3). The door
-  // waits for the lamp and the radio for its charger.
-  assert.deepEqual(office(), ['power office', 'open office-cabinet', 'open office-notebook', 'hear office-telephone'])
+  // The first minute, in the dark: the lamp, the notebook, the drawer and
+  // the iron safe to touch, and the telephone, whose dead line needs no
+  // mains (L3). The door waits for the lamp, the radio for its charger and
+  // the answering machine for the mains it is plugged into.
+  assert.deepEqual(office(), ['power office', 'open office-cabinet', 'open office-notebook', 'open office-safe', 'hear office-telephone'])
   // With the lamp on: its switch has nothing left to do, the door opens,
-  // the radio can be taken and the clock, which has its mains back, set.
+  // the radio can be taken, the clock, which has its mains back, set, and
+  // the machine played.
   assert.deepEqual(office('power:office'), [
     'door atrium-to-office office>atrium',
     'open office-cabinet',
     'open office-notebook',
+    'open office-safe',
     'set office-clock',
     'take office-radio',
     'hear office-telephone',
+    'hear office-answering-machine',
   ])
   // The notebook that was read left the desk with her, a radio in the hand
   // is not on its charger, and a clock that was put right is not set again.
   assert.deepEqual(office('power:office', 'doc:doc-welcome', 'carried:office-radio'), [
     'door atrium-to-office office>atrium',
     'open office-cabinet',
+    'open office-safe',
     'set office-clock',
     'hear office-telephone',
+    'hear office-answering-machine',
   ])
-  assert.deepEqual(office('power:office', 'doc:doc-welcome', 'carried:office-radio', 'flag:clock-set'), [
+  // The machine plays again for whoever has heard it out: it is offered, and gives nothing new.
+  assert.deepEqual(office('power:office', 'doc:doc-welcome', 'carried:office-radio', 'flag:clock-set', 'doc:doc-otavio-tape'), [
     'door atrium-to-office office>atrium',
     'open office-cabinet',
+    'open office-safe',
     'hear office-telephone',
+    'hear office-answering-machine',
   ])
   // The telephone is answered, and gives nothing: no press of it is ever
-  // worth making, and it is in no record.
+  // worth making, and it is in no record. The one voice written down is the
+  // recording, by the paper it files.
   const dial: PlayerAction = { kind: 'voice', deviceId: 'office-telephone' }
   assert.deepEqual(actionGrant(MUSEUM, saveHolding(['room:office']), dial), {})
   assert.equal(actionRecord(MUSEUM, saveHolding(['room:office']), 'office', dial), null)
-  assert.ok(!contentActions(MUSEUM).some((entry) => entry.id.startsWith('voice:')), 'a dead line is written down as an action that gives something')
+  assert.deepEqual(
+    contentActions(MUSEUM).filter((entry) => entry.id.startsWith('voice:')),
+    [{ id: 'voice:office-answering-machine:doc-otavio-tape', requires: ['power:office', 'room:office'], grants: ['doc:doc-otavio-tape'] }],
+    'a dead line is written down as an action that gives something, or the recording is not',
+  )
+  // The safe, touched with no key, refuses and is on the plan; with the
+  // key, the touch opens it and hands over what it kept. The key is asked
+  // for by the press, never taken out of the save.
+  const safe: PlayerAction = { kind: 'container', containerId: 'office-safe' }
+  assert.deepEqual(actionGrant(MUSEUM, saveHolding(['room:office']), safe), { locksSeen: ['office-safe'] })
+  assert.deepEqual(actionRecord(MUSEUM, saveHolding(['room:office']), 'office', safe), { id: 'touch:office-safe', requires: ['room:office'], grants: ['seen:office-safe'] })
+  assert.deepEqual(actionRecord(MUSEUM, saveHolding(['room:office', 'cred:tool:service-key']), 'office', safe), {
+    id: 'container:office-safe',
+    requires: ['cred:tool:service-key', 'room:office'],
+    grants: ['doc:doc-label-proof-office', 'doc:doc-termos', 'lock:office-safe', 'seen:office-safe'],
+  })
+  // The lectern offers the deed once the Book is read and the house is lit, and not before.
+  const signs = (...atoms: string[]) => offered(atoms, 'atrium').filter((line) => line.startsWith('sign '))
+  assert.deepEqual(signs('power:office', 'power:atrium', 'power:holyoke'), [])
+  assert.deepEqual(signs('doc:doc-termos', 'power:office', 'power:atrium'), [])
+  assert.deepEqual(signs('doc:doc-termos', 'power:office', 'power:atrium', 'power:holyoke'), ['sign termo-posse at atrium-lectern'])
+  assert.deepEqual(signs('doc:doc-termos', 'power:office', 'power:atrium', 'power:holyoke', 'term:termo-posse'), [])
   // A flag is not mains: set on another night's save, it still is not offered in the dark.
   assert.ok(!office().includes('set office-clock') && !office('flag:clock-set').includes('set office-clock'))
 
@@ -658,14 +728,25 @@ await test('each accusation, on a museum broken for the purpose', () => {
   // The year taught nowhere at all: the drawer is shut for good, and nothing
   // is behind it that would have taught it.
   const untaught = proves('lock-unopenable', 'office-drawer', yearOnlyIn((doc) => doc))
-  proves('document-unreadable', 'doc-predecessor', yearOnlyIn((doc) => doc))
+  proves('document-unreadable', 'doc-otavio-handover', yearOnlyIn((doc) => doc))
+  // And everything the drawer leads to goes with it: the key, the safe it
+  // opens, the Book in the safe and the deed the Book brings to the lectern.
+  for (const [code, id] of [
+    ['credential-unobtainable', 'tool:service-key'],
+    ['lock-unopenable', 'office-safe'],
+    ['document-unreadable', 'doc-termos'],
+    ['term-unsignable', 'termo-posse'],
+    ['sequence-never-plays', 'seq-posse'],
+  ] as const) {
+    if (!accused(untaught, code).includes(id)) quiet.push(`with the year taught nowhere, ${code} does not accuse "${id}"`)
+  }
   if (accused(untaught, 'lock-evidence-behind-lock').length > 0) noisy.push('lock-evidence-behind-lock accuses a lock whose answer is taught nowhere')
 
   // The year taught only by the letter inside the drawer it opens.
   proves(
     'lock-evidence-behind-lock',
     'office-drawer',
-    yearOnlyIn((doc) => (doc.id === 'doc-predecessor' ? { ...doc, revealsFactId: 'springfield-renaming' } : doc)),
+    yearOnlyIn((doc) => (doc.id === 'doc-otavio-handover' ? { ...doc, revealsFactId: 'springfield-renaming' } : doc)),
   )
 
   // A paper filed in a cabinet no room has, and a piece shown in no room.
@@ -780,7 +861,9 @@ await test('each accusation, on a museum broken for the purpose', () => {
   // And one a device sets by a verb of its own (the clock) is set, and read
   // by the device: neither end is loose.
   assert.deepEqual(accused(played.issues, 'flag-never-read'), [])
-  assert.deepEqual(sorted(wired.final.triggersFired), ['hears-it', 'says-it'])
+  // The two the test added, among the museum's own: the drawer's, which
+  // hands over the key, and the deed's, which sets its flag.
+  assert.deepEqual(sorted(wired.final.triggersFired), ['hears-it', 'lock:office-drawer:opened', 'says-it', 'term:termo-posse:signed'])
 
   // A wing whose main door has a side of its own too: both ways back are
   // doors that open from one side. It can be left (the first push lifts the
@@ -973,16 +1056,25 @@ await test('a museum with its debts paid is accused of nothing, and all twelve p
   }
   const result = simulateProgress(paid)
   assert.deepEqual(result.issues, [])
-  assert.deepEqual(sorted(result.final.flags), ['basement-drained', 'clock-set'])
-  // Every line of the list that has a box is ticked at that end, and the one
-  // that has none is still the promise it was.
+  assert.deepEqual(sorted(result.final.flags), ['basement-drained', 'clock-set', 'posse-signed'])
+  // Every line of the list that has a box is ticked at that end, the
+  // curator's own pencil lines among them, and the two that have none are
+  // still the promises they were.
   const list = MUSEUM.documents.flatMap((doc) => doc.pages ?? []).find((page) => page.style === 'checklist')
   assert.deepEqual(
     checklistRows(list?.items ?? [], result.final, paid).map((row) => `${row.labelKey}: ${row.done}`),
-    ['notebook.todo.power: true', 'notebook.todo.catalogue: true', 'notebook.todo.vault: null'],
+    [
+      'notebook.todo.power: true',
+      'notebook.todo.catalogue: true',
+      'notebook.todo.vault: null',
+      'notebook.todo.drawer: true',
+      'notebook.todo.safe-key: true',
+      'notebook.todo.posse: true',
+      'notebook.todo.proof: null',
+    ],
   )
   assert.equal(result.final.catalogued.length, 12)
-  assert.equal(result.levels.length, 5, 'and it takes no longer')
+  assert.equal(result.levels.length, 7, 'and it takes no longer')
 })
 
 /** A save that holds exactly these atoms. */
@@ -1087,304 +1179,141 @@ await test('what is written down of each action is what the rules do: every guar
   assert.deepEqual(played.actions.filter((entry) => JSON.stringify(offered.get(entry.id)) !== JSON.stringify(entry)), [])
 })
 
-await test('the chain of the Posse, on the museum with it added: the key from the drawer, the safe it is spent on, a recording heard out', async () => {
-  // What the real museum has none of until the Book it leads to: a drawer
-  // that hands over a key as it opens, a safe that key is spent on, and a
-  // machine on the desk that plays a recording once the lamp is on. Played
-  // by the exhaustive player and then by the robot's hands, on the real
-  // store, to the same end.
-  const KEY = { kind: 'tool', id: 'service-key' } as const
-  const chain: MuseumContent = {
-    ...withRooms((room) =>
-      room.id === 'office'
-        ? {
-            ...room,
-            kit: room.kit.filter((placement) => placement.part !== 'office-safe'),
-            containers: [
-              ...(room.containers ?? []),
-              { id: 'office-safe', part: 'office-safe', position: [2.55, 0, 2.45], rotationY: -Math.PI / 2, titleKey: 'container.office.title', lockId: 'office-safe' },
-            ],
-            devices: [
-              ...(room.devices ?? []),
-              {
-                kind: 'voice',
-                id: 'office-machine',
-                part: 'desk-telephone',
-                position: [0.6, 0.74, 0.64],
-                titleKey: 'device.office-telephone.title',
-                speakerKey: 'radio.speaker.static',
-                poweredBy: 'office',
-                utterances: [{ when: {}, documentId: 'doc-test-tape' }],
-              },
-            ],
-          }
-        : room,
+await test('the chain of the Posse, on the museum itself: the key from the drawer, the safe it is spent on, a recording heard out', async () => {
+  // What the lot was built towards, and what two cases proved on a museum
+  // with it added before the museum had it: a drawer that hands over a key
+  // as it opens, a safe that key is spent on, and a machine on the desk that
+  // plays a recording once the lamp is on. Played by the exhaustive player
+  // and then by the robot's hands, on the real store, to the same end.
+  const levelOf = (entry: string) => played.levels.findIndex((level) => level.includes(entry))
+  assert.deepEqual(
+    ['seen:office-safe', 'doc:doc-otavio-tape', 'cred:tool:service-key', 'fired:lock:office-drawer:opened', 'lock:office-safe', 'doc:doc-termos', 'doc:doc-label-proof-office'].map(
+      (entry) => `${entry} N${levelOf(entry)}`,
     ),
-    documents: [
-      ...MUSEUM.documents,
-      { id: 'doc-test-tape', era: 'office', kind: 'oral-history', titleKey: 'document.welcome.title', bodyKey: 'document.welcome.summary', containerId: 'office-machine', lineKeys: ['radio.call.hello.1', 'radio.call.hello.3'] },
-      { id: 'doc-test-book', era: 'office', kind: 'letter', titleKey: 'document.welcome.title', bodyKey: 'document.welcome.summary', containerId: 'office-safe', lockId: 'office-safe' },
-    ],
-    locks: [
-      ...MUSEUM.locks.map((lock) => (lock.id === 'office-drawer' ? { ...lock, onOpen: [{ kind: 'grant-credential', credential: KEY } as const] } : lock)),
-      { kind: 'tool', id: 'office-safe', requires: 'service-key', consumesTool: true, mapLabelKey: 'lock.office-drawer.mapLabel' },
-    ],
-    credentials: [{ credential: KEY, titleKey: 'container.office.title', icon: 'key' }],
-  }
-  const result = simulateProgress(chain)
-  const added = sorted([
-    'seen:office-safe',
-    'doc:doc-test-tape',
-    'cred:tool:service-key',
-    'fired:lock:office-drawer:opened',
-    'lock:office-safe',
-    'doc:doc-test-book',
-  ])
-  const END = sorted([...MAXIMUM_END, ...added])
-  assert.deepEqual(endOf(result.final), END)
-  // Nothing the real museum is not accused of: the chain is sound.
-  assert.deepEqual(
-    sorted(result.issues.map((issue) => `${issue.code} ${issue.id}`)),
-    sorted(played.issues.map((issue) => `${issue.code} ${issue.id}`)),
-  )
-  // The script gains a level: the key is in the hand a level after the
-  // drawer gave it, and the safe opens then. The recording waits only for
-  // the lamp, and the safe is touched (and refuses) on the first visit.
-  const levelOf = (entry: string) => result.levels.findIndex((level) => level.includes(entry))
-  assert.equal(result.levels.length, played.levels.length + 1)
-  assert.deepEqual(
-    added.map((entry) => `${entry} N${levelOf(entry)}`).sort(),
     [
+      'seen:office-safe N0',
+      'doc:doc-otavio-tape N1',
       'cred:tool:service-key N4',
-      'doc:doc-test-book N5',
-      'doc:doc-test-tape N1',
       'fired:lock:office-drawer:opened N4',
       'lock:office-safe N5',
-      'seen:office-safe N0',
+      'doc:doc-termos N5',
+      'doc:doc-label-proof-office N5',
     ],
   )
   // The key is spent by the end, and is still in the save.
-  assert.deepEqual(toolSpent(chain.locks, result.final), ['tool:service-key'])
-  assert.deepEqual(result.final.credentials, ['tool:service-key'])
+  assert.deepEqual(toolSpent(MUSEUM.locks, played.final), ['tool:service-key'])
+  assert.deepEqual(played.final.credentials, ['tool:service-key'])
+  assert.deepEqual(toolSpent(MUSEUM.locks, saveHolding(['cred:tool:service-key'])), [], 'a key in the hand is spent before its lock is open')
 
-  // Written down: the safe is opened by the press of whoever holds the key,
-  // the recording by a press with the lamp on, and each record is what the
-  // rules do for a player who holds exactly what it asks.
-  const records = Object.fromEntries(result.actions.map((entry) => [entry.id, entry]))
+  // Written down: the drawer's trigger gives the key, the safe is opened by
+  // the press of whoever holds it, the recording by a press with the lamp on.
+  const records = Object.fromEntries(played.actions.map((entry) => [entry.id, entry]))
+  assert.deepEqual(records['trigger:lock:office-drawer:opened'], {
+    id: 'trigger:lock:office-drawer:opened',
+    requires: ['lock:office-drawer'],
+    grants: ['cred:tool:service-key', 'fired:lock:office-drawer:opened'],
+  })
   assert.deepEqual(records['container:office-safe'], {
     id: 'container:office-safe',
     requires: ['cred:tool:service-key', 'room:office'],
-    grants: ['doc:doc-test-book', 'lock:office-safe', 'seen:office-safe'],
+    grants: ['doc:doc-label-proof-office', 'doc:doc-termos', 'lock:office-safe', 'seen:office-safe'],
   })
   assert.deepEqual(records['touch:office-safe'], { id: 'touch:office-safe', requires: ['room:office'], grants: ['seen:office-safe'] })
-  assert.deepEqual(records['voice:office-machine:doc-test-tape'], {
-    id: 'voice:office-machine:doc-test-tape',
+  assert.deepEqual(records['voice:office-answering-machine:doc-otavio-tape'], {
+    id: 'voice:office-answering-machine:doc-otavio-tape',
     requires: ['power:office', 'room:office'],
-    grants: ['doc:doc-test-tape'],
+    grants: ['doc:doc-otavio-tape'],
   })
-  for (const id of ['container:office-safe', 'voice:office-machine:doc-test-tape']) {
-    const entry = records[id]
-    assert.ok(pressFor(chain, entry, entry.requires), `${id}: not offered to a player who holds what it asks`)
-    for (const guard of entry.requires.filter((asked) => !asked.startsWith('room:'))) {
-      assert.equal(pressFor(chain, entry, entry.requires.filter((asked) => asked !== guard)), null, `${id}: still offered without ${guard}`)
-    }
-  }
   // In the dark the machine is dead and is not offered; the telephone beside it is.
-  const inTheDark = availableActions(chain, saveHolding(['room:office']), 'office').map(describe)
-  assert.ok(!inTheDark.includes('hear office-machine') && inTheDark.includes('hear office-telephone'))
-  assert.ok(availableActions(chain, saveHolding(['room:office', 'power:office']), 'office').map(describe).includes('hear office-machine'))
+  const inTheDark = availableActions(MUSEUM, saveHolding(['room:office']), 'office').map(describe)
+  assert.ok(!inTheDark.includes('hear office-answering-machine') && inTheDark.includes('hear office-telephone'))
 
-  // The robot, with the content's own rules in the store: every hand of it
-  // is the handler's (the safe by `attemptLock`, the machine by the function
-  // E calls), and every night ends where the simulation ends.
-  registerProgressRules(progressRulesFor(chain))
-  try {
-    for (const seed of [3, 30, 47, 300, 1896]) {
-      const night = await playToEnd(await openGame(), chain, seeded(seed))
-      const end = endOf(night.page.progress())
-      assert.deepEqual(withoutLuck(end), END, `seed ${seed}`)
-      assert.deepEqual(toolSpent(chain.locks, night.page.progress()), ['tool:service-key'], `seed ${seed}`)
-      assert.equal(night.page.state().radio, null, `seed ${seed}: the machine was left talking`)
-      // The key survives the disk, spent as it is.
-      assert.deepEqual((await reload(night.page)).progress().credentials, ['tool:service-key'], `seed ${seed}`)
-    }
-    // The player who never works a voice loses the recording and nothing else.
-    const deaf: RobotProfile = { ...ORDINARY, skips: (action) => action.kind === 'voice' }
-    const night = await playToEnd(await openGame(), chain, seeded(11), deaf)
-    assert.deepEqual(withoutLuck(endOf(night.page.progress())), END.filter((entry) => entry !== 'doc:doc-test-tape'))
-  } finally {
-    // The museum's own rules back in the slot, for every store opened from here on.
-    registerProgressRules(progressRulesFor(MUSEUM))
+  // The robot: every hand of it is the handler's (the safe by `attemptLock`,
+  // the machine by the function E calls), and every night ends where the
+  // simulation ends.
+  for (const seed of [3, 30, 47, 300, 1896]) {
+    const night = await playToEnd(await openGame(), MUSEUM, seeded(seed))
+    assert.deepEqual(withoutLuck(endOf(night.page.progress())), MAXIMUM_END, `seed ${seed}`)
+    assert.deepEqual(toolSpent(MUSEUM.locks, night.page.progress()), ['tool:service-key'], `seed ${seed}`)
+    assert.equal(night.page.state().radio, null, `seed ${seed}: the machine was left talking`)
+    // The key survives the disk, spent as it is.
+    assert.deepEqual((await reload(night.page)).progress().credentials, ['tool:service-key'], `seed ${seed}`)
   }
+  // The player who never works a voice loses the recording and nothing else:
+  // the message says where the year is, and so does the wing.
+  const deaf: RobotProfile = { ...ORDINARY, skips: (action) => action.kind === 'voice' }
+  const night = await playToEnd(await openGame(), MUSEUM, seeded(11), deaf)
+  assert.deepEqual(withoutLuck(endOf(night.page.progress())), MAXIMUM_END.filter((entry) => entry !== 'doc:doc-otavio-tape'))
 })
 
-await test('the end of that chain, on the museum with it added: the Book brings the term to the lectern, a held press signs it, and the sequence follows', async () => {
-  // The rest of what the Posse needs and the real museum has none of yet: a
-  // term the Book in the safe brings to the lectern, signable with light in
-  // the three rooms, and the sequence its signature is followed by. On the
-  // chain of the test above (the key, the safe), with the lectern made a
-  // signing desk and the porter given something to point at while it waits.
-  const KEY = { kind: 'tool', id: 'service-key' } as const
-  const LIT = ['office', 'atrium', 'holyoke'] as const
-  const ending: MuseumContent = {
-    ...withRooms((room) =>
-      room.id === 'office'
-        ? {
-            ...room,
-            kit: room.kit.filter((placement) => placement.part !== 'office-safe'),
-            containers: [
-              ...(room.containers ?? []),
-              { id: 'office-safe', part: 'office-safe', position: [2.55, 0, 2.45], rotationY: -Math.PI / 2, titleKey: 'container.office.title', lockId: 'office-safe' },
-            ],
-            devices: (room.devices ?? []).map((device) =>
-              device.kind === 'radio'
-                ? {
-                    ...device,
-                    hints: [
-                      ...device.hints.slice(0, -1),
-                      { when: { flagsUnset: ['posse-signed'] }, targetId: 'atrium-lectern', heightKeys: ['radio.hint.rest'], mentions: ['atrium-lectern'] },
-                      ...device.hints.slice(-1),
-                    ],
-                  }
-                : device,
-            ),
-          }
-        : room.id === 'atrium'
-          ? {
-              ...room,
-              kit: room.kit.filter((placement) => placement.part !== 'atrium-lectern'),
-              devices: [
-                ...(room.devices ?? []),
-                {
-                  kind: 'signing-desk',
-                  id: 'atrium-lectern',
-                  part: 'atrium-lectern',
-                  position: [-7.15, 0, 2.2],
-                  rotationY: Math.PI / 2,
-                  titleKey: 'device.atrium-podium.title',
-                  emptyNoticeKey: 'device.atrium-podium.notice',
-                  termIds: ['termo-posse'],
-                  holdSeconds: 1.2,
-                },
-              ],
-            }
-          : room,
-    ),
-    documents: [
-      ...MUSEUM.documents,
-      { id: 'doc-test-book', era: 'office', kind: 'letter', titleKey: 'document.welcome.title', bodyKey: 'document.welcome.summary', containerId: 'office-safe', lockId: 'office-safe' },
-    ],
-    locks: [
-      ...MUSEUM.locks.map((lock) => (lock.id === 'office-drawer' ? { ...lock, onOpen: [{ kind: 'grant-credential', credential: KEY } as const] } : lock)),
-      { kind: 'tool', id: 'office-safe', requires: 'service-key', consumesTool: true, mapLabelKey: 'lock.office-drawer.mapLabel' },
-    ],
-    credentials: [{ credential: KEY, titleKey: 'container.office.title', icon: 'key' }],
-    terms: [
-      {
-        id: 'termo-posse',
-        titleKey: 'document.welcome.title',
-        bodyKey: 'document.welcome.summary',
-        presentedWhen: { documentsRead: ['doc-test-book'] },
-        when: { documentsRead: ['doc-test-book'], powered: [...LIT] },
-        grants: 'posse-signed',
-        mentions: ['atrium-lectern'],
-      },
-    ],
-    sequences: [
-      {
-        id: 'seq-posse',
-        when: { flags: ['posse-signed'] },
-        steps: [
-          { kind: 'card', titleKey: 'document.welcome.title', seconds: 4 },
-          { kind: 'line', speakerKey: 'radio.speaker.porter', lineKey: 'radio.hint.rest' },
-        ],
-        mentions: [],
-      },
-    ],
+await test('the night has an end: the Book brings the deed to the lectern, a held press signs it with the house lit, and the sequence follows', async () => {
+  // What ÁT-D1 asks of the museum, as accusations it must not raise. Until
+  // this lot the game stopped at a note in a drawer: there was no term to
+  // sign, and so nothing to accuse of being out of reach.
+  assert.deepEqual((MUSEUM.terms ?? []).map((term) => term.id), ['termo-posse'], 'the museum has one term to sign in this lot')
+  assert.deepEqual((MUSEUM.sequences ?? []).map((sequence) => sequence.id), ['seq-posse'])
+  for (const code of ['term-unsignable', 'ending-unreachable', 'term-presented-late', 'term-blocker-unnamed', 'post-ending-disables-action', 'sequence-never-plays', 'radio-hint-coverage']) {
+    assert.deepEqual(accused(played.issues, code), [], code)
   }
-  const result = simulateProgress(ending)
-  const added = sorted([
-    'seen:office-safe',
-    'cred:tool:service-key',
-    'fired:lock:office-drawer:opened',
-    'lock:office-safe',
-    'doc:doc-test-book',
-    'term:termo-posse',
-    'flag:posse-signed',
-    'fired:term:termo-posse:signed',
-  ])
-  const END = sorted([...MAXIMUM_END, ...added])
-  assert.deepEqual(endOf(result.final), END)
-  // Nothing the real museum is not accused of: the ending is sound, the
-  // porter has the lectern to point at until it is signed, and signing takes
-  // nothing away.
-  assert.deepEqual(
-    sorted(result.issues.map((issue) => `${issue.code} ${issue.id}`)),
-    sorted(played.issues.map((issue) => `${issue.code} ${issue.id}`)),
-  )
-  assert.deepEqual(codesOf(validateEnding(ending)), [])
-  // The script gains two levels: the safe a level after the key, the
-  // signature a level after the Book. The Posse is the last thing in it.
-  const levelOf = (entry: string) => result.levels.findIndex((level) => level.includes(entry))
-  assert.equal(result.levels.length, played.levels.length + 2)
-  assert.deepEqual(
-    ['doc:doc-test-book', 'term:termo-posse', 'flag:posse-signed', 'fired:term:termo-posse:signed'].map((entry) => `${entry} N${levelOf(entry)}`),
-    ['doc:doc-test-book N5', 'term:termo-posse N6', 'flag:posse-signed N6', 'fired:term:termo-posse:signed N6'],
-  )
-  assert.deepEqual(sorted(result.levels.at(-1) ?? []), sorted(['term:termo-posse', 'flag:posse-signed', 'fired:term:termo-posse:signed']))
-  assert.deepEqual(result.final.termsSigned, ['termo-posse'])
-  assert.deepEqual(result.final.sequencesSeen, ['seq-posse'], 'she watches what she is owed')
+  assert.deepEqual(codesOf(validateEnding(MUSEUM)), [])
 
-  // Written down, and what the rules do for a player who holds exactly what it asks.
-  const records = Object.fromEntries(result.actions.map((entry) => [entry.id, entry]))
+  // Signed at the lectern of the hall, on what the term asks: the Book read
+  // and light in the three rooms of the house.
+  const records = Object.fromEntries(played.actions.map((entry) => [entry.id, entry]))
   const signing = records['sign:atrium-lectern:termo-posse']
   assert.deepEqual(signing, {
     id: 'sign:atrium-lectern:termo-posse',
-    requires: ['doc:doc-test-book', 'power:atrium', 'power:holyoke', 'power:office', 'room:atrium'],
+    requires: ['doc:doc-termos', 'power:atrium', 'power:holyoke', 'power:office', 'room:atrium'],
     grants: ['term:termo-posse'],
   })
-  assert.ok(pressFor(ending, signing, signing.requires), 'not offered to a player who holds what it asks')
+  assert.deepEqual(records['trigger:term:termo-posse:signed'], {
+    id: 'trigger:term:termo-posse:signed',
+    requires: ['term:termo-posse'],
+    grants: ['fired:term:termo-posse:signed', 'flag:posse-signed'],
+  })
+  assert.ok(pressFor(MUSEUM, signing, signing.requires), 'not offered to a player who holds what it asks')
+  // Not without light in each of the three, whichever one is dark; not without the Book.
   for (const guard of signing.requires.filter((asked) => !asked.startsWith('room:'))) {
-    assert.equal(pressFor(ending, signing, signing.requires.filter((asked) => asked !== guard)), null, `still offered without ${guard}`)
+    assert.equal(pressFor(MUSEUM, signing, signing.requires.filter((asked) => asked !== guard)), null, `still offered without ${guard}`)
   }
   // Not from another room, and not twice.
-  assert.ok(!availableActions(ending, saveHolding([...signing.requires, 'room:office']), 'office').some((action) => action.kind === 'sign'))
-  assert.ok(!availableActions(ending, saveHolding([...signing.requires, 'term:termo-posse']), 'atrium').some((action) => action.kind === 'sign'))
+  assert.ok(!availableActions(MUSEUM, saveHolding([...signing.requires, 'room:office']), 'office').some((action) => action.kind === 'sign'))
+  assert.ok(!availableActions(MUSEUM, saveHolding([...signing.requires, 'term:termo-posse']), 'atrium').some((action) => action.kind === 'sign'))
+  // And the museum L2 left is the one the gate would call unfinished, were it
+  // given a term: with the deed and no desk to sign it at, the ending is out
+  // of reach.
+  const noDesk = withRooms((room) => ({ ...room, devices: (room.devices ?? []).filter((device) => device.kind !== 'signing-desk') }))
+  assert.deepEqual(accused(simulateProgress(noDesk).issues, 'ending-unreachable'), ['termo-posse'])
 
-  // The robot, with the content's own rules in the store. Its hand for the
-  // desk is the handler the key calls, the gesture's own reducer and the
-  // listener's function; and what the game then shows by itself it watches.
-  registerProgressRules(progressRulesFor(ending))
-  try {
-    for (const seed of [3, 30, 47, 300, 1896]) {
-      const night = await playToEnd(await openGame(), ending, seeded(seed))
-      assert.deepEqual(withoutLuck(endOf(night.page.progress())), END, `seed ${seed}`)
-      assert.deepEqual(night.page.progress().termsSigned, ['termo-posse'], `seed ${seed}`)
-      assert.deepEqual(night.page.progress().sequencesSeen, ['seq-posse'], `seed ${seed}: the sequence was never seen to its end`)
-      assert.equal(night.page.state().sequence, null, `seed ${seed}: a card was left on screen`)
-      assert.ok(night.log.some((line) => line.includes('sign termo-posse at atrium-lectern') && !line.endsWith('(nothing)')), `seed ${seed}: the term was never signed by the hand`)
-      // Through the disk: signed, shown, and nothing owed.
-      const back = await reload(night.page)
-      assert.deepEqual([back.progress().termsSigned, back.progress().sequencesSeen, back.progress().flags.includes('posse-signed')], [['termo-posse'], ['seq-posse'], true], `seed ${seed}`)
-      assert.equal(startDueSequenceOn(back.store.useMuseum, ending, false), false, `seed ${seed}: the sequence played again after a reload`)
-    }
-    // The player who never signs ends a level short, and is owed nothing.
-    const unsigned: RobotProfile = { ...ORDINARY, skips: (action) => action.kind === 'sign' }
-    const night = await playToEnd(await openGame(), ending, seeded(11), unsigned)
-    assert.deepEqual(
-      withoutLuck(endOf(night.page.progress())),
-      END.filter((entry) => !['term:termo-posse', 'flag:posse-signed', 'fired:term:termo-posse:signed'].includes(entry)),
-    )
-    assert.deepEqual(night.page.progress().sequencesSeen, [])
-    // And the one who signs the moment she can (before the pieces, before the
-    // shortcut) ends where everybody ends: signing took nothing away.
-    const eager: RobotProfile = { ...ORDINARY, prefers: (action) => action.kind === 'sign' }
-    for (const seed of [5, 50]) {
-      const hasty = await playToEnd(await openGame(), ending, seeded(seed), eager)
-      assert.deepEqual(withoutLuck(endOf(hasty.page.progress())), END, `seed ${seed}, signing first`)
-    }
-  } finally {
-    registerProgressRules(progressRulesFor(MUSEUM))
+  // The robot. Its hand for the desk is the handler the key calls, the
+  // gesture's own reducer and the listener's function; and what the game then
+  // shows by itself it watches.
+  for (const seed of [3, 30, 47, 300, 1896]) {
+    const night = await playToEnd(await openGame(), MUSEUM, seeded(seed))
+    assert.deepEqual(withoutLuck(endOf(night.page.progress())), MAXIMUM_END, `seed ${seed}`)
+    assert.deepEqual(night.page.progress().termsSigned, ['termo-posse'], `seed ${seed}`)
+    assert.deepEqual(night.page.progress().sequencesSeen, ['seq-posse'], `seed ${seed}: the sequence was never seen to its end`)
+    assert.equal(night.page.state().sequence, null, `seed ${seed}: a card was left on screen`)
+    assert.ok(night.log.some((line) => line.includes('sign termo-posse at atrium-lectern') && !line.endsWith('(nothing)')), `seed ${seed}: the term was never signed by the hand`)
+    // Through the disk: signed, shown, and nothing owed.
+    const back = await reload(night.page)
+    assert.deepEqual([back.progress().termsSigned, back.progress().sequencesSeen, back.progress().flags.includes('posse-signed')], [['termo-posse'], ['seq-posse'], true], `seed ${seed}`)
+    assert.equal(startDueSequenceOn(back.store.useMuseum, MUSEUM, false), false, `seed ${seed}: the sequence played again after a reload`)
+  }
+  // The player who never signs ends a level short, and is owed nothing.
+  const unsigned: RobotProfile = { ...ORDINARY, skips: (action) => action.kind === 'sign' }
+  const night = await playToEnd(await openGame(), MUSEUM, seeded(11), unsigned)
+  assert.deepEqual(
+    withoutLuck(endOf(night.page.progress())),
+    MAXIMUM_END.filter((entry) => !['term:termo-posse', 'flag:posse-signed', 'fired:term:termo-posse:signed'].includes(entry)),
+  )
+  assert.deepEqual(night.page.progress().sequencesSeen, [])
+  // And the one who signs the moment she can (before the pieces, before the
+  // shortcut) ends where everybody ends: signing took nothing away.
+  const eager: RobotProfile = { ...ORDINARY, prefers: (action) => action.kind === 'sign' }
+  for (const seed of [5, 50]) {
+    const hasty = await playToEnd(await openGame(), MUSEUM, seeded(seed), eager)
+    assert.deepEqual(withoutLuck(endOf(hasty.page.progress())), MAXIMUM_END, `seed ${seed}, signing first`)
   }
 })
 
@@ -1445,8 +1374,10 @@ function step(page: Awaited<ReturnType<typeof openGame>>, action: PlayerAction) 
 }
 const door = (doorId: string, from: string, to: string): PlayerAction => ({ kind: 'door', doorId, from, to })
 
-await test('the canonical route is playable in its order, ends on the critical path, and play goes on from there to the end', async () => {
-  // The route of the plan's §2.4: I-01, I-07, I-08, I-09, I-10, I-11a, I-15, I-12.
+await test('the canonical route is playable in its order and ends with the Posse signed, and play goes on from there to the end', async () => {
+  // The route of the plan's §2.4: I-01, I-07, I-08, I-09, I-10, I-11a, I-15,
+  // I-12, and from L3 the rest of Act I: the key in the drawer (I-12), the
+  // iron safe (I-13) and the deed of office at the lectern (I-14).
   const page = await openGame()
   page.state().start()
   const route: readonly PlayerAction[] = [
@@ -1459,7 +1390,10 @@ await test('the canonical route is playable in its order, ends on the critical p
     door(SHORTCUT, 'holyoke', 'atrium'), // I-15, out by the shortcut
     door('atrium-to-office', 'atrium', 'office'),
     { kind: 'container', containerId: 'office-cabinet' }, // the touch that brings the keypad up
-    { kind: 'code', lockId: 'office-drawer', entry: '1896' }, // I-12
+    { kind: 'code', lockId: 'office-drawer', entry: '1896' }, // I-12: the sheet, and the key pinned to it
+    { kind: 'container', containerId: 'office-safe' }, // I-13: the key is spent, the Book and the proof are read
+    door('atrium-to-office', 'office', 'atrium'),
+    { kind: 'sign', deviceId: 'atrium-lectern', termId: 'termo-posse' }, // I-14: the Posse
   ]
   for (const action of route) step(page, action)
 
@@ -1476,12 +1410,29 @@ await test('the canonical route is playable in its order, ends on the critical p
     'cat:portrait-morgan',
     'seen:office-drawer',
     'lock:office-drawer',
-    'doc:doc-predecessor',
+    'doc:doc-otavio-handover',
+    'cred:tool:service-key',
+    'fired:lock:office-drawer:opened',
+    'seen:office-safe',
+    'lock:office-safe',
+    'doc:doc-termos',
+    'doc:doc-label-proof-office',
+    'term:termo-posse',
+    'flag:posse-signed',
+    'fired:term:termo-posse:signed',
   ])
   assert.deepEqual(endOf(page.progress()), critical)
-  // The route skips the notebook, the radio and eight pieces: it is the
-  // shortest way to the drawer, not the end of the game. From its last step
-  // the robot reaches the end like anybody else.
+  // The night has its end: the flag the seals of a later lot will ask for.
+  assert.ok(page.progress().flags.includes('posse-signed'), 'the canonical route does not end with the deed of office signed')
+  assert.deepEqual(page.progress().termsSigned, ['termo-posse'])
+  // What follows the signature is owed, and plays to its last step.
+  assert.equal(startDueSequenceOn(page.store.useMuseum, MUSEUM, false), true, 'no sequence follows the signature')
+  assert.equal(page.state().sequence?.id, 'seq-posse')
+  for (let guard = 0; guard < 8 && page.state().sequence; guard += 1) page.state().advanceSequence()
+  assert.deepEqual(page.progress().sequencesSeen, ['seq-posse'])
+  // The route skips the notebook, the radio, the message and eight pieces: it
+  // is the shortest way to the Posse, not the end of the game. From its last
+  // step the robot reaches the end like anybody else.
   assert.deepEqual(critical.filter((entry) => !MAXIMUM_END.includes(entry)), [])
   const night = await playToEnd(page, MUSEUM, seeded(1896))
   assert.deepEqual(withoutLuck(endOf(night.page.progress())), MAXIMUM_END)
@@ -1570,28 +1521,39 @@ await test('five hundred shuffled orders, with wasted presses and closed tabs, a
   assert.ok(seconds < 120, `the five hundred nights took ${seconds.toFixed(1)} s`)
 })
 
-await test('the player who skips everything optional ends in the same place, less the steps skipped (V7)', async () => {
+await test('the player who skips everything optional still signs, and sees the night closed: the same end, less the steps skipped (V7)', async () => {
   // Never reads the notebook, never takes the radio, never lights the
-  // torch, never sets the clock.
+  // torch, never hears the message, never sets the clock. The Posse asks for
+  // none of them: the year is in the wing, the key in the drawer, and what
+  // closes the night is a sequence, which needs no radio to be heard.
   const journal = new Set(MUSEUM.rooms.flatMap((room) => (room.containers ?? []).filter((container) => container.carriesJournal).map((container) => container.id)))
   const skipper: RobotProfile = {
     ...ORDINARY,
     noTorch: true,
-    skips: (action) => action.kind === 'take' || action.kind === 'set-clock' || (action.kind === 'container' && journal.has(action.containerId)),
+    skips: (action) =>
+      action.kind === 'take' || action.kind === 'set-clock' || action.kind === 'voice' || (action.kind === 'container' && journal.has(action.containerId)),
   }
   assert.deepEqual([...journal], ['office-notebook'])
-  const skipped = ['doc:doc-welcome', 'carried:office-radio', 'flag:clock-set']
+  const skipped = ['doc:doc-welcome', 'carried:office-radio', 'flag:clock-set', 'doc:doc-otavio-tape']
   for (const seed of [1, 2, 3, 5, 8, 13, 21, 34]) {
     const night = await playToEnd(await openGame(), MUSEUM, seeded(seed), skipper)
-    assert.deepEqual(withoutLuck(endOf(night.page.progress())), MAXIMUM_END.filter((entry) => !skipped.includes(entry)), `seed ${seed}`)
+    const progress = night.page.progress()
+    assert.deepEqual(withoutLuck(endOf(progress)), MAXIMUM_END.filter((entry) => !skipped.includes(entry)), `seed ${seed}`)
     assert.equal(night.page.state().flashlightUsed, false, 'the torch was lit')
-    assert.ok(!night.log.some((line) => /office-notebook|office-radio|office-clock/.test(line)), `seed ${seed} touched what it skips`)
+    assert.ok(!night.log.some((line) => /office-notebook|office-radio|office-clock|office-answering-machine|office-telephone/.test(line)), `seed ${seed} touched what it skips`)
+    // Signed, and the card and the two lines were seen to the last of them.
+    assert.deepEqual(progress.termsSigned, ['termo-posse'], `seed ${seed}: the player who skips everything never signs`)
+    assert.ok(progress.flags.includes('posse-signed'), `seed ${seed}`)
+    assert.deepEqual(progress.sequencesSeen, ['seq-posse'], `seed ${seed}: the night was signed and never closed`)
+    assert.deepEqual(progress.devicesCarried, [], `seed ${seed}`)
   }
 })
 
-await test('the player who types the year without having read it only gets the drawer early: the end is the same', async () => {
+await test('the player who types the year without having read it only gets the key early: the Posse still waits for the three rooms', async () => {
   // The shortcut the plan names in 1.4: the keypad compares digits, and takes
-  // the year from somebody who never saw the portrait.
+  // the year from somebody who never saw the portrait. Since L3 the drawer
+  // hands over a key, so the guess brings the key forward, and with it the
+  // safe: what it cannot bring forward is the light the deed asks for.
   const page = await openGame()
   page.state().start()
   step(page, { kind: 'container', containerId: 'office-cabinet' })
@@ -1600,9 +1562,26 @@ await test('the player who types the year without having read it only gets the d
   const before = page.progress()
   assert.ok(!availableActions(MUSEUM, before, 'office').some((candidate) => candidate.kind === 'code'), 'the simulation types a code it has not learnt')
   press(page, MUSEUM, guess)
-  assert.deepEqual(endOf(page.progress()), sorted(['room:office', 'seen:office-drawer', 'lock:office-drawer', 'doc:doc-predecessor']))
+  assert.deepEqual(
+    endOf(page.progress()),
+    sorted(['room:office', 'seen:office-drawer', 'lock:office-drawer', 'doc:doc-otavio-handover', 'cred:tool:service-key', 'fired:lock:office-drawer:opened']),
+  )
   // Which the check between store and simulation calls by its name.
   assert.match(pressProblem(MUSEUM, 'office', guess, before, page.progress()) ?? '', /the store accepted "type 1896 at office-drawer" in office, which the simulation does not offer there/)
+  // The safe opens in the dark, with the key just taken: the Book is read
+  // before any room but the office was ever seen.
+  step(page, { kind: 'container', containerId: 'office-safe' })
+  assert.ok(page.progress().documentsRead.includes('doc-termos') && page.progress().locksOpened.includes('office-safe'))
+  assert.deepEqual(page.progress().roomsPowered, [])
+  // And the lectern, once she gets to it, names the deed and what it waits for: nothing is signed.
+  step(page, { kind: 'power', roomId: 'office' })
+  step(page, door('atrium-to-office', 'office', 'atrium'))
+  const early: PlayerAction = { kind: 'sign', deviceId: 'atrium-lectern', termId: 'termo-posse' }
+  assert.ok(!availableActions(MUSEUM, page.progress(), 'atrium').some((candidate) => candidate.kind === 'sign'), 'the deed is offered with two rooms dark')
+  const dark = page.progress()
+  press(page, MUSEUM, early)
+  assert.equal(page.progress(), dark, 'a press on the lectern with the house dark wrote to the save')
+  assert.deepEqual(page.progress().termsSigned, [])
   // A wrong year costs nothing and writes nothing.
   const fresh = await openGame()
   fresh.state().start()
@@ -1818,26 +1797,32 @@ await test('the content against its own snapshot is accused of nothing', () => {
   assert.equal(NOW.actions.length, played.actions.length)
   assert.deepEqual(NOW.actions.map((entry) => entry.id), sorted(played.actions.map((entry) => entry.id)))
   // The list names its ids, and they are the atoms L2 wrote down when the
-  // two lines still said "all of them". The third has no box, and the lot
-  // that gives it one.
+  // two lines still said "all of them". The line of the vault has no box,
+  // and the lot that gives it one; the four in the curator's pencil came
+  // with the Posse, the last of them a promise too.
   assert.deepEqual(NOW.checklist, [
     { id: 'notebook.todo.catalogue', doneWhen: sorted(MUSEUM.exhibits.map((exhibit) => `cat:${exhibit.id}`)) },
+    { id: 'notebook.todo.drawer', doneWhen: ['lock:office-drawer'] },
+    { id: 'notebook.todo.posse', doneWhen: ['flag:posse-signed'] },
     { id: 'notebook.todo.power', doneWhen: ['power:atrium', 'power:holyoke', 'power:office'] },
+    { id: 'notebook.todo.proof', doneWhen: null, deferredUntilLot: 12 },
+    { id: 'notebook.todo.safe-key', doneWhen: ['lock:office-safe'] },
     { id: 'notebook.todo.vault', doneWhen: null, deferredUntilLot: 12 },
   ])
   assert.deepEqual(graphSnapshot(ALL_OF_THEM, CONTENT_LOT).checklist, NOW.checklist, '"all of them" is written as the ids it means today')
-  // No term and no sequence until the slice that brings the Book: the two
-  // collections are there, and empty.
-  assert.deepEqual(NOW.terms, [])
-  assert.deepEqual([NOW.ids.terms, NOW.ids.sequences], [[], []])
+  // The first term a snapshot holds, with what signing it asks, and the
+  // sequence that follows it.
+  assert.deepEqual(NOW.terms, [{ id: 'termo-posse', when: ['doc:doc-termos', 'power:atrium', 'power:holyoke', 'power:office'] }])
+  assert.deepEqual([NOW.ids.terms, NOW.ids.sequences], [['termo-posse'], ['seq-posse']])
   assert.deepEqual([NOW.saveFields.termsSigned, NOW.saveFields.sequencesSeen], ['list', 'list'])
   assert.deepEqual(NOW.ids.rooms, ['atrium', 'holyoke', 'office'])
   assert.deepEqual(NOW.ids.doors, [SHORTCUT, 'atrium-to-holyoke', 'atrium-to-office'])
-  assert.deepEqual(NOW.ids.locks, ['office-drawer'])
+  assert.deepEqual(NOW.ids.locks, ['office-drawer', 'office-safe'])
   assert.deepEqual(NOW.ids.devices, ['office-clock', 'office-radio'])
+  assert.deepEqual(NOW.ids.documents, ['doc-halstead', 'doc-invention-date', 'doc-label-proof-office', 'doc-otavio-handover', 'doc-otavio-tape', 'doc-rule-changes', 'doc-termos', 'doc-welcome'])
   assert.equal(NOW.ids.exhibits.length, 12)
   assert.equal(NOW.ids.hotspots.length, 21)
-  assert.deepEqual(NOW.ids.triggers, [])
+  assert.deepEqual(NOW.ids.triggers, ['lock:office-drawer:opened', 'term:termo-posse:signed'])
   // Every field of the save's table, by kind.
   assert.deepEqual(Object.keys(NOW.saveFields), sorted(Object.keys(PROGRESS_FIELDS)))
   assert.equal(NOW.saveFields.doorsReleased, 'list')
@@ -1867,7 +1852,9 @@ await test('adding is free: a room, a piece, a paper, a detail, a trigger and a 
     ],
     // The notebook's list names its ids (frozen in L3), so a piece more is free.
     documents: [...MUSEUM.documents, { ...MUSEUM.documents[0], id: 'doc-new', containerId: 'holyoke-cabinet-b' }],
-    locks: MUSEUM.locks.map((lock) => ({ ...lock, onOpen: [{ kind: 'set-flag', flag: 'drawer-open' }] })),
+    // Beside what a lock already gives as it opens (the drawer hands over a
+    // key since L3): in its place would be taking the key away.
+    locks: MUSEUM.locks.map((lock) => ({ ...lock, onOpen: [...(lock.onOpen ?? []), { kind: 'set-flag' as const, flag: 'drawer-open' }] })),
     triggers: [{ id: 'new-trigger', when: { flags: ['drawer-open'] }, effects: [{ kind: 'reveal-document', documentId: 'doc-new' }] }],
   }
   assert.deepEqual(additive(NOW, grown), [])
@@ -1957,16 +1944,16 @@ await test('on the real museum: a detail taken out, a door given a lock, a room 
     'guard-strengthened door:atrium-to-holyoke:atrium>holyoke',
     'guard-strengthened door:atrium-to-holyoke:holyoke>atrium',
   ])
-  assert.match(validateAdditive(NOW, locked)[0].message, /asks for more since L2: power:holyoke\./)
+  assert.match(validateAdditive(NOW, locked)[0].message, new RegExp(`asks for more since L${NOW.lot}: power:holyoke\\.`))
   // The simulation says what that does to a new game; the snapshot says what
   // it does to an old one. Both are needed.
   assert.ok(accused(simulateProgress(locked).issues, 'room-unreachable').includes('holyoke'))
 
-  // A drawer that stops holding its letter.
-  assert.deepEqual(additive(NOW, { ...MUSEUM, documents: MUSEUM.documents.filter((doc) => doc.id !== 'doc-predecessor') }), [
+  // A drawer that stops holding its sheet.
+  assert.deepEqual(additive(NOW, { ...MUSEUM, documents: MUSEUM.documents.filter((doc) => doc.id !== 'doc-otavio-handover') }), [
     'grant-removed code:office-drawer',
     'grant-removed container:office-cabinet',
-    'id-renamed-without-alias documents:doc-predecessor',
+    'id-renamed-without-alias documents:doc-otavio-handover',
   ])
 
   // A room arrives. The list names the three rooms it means, so nothing moves...
@@ -1986,14 +1973,38 @@ await test('on the real museum: a detail taken out, a door given a lock, a room 
 })
 
 await test('a renamed id with its aliases takes nothing away, in what is given and in what an action is called', () => {
-  // The letter in the drawer under a new id (as L3 does with the handover).
-  const letter = withDocuments((doc) => (doc.id === 'doc-predecessor' ? { ...doc, id: 'doc-otavio-handover' } : doc))
+  // The sheet in the drawer under a new id: what L3 did to the predecessor's
+  // note, done once more to the sheet that replaced it.
+  const letter = withDocuments((doc) => (doc.id === 'doc-otavio-handover' ? { ...doc, id: 'doc-handover-sheet-1' } : doc))
   assert.deepEqual(additive(NOW, letter), [
+    'grant-removed code:office-drawer',
+    'grant-removed container:office-cabinet',
+    'id-renamed-without-alias documents:doc-otavio-handover',
+  ])
+  assert.deepEqual(additive(NOW, letter, [{ sinceLot: 4, field: 'documentsRead', from: 'doc-otavio-handover', to: 'doc-handover-sheet-1' }]), [])
+
+  // And the rename this lot made, against the record of the lot before it.
+  // L2's players read `doc-predecessor`; the museum has `doc-otavio-handover`
+  // in its place, and the alias in `SAVE_ALIASES` is all that stands between
+  // that and three accusations.
+  const l2 = snapshotsIn(resolve(ROOT, RELEASES_DIRECTORY)).find((snapshot) => snapshot.lot === 2)
+  assert.ok(l2, 'the record of L2 is on disk')
+  const before = parseGraphSnapshot(l2.text)
+  assert.ok(before.ids.documents.includes('doc-predecessor') && !NOW.ids.documents.includes('doc-predecessor'))
+  assert.deepEqual(additive(before, MUSEUM), [
     'grant-removed code:office-drawer',
     'grant-removed container:office-cabinet',
     'id-renamed-without-alias documents:doc-predecessor',
   ])
-  assert.deepEqual(additive(NOW, letter, [{ sinceLot: 3, field: 'documentsRead', from: 'doc-predecessor', to: 'doc-otavio-handover' }]), [])
+  assert.deepEqual(validateAdditive(before, MUSEUM), [], 'the content takes something from a player of L2')
+  // A rename of a rename: the save of L2 is carried through both.
+  assert.deepEqual(
+    additive(before, letter, [
+      { sinceLot: 3, field: 'documentsRead', from: 'doc-predecessor', to: 'doc-otavio-handover' },
+      { sinceLot: 4, field: 'documentsRead', from: 'doc-otavio-handover', to: 'doc-handover-sheet-1' },
+    ]),
+    [],
+  )
 
   // A piece under a new id: its details, its entry and the actions named after it.
   const piece = withRooms((room) => ({ ...room, exhibitIds: room.exhibitIds.map((id) => (id === 'ball-improvised' ? 'ball-bladder' : id)) }))
@@ -2068,7 +2079,8 @@ await test('a line with no box gains one only where the record gave it a date (D
   // dates reads and writes as itself, byte for byte.
   const text = serialiseGraphSnapshot(NOW)
   assert.ok(text.includes('{"id":"notebook.todo.vault","doneWhen":null,"deferredUntilLot":12}'))
-  assert.equal(text.split('deferredUntilLot').length - 1, 1, 'one dated line, one date')
+  assert.ok(text.includes('{"id":"notebook.todo.proof","doneWhen":null,"deferredUntilLot":12}'))
+  assert.equal(text.split('deferredUntilLot').length - 1, 2, 'two dated lines, two dates')
   assert.equal(serialiseGraphSnapshot(parseGraphSnapshot(text)), text)
   const undatedText = serialiseGraphSnapshot(undated)
   assert.ok(!undatedText.includes('deferredUntilLot'))

@@ -800,6 +800,21 @@ function oldNewsOf(progress: Raw): string[] {
     ...(has('catalogued', null) ? ['porter-first-catalogued'] : []),
   ]
 }
+/**
+ * What the load marks a save with for a drawer that was opened before it held
+ * a key (`PRE_POSSE_SAVE.drawer`): open, and the trigger that hands the key
+ * over not on record. Written out here, apart from the migration, for the
+ * reason above.
+ */
+function drawerMarkOf(progress: Raw): string[] {
+  const list = (field: string) => (Array.isArray(progress[field]) ? (progress[field] as unknown[]) : [])
+  return list('locksOpened').includes('office-drawer') && !list('triggersFired').includes('lock:office-drawer:opened') ? ['legacy-pre-L3-drawer'] : []
+}
+/** And the sheet that took the place of the note in the drawer, for a save that read the note (`SAVE_ALIASES`). */
+function sheetForTheNoteOf(progress: Raw): string[] {
+  const read = Array.isArray(progress.documentsRead) ? (progress.documentsRead as unknown[]) : []
+  return read.includes('doc-predecessor') && !read.includes('doc-otavio-handover') ? ['doc-otavio-handover'] : []
+}
 /** A porter's memory from before the hint had heights, as this build loads it. */
 const withHeights = (memory: unknown) =>
   Object.fromEntries(Object.entries((memory ?? {}) as Record<string, Raw>).map(([radio, entry]) => [radio, { ...entry, hintHeight: entry.hintHeight ?? 0 }]))
@@ -824,10 +839,13 @@ await test('this build reads a save of production as L1 read it, plus what the P
   // could have written, that must not show. Every field L1 knows comes out of
   // this build's load as it came out of L1's, the opening migration included.
   //
-  // But for two things, each by name (it was "exactly as L1 read it" until
+  // But for three things, each by name (it was "exactly as L1 read it" until
   // L3). The porter's calls for milestones the save had already passed are
-  // counted as heard, after the calls L1 read, in the order of the list. And
-  // each entry of his memory gains the height of his last hint, at zero.
+  // counted as heard, after the calls L1 read, in the order of the list.
+  // Each entry of his memory gains the height of his last hint, at zero. And
+  // a save that read the note in the drawer has read the sheet that took
+  // its place, after everything L1 read. (The mark of a drawer opened
+  // before its key is a flag, and L1 has no name for flags.)
   const saves: [string, Raw][] = [
     ...fixtureIds.map((id): [string, Raw] => [id, rawFixture(id)]),
     ['a save with only a version', { version: 1 }],
@@ -847,7 +865,12 @@ await test('this build reads a save of production as L1 read it, plus what the P
     // The milestones are read off the whole save: one of them (the shortcut)
     // is in a field L1 has no name for.
     const news = oldNewsOf({ ...raw, ...then })
-    const expected: Raw = { ...then, radioCalls: [...(then.radioCalls as string[]), ...news], radioMemory: withHeights(then.radioMemory) }
+    const expected: Raw = {
+      ...then,
+      radioCalls: [...(then.radioCalls as string[]), ...news],
+      radioMemory: withHeights(then.radioMemory),
+      documentsRead: [...(then.documentsRead as string[]), ...sheetForTheNoteOf(then)],
+    }
     for (const field of L1_FIELDS) assert.deepEqual(now[field], expected[field], `${name}: ${field}`)
     if (news.length > 0) withOldNews += 1
     // Nothing L1 read is gone or moved: what the Posse adds comes after it.
@@ -1067,71 +1090,65 @@ await test('an alias that points at an id the content does not have fails the co
   assert.ok(!validateOpening(MUSEUM).some((issue) => issue.code === 'legacy-save-alias'))
 
   const codes = (aliases: readonly SaveAlias[]) => validateSaveAliases(MUSEUM, aliases).map((issue) => `${issue.code} ${issue.id}`)
-  // One good alias per kind of id the save holds today.
+  // One good alias per kind of id the save holds today. Five of the sixteen
+  // only since the Posse: the house hands over a key, a signature sets a
+  // flag, two triggers are compiled, and there is a term and a sequence.
   const good: SaveAlias[] = [
     { sinceLot: 3, field: 'catalogued', from: 'old', to: 'ball-spalding' },
     { sinceLot: 3, field: 'hotspots', from: 'old', to: 'portrait-morgan:date' },
-    { sinceLot: 3, field: 'documentsRead', from: 'old', to: 'doc-predecessor' },
+    { sinceLot: 3, field: 'documentsRead', from: 'old', to: 'doc-otavio-handover' },
     { sinceLot: 3, field: 'factsKnown', from: 'old', to: 'springfield-renaming' },
+    { sinceLot: 3, field: 'credentials', from: 'old', to: 'tool:service-key' },
     { sinceLot: 3, field: 'roomsVisited', from: 'old', to: 'holyoke' },
     { sinceLot: 3, field: 'roomsPowered', from: 'old', to: 'atrium' },
     { sinceLot: 3, field: 'locksOpened', from: 'old', to: 'office-drawer' },
     { sinceLot: 3, field: 'locksSeen', from: 'old', to: 'office-drawer' },
     { sinceLot: 3, field: 'doorsReleased', from: 'old', to: 'atrium-from-holyoke-shortcut' },
+    { sinceLot: 3, field: 'flags', from: 'old', to: 'posse-signed' },
+    { sinceLot: 3, field: 'triggersFired', from: 'old', to: 'lock:office-drawer:opened' },
     { sinceLot: 3, field: 'radioCalls', from: 'old', to: 'porter-first-call' },
     { sinceLot: 3, field: 'devicesCarried', from: 'old', to: 'office-radio' },
+    { sinceLot: 3, field: 'termsSigned', from: 'old', to: 'termo-posse' },
+    { sinceLot: 3, field: 'sequencesSeen', from: 'old', to: 'seq-posse' },
   ]
   assert.deepEqual(codes(good), [])
   // The same ids, each in a field that holds another kind: the right id in the wrong list carries nothing.
   const misplaced = good.map((alias, index) => ({ ...alias, to: good[(index + 1) % good.length].to }))
   // Two pairs of neighbours share a kind (the two lists of rooms, the two of
-  // locks), so two of the eleven are still right.
+  // locks), so two of the sixteen are still right.
   const sameKindAsNext = ['roomsVisited', 'locksOpened']
   assert.deepEqual(
     codes(misplaced),
     misplaced.filter((alias) => !sameKindAsNext.includes(alias.field)).map((alias) => `legacy-save-alias ${alias.field}:${alias.from}`),
   )
   // Every list of the save has a line in the gate's table of ids, or says it
-  // has none. The museum sets no flag and compiles no trigger in this lot, so
-  // an alias into either list leads nowhere yet.
+  // has none: the lessons are the HUD's to name, and the content's to none.
   const listFields = fields.filter((field) => Array.isArray(PROGRESS_FIELDS[field].fresh()))
   const unchecked = listFields.filter((field) => !good.some((alias) => alias.field === field))
-  assert.deepEqual(unchecked.sort(), ['credentials', 'flags', 'hintsShown', 'sequencesSeen', 'termsSigned', 'triggersFired'])
-  // Nor has it a term or a sequence until the slice that brings the Book.
-  assert.deepEqual(codes([{ sinceLot: 3, field: 'termsSigned', from: 'old', to: 'termo-posse' }]), ['legacy-save-alias termsSigned:old'])
-  assert.deepEqual(codes([{ sinceLot: 3, field: 'sequencesSeen', from: 'old', to: 'seq-posse' }]), ['legacy-save-alias sequencesSeen:old'])
-  assert.deepEqual(codes([{ sinceLot: 3, field: 'flags', from: 'old', to: 'posse-signed' }]), ['legacy-save-alias flags:old'])
-  assert.deepEqual(codes([{ sinceLot: 3, field: 'triggersFired', from: 'old', to: 'lock:office-drawer:opened' }]), [
-    'legacy-save-alias triggersFired:old',
-  ])
-  // With a museum that does set the flag and open the drawer onto something, both lead somewhere.
-  const withConsequences = {
+  assert.deepEqual(unchecked.sort(), ['hintsShown'])
+  // A flag exists by being set: by the trigger of a term, or by a device's
+  // own verb (the clock put right). The mark the load puts on an older save
+  // (`PRE_POSSE_SAVE.drawer`) is no id of the content, and no rename leads to it.
+  assert.deepEqual(codes([{ sinceLot: 3, field: 'flags', from: 'old', to: 'clock-set' }]), [])
+  assert.deepEqual(codes([{ sinceLot: 3, field: 'flags', from: 'old', to: 'legacy-pre-L3-drawer' }]), ['legacy-save-alias flags:old'])
+  assert.deepEqual(codes([{ sinceLot: 3, field: 'triggersFired', from: 'old', to: 'term:termo-posse:signed' }]), [])
+  // The museum as L2 left it, with no ending: no term, no sequence, no key
+  // to hand over and nothing that compiles to a trigger. An alias into any
+  // of those five lists led nowhere, and was refused; the clock's flag was
+  // the only flag there was.
+  const beforeThePosse = {
     ...MUSEUM,
-    locks: MUSEUM.locks.map((lock) => ({ ...lock, onOpen: [{ kind: 'set-flag' as const, flag: 'posse-signed' }] })),
-  }
+    terms: [],
+    sequences: [],
+    credentials: [],
+    locks: MUSEUM.locks.filter((lock) => lock.kind === 'knowledge').map(({ onOpen: _, ...lock }) => lock),
+  } as typeof MUSEUM
+  const SINCE_THE_POSSE = ['credentials', 'flags', 'triggersFired', 'termsSigned', 'sequencesSeen']
   assert.deepEqual(
-    validateSaveAliases(withConsequences, [
-      { sinceLot: 3, field: 'flags', from: 'old', to: 'posse-signed' },
-      { sinceLot: 3, field: 'triggersFired', from: 'old', to: 'lock:office-drawer:opened' },
-    ]),
-    [],
+    validateSaveAliases(beforeThePosse, good).map((issue) => issue.id),
+    SINCE_THE_POSSE.map((field) => `${field}:old`),
   )
-  // And with a museum that has a term and a sequence, an alias into each list of theirs leads somewhere too:
-  // to the term, to the flag its signature sets, to the trigger that sets it, to the sequence.
-  const withAnEnding = {
-    ...MUSEUM,
-    terms: [{ id: 'termo-posse', titleKey: 'x', bodyKey: 'x', presentedWhen: {}, when: {}, grants: 'posse-signed', mentions: [] }],
-    sequences: [{ id: 'seq-posse', when: { flags: ['posse-signed'] }, steps: [{ kind: 'card' as const, titleKey: 'x', seconds: 4 }], mentions: [] }],
-  }
-  assert.deepEqual(
-    validateSaveAliases(withAnEnding, [
-      { sinceLot: 3, field: 'termsSigned', from: 'old', to: 'termo-posse' },
-      { sinceLot: 3, field: 'sequencesSeen', from: 'old', to: 'seq-posse' },
-      { sinceLot: 3, field: 'flags', from: 'old', to: 'posse-signed' },
-      { sinceLot: 3, field: 'triggersFired', from: 'old', to: 'term:termo-posse:signed' },
-    ]),
-    [],
-  )
+  assert.deepEqual(validateSaveAliases(beforeThePosse, [{ sinceLot: 3, field: 'flags', from: 'old', to: 'clock-set' }]), [])
   // A credential nothing in the content grants or asks for, and a list whose
   // ids the content does not define at all (the lessons are the HUD's): an
   // alias the gate cannot check is an alias the gate refuses.
@@ -1139,7 +1156,11 @@ await test('an alias that points at an id the content does not have fails the co
   assert.deepEqual(codes([{ sinceLot: 3, field: 'hintsShown', from: 'old', to: PRE_OPENING_SAVE.journalHintId }]), [
     'legacy-save-alias hintsShown:old',
   ])
-  assert.deepEqual(codes([{ sinceLot: 3, field: 'documentsRead', from: 'doc-predecessor', to: 'doc-otavio-handover' }]), [
+  // The one rename the lots have made leads somewhere, and is the list's one line; the same note sent to a sheet
+  // nobody wrote does not.
+  assert.deepEqual(SAVE_ALIASES, [{ sinceLot: 3, field: 'documentsRead', from: 'doc-predecessor', to: 'doc-otavio-handover' }])
+  assert.deepEqual(codes(SAVE_ALIASES), [])
+  assert.deepEqual(codes([{ sinceLot: 3, field: 'documentsRead', from: 'doc-predecessor', to: 'doc-otavio-handover-2' }]), [
     'legacy-save-alias documentsRead:doc-predecessor',
   ])
   assert.deepEqual(codes([{ sinceLot: 3, field: 'hotspots', from: 'old', to: 'portrait-morgan:nothing' }]), [
@@ -1194,7 +1215,9 @@ const laterWrite = (settings: Raw = {}, more: Raw = {}) => ({
     hotspots: ['portrait-morgan:date'],
     factsKnown: ['springfield-renaming'],
     locksOpened: ['office-drawer'],
-    documentsRead: [...(OLD_TAB_PROGRESS.documentsRead as string[]), 'doc-predecessor'],
+    // The drawer was opened there, by a build that knows what is in it: the
+    // sheet, and the trigger that hands over the key, on record as fired.
+    documentsRead: [...(OLD_TAB_PROGRESS.documentsRead as string[]), 'doc-otavio-handover'],
     roomsVisited: ['office', 'atrium', 'holyoke'],
     triggersFired: ['lock:office-drawer:opened'],
     ribbonsCut: ['ala-4'],
@@ -1940,6 +1963,11 @@ await test('a term signed in one live tab is signed in every tab, with its flag 
   const rules = { settle: (progress: Progress) => settleTriggers(progress, triggers, content as never).progress }
   const night = SAVE_FIXTURES['l2-shortcut-released'].save
   assert.deepEqual([night.progress.flags, night.progress.triggersFired], [[], []], 'the case needs a save nobody has signed for')
+  // Its drawer was opened in L2, before the drawer held a key: every tab of
+  // this build that loads it marks that, and the mark is the first flag
+  // each of them holds. The flags a signature sets come after it.
+  const mark = drawerMarkOf(night.progress)
+  assert.deepEqual(mark, ['legacy-pre-L3-drawer'])
 
   for (const count of [2, 3]) {
     const browser = openBrowser(night)
@@ -1958,7 +1986,7 @@ await test('a term signed in one live tab is signed in every tab, with its flag 
         const holders: (readonly [string, Raw])[] = [...browser.tabs.map((tab) => [tab.name, tab.progress()] as const), ['the disk', browser.disk()!.progress!]]
         for (const [who, progress] of holders) {
           assert.deepEqual(progress.termsSigned, terms, `${count} tabs, ${when}: ${who} does not hold the signature`)
-          assert.deepEqual(progress.flags, flags, `${count} tabs, ${when}: ${who} does not hold the flag it sets`)
+          assert.deepEqual(progress.flags, [...mark, ...flags], `${count} tabs, ${when}: ${who} does not hold the flag it sets`)
           assert.deepEqual(progress.triggersFired, terms.map((id) => `term:${id}:signed`), `${count} tabs, ${when}: ${who} does not hold the trigger`)
         }
         agreed(browser, `${count} tabs, ${when}`)
@@ -1974,7 +2002,7 @@ await test('a term signed in one live tab is signed in every tab, with its flag 
       signing.act((state) => state.grant({ termsSigned: ['termo-posse'] }))
       stop()
       assert.equal(told, 1, 'a signature and the flag that follows from it were two notifications')
-      assert.deepEqual(signing.progress().flags, ['posse-signed'])
+      assert.deepEqual(signing.progress().flags, [...mark, 'posse-signed'])
       assert.deepEqual(elsewhere.progress().termsSigned, [], 'the other tab has not heard of it yet')
       leftAlone(browser, `${count} tabs, and one signed`)
       assert.deepEqual(writers(written), [signing.name], `${count} tabs: a signature is one write, and nobody answers it`)
@@ -2446,8 +2474,11 @@ await test("the Posse's old news, save by save: what each had passed counts as h
     })
     const loaded = migrateProgress(throughJson(raw))
     assert.deepEqual(loaded.radioCalls, [...before.radioCalls, ...expected], id)
-    // Only that: every other field is as the lots before left it.
-    assert.deepEqual({ ...loaded, radioCalls: before.radioCalls }, before, `${id}: the migration moved something besides the calls`)
+    // That, and the mark of a drawer that was open before it held a key
+    // (the other half of the migration, with a case of its own further
+    // down): every other field is as the lots before left it.
+    assert.deepEqual(loaded.flags, [...before.flags, ...drawerMarkOf(before as Raw)], `${id}: the flags`)
+    assert.deepEqual({ ...loaded, radioCalls: before.radioCalls, flags: before.flags }, before, `${id}: the migration moved something besides the calls and the mark`)
     assert.deepEqual(shrunk(before as Raw, loaded as Raw), [], id)
     // His introduction is owed, and is the first thing this save hears.
     assert.ok(!loaded.radioCalls.includes(PRE_POSSE_SAVE.helloCallId), `${id}: the introduction was taken as heard`)
@@ -2542,10 +2573,14 @@ await test('a tab of the build before the Posse writes a save the porter has not
     leftAlone(browser, '"Continue" in this build')
     assert.deepEqual(writersSince(browser, 0), [here.name])
     assert.ok((browser.disk()!.progress!.radioCalls as string[]).includes('porter-shortcut'))
-    // All the porter owes this player is his introduction; none of it is news.
+    // All the porter owes this player is his introduction and a word about
+    // the light on the answering machine, which is blinking now and is no
+    // milestone of another night; nothing the other tab did is news.
     assert.equal(nextRadioCall(radio, here.progress(), MUSEUM)?.id, 'porter-hello')
     here.act((state) => state.recordRadioCall('porter-hello'))
-    leftAlone(browser, 'the introduction, heard')
+    assert.equal(nextRadioCall(radio, here.progress(), MUSEUM)?.id, 'porter-machine-reminder')
+    here.act((state) => state.recordRadioCall('porter-machine-reminder'))
+    leftAlone(browser, 'the introduction and the reminder, heard')
     assert.equal(nextRadioCall(radio, here.progress(), MUSEUM), null, 'a milestone of another tab\'s night is told as news')
 
     // The tab of L2 takes that in (a list is a list to it: it keeps the ids it
@@ -2594,7 +2629,10 @@ await test("the height of the porter's hint travels between two live tabs: each 
   // heard: a press of R is answered, and the answer is the hint for Wing 1.
   const save = {
     ...fixture,
-    progress: { ...fixture.progress, radioCalls: ['porter-hello', ...fixture.progress.radioCalls, 'porter-atrium-service'] },
+    progress: {
+      ...fixture.progress,
+      radioCalls: ['porter-hello', ...fixture.progress.radioCalls, 'porter-atrium-service', 'porter-machine-reminder'],
+    },
   }
   const browser = openBrowser(save)
   try {
@@ -2676,6 +2714,287 @@ await test("the height of the porter's hint travels between two live tabs: each 
   } finally {
     browser.close()
   }
+})
+
+// ---------------------------------------------------------------------------
+// The Posse (L3): the drawer that was open before it held a key
+// ---------------------------------------------------------------------------
+
+/** What marks a drawer opened before the lot that pinned a key to what is in it (`PRE_POSSE_SAVE.drawer`). */
+const LEGACY_DRAWER = 'legacy-pre-L3-drawer'
+const SERVICE_KEY = 'tool:service-key'
+const DRAWER_TRIGGER = 'lock:office-drawer:opened'
+
+/**
+ * The museum's own rules, as the canvas chunk hands them to the store: its
+ * triggers, compiled, behind one function. Built here from the two functions
+ * the registry is made of and not by importing the registry, which would
+ * hand these rules to every page this suite opens (`engine/contentRegistry.ts`).
+ */
+async function museumRules() {
+  const { compileTriggers, settleTriggers } = await import('../src/engine/triggers.ts')
+  const triggers = compileTriggers(MUSEUM)
+  return {
+    ids: triggers.map((trigger) => trigger.id),
+    rules: { settle: (progress: Progress) => settleTriggers(progress, triggers, MUSEUM).progress },
+  }
+}
+
+await test('the drawer that was open before it held a key, save by save: the load marks it, files the sheet beside the note, and a second load adds nothing (L3)', () => {
+  assert.deepEqual((PRE_POSSE_SAVE as Raw).drawer, { lockId: 'office-drawer', triggerId: DRAWER_TRIGGER, flag: LEGACY_DRAWER })
+  assert.deepEqual(SAVE_ALIASES, [{ sinceLot: 3, field: 'documentsRead', from: 'doc-predecessor', to: 'doc-otavio-handover' }])
+  const list = (raw: Raw, field: string) => (raw[field] as string[] | undefined) ?? []
+  const marked: string[] = []
+  for (const id of fixtureIds) {
+    const raw = rawFixture(id)
+    const loaded = migrateProgress(throughJson(raw))
+    // The same save as the lots before this one brought it forward: no migration of L3, and no id renamed.
+    const older = migrateProgressWith(throughJson(raw), {
+      migrations: SAVE_MIGRATIONS.filter((migration) => migration.lot < 3),
+      aliases: [],
+      contentLot: CONTENT_LOT,
+    })
+    // Open, and the trigger that hands over its key not on record: it was opened before there was one.
+    const before = list(raw, 'locksOpened').includes('office-drawer') && !list(raw, 'triggersFired').includes(DRAWER_TRIGGER)
+    assert.equal(loaded.flags.includes(LEGACY_DRAWER), before, `${id}: the mark of a drawer opened before the key`)
+    if (before) marked.push(id)
+    assert.deepEqual(loaded.flags, [...older.flags, ...(before ? [LEGACY_DRAWER] : [])], `${id}: the load set a flag of its own`)
+    assert.deepEqual(drawerMarkOf(older as Raw), before ? [LEGACY_DRAWER] : [], `${id}: this suite's own account of the rule`)
+    // Whoever read the note has read the sheet that took its place, and keeps the note:
+    // the build before the rename, in another tab, knows the note and nothing of the sheet.
+    const note = list(raw, 'documentsRead').includes('doc-predecessor')
+    assert.deepEqual(loaded.documentsRead, [...older.documentsRead, ...(note ? ['doc-otavio-handover'] : [])], `${id}: the papers`)
+    assert.deepEqual(sheetForTheNoteOf(older as Raw), note ? ['doc-otavio-handover'] : [], id)
+    // No key by the load alone, and no trigger taken as fired: the key is the
+    // content's to hand over, and the store does not know the content.
+    assert.deepEqual([loaded.credentials, loaded.triggersFired], [list(raw, 'credentials'), list(raw, 'triggersFired')], `${id}: the load handed something over`)
+    assert.deepEqual(migrateProgress(throughJson(loaded)), loaded, `${id}: a second load`)
+  }
+  assert.deepEqual(marked.slice(0, 3), ['production-drawer-open', 'l1-route-end', 'l2-shortcut-released'], 'the three saves of the corpus that opened the drawer before L3')
+
+  // By what the save holds, never by its stamp (DL3-3): a slice of the lot
+  // before this one wrote saves that carry this lot's number already.
+  const opened = { version: 1, radioCalls: [], locksOpened: ['office-drawer'] }
+  for (const contentLot of [undefined, 1, 2, 3]) {
+    assert.deepEqual(migrateProgress({ ...opened, ...(contentLot === undefined ? {} : { contentLot }) }).flags, [LEGACY_DRAWER], `stamped ${contentLot}`)
+  }
+  // A save of a lot after this one is that lot's to read.
+  assert.deepEqual(migrateProgress({ ...opened, contentLot: 4 }).flags, [])
+  // Opened in this lot: the trigger is on record, and it is no older night's drawer.
+  assert.deepEqual(migrateProgress({ ...opened, triggersFired: [DRAWER_TRIGGER], credentials: [SERVICE_KEY] }).flags, [])
+  // Shut, or only touched: nothing to mark.
+  assert.deepEqual(migrateProgress({ version: 1, radioCalls: [], locksSeen: ['office-drawer'] }).flags, [])
+  // The two halves of the Posse's migration do not wait for each other: a
+  // save that has met the porter is still marked, and one that has not is
+  // told its old news whether or not it has a drawer to mark.
+  const met = migrateProgress({ ...opened, radioCalls: [PRE_POSSE_SAVE.helloCallId], roomsPowered: ['office', 'atrium'] })
+  assert.deepEqual([met.flags, met.radioCalls], [[LEGACY_DRAWER], [PRE_POSSE_SAVE.helloCallId]])
+  const unmet = migrateProgress({ version: 1, radioCalls: [], roomsPowered: ['office', 'atrium'] })
+  assert.deepEqual([unmet.flags, unmet.radioCalls], [[], ['porter-atrium-service']])
+  // A mark already there is not put there twice, and beside another flag it comes after.
+  assert.deepEqual(migrateProgress({ ...opened, flags: [LEGACY_DRAWER, 'clock-set'] }).flags, [LEGACY_DRAWER, 'clock-set'])
+  assert.deepEqual(migrateProgress({ ...opened, flags: ['clock-set'] }).flags, ['clock-set', LEGACY_DRAWER])
+  // Junk is no list of locks.
+  assert.deepEqual(migrateProgress({ version: 1, radioCalls: [], locksOpened: 'office-drawer' }).flags, [])
+  // And the lock and the trigger the migration names are the content's own (the gate holds it to that).
+  assert.deepEqual(
+    validateOpening(MUSEUM).filter((issue) => issue.code.startsWith('legacy-save')),
+    [],
+  )
+})
+
+await test('a tab of the build before the Posse opens the drawer: this build, open beside it, takes the save, marks the drawer and hands over the key in one write, and every tab falls silent holding both (L3)', async () => {
+  // After a deploy a page of L2 is still open beside one of this build. In
+  // it the player types the year: L2 opens the drawer and files the note it
+  // knows (`doc-predecessor`). It compiles no trigger for a lock and has
+  // never heard of a key. This build reads that write as a load reads a
+  // save: the drawer is open and the trigger that hands over its key is not
+  // on record, so it was opened before there was one (the flag, by the
+  // migration), and whoever read the note has read the sheet (the alias).
+  // The key is the content's to give: the tab that has the museum's rules
+  // settles it, in one write, and nobody answers that write.
+  const { ids, rules } = await museumRules()
+  assert.ok(ids.includes(DRAWER_TRIGGER), 'the museum compiles no trigger for the drawer: nothing would hand the key over')
+  const [{ device: radio }] = radioDevices(MUSEUM)
+  // What L2 left of a game in which the drawer was touched and is still shut.
+  const fixture = SAVE_FIXTURES['l2-new-game-drawer-touched'].save
+  assert.deepEqual([fixture.progress.locksOpened, fixture.progress.locksSeen], [[], ['office-drawer']])
+
+  // The tab in the game alone; with a tab on the title screen opened after
+  // it; and with that tab opened first, so that it is the one to read the
+  // write of L2 before anybody who could hand over the key.
+  for (const order of [['game'], ['game', 'title'], ['title', 'game']] as const) {
+    const when = (what: string) => `${order.join(' then ')}: ${what}`
+    const browser = openBrowser(fixture)
+    try {
+      let here!: LiveTab
+      let titled: LiveTab | null = null
+      for (const kind of order) {
+        if (kind === 'game') here = await browser.open('this build, in the game')
+        else titled = await browser.open('this build, on the title screen', 'idle')
+      }
+      here.act((state) => state.start())
+      here.registerRules(rules)
+      leftAlone(browser, when('this build in the game'))
+      // Shut: nothing is owed and nothing is marked.
+      assert.deepEqual([here.progress().flags, here.progress().credentials, here.progress().triggersFired], [[], [], []], when('a drawer still shut'))
+      const written = browser.writes.length
+
+      // The tab of L2 opens the drawer and reads the note.
+      const before = browser.disk()!
+      const l2 = {
+        ...before,
+        progress: {
+          ...before.progress,
+          contentLot: 2,
+          locksOpened: ['office-drawer'],
+          factsKnown: ['springfield-renaming'],
+          documentsRead: [...(before.progress!.documentsRead as string[]), 'doc-predecessor'],
+        },
+      }
+      browser.anotherBuildWrites(l2)
+      leftAlone(browser, when('the tab of L2 opened the drawer'))
+      // One write, by the tab that has the rules, and it carries the mark, the sheet and the key.
+      assert.deepEqual(writersSince(browser, written), [here.name], when('what follows from the open drawer is one write, by the tab that has the rules'))
+      const holders: (readonly [string, Raw])[] = [...browser.tabs.map((tab) => [tab.name, tab.progress() as Raw] as const), ['the disk', browser.disk()!.progress!]]
+      for (const [who, progress] of holders) {
+        assert.deepEqual(progress.flags, [LEGACY_DRAWER], when(`${who} does not hold the mark`))
+        assert.deepEqual(progress.credentials, [SERVICE_KEY], when(`${who} does not hold the key`))
+        assert.deepEqual(progress.triggersFired, [DRAWER_TRIGGER], when(`${who} does not hold the trigger`))
+        assert.deepEqual(
+          (progress.documentsRead as string[]).filter((documentId) => /predecessor|handover/.test(documentId)),
+          ['doc-predecessor', 'doc-otavio-handover'],
+          when(`${who}: the note and the sheet`),
+        )
+        assert.deepEqual(shrunk(l2.progress, progress), [], when(`${who} lost something the tab of L2 wrote`))
+      }
+      assert.equal(browser.disk()!.progress!.contentLot, CONTENT_LOT)
+      agreed(browser, when('after the key was handed over'))
+
+      // What the porter owes this player now: who he is, the light on the
+      // machine, and the call for a drawer opened before the key. Never the
+      // one that asks what was in a drawer that has just opened.
+      const owed: string[] = []
+      for (let turn = 0; turn < 8; turn += 1) {
+        const call = nextRadioCall(radio, here.progress(), MUSEUM)
+        if (!call) break
+        owed.push(call.id)
+        here.act((state) => state.recordRadioCall(call.id))
+      }
+      assert.deepEqual(owed, ['porter-hello', 'porter-machine-reminder', 'porter-legacy-drawer'], when('the calls owed'))
+      leftAlone(browser, when('the calls, heard'))
+
+      // The tab of L2 takes all of that in (a list is a list to it: it keeps
+      // the ids it has no name for) and writes again, with a lesson of its
+      // own shown. This build has nothing to add to that.
+      const taken = browser.disk()!
+      let at = browser.writes.length
+      browser.anotherBuildWrites({ ...taken, progress: { ...taken.progress, hintsShown: [...(taken.progress!.hintsShown as string[]), 'a-lesson-shown-in-l2'] } })
+      leftAlone(browser, when('the tab of L2 wrote again'))
+      assert.equal(browser.writes.length, at, when('this build answered the second write of L2'))
+      assert.ok(here.progress().hintsShown.includes('a-lesson-shown-in-l2'))
+
+      // A tab with no rules rewrites the save from what it holds: the key, the mark and the trigger are in it.
+      if (titled) {
+        at = browser.writes.length
+        titled.act((state) => state.setSetting('brightness', 1.2))
+        leftAlone(browser, when('the tab on the title screen changed a setting'))
+        assert.deepEqual(writersSince(browser, at), [titled.name])
+        const disk = browser.disk()!.progress!
+        assert.deepEqual([disk.flags, disk.credentials, disk.triggersFired], [[LEGACY_DRAWER], [SERVICE_KEY], [DRAWER_TRIGGER]], when('a tab with no rules wrote the save without the key or the mark'))
+      }
+      agreed(browser, when('at the end'))
+
+      // And the rollback: read by the code of L1, this save loses nothing L1 knows. The key is one of the things it knows.
+      const end = browser.disk()!.progress!
+      assert.deepEqual(lostReadingAsL1(end), [], when('read by the code of L1'))
+      assert.deepEqual((frozenL1.migrateProgress(throughJson(end)) as unknown as Raw).credentials, [SERVICE_KEY])
+    } finally {
+      browser.close()
+    }
+  }
+})
+
+await test('where the drawer opens in a tab that has the rules, the key is in the same write; and back from the code of L1 the same key is handed over once more, with the signature the loss on record (L3, cases F and G)', async () => {
+  const { rules } = await museumRules()
+  const fixture = SAVE_FIXTURES['l2-new-game-drawer-touched'].save
+  const browser = openBrowser({ ...fixture, progress: { ...fixture.progress, radioCalls: ['porter-hello', ...fixture.progress.radioCalls] } })
+  try {
+    const here = await browser.open('this build, in the game')
+    const other = await browser.open('this build, in another room', 'idle')
+    for (const tab of [here, other]) {
+      tab.act((state) => state.start())
+      tab.registerRules(rules)
+    }
+    leftAlone(browser, 'two tabs of this build in the game')
+    const written = browser.writes.length
+    // Case F: opened in this lot. The lock, the key and the trigger are one write; no mark.
+    here.act((state) => state.grant({ locksSeen: ['office-drawer'], locksOpened: ['office-drawer'] }))
+    leftAlone(browser, 'the drawer opened in a tab of this build')
+    assert.deepEqual(writersSince(browser, written), [here.name], 'a drawer and its key are one write, and nobody answers it')
+    for (const tab of browser.tabs) {
+      assert.deepEqual([tab.progress().credentials, tab.progress().triggersFired, tab.progress().flags], [[SERVICE_KEY], [DRAWER_TRIGGER], []], tab.name)
+    }
+    agreed(browser, 'after a drawer opened in this lot')
+    // Through the disk and back, as often as it goes: never marked.
+    const disk = browser.disk()!.progress!
+    assert.deepEqual(migrateProgress(throughJson(disk)).flags, [])
+    assert.deepEqual(rules.settle(migrateProgress(throughJson(disk))).credentials, [SERVICE_KEY], 'a second load handed the key over twice')
+  } finally {
+    browser.close()
+  }
+
+  // Case G. The save at the end of this lot's night, read and written back
+  // by the code of L1 (a rollback to before L2): everything L1 knows is as
+  // it was, the key among it; what L2 and L3 added is gone, because L1
+  // rebuilds a save from the fields it has a name for.
+  const night = {
+    version: 1,
+    contentLot: 3,
+    catalogued: ['portrait-morgan'],
+    hotspots: ['portrait-morgan:date'],
+    documentsRead: ['doc-welcome', 'doc-otavio-tape', 'doc-otavio-handover', 'doc-termos', 'doc-label-proof-office'],
+    factsKnown: ['springfield-renaming'],
+    credentials: [SERVICE_KEY],
+    roomsVisited: ['office', 'atrium', 'holyoke'],
+    roomsPowered: ['office', 'atrium', 'holyoke'],
+    locksOpened: ['office-drawer', 'office-safe'],
+    locksSeen: ['office-drawer', 'office-safe'],
+    doorsReleased: ['atrium-from-holyoke-shortcut'],
+    flags: ['clock-set', 'posse-signed'],
+    triggersFired: [DRAWER_TRIGGER, 'term:termo-posse:signed'],
+    radioCalls: ['porter-hello', 'porter-first-call', 'porter-radio-taken', 'porter-atrium-service', 'porter-machine-reminder', 'porter-holyoke-lit', 'porter-first-catalogued', 'porter-shortcut', 'porter-drawer-open', 'porter-safe-open'],
+    clockSeconds: { 'office-clock': 240 },
+    hintsShown: ['journal-taken', 'radio-taken'],
+    devicesCarried: ['office-radio'],
+    termsSigned: ['termo-posse'],
+    sequencesSeen: ['seq-posse'],
+    radioMemory: {},
+    lastRoom: 'atrium',
+  }
+  const loaded = migrateProgress(throughJson(night))
+  // This build's own save: a load changes nothing in it.
+  assert.deepEqual(loaded, night)
+  assert.deepEqual(rules.settle(loaded), loaded, 'a save with nothing owed was given something')
+  assert.deepEqual(lostReadingAsL1(night), [])
+  const byL1 = frozenL1.migrateProgress(throughJson(night)) as unknown as Raw
+  assert.deepEqual(byL1.credentials, [SERVICE_KEY])
+  assert.deepEqual(byL1.locksOpened, ['office-drawer', 'office-safe'])
+  for (const gone of ['contentLot', 'locksSeen', 'doorsReleased', 'flags', 'triggersFired', 'termsSigned', 'sequencesSeen']) {
+    assert.ok(!(gone in byL1), `L1 has a name for ${gone}: the case no longer shows what a rollback loses`)
+  }
+  // Back in this build. The trigger of the drawer is not on record, so the
+  // drawer is taken for an older night's, and the trigger fires again and
+  // hands over the key the save already holds: once, as a list holds it. It
+  // was made safe to give twice for this. The signature is the loss: the
+  // deed is on the lectern again, with the Book read and the house lit.
+  const back = rules.settle(migrateProgress(throughJson(byL1)))
+  assert.deepEqual(back.credentials, [SERVICE_KEY], 'the key was handed over a second time, or lost')
+  assert.deepEqual(back.triggersFired, [DRAWER_TRIGGER])
+  assert.deepEqual(back.flags, [LEGACY_DRAWER])
+  assert.deepEqual([back.termsSigned, back.sequencesSeen], [[], []], 'on record: a rollback to before L2 loses the signature')
+  assert.deepEqual(shrunk(byL1, back as Raw), [])
+  assert.equal(back.contentLot, CONTENT_LOT)
 })
 
 await test('a seeded run of tabs that play, hide, close and start over in any order ends in silence, with nothing lost', async () => {
@@ -3235,6 +3554,10 @@ const addedByTheLot = (raw: Raw) => ({
 const addedByThePosse = (loadedByL2: Raw) => ({
   radioCalls: [...(loadedByL2.radioCalls as string[]), ...oldNewsOf(loadedByL2)],
   radioMemory: withHeights(loadedByL2.radioMemory),
+  // The mark of a drawer that was open before it held a key, and the sheet
+  // that took the place of the note in it, for a save that read the note.
+  flags: drawerMarkOf(loadedByL2),
+  documentsRead: [...(loadedByL2.documentsRead as string[]), ...sheetForTheNoteOf(loadedByL2)],
   // And the two fields the lot gave the save: nothing signed, nothing shown.
   termsSigned: [],
   sequencesSeen: [],
@@ -3246,8 +3569,19 @@ await test('case A and B: production saves come out as they went in, plus the lo
     const page = await openGame(SAVE_FIXTURES[id].save)
     assert.deepEqual(page.progress(), { ...raw, ...addedByTheLot(raw), ...addedByThePosse(raw) }, id)
   }
-  // By value, so that the helper above cannot agree with a mistake: the open
-  // drawer is on the plan's list of touched locks, the shut one is not yet.
+  // By value, so that the helpers above cannot agree with a mistake. The
+  // save with the drawer open leaves marked and with the sheet beside the
+  // note; the one with the drawer shut gains neither. No key by the load
+  // alone: that is the content's to give, and these pages have no content.
+  const opened = (await openGame(SAVE_FIXTURES['production-drawer-open'].save)).progress()
+  assert.deepEqual(opened.flags, ['legacy-pre-L3-drawer'])
+  assert.deepEqual(opened.documentsRead.slice(-2), ['doc-predecessor', 'doc-otavio-handover'])
+  assert.deepEqual([opened.credentials, opened.triggersFired], [[], []])
+  const shut = (await openGame(SAVE_FIXTURES['production-drawer-closed'].save)).progress()
+  assert.deepEqual(shut.flags, [])
+  assert.ok(!shut.documentsRead.includes('doc-otavio-handover'))
+  // And the open drawer is on the plan's list of touched locks, the shut one
+  // is not yet.
   assert.deepEqual((await openGame(SAVE_FIXTURES['production-drawer-open'].save)).progress().locksSeen, ['office-drawer'])
   assert.deepEqual((await openGame(SAVE_FIXTURES['production-drawer-closed'].save)).progress().locksSeen, [])
   // Nor is a door released for anybody whose save does not say so: not even
@@ -3271,18 +3605,23 @@ await test('a save this lot wrote comes out with the door it released and the lo
   for (const id of own) {
     const raw = rawFixture(id)
     const page = await openGame(SAVE_FIXTURES[id].save)
-    for (const field of ['locksSeen', 'doorsReleased', 'flags', 'triggersFired'] as const) {
+    for (const field of ['locksSeen', 'doorsReleased', 'triggersFired'] as const) {
       assert.deepEqual(page.progress()[field], raw[field], `${id}: ${field}`)
     }
+    // The flags are the save's own word too, and after them the one the
+    // Posse's migration adds for a drawer opened before it held a key.
+    assert.deepEqual(page.progress().flags, [...(raw.flags as string[]), ...drawerMarkOf(raw)], `${id}: flags`)
     assert.ok(page.progress().contentLot >= (raw.contentLot as number), id)
   }
   // By value, for the two L2 left: the door stays released, and the drawer
   // touched and still shut stays touched.
   const released = await openGame(SAVE_FIXTURES['l2-shortcut-released'].save)
   assert.deepEqual(released.progress().doorsReleased, ['atrium-from-holyoke-shortcut'])
+  assert.deepEqual(released.progress().flags, ['legacy-pre-L3-drawer'], 'the drawer L2 left open was opened before it held a key')
   const touched = await openGame(SAVE_FIXTURES['l2-new-game-drawer-touched'].save)
   assert.deepEqual(touched.progress().locksSeen, ['office-drawer'])
   assert.deepEqual(touched.progress().locksOpened, [])
+  assert.deepEqual(touched.progress().flags, [], 'a drawer touched and still shut is no older night\'s drawer')
   // And they survive a session: played, written and read again.
   for (const page of [released, touched]) {
     page.state().recordHint('torch-used')
@@ -3306,7 +3645,10 @@ await test('a save that says what it touched keeps it, and still gains every loc
   assert.deepEqual(said.locksSeen, ['holyoke-hero-seal', 'office-drawer', 'atrium-plinth'])
   // A door this build has, and one only a later build's content has: both stay.
   assert.deepEqual(said.doorsReleased, ['atrium-from-holyoke-shortcut', 'vault-hatch'])
-  assert.deepEqual(said.flags, ['posse-signed'])
+  // The flag it holds stays; and since L3 the load adds one of its own
+  // after it, because this save says its drawer is open and says nothing
+  // of the trigger that hands over the key (`PRE_POSSE_SAVE.drawer`).
+  assert.deepEqual(said.flags, ['posse-signed', 'legacy-pre-L3-drawer'])
   // Another build's record of what already happened: this one has no trigger
   // of that name and no business forgetting that it fired.
   assert.deepEqual(said.triggersFired, ['a-trigger-this-build-never-had'])
@@ -3395,7 +3737,13 @@ await test('case E: back from L1, the save is production\'s again and nothing L1
   assert.deepEqual(written.doorsReleased, SAMPLES.doorsReleased, 'the save that went to L1 had no door released: this case would prove nothing')
   assert.deepEqual(back.progress().doorsReleased, [])
   assert.deepEqual(back.progress().locksSeen, SAMPLES.locksOpened)
-  assert.deepEqual(back.progress().flags, [])
+  // The flags are gone with the rest; the one there now is the load's own.
+  // The sample's drawer is open, and the record that its trigger fired went
+  // with L1: the save is read as one that opened the drawer before it held
+  // a key (the lot plan of L3, case G), and where the content's rules are
+  // the trigger fires once more and hands over the key the save still has.
+  assert.ok((written.triggersFired as string[]).includes('lock:office-drawer:opened') && (written.locksOpened as string[]).includes('office-drawer'))
+  assert.deepEqual(back.progress().flags, ['legacy-pre-L3-drawer'])
   assert.deepEqual(back.progress().triggersFired, [])
   // And, since L3, the signatures: a save that went through L1 has signed
   // nothing and seen nothing, and the desk asks for the term again (the lot
@@ -3426,7 +3774,10 @@ await test('case F: junk in a field is that field\'s default, and the rest of th
   assert.deepEqual(junk.locksSeen, ['holyoke-hero-seal', 'office-drawer'])
   // A string is not a list: no door is released by it, letter by letter or whole.
   assert.deepEqual(junk.doorsReleased, [])
-  assert.deepEqual(junk.flags, [])
+  // The string is no list of flags. The one flag there is the load's own:
+  // the drawer is open, and an object is no list of triggers either, so
+  // none is on record as fired.
+  assert.deepEqual(junk.flags, ['legacy-pre-L3-drawer'])
   assert.deepEqual(junk.triggersFired, [])
   assert.deepEqual(junk.clockSeconds, {})
   assert.equal(junk.lastRoom, SPAWN.room)

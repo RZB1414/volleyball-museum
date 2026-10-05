@@ -32,7 +32,8 @@ export const PRE_OPENING_SAVE = {
 } as const
 
 /**
- * What a save from before the Posse (L3) needs: the porter's old news.
+ * What a save from before the Posse (L3) needs: the porter's old news, and a
+ * word about the drawer that held a key.
  *
  * L3 gave the porter a call for each milestone of the night: the hall lit,
  * Wing 1 lit, the first piece checked, the shortcut pushed open. A player
@@ -48,6 +49,20 @@ export const PRE_OPENING_SAVE = {
  * player who leaves the office without the radio, passes a milestone and
  * reloads before hearing him loses the call for that milestone. The hint the
  * radio gives when called says the same thing.
+ *
+ * The drawer is the other half, and does not wait for the first. L3 pinned a
+ * key to what is in it, handed over as the drawer opens: a trigger of the
+ * lock (`triggerId`, as the content compiles it). A save in which the drawer
+ * is open and that trigger never fired opened it before there was a key: the
+ * player read a note that mentioned none. The content hands such a save its
+ * key as it loads, like any trigger owed; what the load adds is `flag`, the
+ * mark that says so, for the porter to ask by: «olha de novo a gaveta» for
+ * that player, and «tinha o quê?» for the one whose drawer opens tonight.
+ * The evidence is the save's own, for the reason above, so it is also read
+ * off what a tab of the build before leaves on the disk while this one is
+ * open. A rollback to a build that keeps no record of triggers is read the
+ * same way on the way back, and is given the same key once more: a key is a
+ * thing it is safe to hand over twice.
  */
 export const PRE_POSSE_SAVE = {
   /** Whoever has not heard this has not met the porter of this lot. */
@@ -62,9 +77,12 @@ export const PRE_POSSE_SAVE = {
     { callId: 'porter-shortcut', field: 'doorsReleased', id: 'atrium-from-holyoke-shortcut' },
     { callId: 'porter-first-catalogued', field: 'catalogued', id: null },
   ],
+  /** Open, with the trigger that hands over its key not on record: it was opened before it held one. */
+  drawer: { lockId: 'office-drawer', triggerId: 'lock:office-drawer:opened', flag: 'legacy-pre-L3-drawer' },
 } as const satisfies {
   readonly helloCallId: string
   readonly oldNews: readonly { readonly callId: string; readonly field: ListField; readonly id: string | null }[]
+  readonly drawer: { readonly lockId: string; readonly triggerId: string; readonly flag: string }
 }
 
 /**
@@ -88,7 +106,11 @@ export type SaveAlias = {
  * The old id stays. Dropping it would be tidier and would break the build
  * from before the rename, which may still be running in another tab on the
  * same save: it knows the old id and nothing of the new one.
- *
- * Empty: nothing has been renamed yet.
  */
-export const SAVE_ALIASES: readonly SaveAlias[] = []
+export const SAVE_ALIASES: readonly SaveAlias[] = [
+  // The predecessor's note in the drawer gave way to the first sheet of his
+  // handover (L3). A player who read the one has read what is in the drawer,
+  // and finds the sheet in the archive instead of a paper marked unread in a
+  // drawer already open.
+  { sinceLot: 3, field: 'documentsRead', from: 'doc-predecessor', to: 'doc-otavio-handover' },
+]

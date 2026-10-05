@@ -346,15 +346,25 @@ await test('a room is dark, lit with something left, or complete', () => {
     const model = plan({ roomsVisited: ROOM_IDS, ...patch })
     return model.rooms.find((room) => room.id === roomId)!.state
   }
-  // The office: no piece at all, one paper on the desk and one behind the drawer.
+  // The office: no piece at all, and five papers. The notebook on the desk,
+  // the message on the machine, the sheet behind the drawer, and the Book
+  // and the proof in the iron safe.
   const office = roomOf('office')
   assert.deepEqual(office.exhibitIds, [])
-  assert.deepEqual([...office.documentIds].sort(), ['doc-predecessor', 'doc-welcome'])
+  assert.deepEqual([...office.documentIds].sort(), ['doc-label-proof-office', 'doc-otavio-handover', 'doc-otavio-tape', 'doc-termos', 'doc-welcome'])
+  const papers = office.documentIds
   assert.equal(stateOf('office', {}), 'unpowered')
-  assert.equal(stateOf('office', { documentsRead: ['doc-welcome', 'doc-predecessor'] }), 'unpowered', 'read in the dark is still dark')
+  assert.equal(stateOf('office', { documentsRead: papers }), 'unpowered', 'read in the dark is still dark')
   assert.equal(stateOf('office', { roomsPowered: ['office'] }), 'partial')
-  assert.equal(stateOf('office', { roomsPowered: ['office'], documentsRead: ['doc-welcome'] }), 'partial', 'the note in the drawer is unread')
-  assert.equal(stateOf('office', { roomsPowered: ['office'], documentsRead: ['doc-welcome', 'doc-predecessor'] }), 'complete')
+  assert.equal(stateOf('office', { roomsPowered: ['office'], documentsRead: ['doc-welcome'] }), 'partial', 'the sheet in the drawer is unread')
+  for (const unread of papers) {
+    assert.equal(stateOf('office', { roomsPowered: ['office'], documentsRead: papers.filter((id) => id !== unread) }), 'partial', `${unread} is unread`)
+  }
+  assert.equal(stateOf('office', { roomsPowered: ['office'], documentsRead: papers }), 'complete')
+  // A save from before L3 read the note that was in the drawer, and holds
+  // the sheet by its alias: the room is as far from complete as the safe
+  // and the machine are from having been opened and heard.
+  assert.equal(stateOf('office', { roomsPowered: ['office'], documentsRead: ['doc-welcome', 'doc-predecessor', 'doc-otavio-handover'] }), 'partial')
   // Another room's light is not this one's.
   assert.equal(stateOf('office', { roomsPowered: ['atrium', 'holyoke'] }), 'unpowered')
 
@@ -688,23 +698,32 @@ await test("the director's letter fits its page, postscript and all, at the heig
   // gives, under the fold of a page nobody thinks to scroll. A letter is
   // written to fit its page. No layout engine runs in Node, so the lines are
   // counted: each paragraph wrapped at what a line of the sheet holds.
-  const letters = MUSEUM.documents
-    .flatMap((doc) => doc.pages ?? [])
-    .filter((page) => page.style === 'handwritten')
-    .flatMap((page) =>
-      ([['pt-BR', ptBR], ['en', en]] as const).map(([locale, dictionary]) => {
-        const text = (key: string | undefined) => (key ? (dictionary as Record<string, string>)[key] : undefined)
-        return {
-          locale,
-          paragraphs: (text(page.bodyKey) ?? '').split(/\n{2,}/),
-          signature: text(page.signatureKey) ?? null,
-          postscript: text(page.postscriptKey) ?? null,
-        }
-      }),
-    )
+  const inAHand = (documents: readonly (typeof MUSEUM.documents)[number][]) =>
+    documents
+      .flatMap((doc) => doc.pages ?? [])
+      .filter((page) => page.style === 'handwritten')
+      .flatMap((page) =>
+        ([['pt-BR', ptBR], ['en', en]] as const).map(([locale, dictionary]) => {
+          const text = (key: string | undefined) => (key ? (dictionary as Record<string, string>)[key] : undefined)
+          return {
+            locale,
+            paragraphs: (text(page.bodyKey) ?? '').split(/\n{2,}/),
+            signature: text(page.signatureKey) ?? null,
+            postscript: text(page.postscriptKey) ?? null,
+          }
+        }),
+      )
+  const letters = inAHand(MUSEUM.documents.filter((doc) => doc.id === 'doc-welcome'))
   assert.equal(letters.length, 2, 'one handwritten page, in two languages')
   assert.ok(letters.every((letter) => letter.paragraphs.length === 4 && letter.signature && letter.postscript))
   assert.deepEqual(notebookLetterLayoutProblems(readSource, letters), [])
+  // The other page in a hand is in the Book of Deeds (L3): the outgoing
+  // curator's deed of handover, one sentence and a signature, drawn on the
+  // same sheet. It is held to the same page.
+  const deeds = inAHand(MUSEUM.documents.filter((doc) => doc.id !== 'doc-welcome'))
+  assert.equal(deeds.length, 2, 'the deed of handover, in two languages')
+  assert.ok(deeds.every((deed) => deed.paragraphs.length === 1 && deed.signature && !deed.postscript))
+  assert.deepEqual(notebookLetterLayoutProblems(readSource, deeds), [])
 
   const styled =
     (from: RegExp | string, to: string): SourceReader =>

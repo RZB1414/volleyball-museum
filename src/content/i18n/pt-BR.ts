@@ -66,6 +66,7 @@ export const ptBR = {
   'prompt.read': 'Ler',
   'prompt.rotate': 'Arraste para girar',
   'prompt.locked': 'Trancado',
+  'prompt.unlock': 'Destrancar',
   'prompt.close': 'Fechar',
   'prompt.power': 'Restaurar energia',
   'prompt.door.open': 'Abrir porta',
@@ -92,6 +93,9 @@ export const ptBR = {
   'reader.next': 'Próximo',
   // Followed by the name of what was taken: «Você pegou — Chave do cofre de ferro».
   'credential.taken': 'Você pegou',
+  'credential.service-key.title': 'Chave do cofre de ferro',
+  // A line in the curator's own pencil has just appeared on the list.
+  'checklist.noted': 'Anotado no caderno',
   // The signing desk. «Segure E — Assinar: Termo de posse»; on a touch
   // screen the Action button is held instead. A tap asks first: «Assinar /
   // Cancelar». While the term still waits: «…Assinar: Termo de posse ·
@@ -135,9 +139,28 @@ export const ptBR = {
   // to say while it is shut (`lock.office-drawer.prompt`), and stops being
   // true the moment it opens.
   'container.office.title': 'Gaveta do Otávio',
-  'document.predecessor.title': 'Bilhete do curador anterior',
-  'document.predecessor.body':
-    'Se você está lendo isto, achou a combinação — o que significa que leu as placas em vez de passar por elas. Bom. O resto do acervo está no cofre, sob o átrio, e não abre com números: abre com três medalhas. Uma de cada era que você catalogar por inteiro. Não tenha pressa. O museu reabre amanhã, mas ele existe há cento e trinta anos.',
+  // The first sheet of the handover, with the key of the iron safe pinned
+  // to it. It took the place of the predecessor's note, which sent the
+  // player to three medals and a vault the build does not have, and counted
+  // the museum's age from today. What it promises can be done tonight; the
+  // vault is named once, as somewhere nothing in this drawer leads.
+  'document.otavio-handover.title': 'Passagem de acervo — folha 1',
+  'document.otavio-handover.body':
+    'PASSAGEM DE ACERVO — FOLHA 1. Se você está lendo isto, achou o ano — o que significa que leu em vez de passar. Bom. A chave presa nesta folha é do cofre de ferro desta sala. Dentro dele está o que eu lhe devia em mãos: o Livro de Termos. Assine a posse quando a casa estiver acesa. O livro de tombo, o que a seguradora quer ver, não está lá: fica na caixa-forte do Fundador, sob o átrio, e para lá não há número nem chave. Confira o acervo sem pressa: pegue cada peça, vire, leia o que está escrito nela. — O.',
+  // The iron safe in the office, and what it keeps: the Book of Deeds (the
+  // outgoing curator's handover, and the deed of office to be signed) and
+  // the printer's proof of the new plaques.
+  'container.office-safe.title': 'Cofre de ferro',
+  'document.termos.title': 'Livro de Termos',
+  'document.termos.summary': 'O livro em que cada curador assina o que recebe.',
+  'document.termos.handover':
+    'TERMO DE PASSAGEM. Entrego o acervo do Museu do Voleibol, conferido até onde a chuva deixou.',
+  'document.termos.handover.signature': '— Otávio',
+  'term.posse.title': 'Termo de posse',
+  'term.posse.body': 'TERMO DE POSSE. Recebo o acervo e a casa, acesa em suas três salas.',
+  'document.label-proof-office.title': 'Prova de etiqueta — placas novas',
+  'document.label-proof-office.body':
+    'PROVA DE GRÁFICA — PLACAS NOVAS. Presa com clipe, a letra da diretora: “Otávio, ficaram lindas! Quarenta palavras cada, como você pediu. Só cortei a linha de baixo: original, reconstrução, réplica… O visitante não precisa disso para se encantar. Depois da reabertura a gente vê! — H.” Por baixo, a lápis vermelho: “Precisa, sim. É a linha que eu não sei escrever de outro jeito. Guardo esta prova até o curador novo decidir. — O.”',
   'lock.title': 'Fechadura de combinação',
   'lock.prompt': 'Quatro dígitos',
   'lock.submit': 'Abrir',
@@ -207,6 +230,15 @@ export const ptBR = {
   'notebook.todo.vault': 'Caixa-forte — só o Otávio sabia abrir',
   // Pencil, beside a line with no box: why not tonight.
   'notebook.todo.vault.note': 'hoje não: o subsolo alagou',
+  // The curator's own lines, in pencil, as the night gives them something
+  // to write down. The first repeats the question of the drawer's lock and
+  // never the answer.
+  'notebook.todo.drawer': 'Gaveta do Otávio: “o ano em que o jogo deixou de se chamar Mintonette”.',
+  'notebook.todo.safe-key': 'Chave do cofre de ferro.',
+  'notebook.todo.posse': 'Assinar o termo de posse, no púlpito.',
+  'notebook.todo.proof':
+    'A reforma tirou das placas a linha que diz o que cada coisa é. O Otávio guardou a prova no cofre de ferro.',
+  'notebook.todo.proof.note': 'hoje não: fica para a reabertura',
   // A count beside a line: «2 de 3», «Átrio 0 de 4».
   'notebook.counter': '{done} de {total}',
   'device.office-radio.title': 'Rádio da portaria',
@@ -220,6 +252,29 @@ export const ptBR = {
   'device.office-telephone.title': 'Telefone',
   'device.office-telephone.prompt': 'Discar',
   'device.office-telephone.dead': 'Linha muda.',
+  // The answering machine beside the radio, and the message on it: what
+  // Otávio recorded before his bus. It asks the drawer's question and says
+  // where the answer is, never the year, and is cut off by the power going
+  // in the middle of the one thing this night cannot answer. The last line
+  // is the machine's own, not his.
+  'device.office-answering-machine.title': 'Secretária eletrônica',
+  'device.office-answering-machine.speaker': 'Otávio · recado gravado',
+  'document.otavio-tape.title': 'Recado do Otávio (secretária eletrônica)',
+  'document.otavio-tape.summary':
+    'O recado que o Otávio gravou antes do ônibus, cortado pela queda de energia.',
+  'tape.otavio.1': 'Aqui é o Otávio, o curador. O antigo, desde esta tarde.',
+  'tape.otavio.2':
+    'Gravo no aparelho da sua mesa porque a passagem era às seis e a estrada fecha com chuva.',
+  'tape.otavio.3': 'O último ônibus é o das cinco.',
+  'tape.otavio.4': 'A passagem de acervo está escrita, na gaveta de cima do armário alto.',
+  'tape.otavio.5':
+    'A gaveta abre com um ano: o ano em que o jogo deixou de se chamar Mintonette. Não vou dizer qual.',
+  'tape.otavio.6':
+    'Está na Ala 1, num retrato. Quem lê o que está escrito nas peças é exatamente quem eu quero que abra.',
+  'tape.otavio.7': 'O chapéu no cabideiro fica: não é meu, é do cargo.',
+  'tape.otavio.8':
+    'E uma coisa sobre o plinto do saguão, que é importante, porque com essa chuva o subsolo —',
+  'tape.otavio.9': '[A gravação termina aqui. O visor marca 16:47.]',
   // The hour as the porter would say it, one phrase for each milestone of
   // the night met: spelt out and rounded, never in digits.
   'night.hour.1': 'Passa das sete',
@@ -230,10 +285,16 @@ export const ptBR = {
   'night.hour.6': 'Quase dez',
   'night.hour.7': 'Passa das dez',
   'night.hour.8': 'Quase onze',
+  'night.hour.9': 'Passa das onze',
+  'night.hour.10': 'Quase meia-noite',
   // The plinth in the middle of the hall: named, and roped off until the
   // lot that gives it its medals (a dated promise, shown as «title — notice»).
   'device.atrium-podium.title': 'Plinto do Fundador',
   'device.atrium-podium.notice': 'Interditado: obra do piso.',
+  // The lectern against the wall of Wing 1: where terms are signed. Until
+  // the Book has been read it says what it is and what it lacks.
+  'device.atrium-lectern.title': 'Púlpito',
+  'device.atrium-lectern.empty': 'mesa de assinatura: falta o Livro de Termos',
   'radio.speaker.porter': 'Jorge · portaria',
   // His introduction, owed to every save (L3). «De novo»: he raised the
   // roller door to let the curator in as the night began. It gives the
@@ -269,6 +330,34 @@ export const ptBR = {
     'Uma vitrine abriu e fechou aqui no painel. Primeira conferida? Faltam… bom, faltam bastante. Câmbio.',
   'radio.call.shortcut.1':
     'A porta de serviço abriu por dentro. Agora fica destrancada dos dois lados. Tá no meu painel. Câmbio.',
+  // The Posse. He sees a light on the office extension, a drawer and a safe
+  // open on his panel, and nothing of what is inside them: he asks. The one
+  // for a drawer opened on another night is said to a save that holds a key
+  // it was never shown taking.
+  'radio.call.machine.1':
+    'Tem uma luz de recado piscando no ramal do escritório. Deve ser coisa do Otávio. Câmbio.',
+  'radio.call.drawer.1':
+    'A gaveta do Otávio abriu aqui no painel. Trinta anos e eu nunca vi o que tinha dentro. Tinha o quê?',
+  'radio.call.drawer.2':
+    'Se for chave, é do cofre de ferro. Ele era assim: chave dentro de gaveta, gaveta dentro de data. Câmbio.',
+  'radio.call.legacy-drawer.1':
+    'Olha de novo a gaveta do Otávio: o bilhete tinha uma chave presa. Câmbio.',
+  // The one line that sets the two safes side by side, so that neither is
+  // taken for the other again (D34): the only place a bare «o cofre» is said.
+  'radio.call.safe.1':
+    'O cofre de ferro abriu. Esse é o cofre. A caixa-forte é a do Fundador, lá embaixo: não confunde.',
+  'radio.call.safe.2':
+    'Se tem livro aí, é o de termos. Termo se assina no púlpito do saguão, com a casa acesa. Câmbio.',
+  // What follows the signature, with or without a radio in the pocket: a
+  // card, and the porter over the building's loudspeaker. The first line
+  // says the hour of this night (`{hora}`); the second says what the night
+  // cannot give, once and with its reason.
+  'sequence.speaker.porter': 'Jorge · alto-falante',
+  'sequence.posse.card': 'Termo de posse assinado',
+  'sequence.posse.1':
+    'A lâmpada do púlpito acendeu e apagou: assinou. O acervo é seu, curador. {hora}.',
+  'sequence.posse.2':
+    'O livro que a seguradora quer tá na caixa-forte, e o subsolo alagou. Hoje não se desce. Câmbio.',
   // A hint is said one height to a call: where the thing is, what it looks
   // like, how it is worked. Asked again about the same thing he says the
   // next one, and goes on repeating the last.
@@ -285,20 +374,32 @@ export const ptBR = {
   'radio.hint.holyoke.where': 'A Ala 1 tem quadro próprio, na parede de frente pras portas.',
   'radio.hint.holyoke.what': 'Luzinha vermelha, do outro lado da sala.',
   'radio.hint.holyoke.how': 'Atravessa no escuro até a luzinha vermelha. A lanterna dá conta.',
-  // Where the year is, never the year. The second way to it is the archive
-  // of the wing, some metres from the portrait: «perto da entrada», not
-  // «ao lado».
-  'radio.hint.drawer.where': 'A gaveta do Otávio abre com um ano. O ano tá na Ala 1.',
+  // Where the year is, never the year. The first height sends the player to
+  // the message Otávio left on the answering machine, which asks the
+  // question in his words; the next two to the portrait. The second way to
+  // the year is the archive of the wing, some metres from the portrait:
+  // «perto da entrada», not «ao lado».
+  'radio.hint.drawer.where':
+    'A gaveta do Otávio abre com um ano. Ele deixou recado na secretária do escritório.',
   'radio.hint.drawer.what': 'O ano tá na Ala 1, no retrato do Morgan.',
   'radio.hint.drawer.how':
     'Pega a moldura e inclina: tá na borda de baixo. Ou no arquivo de proveniência, perto da entrada da ala.',
-  // The last hint, when nothing is left to point at. Until the night has an
-  // ending it says what can be done tonight; it used to send the player to
-  // three medals and a vault that do not exist. It is only heard once every
-  // room is lit (each dark room has a hint above it), so it gives the light
-  // as done and never as work still to do.
+  // The key in the hand and the iron safe still shut.
+  'radio.hint.key.where': 'Chave do Otávio? É do cofre de ferro.',
+  'radio.hint.key.what': 'Canto do escritório, do lado das estantes.',
+  'radio.hint.key.how': 'Chega perto e abre. A chave fica lá.',
+  // The Book read and the deed not signed. «Segura a ação»: the press is
+  // held, at a keyboard and on glass alike.
+  'radio.hint.posse.where': 'O termo se assina no púlpito do saguão.',
+  'radio.hint.posse.what': 'O púlpito com a lâmpada acesa, entre as duas portas da parede da Ala 1.',
+  'radio.hint.posse.how': 'Com luz nas três salas, segura a ação até a pena parar.',
+  // The last hint, when nothing is left to point at: the honest close. It
+  // is only heard with the deed signed (every hint above it is spent by
+  // then), and says what is left of the night and what is not for tonight,
+  // with the reason. It used to send the player to three medals and a vault
+  // that do not exist.
   'radio.hint.rest':
-    'O subsolo alagou; hoje ninguém desce. A luz tá feita; fora isso, hoje é só conferência. Câmbio.',
+    'Posse assinada. Agora é conferir o acervo, peça por peça. A caixa-forte fica pra depois: o subsolo alagou.',
 
   // The radio in the player's pocket, and the porter's patience with it.
   // Jorge teases, he never insults: "curador" and "você", no "o senhor".
@@ -316,7 +417,9 @@ export const ptBR = {
   // at its foot is the photograph's credit, which carries another year.
   'radio.hint.drawer.curt':
     'Gaveta do Otávio: uma data. Retrato do Morgan, Ala 1. Pega a moldura e inclina: tá na borda de baixo.',
-  'radio.hint.rest.curt': 'Subsolo alagado: hoje ninguém desce. Luz feita; fora isso, só conferência.',
+  'radio.hint.key.curt': 'Cofre de ferro. Canto do escritório. A chave abre. Câmbio.',
+  'radio.hint.posse.curt': 'Púlpito. Saguão. Assina. Câmbio.',
+  'radio.hint.rest.curt': 'Posse assinada. Falta conferir. Caixa-forte: hoje não.',
   'radio.patience.t1.ready': 'Portaria, pode falar.',
   'radio.patience.t1.listening': 'Fala, curador. Tô na escuta.',
   'radio.patience.t1.jorge': 'Jorge na escuta. Câmbio.',
@@ -548,6 +651,10 @@ export const ptBR = {
   'lock.office-drawer.mapLabel': 'Gaveta com segredo — 4 dígitos',
   // After the drawer's name while it is shut: «Gaveta do Otávio — trancada (um ano)».
   'lock.office-drawer.prompt': 'trancada (um ano)',
+  // The iron safe: on the plan once touched, and after its name while shut
+  // («Cofre de ferro — precisa de chave»).
+  'lock.office-safe.mapLabel': 'Cofre de ferro — precisa de chave',
+  'lock.office-safe.prompt': 'precisa de chave',
   'lock.hint.highlight': 'A placa correta acendeu.',
   'lock.hint.audio': 'A gravação do docente repete o ano.',
   'lock.hint.reveal': 'O disco travou no dígito certo.',

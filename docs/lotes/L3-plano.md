@@ -254,7 +254,7 @@ A lista no fim do lote (as três primeiras em F1; as quatro a lápis em F5, com 
 | 5 | `notebook.todo.drawer` | curator | `anyOf: [{ documentsRead: ['doc-otavio-tape'] }, { locksSeen: ['office-drawer'] }]` | `locksOpened: ['office-drawer']` | — |
 | 6 | `notebook.todo.safe-key` | curator | `locksOpened: ['office-drawer']` | `locksOpened: ['office-safe']` | — |
 | 7 | `notebook.todo.posse` | curator | `documentsRead: ['doc-termos']` | `flags: ['posse-signed']` | — |
-| 8 | `notebook.todo.proof` | curator | `documentsRead: ['doc-label-proof-office']` | — (`deferredUntilLot: 12`) | — |
+| 8 | `notebook.todo.proof` | curator | `documentsRead: ['doc-label-proof-office']` | — (`deferredUntilLot: 12`, `noteKey: 'notebook.todo.proof.note'`: uma promessa datada sem nota é `deferred-without-notice`) | — |
 
 (A linha 4, do plinto, é de L11.)
 
@@ -449,7 +449,15 @@ export type ContainerData = {
 export function toolSpent(locks: readonly Lock[], progress: Pick<Progress, 'locksOpened'>): readonly string[]
 /** F3. Whether a container stands open: its lock is open, or it has none. What the door and the contents are drawn by. */
 export function containerOpen(container: Pick<ContainerData, 'lockId'>, progress: Pick<Progress, 'locksOpened'>): boolean
+/** F5. Whether a shut lock still bars the way: E on it neither finds it open nor opens it. What a prompt is worded by. */
+export function lockBars(lock: Lock, facts: readonly Fact[], progress: Pick<Progress, 'locksOpened' | 'credentials'>): boolean
 ```
+
+**O prompt de uma tranca que a mão abre** [não previsto; F5, §15.5]. Com a chave em `credentials`
+o cofre fechado abre no próprio `E`, e o prompt não pode continuar dizendo «precisa de chave»:
+`containerPrompt(container, lock, barred, gives)` diz «Destrancar · Cofre de ferro»
+(`prompt.unlock`) quando a tranca está fechada e `lockBars` responde que não. Uma tranca de
+teclado barra até o ano ser digitado, tenha o jogador o que tiver.
 
 `attemptLock`, na tabela de L2: a linha «`tool` com `consumesTool: true` → `refused: 'unsupported'`»
 passa a ser igual à de `tool` sem consumo (a credencial na lista abre; `ritual` continua
@@ -1339,8 +1347,9 @@ prateleira); `test:desk-top` (a secretária apoiada na nogueira e a 2 mm ou mais
    assinatura, e `term` com `termId: 'termo-posse'`), `doc-label-proof-office` (`kind: 'proof'`, no
    cofre), `doc-otavio-tape` (`kind: 'oral-history'`, `containerId: 'office-answering-machine'`,
    `lineKeys: tape.otavio.1` a `.9`). `documentIds` do escritório lista os cinco. Cada um com
-   `mentions` (a folha: `office-safe`, `doc-termos`, `atrium-lectern`; o recado: `office-cabinet`,
-   `portrait-morgan`, `atrium-podium`).
+   `mentions` (a folha: `tool:service-key`, `office-safe`, `doc-termos`, `atrium-lectern`; o Livro:
+   `atrium-lectern`; o recado: `office-cabinet`, `portrait-morgan`, `atrium-podium`). Uma
+   credencial declarada é citável pela chave com que o save a escreve.
 4. **Containers.** O cofre sai do `kit` (`:1491`) e entra em `OFFICE_CONTAINERS`:
    `{ id: 'office-safe', part: 'office-safe', position: [2.55, 0, 2.45], rotationY: -Math.PI / 2,
    titleKey: 'container.office-safe.title', lockId: 'office-safe', door: { nodePrefix: 'door',
@@ -1349,7 +1358,7 @@ prateleira); `test:desk-top` (a secretária apoiada na nogueira e a 2 mm ou mais
 5. **Dispositivos.** `office-answering-machine` (`voice`, `poweredBy: 'office'`,
    `messageLamp: true`, `utterances: [{ when: {}, documentId: 'doc-otavio-tape' }]`), em
    `[0.615, 0.74, 0.642]`,
-   `rotationY: -Math.PI / 2` [a validar, §7]. O púlpito sai do `kit` (`:1069`) e entra em `devices`
+   `rotationY: -Math.PI / 2` [validado em F5: §7 e §15.5]. O púlpito sai do `kit` (`:1069`) e entra em `devices`
    do átrio: `{ kind: 'signing-desk', id: 'atrium-lectern', part: 'atrium-lectern', position:
    [-7.15, 0, 2.2], rotationY: Math.PI / 2, titleKey: 'device.atrium-lectern.title',
    emptyNoticeKey: 'device.atrium-lectern.empty', termIds: ['termo-posse'], holdSeconds: 1.2 }`.
@@ -1385,8 +1394,9 @@ prateleira); `test:desk-top` (a secretária apoiada na nogueira e a 2 mm ou mais
     (`knownDebt.ts:167-173`).
 
 **Teste.** `validate:content` verde sem dívida nova além das de §8. `test:playthrough`
-(`:391-467`, reescrito): `MAXIMUM` ganha a chave, o cofre, os quatro documentos, o termo, as três
-flags e os gatilhos; os níveis são os do plano mestre (`N0` luminária e o relógio · `N1` átrio ·
+(`:391-467`, reescrito): `MAXIMUM` ganha a chave, o cofre, os quatro documentos, o termo, as duas
+flags (`clock-set` e `posse-signed`: a de legado só a migração põe, e um jogo novo nunca a tem) e
+os gatilhos; os níveis são os do plano mestre (`N0` luminária e o relógio · `N1` átrio ·
 `N2` luz do átrio, Ala 1 · `N3` luz da Ala 1, o ano, peças · `N4` gaveta, chave · `N5` cofre,
 Livro, prova · `N6` Posse); a rota canônica termina com `flag:posse-signed`; as 500 ordens chegam
 ao mesmo fim; o perfil **«pula tudo»** (nunca lê o caderno, nunca pega o rádio, nunca acende a
@@ -1454,7 +1464,7 @@ gatilhos assentados), no fim do lote.
 
 | # | Save | Antes | Depois |
 |---|---|---|---|
-| A | `production-drawer-open`, `l1-route-end` | gaveta aberta; `doc-predecessor` lido; três salas acesas; peças catalogadas; sem `porter-hello` | `contentLot: 3`; `documentsRead` + `doc-otavio-handover` (o antigo fica); `flags: ['legacy-pre-L3-drawer']`; `credentials: ['tool:service-key']`; `triggersFired: ['lock:office-drawer:opened']`; `radioCalls` + `porter-atrium-service`, `porter-holyoke-lit`, `porter-first-catalogued`; `termsSigned: []`, `sequencesSeen: []`. Ouve `porter-hello` e depois `porter-legacy-drawer` |
+| A | `production-drawer-open`, `l1-route-end` | gaveta aberta; `doc-predecessor` lido; três salas acesas; peças catalogadas; sem `porter-hello` | `contentLot: 3`; `documentsRead` + `doc-otavio-handover` (o antigo fica); `flags: ['legacy-pre-L3-drawer']`; `credentials: ['tool:service-key']`; `triggersFired: ['lock:office-drawer:opened']`; `radioCalls` + `porter-atrium-service`, `porter-holyoke-lit`, `porter-first-catalogued`; `termsSigned: []`, `sequencesSeen: []`. Ouve `porter-hello`, depois `porter-machine-reminder` (o recado é de L3: nenhum save antigo o ouviu) e depois `porter-legacy-drawer` |
 | B | `l2-shortcut-released` | como A, e `doorsReleased` com o atalho | como A, e `radioCalls` + `porter-shortcut` |
 | C | `production-drawer-closed`, `production-radio-on-desk`, `l2-new-game-drawer-touched` | gaveta fechada | sem flag, sem chave; as notícias velhas do que cada um já passou; ao abrir a gaveta: chave, gatilho, `porter-drawer-open` |
 | D | `production-catalogued-unturned` | duas peças catalogadas | `radioCalls` + `porter-first-catalogued` e as das salas que tiver acesas |
@@ -1621,6 +1631,8 @@ quatro dicas cheias de hoje), `radio.hint.vault`, `.vault.curt` (renomeadas).
 | `notebook.todo.safe-key` | Chave do cofre de ferro. | Key to the iron safe. |
 | `notebook.todo.posse` | Assinar o termo de posse, no púlpito. | Sign the deed of office, at the lectern. |
 | `notebook.todo.proof` | A reforma tirou das placas a linha que diz o que cada coisa é. O Otávio guardou a prova no cofre de ferro. | The refit took off the plaques the line that says what each thing is. Otávio kept the proof in the iron safe. |
+| `notebook.todo.proof.note` [não previsto: o portão pede a nota de toda promessa datada] | hoje não: fica para a reabertura | not tonight: it waits for the reopening |
+| `prompt.unlock` [não previsto: 3.8] | Destrancar | Unlock |
 | `checklist.noted` | Anotado no caderno | Noted in your notebook |
 | `night.hour.9`, `.10` | Passa das onze · Quase meia-noite | Gone eleven · Nearly midnight |
 
@@ -1641,9 +1653,9 @@ instanciados: 46.272, 16.544, 34.230.
 
 | Receita | Hoje (nós · triângulos) | Depois | Teto | Classe |
 |---|---|---|---|---|
-| `office-answering-machine` (nova, `officeProps.mjs`) | — | 3 nós: corpo (`plastic-black`), `__led` (`led-off`; o runtime pinta), `__play` (`brass`, a fileira de teclas) · até 400 | 400 | dispositivo |
-| `office-safe` (`officeDecor.mjs:364-438`) | 2 nós · 1.084 | 4 nós: corpo (`archive-green`: carcaça em cinco chapas e moldura, com cavidade e uma prateleira, no lugar da caixa maciça), `__door` (`archive-green`), `__door-hardware` (`brass`: friso, roda, espelho da chave **e as duas dobradiças**, que ficam no eixo), `__papers` (`paper-writing`: a prova na prateleira) · até 1.434 | +350 | container |
-| `atrium-lectern` (`atriumDecor.mjs:930-1010`) | 4 nós · 896 | 5 nós: os três de hoje, `__led` (a família `light` renomeada; `atrium-glow`), `__book` (`paper-aged`: o Livro aberto, 0,40 × 0,28 m, com lombo e curvatura de página; um material só) · régua de apoio na família `brass` (+24) · até 1.170 | +274 | dispositivo |
+| `office-answering-machine` (nova, `officeProps.mjs`) | — | 3 nós: corpo (`plastic-black`), `__led` (`led-off`; o runtime pinta), `__play` (`brass`, a fileira de teclas) · até 400; **[medido em F5: 264 + 32 + 60 = 356]** | 400 | dispositivo |
+| `office-safe` (`officeDecor.mjs:364-438`) | 2 nós · 1.084 | 4 nós: corpo (`archive-green`: carcaça em cinco chapas e moldura, com cavidade e uma prateleira, no lugar da caixa maciça), `__door` (`archive-green`), `__door-hardware` (`brass`: friso, roda, espelho da chave **e as duas dobradiças**, que ficam no eixo), `__papers` (`paper-writing`: a prova na prateleira) · até 1.434; **[medido em F5: 384 + 108 + 676 + 24 = 1.192, 108 a mais. A carcaça não saiu em cinco chapas: é a casca chanfrada de antes sem a face da frente, com moldura em meia-esquadria, o rebaixo e o forro por dentro; cada dobradiça ganhou a aba de latão que a prende à porta e, na família do corpo, o olhal de ferro atrás dela]** | +350 | container |
+| `atrium-lectern` (`atriumDecor.mjs:930-1010`) | 4 nós · 896 | 5 nós: os três de hoje, `__led` (a família `light` renomeada; `atrium-glow`), `__book` (`paper-aged`: o Livro aberto, 0,40 × 0,28 m, com lombo e curvatura de página; um material só) · régua de apoio na família `brass` (+24) · até 1.170; **[medido em F5: 624 + 44 + 216 + 12 + 72 = 968, 72 a mais. Não houve régua nova: a régua de latão que o tampo já tinha (`topRule`) é o apoio do Livro, e o `layout` a exporta]** | +274 | dispositivo |
 | `desk-telephone` | 2 nós · 1.508 | igual; passa de `kit` a dispositivo | — | dispositivo |
 | `atrium-central-podium` | 5 nós · 2.052 | igual; passa de `kit` a dispositivo (`notice`) | — | dispositivo |
 
@@ -1652,6 +1664,8 @@ novo [previsto; medir], nenhuma textura. Colisores: `office-safe` e `atrium-lect
 o do nó raiz (o do cofre fica 8 cm mais raso: a porta deixou o corpo); a secretária não tem.
 `kit.glb` cresce cerca de 15 a 25 kB [previsto]: `RATCHETS.kitGlb.ceiling` sobe para o medido, no
 commit do bake, com o motivo escrito (a secretária, a porta e a cavidade do cofre, o Livro).
+**[Medido em F5: 2.255.668 bytes, 21.416 a mais; 536 triângulos a mais sobre 104.940; nenhum
+programa novo (35) e nenhuma textura.]**
 
 **Lotes [previsto, conferido em Node contra o manifesto de hoje].**
 
@@ -1665,7 +1679,9 @@ commit do bake, com o motivo escrito (a secretária, a porta e a cavidade do cof
 temporário de ÁT-K1 (58 lotes, 102 draws) **não é gasto**: o átrio não desenha um nó a mais do que
 hoje em nenhum estado de L3. Triângulos de kit instanciados: átrio 43.324, escritório 31.638.
 
-**A secretária na mesa [a validar por `test:desk-top` e pela rota].** A mesa, em coordenadas da
+**A secretária na mesa [validado em F5 por `test:desk-top` e pela rota: a posição A serve, com
+12 mm até o mata-borrão, 8 mm até a borda e 114 mm até o rádio; ela saiu com 46 mm de altura, não
+60; o plano B não foi preciso].** A mesa, em coordenadas da
 sala [medido]: tampo de x 0,200 a 1,100 e z −1,025 a 0,725; mata-borrão (0,747) de x 0,295 a 0,975
 e z −0,855 a 0,555; na faixa de nogueira do lado do telefone (z 0,555 a 0,725, a 0,74) está o
 rádio, de x 0,323 a 0,396. A secretária fica nessa faixa, com o lado comprido ao longo de x:
@@ -1677,7 +1693,10 @@ mira ou o apoio reprovarem: no mata-borrão, entre o caderno e o telefone, centr
 
 **Frame [previsto; medido em F5].** R01 de 58 para 61 e R02 de 66 para 70 (teto 100); R03 a R06 e
 R10 iguais aos de hoje com o Livro à vista, e um a menos antes de o Livro ser achado; Holyoke
-igual. Programas: 35.
+igual. Programas: 35. **[Medido: R01 62, um a mais que o previsto (a porta do cofre, que virou nó
+próprio, está no quadro de R01 também); R02 70; R03, R04, R05 e R10 em 80, 101, 85 e 125 com o
+Livro à vista, e 79, 100, 84 e 124 antes de o Livro ser lido; R06 não vê o púlpito e não muda; a
+Ala 1 igual; 35 programas. A tabela está em §15.5.]**
 
 ## 8. Dívidas datadas
 
@@ -1721,9 +1740,9 @@ HANDOFF §11.6. Um validador de L3 que acuse algo fora destas tabelas reprova a 
 | `test:radio` | ganha casos | T5, T6, T7, T12, T19 | F2, F3, F5 |
 | `test:mobile-controls` | ganha casos | T15 | F4 |
 | `test:save` | ganha casos (abas vivas) | T5, T6, T12, T14, T20 | F2, F3, F4, F5 |
-| `test:triggers`, `test:locks` | ganham casos | T14; T10 | F4; F3 |
+| `test:triggers`, `test:locks` | ganham casos | T14, T19 (`locksSeen` como condição); T10, T19 (`lockBars`) | F4, F5; F3, F5 |
 | `test:playthrough` | ganha casos e mãos novas | T1, T8, T12, T14, T19, T21 | F1 a F5 |
-| `test:navigation`, `test:desk-top`, `test:kit`, `test:kit-runtime` | ganham casos | T2, T12, T18 | F1, F3, F5 |
+| `test:navigation`, `test:desk-top`, `test:kit` (ganha um terceiro script, `scripts/test-kit-layout.ts`: peça × `layout`), `test:kit-runtime` | ganham casos | T2, T12, T18 | F1, F3, F5 |
 | `test:lints`, `test:qa-save`, `test:ratchets`, `test:docs`, `test:map` | ganham casos | T7; T19; T21; T21; T4 e T13 | — |
 
 `package.json`: `test:ending` e `test:speech-coherence`. No `check`: `test:ending` depois de
@@ -1792,12 +1811,12 @@ título: toda fatia que escreve texto sobe esse teto.
 | título | cerca de 45 chaves de fala; `hintHeight`; `prePosse` | +1,6 kB; **[medido em F2: 35 chaves novas, 8 a menos, 5 reescritas; +1.165 bytes, 31.478; teto 31.630]** | F2 |
 | título | 8 chaves | +0,2 kB; **[medido em F3: 8 chaves novas, as regras do leitor na folha de estilos e `grantOnEnd` no store; +249 bytes, 31.727; teto 31.880]** | F3 |
 | título | 9 chaves; `termsSigned`, `sequencesSeen` | +0,3 kB; **[medido em F4: +1.025 bytes, 32.752; teto 32.910. A previsão não contava a folha de estilos, que viaja com o título e é sete décimos disso (de 4.676 para 5.404, arquivo por arquivo contra um build do commit anterior: o anel, as duas respostas, o cartão e a legenda da sequência, a página do termo, a lista de termos); o resto é o pedaço que os dicionários e o store dividem (de 22.466 para 22.764: as 9 chaves em cada língua, os dois campos e a sequência no store)]** | F4 |
-| título | cerca de 60 chaves (dois documentos longos, o recado, falas) ; o alias | +2,4 kB | F5 |
-| jogo | `checklist.ts`, dispositivos miráveis, `nightClock.ts`, `readingQueue.ts`, `voiceDevice.ts`, `containerNodes.ts`, `termRules.ts`, `holdAction.ts`, `sequenceRules.ts`, `SequenceOverlay.tsx`, o conteúdo novo | +6 a +9 kB no lote; **[medido: F1 +1.151 (392.146), F2 +1.649 (393.795), F3 +1.632 (395.427), F4 +3.478 (398.905); teto 395.760 desde F2 e 400.890 desde F4: 7.910 bytes no lote até aqui, e F5 ainda traz o conteúdo]** | F1 a F5 |
+| título | cerca de 60 chaves (dois documentos longos, o recado, falas) ; o alias | +2,4 kB; **[medido em F5: 56 chaves novas, 2 a menos, 3 reescritas; +3.127 bytes, 35.879; teto 36.050. Tudo menos 41 bytes está no pedaço que os dicionários e o store dividem (de 22.764 para 25.850): os textos saíram mais longos do que a previsão contava, nas duas línguas]** | F5 |
+| jogo | `checklist.ts`, dispositivos miráveis, `nightClock.ts`, `readingQueue.ts`, `voiceDevice.ts`, `containerNodes.ts`, `termRules.ts`, `holdAction.ts`, `sequenceRules.ts`, `SequenceOverlay.tsx`, o conteúdo novo | +6 a +9 kB no lote; **[medido: F1 +1.151 (392.146), F2 +1.649 (393.795), F3 +1.632 (395.427), F4 +3.478 (398.905); teto 395.760 desde F2 e 400.890 desde F4: 7.910 bytes no lote até aqui, e F5 ainda traz o conteúdo; F5 +1.463 (400.368), dentro do teto de F4 com 522 de folga: 9.373 bytes no lote]** | F1 a F5 |
 
 Tudo [previsto]. Cada teto sobe **no commit da fatia que precisa**, para o medido mais meio por
 cento, com o motivo em `BUNDLE_PATH_CEILINGS`. Os dois orçamentos do papel ficam longe: 93 kB antes
-do clique (250) e 484 kB no total (600); o lote termina perto de 98 e 500. O store continua sem
+do clique (250) e 484 kB no total (600); o lote termina perto de 98 e 500 **[medido em F5: 99,11 e 499,48]**. O store continua sem
 importar conteúdo: os termos, as sequências e os marcos chegam a ele só como ids em listas, e o
 gatilho do termo é compilado do lado do canvas (`contentRegistry.ts`); `test:save` caminha os
 `import` como hoje. Dicionário em duas camadas é de L17.
@@ -1841,7 +1860,7 @@ um toque curto abre «Assinar / Cancelar»; arrastar o olhar para fora cancela; 
 documento por vez cabe na tela; a aba Caderno cabe.
 
 **E. Saves.** `?qaSave=l2-shortcut-released` e `?qaSave=production-drawer-open`: ao continuar,
-nenhum toast; `porter-hello` e depois `porter-legacy-drawer`; o Arquivo mostra a folha nova; o
+nenhum toast; `porter-hello`, `porter-machine-reminder` e depois `porter-legacy-drawer`; o Arquivo mostra a folha nova; o
 cofre abre; Posse. `?qaSave=l2-new-game-drawer-touched`: a linha 5 já está na lista (a gaveta foi
 tocada); a rota segue. `?qaSave=production-pre-opening` em inglês: carrega, nada some.
 
@@ -2538,3 +2557,297 @@ grava.
   vírgula.
 - `resetProgress()` chamado com a cena montada deixa o `currentRoom` do store fora de passo com
   o jogador. Só o console chega a isso; o jogo começa um jogo novo pela tela de título.
+
+### 15.5 F5 — Posse: a cadeia inteira, o bake, o save antigo e o lote 3 (2026-10-05)
+
+T18 a T21 feitas. `npm run check` (35 passos) e `npm run build` verdes. `CONTENT_LOT` é 3.
+`docs/releases/L3.graph.json` foi escrito pela primeira vez, como **rascunho** (49 ações, 7 linhas
+da lista, 71 ids, 21 campos do save; nenhum digest em `FROZEN_SNAPSHOTS`, que é do fecho);
+`docs/releases/L2.graph.json` não foi tocado e `validateAdditive` contra ele não acusa nada
+(«graph: held to L2's snapshot · 42 actions it gave»). `validate:content` não tem dívida nova: 34
+linhas datadas, nenhuma com data 3, e três promessas datadas, cada uma dita no jogo pela chave ao
+lado (o pódio, a caixa-forte, a prova). `SAVE_VERSION` 1 e **nenhum campo novo no save**: o que
+muda na carga é a marca da gaveta (`PRE_POSSE_SAVE.drawer`, em `prePosse`) e o alias da folha
+(`SAVE_ALIASES`). O corpus (`saveFixtures.ts`) não ganhou save: os dois de L3 são do fecho (§14).
+
+O roteiro do jogador exaustivo tem os sete níveis do plano: N0 a luminária · N1 o átrio, o recado,
+o relógio, o rádio · N2 a luz do átrio e a Ala 1 · N3 a luz da Ala 1, o atalho, o ano · N4 a
+gaveta, a folha, a chave · N5 o cofre, o Livro, a prova · N6 a Posse.
+
+**Vermelho visto antes do conserto** (as suítes escritas primeiro, rodadas contra a fonte de
+`645b2ca`):
+
+| Suíte | Como reprovou |
+|---|---|
+| `test:playthrough` (reescrita antes do conteúdo) | 19 de 38. «"open office-safe" is not offered in office»; «the museum has one term to sign in this lot» com `[]`; as 500 noites; «production-drawer-open: short of the end»; `id-renamed-without-alias documents:doc-otavio-handover` |
+| `test:ending` | 18 de 22. O púlpito não é mesa; o museu não tem termo; `PRE_POSSE_SAVE.drawer` não existe; «the drawer was open in a write that did not carry its key» |
+| os três saves com a gaveta aberta (`production-drawer-open`, `l1-route-end`, `l2-shortcut-released`), carregados pelo store | `credentials: []`, sem flag, sem gatilho, sem a folha: o save carregado não tem a chave (T20) |
+| `test:save` | 63 de 66. A marca da gaveta save por save; a aba de L2 que abre a gaveta («the museum compiles no trigger for the drawer: nothing would hand the key over»); os casos F e G |
+| `validate:content`, com o conteúdo de F5 e sem o bake | `device-node-missing` duas vezes (`atrium-lectern__led`, `atrium-lectern__book`), `container-node-missing` duas vezes (`office-safe__door*`, `office-safe__papers`) e `device-part-not-baked` (`office-answering-machine`) |
+| `test:ratchets`, com `CONTENT_LOT` em 3 | 2 de 4. «the reference points were last measured in L1 and the content is at L3: measure again», e o kit acima do teto (2.201,6 de 2.181,9 KiB) |
+| `test:opening-flow`, para o prompt do cofre (item 1 de «diferente») | `lockBars is not a function`; antes da suíte, visto no navegador: «E · Cofre de ferro — precisa de chave» com a chave na mão, sobre um `E` que abria o cofre |
+| **escritos depois da regra**, e por isso provados ao contrário (a regra desligada na fonte, a suíte rodada, a fonte devolvida byte a byte): os casos de `legacy-save-drawer` em `test:opening` e o do corte do cofre em `test:kit` | 38 de 39: «legacy-save-drawer does not accuse "office-drawer"» e, duas vezes, «…"lock:office-drawer:opened"»; 6 de 7: «Missing expected exception» com a guarda de `withoutFlatFace` desligada (e, com metade da face deixada no lugar, o próprio gerador do cofre para o bake) |
+
+**Mutações que provam que as asserções mordem.**
+
+- `progressWiringProblems` (chamada por `test:locks` e `test:triggers`), três refatorações novas
+  do prompt de um armário, todas pegas: toda tranca fechada chamada de trancada, tenha a mão o que
+  tiver (era o que estava no jogo); o prompt decidindo pelo tipo da tranca e não pela resposta de
+  `attemptLock`; a tranca que cede dita como gaveta para ler. E `lockBars` contra a tabela de
+  `attemptLock`, tranca por tranca, chaveiro por chaveiro: barra exatamente quando o toque nem a
+  acha aberta nem a abre.
+- `officeAnswersWiringProblems` (chamada por `test:opening-flow`), seis do aviso «Anotado no
+  caderno»: o aviso de uma linha que veio com o save; o aviso para quem não tem caderno; uma lista
+  própria do componente; sem o save anterior para comparar; a mesma linha anunciada a cada
+  escrita; o aviso que ninguém monta.
+- `test:speech-coherence`, dois museus a mais reprovam: a chamada do save antigo
+  (`porter-legacy-drawer`) dita a quem acabou de abrir a gaveta («a new game was told to look
+  again in a drawer of another night»), e o cartão da Posse devido desde a leitura do Livro («the
+  card that says the deed was signed was shown with the deed unsigned»).
+- `test:kit` (`scripts/test-kit-layout.ts`, novo): a dobradiça declarada com 3 cm de erro reprova;
+  a porta girada pelo ângulo do conteúdo livra a frente do cofre, e girada em torno de um eixo
+  dez centímetros para dentro da folha, ou recuado oito na moldura, atravessa-a. O corte
+  (`withoutFlatFace`): a face sai inteira e sozinha, as arestas ficam, o plano que erra por 4 mm
+  é recusado, e nenhum triângulo da carcaça gravada no kit cobre o vão no plano da frente (um
+  teste por vértices não veria a face deixada no lugar: os cantos dela ficam fora do vão).
+- `test:opening`: um museu sem o bake de F5 é acusado dos cinco erros da tabela acima, pelo id de
+  cada objeto; H-23, sobre o museu de verdade: tirar a chave das credenciais, o cofre, o Livro ou
+  o púlpito faz da folha da gaveta `speech-mentions-missing`; uma promessa datada sem nota é
+  `deferred-without-notice`; `legacy-save-drawer` acusa a tranca renomeada (com ela vai o
+  gatilho, que é escrito a partir do id) e a gaveta que não entrega nada ao abrir.
+- `test:save`, abas vivas: a aba que grava como L2 abre a gaveta nas três ordens possíveis de
+  aviso e de leitura, e este build, aberto ao lado, marca a gaveta e entrega a chave em **uma**
+  escrita; uma aba sem regras grava por cima sem perder chave nem flag; uma segunda carga não
+  acrescenta nada. O alias: dezesseis aliases bons passam e cada um dos ruins é acusado.
+- `test:ending`, no museu de verdade: o púlpito nomeia o termo quando o Livro é lido, não assina
+  com sala apagada, assina com a casa acesa; o save que abriu a gaveta antes de ela guardar chave
+  recebe a chave na carga, ouve a chamada dele uma vez e chega à Posse; a gaveta aberta agora
+  entrega a chave na mesma escrita e não ganha a marca.
+- `test:playthrough`: a rota canônica na ordem dela; as 500 noites (23.423 teclas, 3.188 delas
+  para nada, 1.244 abas fechadas); quem pula tudo o que é opcional assina e vê a noite fechada;
+  quem digita o ano sem ter lido só adianta a chave; todo save do corpus, carregado e jogado até
+  o fim, não perde nada e chega lá.
+
+**O que saiu diferente do plano** (o texto acima já está corrigido onde se diz).
+
+1. **O prompt do cofre com a chave na mão** [não previsto; 3.8 e §6.5, corrigidos]. Achado na rota
+   A: com `tool:service-key` em `credentials` o prompt continuava «Cofre de ferro — precisa de
+   chave», e `E` abria o cofre. É uma linha que o estado desmente. A regra nova é `lockBars`
+   (`lockRules.ts`): uma tranca barra quando o toque nem a acha aberta nem a abre, que é a
+   resposta de `attemptLock` e de mais nada. `containerPrompt` ganhou o quarto argumento e a chave
+   `prompt.unlock`: «E · Destrancar · Cofre de ferro» / *Unlock · Iron safe*; sem a chave continua
+   «precisa de chave»; aberto, «Ler · Cofre de ferro ✓». O mapa não mudou: a lista de trancas
+   pendentes da planta continua dizendo «Cofre de ferro — precisa de chave» enquanto o cofre
+   estiver fechado, como ponteiro do que falta abrir e com quê.
+2. **A linha da prova tem nota** (3.4, §6.5, corrigidos). `notebook.todo.proof` é promessa datada,
+   e o portão pede a nota de toda promessa (`deferred-without-notice`):
+   `notebook.todo.proof.note`, «hoje não: fica para a reabertura».
+3. **Saves antigos ouvem três chamadas, não duas** (§5 A e B, §11 E, corrigidos): `porter-hello`,
+   depois `porter-machine-reminder` (o recado é de L3; nenhum save antigo o ouviu, e o átrio deles
+   está aceso), depois `porter-legacy-drawer`. Pela mesma razão **o saguão aceso começa duas
+   chamadas** num jogo novo: a dele e a da secretária, que caduca quando o recado é ouvido.
+4. **`MAXIMUM` tem duas flags** (T19, corrigido): `clock-set` e `posse-signed`. A de legado só a
+   migração põe; `simulate.ts` a trata como posta para não acusar `flag-never-set` na condição de
+   `porter-legacy-drawer`, e nenhum jogo novo a tem.
+5. **A última dica só é ouvida com a Posse assinada, e diz isso.** Com a dica da chave e a da
+   Posse acima dela, o resto da escada deixou de ser «a luz está feita»: «Posse assinada. Agora é
+   conferir o acervo, peça por peça. A caixa-forte fica pra depois: o subsolo alagou.» (o texto
+   de §6.5 já era este; o que mudou foi o que `test:radio` afirma dela).
+6. **A folha cita a chave, e uma credencial declarada é citável** (T19, corrigido): `mentions` de
+   `doc-otavio-handover` leva `tool:service-key`, escrito como o save o escreve, e
+   `validateSpeech` aceita como id citável toda credencial de `MUSEUM.credentials`. O Livro cita
+   o púlpito. `DocumentData.mentions` é o campo novo do schema.
+7. **A carcaça do cofre não é de cinco chapas** (§7, corrigido). É a casca chanfrada de antes sem
+   a face da frente (`withoutFlatFace`, novo em `geometry.mjs`: tira os triângulos deitados num
+   plano e reprova se a conta não for a esperada), com moldura em meia-esquadria, rebaixo e forro
+   por dentro, a prateleira a 0,90 m, o rodapé e a cimalha. Cada dobradiça ganhou a aba de latão
+   que a prende à porta e, na família do corpo, o olhal de ferro atrás dela: sem os dois a porta
+   girava num cilindro solto no ar. 1.192 triângulos (teto 1.434). O gerador exporta `layout`
+   (a frente, o eixo e os dois nós da dobradiça, a porta, o vão, a cavidade, a prateleira, os
+   papéis) e `test:kit` confere o conteúdo contra ele.
+8. **O púlpito não ganhou régua** (§7, corrigido): a régua de latão que o tampo já tinha é o
+   apoio do Livro. O Livro é um perfil só, varrido (72 triângulos, um material), deitado no plano
+   de leitura com o pé na régua. 968 triângulos (teto 1.170). A família `light` chama-se `led`.
+9. **A secretária** ficou na posição A (`[0.615, 0.74, 0.642]`, `rotationY: -π/2`), com 46 mm de
+   altura e 356 triângulos; o plano B não foi preciso. **Do ponto de leitura, o rádio no berço
+   ganha a mira**: a secretária mira-se do lado da porta e da ponta sul da mesa, e do ponto de
+   leitura assim que o rádio vai para o bolso (`test:navigation` acha o lugar de onde ela é
+   alcançada). A chamada `porter-machine-reminder` diz onde ela está («no ramal do escritório»).
+10. **R01 mede 62, não 61** (§7, corrigido): a porta do cofre, nó próprio, está no quadro de R01
+    também.
+11. **O título cresceu 3,1 kB, não 2,4** (§10, corrigido), e só o teto dele subiu: os outros dois
+    caminhos couberam nos tetos de F4. Antes do clique 99,11 kB de 250; no jogo 499,48 kB de 600.
+12. **Atrasos das chamadas** (o plano não os dava): 4 s a da secretária; 2,5 s as da gaveta, do
+    save antigo e do cofre.
+13. **`device-part-not-baked` passou a levar o id do dispositivo**, para o portão de teste poder
+    dizer quem foi acusado.
+14. **`locksSeen` é condição** (3.3 já a previa; entrou nesta fatia, com a linha da tabela de
+    classes e o átomo da simulação): a linha 5 aparece para quem tocou a gaveta sem ter ouvido o
+    recado.
+15. **`test:kit` tem três scripts** (§9.1, corrigido), e `test:triggers` e `test:locks` também
+    ganharam casos nesta fatia.
+16. **Formas que o plano deixou em aberto.** `lockBars` (`lockRules.ts`); `checklistToastStep` e
+    o quarto argumento de `containerPrompt` (`promptRules.ts`); `ChecklistToast` (`Hud.tsx`);
+    `withoutFlatFace` (`geometry.mjs`); `buildAnsweringMachine` (`officeProps.mjs`); `layout` nos
+    três geradores; `flagsOfOlderSaves` (`simulate.ts`); `PRE_POSSE_SAVE.drawer`
+    (`legacySave.ts`).
+
+**Medido.**
+
+- Bake: `kit.143787a7.glb`, 2.255.668 bytes (eram 2.234.252; +21.416, dentro dos 15 a 25 kB
+  previstos), 105.476 triângulos em 201 nós (536 a mais); o teto da catraca é o medido, com o
+  motivo. Secretária 264 + 32 + 60; cofre 384 + 108 + 676 + 24; púlpito 624 + 44 + 216 + 12 + 72.
+  Seis pacotes, 2.959 KB, 152.188 triângulos. Nenhuma textura nova.
+- Lotes de kit: átrio 47, Holyoke 28, escritório 49. Desenhado por dado: 59, 33 e 79, os tetos de
+  §7. Triângulos de kit instanciados: átrio 43.324, escritório 31.638.
+- Bundle (gzip, pelo próprio portão): documento 63.234 (teto 63.600); título 35.879 (era 32.752;
+  teto de 32.910 para 36.050); jogo 400.368 (era 398.905; teto 400.890, sem subir). Do título,
+  3.086 dos 3.127 bytes estão no pedaço dos dicionários e do store (22.764 para 25.850): 56
+  chaves novas em cada língua, 2 a menos, 3 reescritas.
+- Suítes: `test:ending` 22 (eram 19), `test:save` 66 (63), `test:locks` 20 (19),
+  `test:opening-flow` 54 (53), `test:speech-coherence` 7 (6), `test:desk-top` 10 (9), a nova
+  `test-kit-layout.ts` 7; `test:playthrough` 38, `test:opening` 39, `test:radio` 40,
+  `test:triggers` 31, `test:qa-save` 27 e `test:map` 19, os mesmos, reescritos ou com asserções
+  a mais. As 500 noites: 23.423 teclas (eram 20.531), 3.188 para nada. As 500 noites ouvidas:
+  11.357 coisas, 6.481 delas o Jorge respondendo; 396 chegaram aos degraus impacientes.
+- **`BROWSER_RECORD`, lote 3.** Servidor `museum-dev` reiniciado depois da última edição, 1280 ×
+  720, qualidade `medium`, campo de 62° por 93,78°, três salas acesas, portas fechadas menos em
+  R10; cada ponto como em `P0-linha-de-base.md` §0, depois de programas, geometrias e texturas
+  iguais por 20 rodadas. Três sessões, três passadas iguais em cada uma (a terceira da sessão do
+  fim da rota refeita depois de reiniciar o servidor, com os mesmos dez números):
+
+  | Ponto | Jogo novo, três salas pelo store, rádio e caderno na mesa | `?qaSave=production-drawer-open`, como carrega | Fim da rota A (o Livro no púlpito, o cofre aberto) | L1 | Gravado |
+  |---|---|---|---|---|---|
+  | R01 | **62 · 36.526** | 55 · 35.402 | 56 · 35.426 | 58 · 36.086 | 62 · 36.526 |
+  | R02 | **70 · 38.346** | 63 · 37.222 | 64 · 37.246 | 66 · 37.906 | 70 · 38.346 |
+  | R03 | 79 · 63.928 | 79 · 63.928 | **80 · 64.000** | 80 · 63.940 | 80 · 64.000 |
+  | R04 | 100 · 77.322 | 100 · 77.322 | **101 · 77.394** | 101 · 77.334 | 101 · 77.394 |
+  | R05 | 84 · 67.808 | 84 · 67.808 | **85 · 67.880** | 85 · 67.820 | 85 · 67.880 |
+  | R06 | 79 · 70.774 | 79 · 70.774 | 79 · 70.774 | 79 · 70.774 | 79 · 70.774 |
+  | R07 | 39 · 37.676 | 39 · 37.676 | 39 · 37.676 | 39 · 37.676 | 39 · 37.676 |
+  | R08 | 70 · 52.036 | 70 · 52.036 | 70 · 52.036 | 70 · 52.036 | 70 · 52.036 |
+  | R09 | 81 · 62.374 | 81 · 62.374 | 81 · 62.374 | 81 · 62.374 | 81 · 62.374 |
+  | R10 | 124 · 100.416 | 124 · 100.416 | **125 · 100.488** | 125 · 100.428 | 125 · 100.488 |
+
+  Programas: 35 nas três sessões, depois de a casa ser percorrida (33 parado no escritório).
+  O átrio não desenha um nó a mais do que em L1 em nenhum estado: 101 em R04 (teto 102) e 125 em
+  R10 (teto 125) com o Livro à vista, que são os números de L1 com 60 triângulos a mais (o Livro
+  no lugar da lente); um draw a menos enquanto o Livro não foi lido (o púlpito vazio não acende a
+  lâmpada). No escritório são quatro draws e 440 triângulos a mais do que em L1 no estado de base
+  (os três nós da secretária e a porta do cofre); o estado mais cheio do escritório, que a tabela
+  não mede, é esse mais a prova na prateleira (um draw, 24 triângulos), para quem abre o cofre
+  sem ter tirado o rádio nem o caderno da mesa. A Ala 1 não mudou.
+  O painel do navegador fica oculto, e a escala adaptativa de resolução cai sozinha com os
+  quadros lentos (de 0,92 a 0,65 nas sessões): o buffer não ficou em 1536 × 864. Draws e
+  triângulos não dependem dele; não é medida de desempenho.
+
+**Navegador** (servidor reiniciado depois da última edição de código; depois dele só mudaram
+testes, este documento e um comentário de `museum.ts`. Ao fim, o viewport de volta ao `desktop`,
+o save apagado pelo `localStorage` e a tela de título em «Entrar no museu»; nenhuma captura
+gravada). Com o painel oculto o jogo anda por `__museumStep`, e o que é dito e mostrado
+foi lido do DOM e do store.
+
+- **A, jogo novo, pt-BR, 1280 × 720.** No escuro: «Sem energia · Secretária eletrônica», sem
+  tecla; «E · Cofre de ferro — precisa de chave», e o toque grava `locksSeen`. Luminária:
+  `porter-hello` (cinco falas), a instrução do quadro, o lembrete do caderno. Caderno: a lista
+  conta («1 de 3» com o escritório aceso, «3 de 3» ao fim; «Átrio 0 de 4 · Ala 1 · Holyoke 1 de
+  8»), e a caixa-forte está sem caixa e com a nota. Relógio
+  acertado: «Passa das sete». Telefone: «Linha muda.». Secretária: «E · Ouvir · Secretária
+  eletrônica», a lente pisca (`led-off`, `led-red`), «OTÁVIO · RECADO GRAVADO», nove falas até
+  «[A gravação termina aqui. O visor marca 16:47.]», `doc-otavio-tape` no Arquivo, a lente apaga,
+  «Ouvir de novo»; a linha 5 a lápis e «✓ Anotado no caderno». Saguão: o aviso do pódio; «Púlpito
+  — mesa de assinatura: falta o Livro de Termos», sem tecla, sem lâmpada, sem Livro; o quadro,
+  `porter-atrium-service` e **nenhuma** chamada da secretária (caducou). Ala 1: `porter-holyoke-lit`;
+  o retrato, `porter-first-catalogued`; o atalho, `porter-shortcut`. Gaveta, 1896: uma escrita com
+  a tranca, a chave e o gatilho; «✓ Você pegou — Chave do cofre de ferro» e «✓ Anotado no
+  caderno»; a folha 1; `porter-drawer-open`, duas falas. Cofre: «E · Destrancar · Cofre de
+  ferro»; um `E` grava a tranca aberta e depois os dois papéis; a porta gira no eixo das
+  dobradiças (de x 14,41–14,48 para 13,68–14,40, sem atravessar nada) e a prova aparece na
+  prateleira, a 0,90 m; o leitor em «1 / 3», «2 / 3» (o termo) e «3 / 3» (a prova);
+  `porter-safe-open`, duas falas; «E · Ler · Cofre de ferro ✓». A lista: gaveta e chave riscadas,
+  «Assinar o termo de posse, no púlpito.» por riscar, a prova sem caixa com «hoje não: fica para
+  a reabertura». Púlpito: lente `led-green`, «E · Segure E — Assinar: Termo de posse»; a tecla
+  ganha `is-holding` com `--hold-seconds: 1.2s`; soltar a 0,6 s não assina e não grava; um toque
+  curto pergunta «E · Assinar: Termo de posse · Esc · Cancelar», e `Esc` cancela; segurar assina
+  a 1,198 s, numa escrita (`termsSigned`, a flag e o gatilho). O cartão «Termo de posse assinado»
+  por 3,5 s, depois «JORGE · ALTO-FALANTE A lâmpada do púlpito acendeu e apagou: assinou. O
+  acervo é seu, curador. Quase dez.» e «O livro que a seguradora quer tá na caixa-forte, e o
+  subsolo alagou. Hoje não se desce. Câmbio.»; `sequencesSeen` gravado no fim. O Livro no púlpito,
+  a lente apagada, «Púlpito — Termo de posse · assinado ✓»; a linha 7 riscada; «TERMOS ASSINADOS
+  · Termo de posse · Assinado pelo curador.». Chamar o Jorge: «Posse assinada. Agora é conferir o
+  acervo, peça por peça. A caixa-forte fica pra depois: o subsolo alagou.». Recarregar e
+  continuar: 12 s sem fala, sem aviso e sem escrita; a porta do cofre desenhada aberta.
+- **B, em inglês, sem rádio, sem caderno, sem lanterna.** *No power · Answering machine*; *Not
+  charging · Porter's radio*; *E · Iron safe — needs a key*. As chamadas tocam só no escritório,
+  pelo rádio da mesa (`porter-hello`, a do quadro, a do caderno, depois `porter-drawer-open` e
+  `porter-safe-open`, e `porter-holyoke-lit` quando o jogador volta a ele); no saguão e na Ala 1,
+  só os avisos de energia. *OTÁVIO · RECORDED
+  MESSAGE*, as nove falas; nenhum aviso de lista (não há caderno), e o leitor diz *It will be
+  filed in the curator's notebook, still on the office desk.* O ano digitado sem o retrato: *✓
+  You took — Key to the iron safe*; *E · Unlock · Iron safe*. No saguão escuro: *Lectern — Sign:
+  Deed of office · no light yet in: Atrium, Wing 1 · Holyoke*, lente vermelha, e segurar `E` não
+  grava nada; aceso o saguão, *… no light yet in: Wing 1 · Holyoke*; acesa a Ala 1, lente verde e
+  *E · Hold E — Sign: Deed of office*. Assinado a 1,2 s: *Deed of office signed*, *JORGE ·
+  LOUDSPEAKER The lectern lamp came on and went out: you signed. The collection's yours, curator.
+  Nearly ten.* Recarregado no meio da primeira fala (`termsSigned` no disco, `sequencesSeen`
+  vazio): ao continuar, a sequência toca de novo do cartão até o fim e só então é gravada.
+- **D, toque, 844 × 390, pelos direcionais e pelo botão de Ação.** Os dois direcionais andam e
+  viram o jogador; o botão abre a porta do escritório e o leitor do cofre («Ler · Cofre de ferro
+  ✓», sem a tecla). O leitor cabe nas três páginas (painel de 844 × 390, nada rola, «Voltar»,
+  «Próximo» e «Fechar» à vista). A aba Caderno cabe (as cinco abas e «Fechar»), e **a lista rola
+  dentro dela**: 560 de 297 px em pt-BR e 659 em inglês, com as sete linhas e os termos
+  assinados (F1 já previa). No púlpito: «Segure Ação — Assinar: Termo de posse»; o botão segurado
+  ganha `is-holding` com o anel de 1,2 s; meio caminho cancela; um toque troca o botão por
+  «ASSINAR» e «CANCELAR», com «Cancelar» onde a Ação estava, e «Cancelar» cancela; segurar e
+  arrastar o olhar para fora (1 rad em 0,6 s) cancela, e continuar segurando não assina; segurar
+  até o fim assina, uma escrita. O cartão fica de 54 a 131 px e a legenda de 54 a 155, o prompt
+  de 237 a 271: nada se cobre. Em inglês: *Lectern — Deed of office · signed ✓*, *DEEDS SIGNED ·
+  Deed of office · Signed by the curator.*
+- **E, saves.** `?qaSave=production-drawer-open` (no disco: sem lote, sem chave): ao continuar,
+  **nenhum aviso**; o save carregado tem `tool:service-key`, `legacy-pre-L3-drawer`, o gatilho,
+  `doc-predecessor` **e** `doc-otavio-handover`, lote 3. Ouve `porter-hello` (cinco falas), «Tem
+  uma luz de recado piscando no ramal do escritório. Deve ser coisa do Otávio. Câmbio.» e «Olha
+  de novo a gaveta do Otávio: o bilhete tinha uma chave presa. Câmbio.». O Arquivo mostra
+  «Passagem de acervo — folha 1» uma vez, entre os papéis que o save já tinha. O recado é ouvido;
+  «Destrancar · Cofre de ferro»; o cofre abre numa escrita; `porter-safe-open`; a Posse é
+  assinada, e a primeira fala termina em «Passa das onze.» (nove marcos nesse save).
+  `?qaSave=l2-shortcut-released` (no disco: lote 2, sem chave): ao continuar, nenhum aviso; a
+  chave e a marca; as mesmas três chamadas na mesma ordem. Com `R` apertado a 1,2 s de cada
+  fala, cada toque avança uma fala e nenhuma chamada de duas falas perde a segunda.
+- Console: nenhum erro do jogo e nenhum aviso novo (só o `THREE.Clock` de sempre e as linhas do
+  `[qaSave]`). Os erros no histórico são do Vite trocando módulos no meio de uma edição, antes
+  do servidor ser reiniciado.
+- **Não visto no navegador nesta fatia:** as rotas C (o cofre aberto no escuro; a Ala 1 acesa
+  antes do saguão) e F (duas abas de verdade), que §14 deixa para o fecho; a Posse é provada nas
+  duas situações por `test:playthrough` e `test:ending`, e as abas por `test:save`. O detalhe do
+  retrato foi concedido pela função do próprio visor (`hotspotGrant`), não por um arrasto do
+  ponteiro.
+
+**O fecho herda.**
+
+- As rotas C e F de §11, os dois saves do corpus, as capturas, o digest de `L3.graph.json` (o
+  rascunho tem de ser refeito se qualquer conteúdo mudar na revisão), o HANDOFF §12 e o «Feito
+  em».
+- A lista do mapa continua dizendo «Cofre de ferro — precisa de chave» para quem já tem a chave
+  e ainda não abriu o cofre. Lê-se como ponteiro; se a revisão achar que desmente o estado, a
+  regra é a mesma do prompt (`lockBars`) e o lugar é `mapModel.ts`.
+- Em 844 × 390 a lista do Caderno rola por quase duas telas. Cabe na regra de hoje (o corpo do
+  caderno rola); se a revisão quiser a lista inteira à vista, é desenho da página, não dado.
+- O estado mais cheio do escritório (63 e 71 draws) não está no registro, só descrito acima.
+- `docs/HANDOFF.md` §2 («Bake atual») ainda cita `kit.6f5f4950.glb`, 2.938 KB e 151.652
+  triângulos, e as contas de suítes de L2: o bake de hoje é `kit.143787a7.glb`, 2.959 KB e
+  152.188. As fatias não escrevem o HANDOFF; é do §12 do fecho.
+
+**Visto de passagem, sem conserto nesta fatia.**
+
+- Uns nove segundos depois de a porta da Ala 1 ser aberta, R01 mede um draw e 60 triângulos a
+  mais por menos de um segundo, do escritório, com só o escritório visível (63 por 62; 57 por
+  56); R02, medido logo depois, não. Repetiu-se nas três sessões e some sozinho; o número
+  gravado é o assentado. A causa não foi procurada: parece a folha de uma porta a fechar, que
+  seria de L1.
+- R03 mede 88 · 70.776 enquanto a porta da Ala 1, do outro lado do saguão, ainda está aberta: é
+  um par de salas, como R10, e não o ponto de porta fechada que a tabela pede.
+- Com o painel oculto, entre duas chamadas do harness o jogo fica sem quadros, e o primeiro
+  quadro depois da pausa conta até 0,25 s da espera de segurar (F4 já tinha visto): um ensaio que
+  não aquece os quadros antes assina com um segundo de tecla. Num navegador de verdade os quadros
+  são contínuos; as medidas de tempo acima são com os quadros aquecidos.

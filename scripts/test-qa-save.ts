@@ -46,7 +46,7 @@ const browserStorage = {
 Object.assign(globalThis, { localStorage: browserStorage })
 
 const { CONTENT_LOT } = await import('../src/content/contentLot.ts')
-const { PRE_OPENING_SAVE, PRE_POSSE_SAVE } = await import('../src/content/legacySave.ts')
+const { PRE_OPENING_SAVE, PRE_POSSE_SAVE, SAVE_ALIASES } = await import('../src/content/legacySave.ts')
 const { MUSEUM } = await import('../src/content/museum.ts')
 const { fixtureLot, SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
 const { applyQaSave, QA_SAVE_PARAM, QA_SAVE_STORAGE_KEY, qaSaveRequest } = await import(
@@ -239,7 +239,15 @@ for (const id of fixtureIds) {
         assert.deepEqual(kept, value, `${where} changed`)
       }
     }
-    for (const [field, value] of Object.entries(raw)) holds((progress as Record<string, unknown>)[field], value, field)
+    for (const [field, value] of Object.entries(raw)) {
+      // The stamp is the one plain value a load moves, and only up: a save
+      // an earlier lot stamped leaves with this build's lot on it.
+      if (field === 'contentLot') {
+        assert.equal(progress.contentLot, Math.max(value as number, CONTENT_LOT), 'contentLot went down, or stayed behind')
+        continue
+      }
+      holds((progress as Record<string, unknown>)[field], value, field)
+    }
     // And the one thing the load is known to add inside a record, by name.
     for (const [radioId, memory] of Object.entries((raw.radioMemory as Record<string, object> | undefined) ?? {})) {
       assert.deepEqual(progress.radioMemory[radioId], { ...memory, hintHeight: 0 }, `${radioId}: the porter's memory`)
@@ -297,9 +305,22 @@ function replyIds(radio: (typeof radios)[number]) {
   )
 }
 
-test('after loading, every id a fixture names is one the content still has', () => {
+test('after loading, every id a fixture names is one the content still has, or has under another name', () => {
   // Checked on the loaded save, not on the record: a lot that renames an id
   // keeps the record as it was written and has to carry it in the migration.
+  //
+  // Carrying it leaves both in the save: the old id stays for the build
+  // from before the rename, which may be open in another tab, and the new
+  // one stands beside it (`SAVE_ALIASES`). So an id the content no longer
+  // has is still accounted for when the same list of the loaded save holds
+  // the name it was given, and that name is the content's. It was «every
+  // id is one the content has» until L3 renamed the note in the drawer.
+  const carried = (field: string, old: string, held: readonly string[], has: (id: string) => boolean) =>
+    SAVE_ALIASES.some((alias) => alias.field === field && alias.from === old && held.includes(alias.to) && has(alias.to))
+  assert.ok(carried('documentsRead', 'doc-predecessor', ['doc-otavio-handover'], (id) => documentById.has(id)))
+  assert.ok(!carried('documentsRead', 'doc-predecessor', [], (id) => documentById.has(id)), 'an old id whose new name the save does not hold is carried nowhere')
+  assert.ok(!carried('catalogued', 'doc-predecessor', ['doc-otavio-handover'], () => true), 'an alias answers for its own list only')
+  assert.ok(!carried('documentsRead', 'doc-never-was', ['doc-otavio-handover'], (id) => documentById.has(id)))
   for (const id of fixtureIds) {
     const progress = progressOf(id)
     const missing: string[] = []
@@ -313,7 +334,9 @@ test('after loading, every id a fixture names is one the content still has', () 
       const exhibit = exhibitById.get(exhibitId)
       want(Boolean(exhibit?.hotspots.some((hotspot) => hotspot.id === hotspotId)), `hotspot ${key}`)
     }
-    for (const doc of progress.documentsRead) want(documentById.has(doc), `document ${doc}`)
+    for (const doc of progress.documentsRead) {
+      want(documentById.has(doc) || carried('documentsRead', doc, progress.documentsRead, (to) => documentById.has(to)), `document ${doc}`)
+    }
     for (const fact of progress.factsKnown) want(factIds.has(fact), `fact ${fact}`)
     for (const room of [...progress.roomsVisited, ...progress.roomsPowered, progress.lastRoom]) {
       want(roomIds.has(room), `room ${room}`)
@@ -372,8 +395,10 @@ test('each fixture is a state the game could really have reached', () => {
       if ('revealsFactId' in hotspot && hotspot.revealsFactId) revealed.add(hotspot.revealsFactId)
     }
     for (const docId of progress.documentsRead) {
-      const doc = documentById.get(docId)!
-      if ('revealsFactId' in doc && doc.revealsFactId) revealed.add(doc.revealsFactId)
+      // An id a lot renamed is in the save beside its new name (the case
+      // above holds it to that): what it revealed is the new one's to say.
+      const doc = documentById.get(docId)
+      if (doc && 'revealsFactId' in doc && doc.revealsFactId) revealed.add(doc.revealsFactId)
     }
     assert.deepEqual([...progress.factsKnown].sort(), [...revealed].sort(), say('facts known and facts revealed differ'))
 
@@ -625,16 +650,30 @@ test('a save the lot in the tree wrote loads as itself', () => {
   // in the same order. A field mistyped, left out or put in another place
   // while copying the record out of the browser shows here.
   //
-  // One thing may differ, and only while the next lot is being written in
-  // slices: the tree is then ahead of its own stamp (`CONTENT_LOT` moves
-  // with the last slice), and carries a migration of a lot the stamp has not
-  // reached. A record with the tree's stamp was written by the lot before,
-  // and that migration runs on it. What it adds is said here by name (the
-  // porter's old news, in `radioCalls`) and nothing else may move; and the
-  // two fields the lot gave the save arrive empty, after every field the
-  // record has (`ADDED_BY_L3`).
+  // The same text, with nothing set aside, since the tree's stamp caught up
+  // with its lot. While L3 was written in slices the tree ran ahead of its
+  // own stamp (`CONTENT_LOT` moves with the last slice): the records that
+  // carried the tree's stamp were L2's, and the Posse's migration added to
+  // them, which this case said by name. A lot that ships in slices again
+  // has to say here what its migration adds, and until it does this fails.
   const ahead = SAVE_MIGRATIONS.filter((migration) => migration.lot > CONTENT_LOT).map((migration) => migration.lot)
-  assert.ok(ahead.every((lot) => lot === CONTENT_LOT + 1), `a migration more than one lot ahead of the tree: ${ahead.join(', ')}`)
+  assert.deepEqual(ahead, [], 'a migration of a lot the tree has not reached: say here, by name, what it adds to a record of this lot')
+  const own = fixtureIds.filter((id) => fixtureLot(SAVE_FIXTURES[id]) === CONTENT_LOT)
+  for (const id of own) {
+    const { state } = loaded.get(id)!
+    assert.equal(
+      JSON.stringify({ settings: state.settings, progress: state.progress }),
+      JSON.stringify(SAVE_FIXTURES[id].save),
+      `${id}: this build reads its own save as something else`,
+    )
+  }
+  // While a lot is open the corpus has no save of it yet, and this holds of
+  // nothing; the lot closes by adding one (the check on the plan, above).
+  if (lastLotDone(readText(resolve(ROOT, 'docs/PLANO-ATE-O-FINAL.md'))) === CONTENT_LOT) {
+    assert.ok(own.length > 0, `L${CONTENT_LOT} is done and none of its saves is in the corpus`)
+  }
+  // The records of the lot before are not this build's writing any more:
+  // the load adds the porter's old news to them, each by what it had passed.
   const oldNews = (progress: RawProgress): string[] =>
     PRE_POSSE_SAVE.oldNews
       .filter((news) => {
@@ -642,42 +681,16 @@ test('a save the lot in the tree wrote loads as itself', () => {
         return news.id === null ? list.length > 0 : list.includes(news.id)
       })
       .map((news) => news.callId)
-  const asThisBuildReads = (save: (typeof SAVE_FIXTURES)[FixtureId]['save']) =>
-    ahead.includes(3)
-      ? {
-          ...save,
-          progress: {
-            ...save.progress,
-            radioCalls: [...(save.progress.radioCalls as readonly string[]), ...oldNews(save.progress)],
-            ...Object.fromEntries(ADDED_BY_L3.map((field) => [field, []])),
-          },
-        }
-      : save
-  const own = fixtureIds.filter((id) => fixtureLot(SAVE_FIXTURES[id]) === CONTENT_LOT)
-  for (const id of own) {
-    const { state } = loaded.get(id)!
-    assert.equal(
-      JSON.stringify({ settings: state.settings, progress: state.progress }),
-      JSON.stringify(asThisBuildReads(SAVE_FIXTURES[id].save)),
-      `${id}: this build reads its own save as something else`,
+  for (const id of ['l2-shortcut-released', 'l2-new-game-drawer-touched'] as const) {
+    const record = rawProgress(id)
+    assert.deepEqual(
+      loaded.get(id)!.state.progress.radioCalls,
+      [...(record.radioCalls as readonly string[]), ...oldNews(record)],
+      `${id}: the calls a record of L2 leaves with`,
     )
   }
-  if (ahead.includes(3)) {
-    // By name, for the two records of L2: what each had passed before the
-    // porter had a call for it.
-    assert.deepEqual(oldNews(rawProgress('l2-shortcut-released')), [
-      'porter-atrium-service',
-      'porter-holyoke-lit',
-      'porter-shortcut',
-      'porter-first-catalogued',
-    ])
-    assert.deepEqual(oldNews(rawProgress('l2-new-game-drawer-touched')), ['porter-atrium-service'])
-  }
-  // While a lot is open the corpus has no save of it yet, and this holds of
-  // nothing; the lot closes by adding one (the check on the plan, above).
-  if (lastLotDone(readText(resolve(ROOT, 'docs/PLANO-ATE-O-FINAL.md'))) === CONTENT_LOT) {
-    assert.ok(own.length > 0, `L${CONTENT_LOT} is done and none of its saves is in the corpus`)
-  }
+  assert.deepEqual(oldNews(rawProgress('l2-shortcut-released')), ['porter-atrium-service', 'porter-holyoke-lit', 'porter-shortcut', 'porter-first-catalogued'])
+  assert.deepEqual(oldNews(rawProgress('l2-new-game-drawer-touched')), ['porter-atrium-service'])
 })
 
 // ---------------------------------------------------------------------------

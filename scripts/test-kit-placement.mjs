@@ -245,6 +245,7 @@ for (const recipe of [
   'curator-notebook',
   'desk-radio',
   'desk-telephone',
+  'office-answering-machine',
   'door-leaf',
   'door-leaf-right',
   'threshold',
@@ -335,6 +336,7 @@ for (const recipe of [
   'curator-notebook',
   'desk-radio',
   'desk-telephone',
+  'office-answering-machine',
   'office-wall-clock',
   'door-access-panel',
 ]) {

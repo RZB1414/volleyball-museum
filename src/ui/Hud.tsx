@@ -30,9 +30,9 @@ import {
   parseInteractionWinnerKey,
   type InteractionKind,
 } from '../engine/interactionTarget'
-import { lockStatus } from '../engine/lockRules'
+import { lockBars, lockStatus } from '../engine/lockRules'
 import { fillHour } from '../engine/nightClock'
-import { containerById, isNotebook, journalUnlocked } from '../engine/notebook'
+import { checklistPageOf, containerById, isNotebook, journalUnlocked } from '../engine/notebook'
 import { isRoomPowered } from '../engine/power'
 import { primaryHoldMark, subscribePrimaryHold } from '../engine/primaryAction'
 import { credentialKey } from '../engine/progressCondition'
@@ -56,7 +56,14 @@ import {
 import { LockPanel } from './LockPanel'
 import { MobileControls } from './MobileControls'
 import { NotebookPageView, NotebookPanel } from './Notebook'
-import { clockJustSet, containerPrompt, credentialsTaken, deskMissingText, devicePrompt } from './promptRules'
+import {
+  checklistToastStep,
+  clockJustSet,
+  containerPrompt,
+  credentialsTaken,
+  deskMissingText,
+  devicePrompt,
+} from './promptRules'
 import { SequenceOverlay } from './SequenceOverlay'
 import { useCoarsePointer } from './useCoarsePointer'
 import { useDocumentHidden } from './useDocumentHidden'
@@ -79,6 +86,8 @@ const clockFlags: ReadonlySet<string> = new Set(
 const credentialTitles: ReadonlyMap<string, string> = new Map(
   (MUSEUM.credentials ?? []).map((entry) => [credentialKey(entry.credential), entry.titleKey]),
 )
+/** The lines of the notebook's list: what the toast of a line just noted watches. */
+const checklistItems = checklistPageOf(MUSEUM)?.items ?? []
 /**
  * The room each one-way door opens from, by the door's id (the portal that
  * declares the leaf): the room its toast names. Read off the content rather
@@ -139,14 +148,18 @@ function InteractionPrompt() {
  * and telling the player they are about to read something is what makes the
  * optional layer legible as optional depth rather than as another lock.
  *
- * While its lock is shut the prompt leads with the name and lets the lock
- * say the rest («Gaveta do Otávio — trancada (um ano)»); how it is worded is
- * `containerPrompt`'s to decide, where a suite can ask it.
+ * While its lock bars the way the prompt leads with the name and lets the
+ * lock say the rest («Gaveta do Otávio — trancada (um ano)»); how it is
+ * worded is `containerPrompt`'s to decide, where a suite can ask it. A shut
+ * lock that this press opens (the key is in the hand) is not said to need
+ * what the player holds: whether it bars is `lockBars`'s to say, by the
+ * answer the press itself acts on.
  */
 function ContainerPrompt() {
   const focusedContainer = useWinner('container')?.id ?? null
   const read = useMuseum((state) => state.progress.documentsRead)
   const locksOpened = useMuseum((state) => state.progress.locksOpened)
+  const credentials = useMuseum((state) => state.progress.credentials)
   const t = useTranslate()
 
   if (!focusedContainer) return null
@@ -158,9 +171,11 @@ function ContainerPrompt() {
 
   const inside = MUSEUM.documents.filter((doc) => doc.containerId === focusedContainer)
   const allRead = inside.length > 0 && inside.every((doc) => read.includes(doc.id))
-  const isLocked = container.lockId !== undefined && lockStatus(container.lockId, { locksOpened }) === 'closed'
+  const shut = container.lockId !== undefined && lockStatus(container.lockId, { locksOpened }) === 'closed'
   const lock = MUSEUM.locks.find((candidate) => candidate.id === container.lockId)
-  const view = containerPrompt(container, lock, isLocked)
+  // A lock the content does not have is opened by nothing, and bars for good.
+  const barred = shut && (lock === undefined || lockBars(lock, MUSEUM.facts, { locksOpened, credentials }))
+  const view = containerPrompt(container, lock, barred, shut && !barred)
 
   return (
     <div className="prompt" role="status">
@@ -807,6 +822,48 @@ function useJournalUnlocked() {
 }
 
 /**
+ * The curator has just noted something on the list: said once («Anotado no
+ * caderno»), so that a line added in pencil, on a page the player is not
+ * looking at, does not go unseen. Only for whoever holds the notebook; the
+ * line is written either way, and is on the page when it is taken.
+ *
+ * No chime: what puts a line there (a drawer that opens, a paper read) has
+ * a sound and often a toast of its own at the same moment.
+ */
+function ChecklistToast() {
+  const progress = useMuseum((state) => state.progress)
+  const unlocked = useJournalUnlocked()
+  // The save arrives whole on the first render, and settled: a line noted on
+  // another night, or owed at load, was on the list before this looked.
+  const seen = useRef(progress)
+  const [shown, setShown] = useState(false)
+  const t = useTranslate()
+
+  useEffect(() => {
+    const step = checklistToastStep(checklistItems, seen.current, progress, MUSEUM, unlocked)
+    seen.current = progress
+    if (step === 'show') setShown(true)
+    else if (step === 'hide') setShown(false)
+  }, [progress, unlocked])
+
+  // Its own effect, keyed only on `shown`: another write during these few
+  // seconds must not cancel the timer and leave the toast up for good.
+  useEffect(() => {
+    if (!shown) return undefined
+    const timer = window.setTimeout(() => setShown(false), 3200)
+    return () => window.clearTimeout(timer)
+  }, [shown])
+
+  if (!shown) return null
+  return (
+    <div className="toast" role="status">
+      <span className="toast-mark">✓</span>
+      <span>{t('checklist.noted')}</span>
+    </div>
+  )
+}
+
+/**
  * Shown once, when the player has just picked up one of their tools: what it
  * now does, and how to use it.
  *
@@ -1080,6 +1137,7 @@ export function Hud() {
         <PowerToast />
         <ClockToast />
         <CredentialToast />
+        <ChecklistToast />
         <DoorReleasedToast />
         <JournalTakenToast />
         <RadioTakenToast />

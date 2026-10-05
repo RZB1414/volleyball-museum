@@ -548,8 +548,13 @@ await test('text-ages reads collection text, and leaves a voice its «hoje»', (
     'sign.atrium.eyebrow',
     'sign.atrium.heading',
     'sign.atrium.body',
-    'document.predecessor.title',
-    'document.predecessor.body',
+    'document.otavio-handover.title',
+    'document.otavio-handover.body',
+    'document.label-proof-office.body',
+    // What the archive lists of a bound book and of a recording.
+    'document.termos.title',
+    'document.termos.summary',
+    'document.otavio-tape.summary',
     'document.welcome.title',
     'document.welcome.summary',
   ]) {
@@ -561,6 +566,13 @@ await test('text-ages reads collection text, and leaves a voice its «hoje»', (
     'notebook.todo.heading',
     'radio.call.hello.5',
     'radio.hint.rest',
+    // So are a page of the Book of Deeds, a term, what a recording says and
+    // what the loudspeaker says: «esta tarde» is Otávio's to say on a tape.
+    'document.termos.handover',
+    'term.posse.body',
+    'tape.otavio.1',
+    'sequence.posse.2',
+    'notebook.todo.proof',
     // Chrome and wayfinding are not what the collection says.
     'room.atrium.title',
     'container.office.title',
@@ -762,24 +774,30 @@ await test('a line about the night belongs to someone who checks the night first
 
 await test('the museum is clean but for what the debt table dates', () => {
   const issues = validateText(MUSEUM, REAL, { mediaTexts: MEDIA_TEXTS })
-  // There were four. The three lines about the night were paid by the slice
-  // of L3 that gave an answer its `when`; the note leaves with the last one.
-  assert.deepEqual(issues.map((issue) => `${issue.code} ${issue.id}`).sort(), ['text-ages document.predecessor.body'])
-  // It has its line, in good standing, and no line of these codes is stale.
+  // There were four, and L3 paid all four. The three lines about the night,
+  // by the slice that gave an answer its `when`; the predecessor's note,
+  // which counted the museum's age from today, by the sheet that took its
+  // place in the drawer.
+  assert.deepEqual(issues.map((issue) => `${issue.code} ${issue.id}`).sort(), [])
+  // So the table keeps no line of these codes: one would be stale, and the gate would say so.
   const lines = debtOf('validate:content').filter((line) => line.code === 'text-ages' || line.code === 'speech-night-state-unconditional')
-  assert.equal(lines.length, 1)
-  const settled = settleKnownDebt(issues, lines, CONTENT_LOT)
-  assert.deepEqual(settled.filter((issue) => issue.severity === 'error'), [])
-  assert.equal(settled.filter((issue) => issue.severity === 'debt').length, 1)
-  assert.ok(lines.every((line) => line.untilLot === 3), 'the one that is left is paid by the Posse')
-  // The note of the predecessor is accused for the count of years it gives.
-  assert.match(issues.find((issue) => issue.code === 'text-ages')?.message ?? '', /«há N anos» \(pt-BR\)/)
+  assert.deepEqual(lines, [])
+  assert.deepEqual(settleKnownDebt(issues, lines, CONTENT_LOT), [])
+  // The rule still reads the paper that replaced the note: given the count
+  // of years the note carried, the sheet is accused, by its key, for it.
+  const SHEET = 'document.otavio-handover.body'
+  const aged = validateText(MUSEUM, reworded({ [SHEET]: [`${PT[SHEET]} O museu existe há cento e trinta anos.`, EN[SHEET]] }), { mediaTexts: MEDIA_TEXTS })
+  assert.deepEqual(aged.map((issue) => `${issue.code} ${issue.id}`), [`text-ages ${SHEET}`])
+  assert.match(aged[0].message, /«há N anos» \(pt-BR\)/)
+  // And a line for it would be a debt again, in good standing until its lot.
+  const dated = settleKnownDebt(aged, [{ gate: 'validate:content', code: 'text-ages', id: SHEET, untilLot: CONTENT_LOT + 1, note: 'made for the test' }], CONTENT_LOT)
+  assert.deepEqual(dated.map((issue) => issue.severity), ['debt'])
 })
 
 await test('the content gate runs the lint, and runs it where the plan says', () => {
   const NIGHT = 'speech-night-state-unconditional'
   const withWords = validateContent(MUSEUM, undefined, undefined, undefined, { dictionaries: REAL })
-  assert.deepEqual(accused(withWords, 'text-ages'), ['document.predecessor.body'])
+  assert.deepEqual(accused(withWords, 'text-ages'), [])
   assert.deepEqual(accused(withWords, NIGHT), [])
   // The gate runs the rule about the night too: an answer that stops looking is accused there.
   const blind = withAnswer('porter-t4-dark', ({ when: _, ...answer }) => answer)

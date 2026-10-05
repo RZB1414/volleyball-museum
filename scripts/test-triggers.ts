@@ -177,6 +177,7 @@ const FIELD_CASES: Record<string, { ask: Condition; empty: boolean; turnedBy: Ra
   unpowered: { ask: { unpowered: ['cellar'] }, empty: true, turnedBy: { roomsPowered: ['cellar'] } },
   locksOpened: { ask: { locksOpened: ['hatch'] }, empty: false, turnedBy: { locksOpened: ['hatch'] } },
   locksClosed: { ask: { locksClosed: ['hatch'] }, empty: true, turnedBy: { locksOpened: ['hatch'] } },
+  locksSeen: { ask: { locksSeen: ['hatch'] }, empty: false, turnedBy: { locksSeen: ['hatch'] } },
   documentsRead: { ask: { documentsRead: ['doc-loose'] }, empty: false, turnedBy: { documentsRead: ['doc-loose'] } },
   documentsUnread: { ask: { documentsUnread: ['doc-loose'] }, empty: true, turnedBy: { documentsRead: ['doc-loose'] } },
   carried: { ask: { carried: ['office-radio'] }, empty: false, turnedBy: { devicesCarried: ['office-radio'] } },
@@ -381,7 +382,9 @@ await test('a container records every document in it and the facts they reveal',
   assert.deepEqual(containerGrant(HOUSE, 'cellar-box'), { documentsRead: ['doc-cellar'], factsKnown: ['fact-cellar'] })
   assert.deepEqual(containerGrant(HOUSE, 'empty-shelf'), { documentsRead: [], factsKnown: [] })
   // The real cabinets: the one whose title prints the year gives the year.
-  assert.deepEqual(containerGrant(MUSEUM, 'office-cabinet'), { documentsRead: ['doc-predecessor'], factsKnown: [] })
+  assert.deepEqual(containerGrant(MUSEUM, 'office-cabinet'), { documentsRead: ['doc-otavio-handover'], factsKnown: [] })
+  // The iron safe: the Book and the proof, in the order they are read.
+  assert.deepEqual(containerGrant(MUSEUM, 'office-safe'), { documentsRead: ['doc-termos', 'doc-label-proof-office'], factsKnown: [] })
   const cabinet = containerGrant(MUSEUM, 'holyoke-cabinet-a')
   assert.equal(cabinet.documentsRead?.length, 2)
   assert.deepEqual(cabinet.factsKnown, ['springfield-renaming'])
@@ -566,18 +569,49 @@ const register = (content: Content) => registerProgressRules(progressRulesFor(co
 /** A build whose content has no trigger: what yesterday's game was. */
 const registerNoTriggers = () => registerProgressRules({ settle: (progress: Progress) => progress })
 
-await test('the real museum registers itself, compiles no trigger and settles nothing', async () => {
+await test('the real museum registers itself, compiles the two triggers of its ending, and gives each save of the corpus what they owe it, once', async () => {
   // Importing the registry is what the canvas chunk does.
   assert.notEqual(progressRules(), null, 'importing engine/contentRegistry registered nothing')
-  assert.deepEqual(compileTriggers(MUSEUM), [], 'this lot adds the rails and no story: a real trigger is a later lot\'s')
+  // It compiled none until L3 gave the night an end: the drawer hands over a
+  // key as it opens, and the deed of office sets its flag as it is signed.
+  assert.deepEqual(compileTriggers(MUSEUM), [
+    {
+      id: 'lock:office-drawer:opened',
+      when: { locksOpened: ['office-drawer'] },
+      effects: [{ kind: 'grant-credential', credential: { kind: 'tool', id: 'service-key' } }],
+    },
+    { id: 'term:termo-posse:signed', when: { termsSigned: ['termo-posse'] }, effects: [{ kind: 'set-flag', flag: 'posse-signed' }] },
+  ])
+  const rules = progressRulesFor(MUSEUM)
+  const owed: string[] = []
   for (const [id, fixture] of Object.entries(SAVE_FIXTURES)) {
     const loaded = migrateProgress(throughJson(fixture.save.progress))
-    assert.equal(progressRulesFor(MUSEUM).settle(loaded), loaded, id)
+    const settled = rules.settle(loaded)
+    // A save whose drawer was already open is owed the key; the others are
+    // owed nothing, and get back the very save they handed in.
+    const open = loaded.locksOpened.includes('office-drawer')
+    if (open) {
+      owed.push(id)
+      assert.deepEqual(
+        [settled.credentials, settled.triggersFired],
+        [[...loaded.credentials, 'tool:service-key'], [...loaded.triggersFired, 'lock:office-drawer:opened']],
+        id,
+      )
+      assert.deepEqual({ ...settled, credentials: loaded.credentials, triggersFired: loaded.triggersFired }, loaded, `${id}: settling moved something besides the key`)
+    } else {
+      assert.equal(settled, loaded, id)
+    }
+    assert.equal(rules.settle(settled), settled, `${id}: a save settled once was given something more`)
+    // The store, loading the same record with the museum's rules in its slot, holds exactly that.
     const page = await openGame(fixture.save)
+    assert.deepEqual(page.progress(), settled, `${id}: the store loaded something other than the save, settled`)
     for (const act of Object.values(STORE_ACTIONS)) act(page.state())
-    assert.deepEqual(page.progress().triggersFired, [], `${id}: a trigger fired in a museum that has none`)
-    assert.deepEqual(page.progress().flags, ['effect-flag'], `${id}: the only flag is the one the table of actions grants`)
+    // No action of the table opens the drawer or signs the deed: nothing else fires.
+    assert.deepEqual(page.progress().triggersFired, settled.triggersFired, `${id}: a trigger fired that nothing done here is the cause of`)
+    assert.deepEqual(page.progress().flags, [...settled.flags, 'effect-flag'], `${id}: the flags are the save's own and the one the table of actions grants`)
+    assert.ok(!page.progress().flags.includes('posse-signed'), id)
   }
+  assert.deepEqual(owed, ['production-drawer-open', 'l1-route-end', 'l2-shortcut-released'])
 })
 
 const PLAY: Record<string, (state: StoreState) => void> = {

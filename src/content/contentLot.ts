@@ -10,4 +10,4 @@
  * `spawn.ts`, or the content set would follow this number into the first
  * download.
  */
-export const CONTENT_LOT = 2
+export const CONTENT_LOT = 3

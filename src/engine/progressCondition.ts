@@ -33,6 +33,7 @@ export type ConditionProgress = {
   readonly roomsVisited?: readonly string[]
   readonly doorsReleased?: readonly string[]
   readonly termsSigned?: readonly string[]
+  readonly locksSeen?: readonly string[]
 }
 
 type ConditionContent = Pick<MuseumContent, 'rooms' | 'exhibits'>
@@ -121,6 +122,7 @@ export function progressConditionMet(
   if (!holdsNone(progress.roomsVisited, condition.roomsUnvisited)) return false
   if (!holdsAll(progress.doorsReleased, condition.doorsReleased)) return false
   if (!holdsAll(progress.termsSigned, condition.termsSigned)) return false
+  if (!holdsAll(progress.locksSeen, condition.locksSeen)) return false
   // `some` of nothing is false, which is the rule: with no branch to take,
   // there is no way through.
   if (condition.anyOf && !condition.anyOf.some((branch) => progressConditionMet(branch, progress, content))) {
@@ -149,6 +151,8 @@ export const CONDITION_FIELD_CLASS = {
   unpowered: 'negative',
   locksOpened: 'positive',
   locksClosed: 'negative',
+  // A lock that was touched stays touched: the list only grows.
+  locksSeen: 'positive',
   documentsRead: 'positive',
   documentsUnread: 'negative',
   carried: 'positive',

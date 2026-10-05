@@ -735,8 +735,8 @@ export const BAKED_BUNDLES = [
   },
   {
     "name": "kit",
-    "url": "/models/kit.6f5f4950.glb",
-    "bytes": 2234252,
+    "url": "/models/kit.143787a7.glb",
+    "bytes": 2255668,
     "parts": [
       {
         "name": "plinth-block",
@@ -3359,36 +3359,63 @@ export const BAKED_BUNDLES = [
           "max": [
             0.4525,
             1.62,
-            0.3945
+            0.355
           ],
           "size": [
             0.905,
             1.62,
-            0.732
+            0.6925
           ],
           "centre": [
             0,
             0.81,
-            0.0285
+            0.0087
           ]
         },
-        "triangles": 432,
+        "triangles": 384,
         "collider": {
           "kind": "box",
           "halfExtents": [
             0.4525,
             0.81,
-            0.366
+            0.3463
           ],
           "centre": [
             0,
             0.81,
-            0.0285
+            0.0087
           ]
         }
       },
       {
-        "name": "office-safe__hardware",
+        "name": "office-safe__door",
+        "material": "archive-green",
+        "bounds": {
+          "min": [
+            -0.372,
+            0.185,
+            0.3195
+          ],
+          "max": [
+            0.348,
+            1.485,
+            0.3945
+          ],
+          "size": [
+            0.72,
+            1.3,
+            0.075
+          ],
+          "centre": [
+            -0.012,
+            0.835,
+            0.357
+          ]
+        },
+        "triangles": 108
+      },
+      {
+        "name": "office-safe__door-hardware",
         "material": "brass",
         "bounds": {
           "min": [
@@ -3412,7 +3439,34 @@ export const BAKED_BUNDLES = [
             0.4077
           ]
         },
-        "triangles": 652
+        "triangles": 676
+      },
+      {
+        "name": "office-safe__papers",
+        "material": "paper-writing",
+        "bounds": {
+          "min": [
+            -0.2332,
+            0.9,
+            -0.0499
+          ],
+          "max": [
+            0.0932,
+            0.905,
+            0.1999
+          ],
+          "size": [
+            0.3264,
+            0.005,
+            0.2498
+          ],
+          "centre": [
+            -0.07,
+            0.9025,
+            0.075
+          ]
+        },
+        "triangles": 24
       },
       {
         "name": "visitor-chair",
@@ -4101,6 +4155,87 @@ export const BAKED_BUNDLES = [
           ]
         },
         "triangles": 56
+      },
+      {
+        "name": "office-answering-machine",
+        "material": "plastic-black",
+        "bounds": {
+          "min": [
+            -0.075,
+            0,
+            -0.105
+          ],
+          "max": [
+            0.075,
+            0.052,
+            0.105
+          ],
+          "size": [
+            0.15,
+            0.052,
+            0.21
+          ],
+          "centre": [
+            0,
+            0.026,
+            0
+          ]
+        },
+        "triangles": 264
+      },
+      {
+        "name": "office-answering-machine__led",
+        "material": "led-off",
+        "bounds": {
+          "min": [
+            0.0385,
+            0.046,
+            0.0265
+          ],
+          "max": [
+            0.0535,
+            0.051,
+            0.0415
+          ],
+          "size": [
+            0.015,
+            0.005,
+            0.015
+          ],
+          "centre": [
+            0.046,
+            0.0485,
+            0.034
+          ]
+        },
+        "triangles": 32
+      },
+      {
+        "name": "office-answering-machine__play",
+        "material": "brass",
+        "bounds": {
+          "min": [
+            -0.062,
+            0.046,
+            0.0745
+          ],
+          "max": [
+            0.062,
+            0.052,
+            0.0915
+          ],
+          "size": [
+            0.124,
+            0.006,
+            0.017
+          ],
+          "centre": [
+            0,
+            0.049,
+            0.083
+          ]
+        },
+        "triangles": 60
       },
       {
         "name": "holyoke-entry-screen",
@@ -6136,7 +6271,7 @@ export const BAKED_BUNDLES = [
         "triangles": 216
       },
       {
-        "name": "atrium-lectern__light",
+        "name": "atrium-lectern__led",
         "material": "atrium-glow",
         "bounds": {
           "min": [
@@ -6161,6 +6296,33 @@ export const BAKED_BUNDLES = [
           ]
         },
         "triangles": 12
+      },
+      {
+        "name": "atrium-lectern__book",
+        "material": "paper-aged",
+        "bounds": {
+          "min": [
+            -0.2,
+            0.9292,
+            0.0247
+          ],
+          "max": [
+            0.2,
+            1.0057,
+            0.3036
+          ],
+          "size": [
+            0.4,
+            0.0765,
+            0.2789
+          ],
+          "centre": [
+            0,
+            0.9675,
+            0.1642
+          ]
+        },
+        "triangles": 72
       },
       {
         "name": "atrium-divider-screen",
@@ -7773,8 +7935,8 @@ export const BAKED_MATERIALS = {
 } as const satisfies Record<string, BakedMaterial>
 
 export const BAKE_TOTALS = {
-  bytes: 3008628,
-  triangles: 151652,
+  bytes: 3030044,
+  triangles: 152188,
   textureBytes: 1269562,
   /** Uncompressed VRAM with mips. The wire size says nothing about this. */
   textureVramBytes: 46006272,

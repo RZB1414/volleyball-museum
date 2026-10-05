@@ -122,6 +122,29 @@ export function attemptLock(
   }
 }
 
+/**
+ * Whether a lock still bars the way to what it shuts: it is shut, and E on
+ * it does not open it here and now.
+ *
+ * What a prompt words itself by. «precisa de chave» is true of a hand
+ * without the key; with the key in it the same shut lock gives to the very
+ * press the prompt is for, and saying that it needs one would describe an
+ * empty hand. A keypad bars until its code is typed (E only brings the panel
+ * up), whatever the player carries.
+ *
+ * Asked of `attemptLock` and of nothing else, so the prompt and the press
+ * cannot come to disagree: the answer the handler acts on is the answer the
+ * words are chosen by.
+ */
+export function lockBars(
+  lock: Lock,
+  facts: readonly Fact[],
+  progress: Pick<Progress, 'locksOpened' | 'credentials'>,
+): boolean {
+  const { outcome } = attemptLock(lock, facts, progress, { kind: 'touch' })
+  return outcome !== 'open' && outcome !== 'opened'
+}
+
 /** Touched and still shut, in content order: what the plan lists. */
 export function pendingLocks(
   locks: readonly Lock[],

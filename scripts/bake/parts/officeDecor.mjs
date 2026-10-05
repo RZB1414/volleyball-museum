@@ -27,10 +27,12 @@ import {
   bevelledBox,
   domeStud,
   finalize,
+  flatPolygon,
   lathe,
   merge,
   piping,
   quiltedPanel,
+  withoutFlatFace,
 } from '../lib/geometry.mjs'
 
 function finishBoxes(parts, metresPerTile) {
@@ -364,15 +366,120 @@ export function buildArchiveTrolley({ width = 0.84, depth = 0.43, height = 1.17 
 // Recipe id: office-safe
 // ---------------------------------------------------------------------------
 
-/** A tall iron safe with a proud door, external hinges and four-spoke wheel. */
+/**
+ * A tall iron safe with a proud door, external hinges and four-spoke wheel.
+ *
+ * It was a solid box with the door drawn on it. It opens now, so it is a
+ * carcass with a cavity and a shelf, and its door is two families of its own
+ * that the runtime turns about the hinge (`<recipe>__door`, `__door-hardware`):
+ *
+ *   body           the shell with its front face left out and a frame round
+ *                  the opening, the lining of the cavity, a shelf, the plinth,
+ *                  the cap and the two lugs the hinges are carried on. The
+ *                  root node, and what the collider is cut from: the door is
+ *                  no longer part of it.
+ *   door           the door leaf, where it always was.
+ *   door-hardware  the brass on the door: its arris, the wheel, the key
+ *                  plate and BOTH hinges, which stand on the axis the door
+ *                  turns about and so turn in place, each with the strap
+ *                  that ties it to the leaf.
+ *   papers         the printer's proof lying on the shelf, drawn only while
+ *                  the safe stands open.
+ *
+ * The cavity is lined with single faces, turned inwards: it is only ever
+ * seen from outside, through the opening, and a face nobody can see is not
+ * drawn. Closed, the door laps the opening by five centimetres all round, so
+ * none of it shows.
+ *
+ * `layout` is what the content and the suites are held to: the hinge the
+ * door's pivot is put on (`museum.ts` declares it, `test:kit` compares the
+ * two and finds the cylinders in the bake), the opening, the cavity and the
+ * shelf the papers rest on.
+ */
 export function buildOfficeSafe({ width = 0.88, depth = 0.65, height = 1.62 } = {}) {
   const body = []
+  const door = []
   const hardware = []
+  const papers = []
 
   const plinthHeight = 0.12
-  const shell = bevelledBox(width, height - plinthHeight, depth, 0.028, 1)
+  const shellRadius = 0.028
+  const front = depth / 2
+
+  const doorWidth = width - 0.16
+  const doorHeight = height - 0.32
+  const doorZ = front + 0.032
+  const doorX = -0.012
+  const doorY = plinthHeight + doorHeight / 2 + 0.065
+  const doorThickness = 0.075
+
+  // What the door covers, less the lap: the hole in the front of the shell.
+  const lap = 0.05
+  const opening = {
+    minX: doorX - doorWidth / 2 + lap,
+    maxX: doorX + doorWidth / 2 - lap,
+    minY: doorY - doorHeight / 2 + lap,
+    maxY: doorY + doorHeight / 2 - lap,
+  }
+  // Iron five centimetres thick at the sides and the back, six at the front.
+  const wall = 0.05
+  const frontWall = 0.06
+  const cavity = {
+    minX: -width / 2 + wall,
+    maxX: width / 2 - wall,
+    minY: plinthHeight + wall + 0.005,
+    maxY: height - 0.12,
+    minZ: -front + wall,
+    maxZ: front - frontWall,
+  }
+
+  const shell = bevelledBox(width, height - plinthHeight, depth, shellRadius, 1)
   shell.translate(0, plinthHeight + (height - plinthHeight) / 2, 0)
-  body.push(shell)
+  body.push(withoutFlatFace(shell, 'z', front))
+
+  // The frame: what is left of the front face round the opening, as four
+  // mitred faces from the flat's own corners to the opening's.
+  const flat = {
+    minX: -width / 2 + shellRadius,
+    maxX: width / 2 - shellRadius,
+    minY: plinthHeight + shellRadius,
+    maxY: height - shellRadius,
+  }
+  const at = (x, y, z = front) => [x, y, z]
+  const outwards = [0, 0, 1]
+  body.push(
+    flatPolygon([at(flat.minX, flat.minY), at(flat.maxX, flat.minY), at(opening.maxX, opening.minY), at(opening.minX, opening.minY)], outwards),
+    flatPolygon([at(opening.minX, opening.maxY), at(opening.maxX, opening.maxY), at(flat.maxX, flat.maxY), at(flat.minX, flat.maxY)], outwards),
+    flatPolygon([at(flat.minX, flat.minY), at(opening.minX, opening.minY), at(opening.minX, opening.maxY), at(flat.minX, flat.maxY)], outwards),
+    flatPolygon([at(opening.maxX, opening.minY), at(flat.maxX, flat.minY), at(flat.maxX, flat.maxY), at(opening.maxX, opening.maxY)], outwards),
+  )
+
+  // The reveal: the thickness of the front, seen edge-on in the opening.
+  const back = cavity.maxZ
+  body.push(
+    flatPolygon([at(opening.minX, opening.minY), at(opening.minX, opening.minY, back), at(opening.minX, opening.maxY, back), at(opening.minX, opening.maxY)], [1, 0, 0]),
+    flatPolygon([at(opening.maxX, opening.minY), at(opening.maxX, opening.minY, back), at(opening.maxX, opening.maxY, back), at(opening.maxX, opening.maxY)], [-1, 0, 0]),
+    flatPolygon([at(opening.minX, opening.minY), at(opening.maxX, opening.minY), at(opening.maxX, opening.minY, back), at(opening.minX, opening.minY, back)], [0, 1, 0]),
+    flatPolygon([at(opening.minX, opening.maxY), at(opening.maxX, opening.maxY), at(opening.maxX, opening.maxY, back), at(opening.minX, opening.maxY, back)], [0, -1, 0]),
+  )
+
+  // The lining: five faces turned inwards. The sixth, the back of the front
+  // wall, faces away from anybody who can look in.
+  const c = cavity
+  body.push(
+    flatPolygon([[c.minX, c.minY, c.minZ], [c.minX, c.minY, c.maxZ], [c.minX, c.maxY, c.maxZ], [c.minX, c.maxY, c.minZ]], [1, 0, 0]),
+    flatPolygon([[c.maxX, c.minY, c.minZ], [c.maxX, c.minY, c.maxZ], [c.maxX, c.maxY, c.maxZ], [c.maxX, c.maxY, c.minZ]], [-1, 0, 0]),
+    flatPolygon([[c.minX, c.minY, c.minZ], [c.maxX, c.minY, c.minZ], [c.maxX, c.minY, c.maxZ], [c.minX, c.minY, c.maxZ]], [0, 1, 0]),
+    flatPolygon([[c.minX, c.maxY, c.minZ], [c.maxX, c.maxY, c.minZ], [c.maxX, c.maxY, c.maxZ], [c.minX, c.maxY, c.maxZ]], [0, -1, 0]),
+    flatPolygon([[c.minX, c.minY, c.minZ], [c.maxX, c.minY, c.minZ], [c.maxX, c.maxY, c.minZ], [c.minX, c.maxY, c.minZ]], [0, 0, 1]),
+  )
+
+  // One shelf, wall to wall, a little short of the door: where the papers
+  // lie, at the height a hand reaches into without bending.
+  const shelf = { top: 0.9, thickness: 0.022, minX: c.minX, maxX: c.maxX, minZ: c.minZ, maxZ: c.maxZ - 0.04 }
+  const board = new BoxGeometry(shelf.maxX - shelf.minX, shelf.thickness, shelf.maxZ - shelf.minZ)
+  board.translate((shelf.minX + shelf.maxX) / 2, shelf.top - shelf.thickness / 2, (shelf.minZ + shelf.maxZ) / 2)
+  body.push(board)
 
   const plinth = bevelledBox(width - 0.13, plinthHeight, depth - 0.11, 0.012, 1)
   plinth.translate(0, plinthHeight / 2, -0.012)
@@ -382,30 +489,47 @@ export function buildOfficeSafe({ width = 0.88, depth = 0.65, height = 1.62 } = 
   cap.translate(0, height - 0.0275, 0)
   body.push(cap)
 
-  const doorWidth = width - 0.16
-  const doorHeight = height - 0.32
-  const doorZ = depth / 2 + 0.032
-  const door = bevelledBox(doorWidth, doorHeight, 0.075, 0.018, 1)
-  door.translate(-0.012, plinthHeight + doorHeight / 2 + 0.065, doorZ)
-  body.push(door)
+  const leaf = bevelledBox(doorWidth, doorHeight, doorThickness, 0.018, 1)
+  leaf.translate(doorX, doorY, doorZ)
+  door.push(leaf)
 
   // A narrow brass arris around the door survives the nearly black iron and
   // outlines its thickness without adding another full metal material.
   const trim = 0.018
   for (const side of [-1, 1]) {
     const stile = new BoxGeometry(trim, doorHeight - 0.055, 0.008)
-    stile.translate(side * (doorWidth / 2 - 0.028) - 0.012, plinthHeight + doorHeight / 2 + 0.065, doorZ + 0.041)
+    stile.translate(side * (doorWidth / 2 - 0.028) + doorX, doorY, doorZ + 0.041)
     hardware.push(stile)
 
     const rail = new BoxGeometry(doorWidth - 0.055, trim, 0.008)
-    rail.translate(-0.012, plinthHeight + 0.065 + doorHeight / 2 + side * (doorHeight / 2 - 0.028), doorZ + 0.041)
+    rail.translate(doorX, doorY + side * (doorHeight / 2 - 0.028), doorZ + 0.041)
     hardware.push(rail)
   }
 
-  for (const y of [0.52, 1.23]) {
-    const hinge = new CylinderGeometry(0.025, 0.025, 0.18, 10)
-    hinge.translate(-doorWidth / 2 - 0.045, y, doorZ + 0.016)
-    hardware.push(hinge)
+  // The two knuckles of the hinge share one vertical axis, and that axis is
+  // what the door turns about: they are the door's own hardware, and turn in
+  // place while the leaf swings clear of the frame.
+  const hinge = { x: -doorWidth / 2 - 0.045, z: doorZ + 0.016, centres: [0.52, 1.23], radius: 0.025, length: 0.18 }
+  const doorLeft = doorX - doorWidth / 2
+  for (const y of hinge.centres) {
+    const knuckle = new CylinderGeometry(hinge.radius, hinge.radius, hinge.length, 10)
+    knuckle.translate(hinge.x, y, hinge.z)
+    hardware.push(knuckle)
+
+    // Each knuckle is held at both ends, now that the door comes away from
+    // the frame: a brass strap from the axis onto the face of the leaf,
+    // which swings with it, and an iron lug from the frame up to the back
+    // of the knuckle, which stays. Shut, both were hidden by the fact that
+    // nothing moved; open, a knuckle on nothing is the first thing seen.
+    const strapEnd = doorLeft + 0.075
+    const strap = new BoxGeometry(strapEnd - hinge.x, 0.05, 0.006)
+    strap.translate((hinge.x + strapEnd) / 2, y, doorZ + doorThickness / 2 + 0.003)
+    hardware.push(strap)
+
+    const lugDepth = hinge.z - hinge.radius + 0.007 - front
+    const lug = new BoxGeometry(hinge.x + hinge.radius - flat.minX, 0.06, lugDepth)
+    lug.translate((flat.minX + hinge.x + hinge.radius) / 2, y, front + lugDepth / 2)
+    body.push(lug)
   }
 
   const wheelY = 0.87
@@ -436,9 +560,40 @@ export function buildOfficeSafe({ width = 0.88, depth = 0.65, height = 1.62 } = 
   keyPlate.translate(0.27, 0.59, wheelZ - 0.012)
   hardware.push(keyPlate)
 
+  // The printer's proof on the shelf, a hand's reach from the door: the
+  // sheet, a little askew, and the director's note clipped to its corner.
+  const proof = { width: 0.30, depth: 0.21, thickness: 0.003, x: -0.07, z: shelf.maxZ - 0.15, turn: 0.14 }
+  const sheet = new BoxGeometry(proof.width, proof.thickness, proof.depth)
+  sheet.rotateY(proof.turn)
+  sheet.translate(proof.x, shelf.top + proof.thickness / 2, proof.z)
+  papers.push(sheet)
+  const note = new BoxGeometry(0.105, 0.002, 0.148)
+  note.rotateY(proof.turn - 0.22)
+  note.translate(proof.x + 0.075, shelf.top + proof.thickness + 0.001, proof.z - 0.02)
+  papers.push(note)
+
   return {
     body: finishBoxes(body, 0.52),
-    hardware: finishMixed(hardware, 0.18),
+    door: finishBoxes(door, 0.52),
+    'door-hardware': finishMixed(hardware, 0.18),
+    papers: finishBoxes(papers, 0.3),
+    layout: {
+      // The plane of the frame: the front of the carcass, which the door stands proud of.
+      front,
+      hinge,
+      door: {
+        minX: doorX - doorWidth / 2,
+        maxX: doorX + doorWidth / 2,
+        minY: doorY - doorHeight / 2,
+        maxY: doorY + doorHeight / 2,
+        minZ: doorZ - doorThickness / 2,
+        maxZ: doorZ + doorThickness / 2,
+      },
+      opening,
+      cavity,
+      shelf,
+      papers: { bottom: shelf.top, top: shelf.top + proof.thickness + 0.002 },
+    },
   }
 }
 

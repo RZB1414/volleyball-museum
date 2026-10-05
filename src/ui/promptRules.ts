@@ -14,32 +14,45 @@
  */
 
 import type { TranslationKey } from '../content/i18n/pt-BR'
-import type { ContainerData, DeviceData, Lock } from '../content/schema'
+import type { ChecklistItem, ContainerData, DeviceData, Lock, MuseumContent } from '../content/schema'
+import { checklistNews } from '../engine/checklist.ts'
 import type { DeskRadioIntent, DeviceIntent } from '../engine/deviceRules'
+import type { ConditionProgress } from '../engine/progressCondition'
 import type { TermBlockers } from '../engine/termRules'
 import { listGrew } from './hudRules.ts'
 
-/** How a container's prompt is worded: as a shut lock, or as something to read. */
+/** How a container's prompt is worded: as a shut lock, or as something E does to it. */
 export type ContainerPromptView =
-  /** «title — what the lock says», while its lock is shut and has words of its own. */
+  /** «title — what the lock says», while its lock bars the way and has words of its own. */
   | { readonly form: 'locked'; readonly titleKey: string; readonly sayingKey: string }
-  /** «label title»: «Ler — Gaveta do Otávio». */
+  /** «label title»: «Ler Gaveta do Otávio», «Destrancar Cofre de ferro». */
   | { readonly form: 'read'; readonly labelKey: TranslationKey; readonly titleKey: string }
 
 /**
  * What the prompt of a container says.
  *
  * A name says what a thing is; that it is locked is the lock's to say, for
- * as long as it is true. A lock with no words of its own keeps the plain
- * «Trancado» before the name.
+ * as long as it bars the way (`lockBars`). A lock with no words of its own
+ * keeps the plain «Trancado» before the name.
+ *
+ * `gives` is the shut lock that this very press opens: the key is in the
+ * hand. «Cofre de ferro — precisa de chave» went on being said to a player
+ * holding the key, over an E that opened the safe; the prompt says what E
+ * does instead, «Destrancar». A lock that bars is never worded as one about
+ * to give, whatever the caller hands in.
  */
 export function containerPrompt(
   container: Pick<ContainerData, 'titleKey'>,
   lock: Pick<Lock, 'promptKey'> | undefined,
-  locked: boolean,
+  barred: boolean,
+  gives = false,
 ): ContainerPromptView {
-  if (locked && lock?.promptKey) return { form: 'locked', titleKey: container.titleKey, sayingKey: lock.promptKey }
-  return { form: 'read', labelKey: locked ? 'prompt.locked' : 'prompt.read', titleKey: container.titleKey }
+  if (barred && lock?.promptKey) return { form: 'locked', titleKey: container.titleKey, sayingKey: lock.promptKey }
+  return {
+    form: 'read',
+    labelKey: barred ? 'prompt.locked' : gives ? 'prompt.unlock' : 'prompt.read',
+    titleKey: container.titleKey,
+  }
 }
 
 const DESK_RADIO_LABEL = {
@@ -100,6 +113,35 @@ export function credentialsTaken(
     const title = titles.get(key)
     return title === undefined ? [] : [title]
   })
+}
+
+/**
+ * What the toast of the list does as the save goes from `before` to `after`:
+ * «Anotado no caderno», when a line in the curator's own pencil has just
+ * appeared on it.
+ *
+ *   show   a pencil line is on the list now that was not a moment ago, and
+ *          the player holds the notebook: there is a page to go and look at.
+ *   hide   a line that was on the list is gone: the save was started over,
+ *          and a toast still up belongs to the game that was erased.
+ *   keep   anything else, a player with no notebook among it. The line is
+ *          written all the same, and is there when the notebook is taken.
+ *
+ * Asked of the two saves and not of the length of a list, because a line
+ * appears by a condition over several lists (`appearsWhen`). The component
+ * hands in the save it last saw, which on its first render is the save as
+ * it was loaded: a line noted on another night is not announced on Continue.
+ */
+export function checklistToastStep(
+  items: readonly ChecklistItem[],
+  before: ConditionProgress,
+  after: ConditionProgress,
+  content: Pick<MuseumContent, 'rooms' | 'exhibits'>,
+  holdsNotebook: boolean,
+): 'show' | 'hide' | 'keep' {
+  if (before === after) return 'keep'
+  if (checklistNews(items, after, before, content).length > 0) return 'hide'
+  return holdsNotebook && checklistNews(items, before, after, content).length > 0 ? 'show' : 'keep'
 }
 
 /** How a device's prompt is worded. */

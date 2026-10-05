@@ -62,15 +62,26 @@ export const RATCHETS = {
   /**
    * The one file every session downloads before the first room.
    * Baseline 2,241,880 bytes (P0); L1 took 324 triangles of dressing out of
-   * the Holyoke wall case.
+   * the Holyoke wall case (2,234,252).
+   *
+   * Raised by L3, in the commit of its bake, by 21,416 bytes: the night's
+   * ending is three things that have to be there to be worked. The answering
+   * machine is a recipe that did not exist (356 triangles in three nodes).
+   * The iron safe opens, so it stopped being a solid box with a door drawn
+   * on it: a lined cavity behind a frame, a shelf, the door as a node of its
+   * own on two hinges, and the proof on the shelf (108 triangles and two
+   * nodes more). The lectern gained the Book of Deeds that lies on it once
+   * signed (72 triangles, one node). 536 triangles in all, on 104,940. The
+   * plan foresaw 15 to 25 kB. Nothing was taken out to pay for it: the
+   * unused recipes leave with L5, which is what this figure waits for.
    */
   kitGlb: {
     id: 'kit-glb',
     what: 'kit.glb, bytes in the bake manifest',
     unit: 'KiB',
     budget: 800 * KIB,
-    ceiling: 2_234_252,
-    origin: 'the bake of L1 (was 2,241,880 at the P0 baseline). L5 removes the unused recipes; L6 splits the kit by room.',
+    ceiling: 2_255_668,
+    origin: 'the bake of L3 (2,234,252 after L1; 2,241,880 at the P0 baseline): the answering machine, the safe that opens and the Book on the lectern. L5 removes the unused recipes; L6 splits the kit by room.',
   },
   /**
    * Every texture the three resident rooms keep on the GPU: material maps,
@@ -129,7 +140,7 @@ export const RATCHETS = {
     unit: 'count',
     budget: 150_000,
     ceiling: 150_000,
-    origin: 'the hard mobile ceiling. The highest reference point is 100,428 (R10).',
+    origin: 'the hard mobile ceiling. The highest reference point is 100,488 (R10).',
   },
 } as const satisfies Record<string, Ratchet>
 
@@ -166,25 +177,38 @@ export type ReferencePoint = {
  * checks the record instead: that it is from this lot or the one before, and
  * that every figure is within its ratchet. A lot that changes what a room
  * draws measures again and replaces this record in the same commit.
+ *
+ * Since L3 a room is not drawn the same all night, so each point is the
+ * state of the save that draws the most there (the lot plan, §10 and §15.5).
+ * The office (R01, R02) as a new game finds it, the radio and the notebook
+ * still on the desk: four draws and 440 triangles more than in L1, which
+ * are the answering machine (three nodes) and the door of the safe as a
+ * node of its own. The hall and the wing (R03 to R10) with the deed signed:
+ * the lectern left the furniture and is drawn as a device, its lamp while a
+ * term waits or its Book once signed and never both, so the hall draws what
+ * it drew in L1 and 60 triangles more where the Book is in the frame, and
+ * one draw less than that before the Book of Deeds is read (R04 at 100, R10
+ * at 124). The wing did not change.
  */
 export const BROWSER_RECORD = {
-  lot: 1,
-  date: '2026-10-04',
-  source: 'docs/HANDOFF.md, §10.3 (the baseline it is compared with: docs/lotes/P0-linha-de-base.md, 2.1)',
+  lot: 3,
+  date: '2026-10-05',
+  source: 'docs/lotes/L3-plano.md, §15.5 (the record before it: docs/HANDOFF.md, §10.3, of L1)',
   programs: 35,
   points: [
-    { id: 'R01', ratchet: 'roomDraws', camera: '11.05,0,2.95,-1.5708,-0.45', draws: 58, triangles: 36_086 },
-    { id: 'R02', ratchet: 'roomDraws', camera: '10.3,0,2.95,-1.5708,-0.05', draws: 66, triangles: 37_906 },
-    { id: 'R03', ratchet: 'atriumDraws', camera: '8.2,0,3,1.5708,0', draws: 80, triangles: 63_940 },
-    { id: 'R04', ratchet: 'atriumDraws', camera: '7.8,0,7.8,0.7854,0', draws: 101, triangles: 77_334 },
-    { id: 'R05', ratchet: 'atriumDraws', camera: '-7.8,0,-7.8,-2.3562,0', draws: 85, triangles: 67_820 },
+    { id: 'R01', ratchet: 'roomDraws', camera: '11.05,0,2.95,-1.5708,-0.45', draws: 62, triangles: 36_526 },
+    { id: 'R02', ratchet: 'roomDraws', camera: '10.3,0,2.95,-1.5708,-0.05', draws: 70, triangles: 38_346 },
+    { id: 'R03', ratchet: 'atriumDraws', camera: '8.2,0,3,1.5708,0', draws: 80, triangles: 64_000 },
+    { id: 'R04', ratchet: 'atriumDraws', camera: '7.8,0,7.8,0.7854,0', draws: 101, triangles: 77_394 },
+    { id: 'R05', ratchet: 'atriumDraws', camera: '-7.8,0,-7.8,-2.3562,0', draws: 85, triangles: 67_880 },
     { id: 'R06', ratchet: 'atriumDraws', camera: '-8.2,0,-2,-1.5708,0', draws: 79, triangles: 70_774 },
-    // The Holyoke breaker is now in the frame of whoever stands at the door:
-    // three draws more here, which is what the lot set out to do.
+    // The Holyoke breaker has been in the frame of whoever stands at the
+    // door since L1: three draws more here, which is what that lot set out
+    // to do.
     { id: 'R07', ratchet: 'roomDraws', camera: '-10.2,0,-2,1.5708,0', draws: 39, triangles: 37_676 },
     { id: 'R08', ratchet: 'roomDraws', camera: '-10.2,0,-2,2.3562,0', draws: 70, triangles: 52_036 },
     { id: 'R09', ratchet: 'roomDraws', camera: '-20.45,0,-7.2,-2.3562,0', draws: 81, triangles: 62_374 },
-    { id: 'R10', ratchet: 'pairDraws', camera: '-13.5,0,-2,-1.5708,0', draws: 125, triangles: 100_428 },
+    { id: 'R10', ratchet: 'pairDraws', camera: '-13.5,0,-2,-1.5708,0', draws: 125, triangles: 100_488 },
   ],
 } as const satisfies {
   lot: number
@@ -378,10 +402,31 @@ export const BUNDLE_BUDGETS = {
  *     notebook's page of a term and the journal's list (+111, +95). The
  *     ceiling is the measure plus half a per cent. The document did not
  *     move (63,239).
+ *   - `title` +3,140 bytes, on 35,879 measured (it was 32,910 on 32,752).
+ *     The fifth slice is the story the other four were built for, and a
+ *     story is words: the dictionaries of both languages ship with the title
+ *     screen, and all but 41 of the 3,127 bytes are in their chunk (22,764
+ *     to 25,850). Fifty-six keys in each language, two gone, three
+ *     rewritten: Otávio's recording, nine lines; the sheet in his drawer,
+ *     which now hands a key over; the Book of Deeds, two pages; the
+ *     printer's proof with the director's note and his answer; four calls of
+ *     the porter and the two lines over the loudspeaker; the hints for the
+ *     key and for the deed, three heights each; four lines of the list in
+ *     the curator's pencil; the names of the safe, the machine, the lectern
+ *     and the key. The same chunk carries the store, and with it what a
+ *     save from before the lot is owed: the mark of a drawer opened before
+ *     it held a key and the sheet's new id beside the old one
+ *     (`saveMigrations.ts`, `legacySave.ts`). The plan foresaw 2.4 kB and
+ *     had counted the texts shorter than they came out in two languages.
+ *     The game grew 1,463 bytes and is inside its ceiling with 522 to spare
+ *     (400,368: the content itself, which is most of it; a line of the list
+ *     that appears by a lock seen; the toast of a line noted; a shut lock
+ *     that is not called locked to the hand holding its key). The document
+ *     did not move (63,234).
  */
 export const BUNDLE_PATH_CEILINGS = {
   document: 63_600,
-  title: 32_910,
+  title: 36_050,
   game: 400_890,
 } as const
 

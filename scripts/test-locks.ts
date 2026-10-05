@@ -37,7 +37,7 @@ import { readText } from './lib/readText.ts'
 const { MUSEUM } = await import('../src/content/museum.ts')
 const { fixtureLot, SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
 const { progressRulesFor } = await import('../src/engine/contentRegistry.ts')
-const { attemptLock, containerOpen, lockPanel, lockStatus, pendingLocks, toolSpent } = await import('../src/engine/lockRules.ts')
+const { attemptLock, containerOpen, lockBars, lockPanel, lockStatus, pendingLocks, toolSpent } = await import('../src/engine/lockRules.ts')
 const { containerGrant } = await import('../src/engine/progressGrants.ts')
 const { credentialsTaken } = await import('../src/ui/promptRules.ts')
 const { effectGrant } = await import('../src/engine/triggers.ts')
@@ -240,6 +240,51 @@ await test('a key that is spent opens its lock by touch, stays in the save, and 
   assert.equal(containerOpen({ lockId: safe.id }, before), false)
   assert.equal(containerOpen({ lockId: safe.id }, after), true)
   assert.equal(containerOpen({}, before), true, 'a cabinet with no lock is open from the start')
+})
+
+await test('a shut lock bars the way until the very press opens it: a prompt is never worded against what E does', () => {
+  // The defect: «Cofre de ferro — precisa de chave» was said to a player
+  // holding the key, over an E that opened the safe. Whether a lock still
+  // stands in the way is asked of the rule the press is answered by.
+  const bars = (lock: Lock, patch: Partial<Progress> = {}, facts = FACTS) => lockBars(lock, facts, holding(patch))
+  const table = Object.fromEntries(
+    ALL_LOCKS.map((lock) => [
+      lock.id,
+      [bars(lock), bars(lock, { credentials: KEYRING }), bars(lock, { credentials: KEYRING, locksOpened: [lock.id] })],
+    ]),
+  )
+  assert.deepEqual(table, {
+    // A keypad bars whatever is carried: E brings the panel up, and the year opens it.
+    drawer: [true, true, false],
+    'staff-door': [true, false, false],
+    plinth: [true, false, false],
+    hatch: [true, false, false],
+    safe: [true, false, false],
+    // A ritual has no way in until its lot, and says so for as long.
+    shelf: [true, true, false],
+  })
+  // All of what it asks for: one medallion of two is still an empty hand.
+  assert.equal(bars(LOCKS.plinth, { credentials: ['medallion:founding'] }), true)
+  assert.equal(bars(LOCKS.safe, { credentials: ['badge:service-key'] }), true, 'the kind is part of the key')
+  // It is the answer of the press and of nothing else: for every lock, every
+  // keyring and every state, it bars exactly when a touch neither finds it
+  // open nor opens it.
+  for (const lock of ALL_LOCKS) {
+    for (const credentials of [[], [KEY], KEYRING]) {
+      for (const locksOpened of [[], [lock.id]]) {
+        const progress = holding({ credentials, locksOpened })
+        const { outcome } = attempt(lock, progress, TOUCH)
+        assert.equal(lockBars(lock, FACTS, progress), outcome === 'ask' || outcome === 'refused', `${lock.id}: ${outcome}`)
+      }
+    }
+  }
+  // The real safe and the real drawer, by the real facts.
+  const realSafe = MUSEUM.locks.find((lock) => lock.id === 'office-safe')!
+  const realDrawer = MUSEUM.locks.find((lock) => lock.id === 'office-drawer')!
+  assert.equal(lockBars(realSafe, MUSEUM.facts, holding()), true)
+  assert.equal(lockBars(realSafe, MUSEUM.facts, holding({ credentials: [KEY] })), false)
+  assert.equal(lockBars(realSafe, MUSEUM.facts, holding({ locksOpened: ['office-safe'] })), false)
+  assert.equal(lockBars(realDrawer, MUSEUM.facts, holding({ credentials: [KEY] })), true)
 })
 
 await test('no kind of lock without a panel ever answers "ask" (S1)', () => {
@@ -696,6 +741,20 @@ await test('the cabinet, the breaker, the keypad, the plan and the prompt ask th
       changed('ui/mapModel.ts', 'pendingLocks(content.locks, progress)', 'content.locks.filter((lock) => !progress.locksOpened.includes(lock.id))'),
     ],
     ['the prompt reading the save by itself', changed('ui/Hud.tsx', /lockStatus\([^)]*\) === 'closed'/, '!locksOpened.includes(container.lockId)')],
+    // What was in the game: any shut lock was called locked, the key in the
+    // hand or not, and a safe went on saying it needed the key E opened it with.
+    [
+      'the prompt calling every shut lock locked, whatever is in the hand',
+      changed('ui/Hud.tsx', /const barred = shut && \(lock === undefined \|\| lockBars\([^)]*\)\)/, 'const barred = shut'),
+    ],
+    [
+      'the prompt deciding by the keys alone whether a lock gives',
+      changed('ui/Hud.tsx', /lockBars\(lock, MUSEUM\.facts, \{ locksOpened, credentials \}\)/, "lock.kind !== 'tool'"),
+    ],
+    [
+      'the prompt wording a lock that gives as a drawer to read',
+      changed('ui/Hud.tsx', 'containerPrompt(container, lock, barred, shut && !barred)', 'containerPrompt(container, lock, barred)'),
+    ],
     // The line that takes what the rule decided to the save. With it gone
     // the rule is still asked, the sound still plays, and the game looks the
     // same for one press: the drawer is never on the plan, and the right

@@ -20,6 +20,15 @@
  * And the rules are shown to bite: three museums changed for the purpose
  * (a call that no longer lapses, an answer that no longer looks first, a
  * milestone of the night that can be un-met) each fail.
+ *
+ * Since the Posse the night has an end, and two things are said that the
+ * radio does not carry: a recording, and the card and the lines that follow
+ * the signature. The first is heard by the robot's own hand and filed; the
+ * second is seen, and is held here to the night it closes: shown after the
+ * deed is signed and never before, with an hour to say, and never left owed.
+ * Two more museums fail for it: one whose porter tells every player to look
+ * again in a drawer of another night, and one whose card comes up as the
+ * Book is read.
  */
 
 import assert from 'node:assert/strict'
@@ -34,9 +43,10 @@ import { MUSEUM } from '../src/content/museum.ts'
 import type { DeviceData, MuseumContent, NightClock } from '../src/content/schema.ts'
 import { nightStateWord } from '../src/content/textLint.ts'
 import { radioDevices } from '../src/engine/deviceRules.ts'
-import { nightPhraseKey, nightPoints } from '../src/engine/nightClock.ts'
+import { HOUR_TOKEN, nightPhraseKey, nightPoints } from '../src/engine/nightClock.ts'
 import { isRoomPowered } from '../src/engine/power.ts'
 import { progressConditionMet } from '../src/engine/progressCondition.ts'
+import { dueSequence } from '../src/engine/sequenceRules.ts'
 import type { Progress } from '../src/state/progressFields.ts'
 
 // The museum hands the store its rules as the canvas chunk arrives. Here, now:
@@ -153,6 +163,8 @@ type Night = {
   readonly end: Progress
   /** The count of the night's milestones met, after every press. */
   readonly points: readonly number[]
+  /** Each directed sequence seen to its end, with the save and the count of milestones as they stood when it first was. */
+  readonly seen: readonly { readonly id: string; readonly progress: Progress; readonly points: number }[]
 }
 
 const LAZY: Omit<EarOptions, 'random'> = { promptness: 0.5, callChance: 0.4 }
@@ -163,12 +175,20 @@ async function night(content: MuseumContent, seed: number, profile: RobotProfile
   // Another dice for the ear, from the same seed: who listens does not change the night.
   const listening = radioEar(content, { ...ear, random: seeded(seed + 100_003) })
   const points: number[] = []
+  const seen: { id: string; progress: Progress; points: number }[] = []
   const clock = content.nightClock
   const played = await playToEnd(await openGame(), content, seeded(seed), profile, content, (page) => {
+    // What the game showed by itself after the press is on record by now
+    // (the robot watches it before anybody listens): written down the first
+    // time it is, before the porter's next call moves the save on.
+    const progress = page.progress()
+    for (const id of progress.sequencesSeen) {
+      if (!seen.some((entry) => entry.id === id)) seen.push({ id, progress, points: clock ? nightPoints(clock, progress, content) : 0 })
+    }
     listening.listen(page)
     if (clock) points.push(nightPoints(clock, page.progress(), content))
   })
-  return { heard: listening.heard, end: played.page.progress(), points }
+  return { heard: listening.heard, end: played.page.progress(), points, seen }
 }
 
 /** What a whole night gets wrong: each thing heard, and what only shows across the night. */
@@ -196,6 +216,65 @@ function nightProblems(content: MuseumContent, heard: Night): string[] {
       return key === null ? -1 : clock.phraseKeys.indexOf(key)
     })
     if (phrases.some((phrase, index) => index > 0 && phrase < phrases[index - 1])) problems.push('the hour the porter reads went back')
+  }
+
+  // What the game shows by itself. A sequence seen was owed when it was
+  // seen; a line of it that says the hour had an hour to say; its words
+  // are held to the night like the porter's; and none is left owed and
+  // unseen as the night ends.
+  for (const shown of heard.seen) {
+    const sequence = (content.sequences ?? []).find((candidate) => candidate.id === shown.id)
+    if (!sequence) {
+      problems.push(`sequence "${shown.id}" is on record as seen, and the content has none of that id`)
+      continue
+    }
+    if (!progressConditionMet(sequence.when, shown.progress, content)) problems.push(`sequence "${sequence.id}" was shown while its \`when\` did not hold`)
+    const lit = content.rooms.every((room) => isRoomPowered(room, shown.progress.roomsPowered))
+    for (const step of sequence.steps) {
+      const key = step.kind === 'line' ? step.lineKey : step.titleKey
+      for (const [locale, dictionary] of DICTIONARIES) {
+        const text = dictionary[key] ?? ''
+        if (text.includes(HOUR_TOKEN) && (!clock || nightPhraseKey(clock, shown.points) === null)) {
+          problems.push(`${key} (${locale}) says the hour in a night that has none yet`)
+        }
+        const dark = wordOf('dark', text, locale)
+        if (dark && lit) problems.push(`${key} (${locale}) says "${dark}" with every room lit`)
+        const rain = wordOf('rain', text, locale)
+        if (rain && shown.progress.flags.includes(RAIN_OVER)) problems.push(`${key} (${locale}) says "${rain}" after the rain has stopped`)
+      }
+    }
+  }
+  const owed = dueSequence(content.sequences ?? [], heard.end, content)
+  if (owed) problems.push(`the night ended with sequence "${owed.id}" owed and never shown`)
+  return problems
+}
+
+/**
+ * What the Posse asks of a night played from a new game, beyond the rules of
+ * any night. The drawer that opens tonight is asked about by the call made
+ * for it, and never by the one made for a save that opened it before it held
+ * a key; the card that says the deed was signed comes after the signature;
+ * and the loudspeaker reads an hour no earlier than the six things the deed
+ * stands on (the three rooms, the drawer, the safe, the signature).
+ */
+function posseProblems(heard: Night, withRadio: boolean): string[] {
+  const problems: string[] = []
+  const calls = heard.heard.flatMap((entry) => (entry.callId ? [entry.callId] : []))
+  if (calls.includes('porter-legacy-drawer')) problems.push('a new game was told to look again in a drawer of another night')
+  if (heard.end.flags.includes('legacy-pre-L3-drawer')) problems.push('a new game ended marked as a save from before the key')
+  if (withRadio) {
+    for (const id of ['porter-drawer-open', 'porter-safe-open']) {
+      const times = calls.filter((candidate) => candidate === id).length
+      if (times !== 1) problems.push(`call "${id}" was heard ${times} times by a player with the radio in hand`)
+    }
+    if (calls.indexOf('porter-drawer-open') > calls.indexOf('porter-safe-open')) problems.push('the porter spoke of the safe before he spoke of the drawer')
+  }
+  if (!heard.end.termsSigned.includes('termo-posse')) problems.push('the night ended with the deed of office unsigned')
+  const closing = heard.seen.find((entry) => entry.id === 'seq-posse')
+  if (!closing) problems.push('the deed was signed and the night was never closed')
+  else {
+    if (!closing.progress.termsSigned.includes('termo-posse')) problems.push('the card that says the deed was signed was shown with the deed unsigned')
+    if (closing.points < 6) problems.push(`the loudspeaker read the hour of a night with ${closing.points} thing(s) done, and the deed stands on six`)
   }
   return problems
 }
@@ -299,9 +378,35 @@ await test('with the radio taken first, every milestone reached had its call, on
   })
   assert.deepEqual(result.problems.slice(0, 12), [])
   // The milestones of this lot, by the call each one has.
-  for (const id of ['porter-atrium-service', 'porter-holyoke-lit', 'porter-first-catalogued', 'porter-shortcut']) {
+  for (const id of ['porter-atrium-service', 'porter-holyoke-lit', 'porter-first-catalogued', 'porter-shortcut', 'porter-drawer-open', 'porter-safe-open']) {
     assert.ok(calls.some((call) => call.id === id), `the content has no call "${id}"`)
   }
+})
+
+await test('the Posse, heard and seen: the drawer and the safe have their calls, a new game is never told of an older night, and what closes the night comes after the signature, with an hour to say', async () => {
+  // The calls and the sequence are the museum's own (they were a house made
+  // for the test until the slice that brought the Book).
+  const posse = (MUSEUM.sequences ?? []).find((sequence) => sequence.id === 'seq-posse')
+  assert.ok(posse, 'the museum has the sequence that closes the night')
+  const lines = posse.steps.flatMap((step) => (step.kind === 'line' ? [step.lineKey] : []))
+  assert.deepEqual(lines, ['sequence.posse.1', 'sequence.posse.2'])
+  for (const [locale, dictionary] of DICTIONARIES) {
+    assert.ok(dictionary['sequence.posse.1'].includes(HOUR_TOKEN), `${locale}: the first line says the hour`)
+    assert.ok(!dictionary['sequence.posse.2'].includes(HOUR_TOKEN))
+  }
+  // With the radio in hand from the first minute, and an ear that hears every call as it falls due.
+  const carried = await problemsOf(MUSEUM, 120, RADIO_FIRST, PROMPT, (heard) => posseProblems(heard, true))
+  assert.deepEqual(carried.problems.slice(0, 12), [])
+  // With the radio left on its charger: fewer calls are heard, none of them
+  // the wrong one, and the night is closed all the same. What closes it
+  // needs no radio.
+  let closed = 0
+  const onTheDesk = await problemsOf(MUSEUM, 120, RADIO_ON_DESK, LAZY, (heard) => {
+    closed += heard.seen.some((entry) => entry.id === 'seq-posse') ? 1 : 0
+    return posseProblems(heard, false)
+  })
+  assert.deepEqual(onTheDesk.problems.slice(0, 12), [])
+  assert.equal(closed, 120, 'a night played without the radio was never closed')
 })
 
 await test('with the radio left on the desk, nothing is heard outside the office', async () => {
@@ -330,7 +435,7 @@ const withRadio = (change: (radio: Radio) => Radio): MuseumContent => ({
   })),
 })
 
-await test('the rules bite: a call that no longer lapses, an answer that no longer looks, a milestone that can be un-met', async () => {
+await test('the rules bite: a call that no longer lapses, an answer that no longer looks, a milestone that can be un-met, a call for an older night said to everybody, a card shown before the signature', async () => {
   // 1. The call for the hall lit keeps waiting once Wing 1 is lit too: a
   //    player who lit both away from the desk comes back to be sent to a
   //    breaker already thrown.
@@ -385,6 +490,31 @@ await test('the rules bite: a call that no longer lapses, an answer that no long
   assert.ok(
     back.problems.some((problem) => /the night went back from \d+ milestone\(s\) to \d+/.test(problem)),
     `a milestone that can be un-met went through: ${back.problems.join('; ') || 'no problem found'}`,
+  )
+
+  // 4. The call for a drawer opened before it held a key, said to whoever
+  //    has the drawer open: a player who opened it a minute ago is told to
+  //    look again for a key that is in their hand.
+  const toEverybody = withRadio((radio) => ({
+    ...radio,
+    calls: radio.calls.map((call) => (call.id === 'porter-legacy-drawer' ? { ...call, when: { locksOpened: ['office-drawer'] } } : call)),
+  }))
+  const older = await problemsOf(toEverybody, 40, RADIO_FIRST, PROMPT, (heard) => posseProblems(heard, true))
+  assert.ok(
+    older.problems.some((problem) => /a new game was told to look again in a drawer of another night/.test(problem)),
+    `a call for an older night's drawer said to everybody went through: ${older.problems.join('; ') || 'no problem found'}`,
+  )
+
+  // 5. The card that says the deed was signed, owed from the moment the
+  //    Book is read: it comes up in the office, with nothing signed.
+  const tooSoon: MuseumContent = {
+    ...MUSEUM,
+    sequences: (MUSEUM.sequences ?? []).map((sequence) => (sequence.id === 'seq-posse' ? { ...sequence, when: { documentsRead: ['doc-termos'] } } : sequence)),
+  }
+  const early = await problemsOf(tooSoon, 40, ORDINARY, LAZY, (heard) => posseProblems(heard, false))
+  assert.ok(
+    early.problems.some((problem) => /the card that says the deed was signed was shown with the deed unsigned/.test(problem)),
+    `a card shown before the signature went through: ${early.problems.join('; ') || 'no problem found'}`,
   )
 })
 

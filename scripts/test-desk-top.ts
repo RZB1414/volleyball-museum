@@ -264,6 +264,9 @@ test('every object on the desk is found', () => {
     // The telephone left the furniture in L3: it answers (a dead line), so
     // it is a device, on the same leather at the same height.
     'device:office-telephone',
+    // The answering machine came with the Posse, on the strip of walnut the
+    // radio's charger stands on.
+    'device:office-answering-machine',
     'container:office-notebook',
     'device:office-radio',
     'power:office-lamp-switch',
@@ -285,6 +288,51 @@ test('desk-top items rest on their support', () => {
 test('desk-top items do not interpenetrate', () => {
   const problems = overlapProblems(items)
   assert.deepEqual(problems, [], problems.join('\n'))
+})
+
+test('the answering machine stands on the walnut beside the radio, clear of the leather, of the edge and of its neighbours (L3)', () => {
+  const find = (id: string) => {
+    const item = items.find((candidate) => candidate.footprint.id === id)
+    assert.ok(item, `${id} is on the desk`)
+    return item
+  }
+  const machine = find('device:office-answering-machine')
+  // Wholly off the blotter and wholly on the desk: it stands on the timber's own height.
+  assert.ok(!footprintsOverlap(machine.footprint, blotter) && footprintInside(machine.footprint, deskTop))
+  assert.ok(Math.abs(machine.bottom - layout.top) < REST_TOLERANCE, `bottom at ${machine.bottom}`)
+  assert.ok(machine.top - machine.bottom <= 0.06, `it is ${((machine.top - machine.bottom) * 1000).toFixed(0)} mm high`)
+  // The strip is 170 mm of walnut between the leather and the desk's edge,
+  // and the machine is 150 mm across it: twelve millimetres from the leather
+  // and eight from the edge, as the lot plan drew it.
+  const reach = (footprint: Footprint, axis: 0 | 1) => corners(footprint).map((corner) => corner[axis])
+  const toLeather = footprintGap(machine.footprint, blotter)
+  const toEdge = Math.max(...reach(deskTop, 1)) - Math.max(...reach(machine.footprint, 1))
+  assert.ok(Math.abs(toLeather - 0.012) < 0.0005, `${(toLeather * 1000).toFixed(1)} mm from the blotter`)
+  assert.ok(Math.abs(toEdge - 0.008) < 0.0005, `${(toEdge * 1000).toFixed(1)} mm from the edge of the desk`)
+  // A hand's width from the radio's charger, further along the same strip,
+  // and well clear of the telephone on the leather.
+  assert.ok(footprintGap(machine.footprint, find('device:office-radio').footprint) > 0.1)
+  assert.ok(footprintGap(machine.footprint, find('device:office-telephone').footprint) > 0.05)
+  // Its long side runs along the strip, and its keys face whoever walks in:
+  // the front of the recipe (+Z) is turned to the door's side of the room.
+  const placed = (office.devices ?? []).find((device) => device.id === 'office-answering-machine')
+  assert.equal(placed?.rotationY, -Math.PI / 2)
+  const along = Math.max(...reach(machine.footprint, 0)) - Math.min(...reach(machine.footprint, 0))
+  const across = Math.max(...reach(machine.footprint, 1)) - Math.min(...reach(machine.footprint, 1))
+  assert.ok(Math.abs(along - 0.21) < 0.001 && Math.abs(across - 0.15) < 0.001, `${along.toFixed(3)} by ${across.toFixed(3)}`)
+
+  // The rules bite. At the place the plan kept in reserve (on the leather,
+  // between the notebook and the telephone) but at the walnut's height, it
+  // sinks; and a centimetre and a half nearer the leather it straddles its edge.
+  const reserve = placedItem('device:machine (on the leather)', 'office-answering-machine', [0.42, layout.top, 0.07], -Math.PI / 2)
+  assert.ok(restProblems([reserve]).some((problem) => problem.includes('sinks 7.0 mm')), restProblems([reserve]).join('; '))
+  const astride = placedItem('device:machine (astride)', 'office-answering-machine', [0.615, layout.top, 0.627], -Math.PI / 2)
+  assert.ok(restProblems([astride]).some((problem) => problem.includes('straddles the edge of the blotter')), restProblems([astride]).join('; '))
+  const crowding = placedItem('device:machine (against the radio)', 'office-answering-machine', [0.502, layout.top, 0.642], -Math.PI / 2)
+  assert.ok(
+    overlapProblems([crowding, find('device:office-radio')]).some((problem) => problem.includes('are only')),
+    'a machine a millimetre from the charger is reported',
+  )
 })
 
 test('the rules catch the old ledger stack: sunk into the leather and through the telephone', () => {

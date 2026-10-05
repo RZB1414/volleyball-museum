@@ -97,7 +97,7 @@ function locksSeenFromOpened(progress: Progress): Progress {
 }
 
 /**
- * The Posse (L3): the porter's old news.
+ * The Posse (L3): the porter's old news, and the drawer that held a key.
  *
  * A save that has not heard his new introduction, and has already passed a
  * milestone he now has a call for, counts that call as heard: it would tell
@@ -107,15 +107,24 @@ function locksSeenFromOpened(progress: Progress): Progress {
  * already. So it also runs, with the same result, on what a tab of the build
  * before leaves on the disk while this one is open.
  *
- * Once the introduction is in the save this does nothing: from then on a
- * milestone is passed with him listening, and its call is owed.
+ * Once the introduction is in the save that half does nothing: from then on
+ * a milestone is passed with him listening, and its call is owed.
+ *
+ * The other half asks nothing of the first. A drawer that is open with the
+ * trigger that hands over its key not on record was opened before it held
+ * one, and the save is marked as that (`PRE_POSSE_SAVE.drawer`). Only the
+ * mark: the key is the content's to give, as a trigger owed at load, and
+ * the store does not know the content.
  */
 function prePosse(progress: Progress): Progress {
-  if (progress.radioCalls.includes(PRE_POSSE_SAVE.helloCallId)) return progress
+  const { drawer } = PRE_POSSE_SAVE
+  const before = progress.locksOpened.includes(drawer.lockId) && !progress.triggersFired.includes(drawer.triggerId)
+  const marked = before ? grantProgress(progress, { flags: [drawer.flag] }) : progress
+  if (marked.radioCalls.includes(PRE_POSSE_SAVE.helloCallId)) return marked
   const oldNews = PRE_POSSE_SAVE.oldNews.filter((news) =>
-    news.id === null ? progress[news.field].length > 0 : progress[news.field].includes(news.id),
+    news.id === null ? marked[news.field].length > 0 : marked[news.field].includes(news.id),
   )
-  return grantProgress(progress, { radioCalls: oldNews.map((news) => news.callId) })
+  return grantProgress(marked, { radioCalls: oldNews.map((news) => news.callId) })
 }
 
 /** In the order of the lots, which is the order they run in. */

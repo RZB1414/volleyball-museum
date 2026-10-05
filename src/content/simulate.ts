@@ -65,6 +65,7 @@ import {
   type Progress,
   type ProgressGrant,
 } from '../state/progressFields.ts'
+import { PRE_POSSE_SAVE } from './legacySave.ts'
 import type {
   ContainerData,
   DeviceData,
@@ -505,6 +506,7 @@ const CONDITION_ATOMS: {
   unpowered: (rooms) => rooms.map((id) => `not(${atom('roomsPowered', id)})`),
   locksOpened: (locks) => locks.map((id) => atom('locksOpened', id)),
   locksClosed: (locks) => locks.map((id) => `not(${atom('locksOpened', id)})`),
+  locksSeen: (locks) => locks.map((id) => atom('locksSeen', id)),
   documentsRead: (documents) => documents.map((id) => atom('documentsRead', id)),
   documentsUnread: (documents) => documents.map((id) => `not(${atom('documentsRead', id)})`),
   carried: (devices) => devices.map((id) => atom('devicesCarried', id)),
@@ -1260,8 +1262,14 @@ export function simulateProgress(content: MuseumContent, from: Progress = emptyP
     ...conditions.flatMap((condition) => [...(condition.flags ?? []), ...(condition.flagsUnset ?? [])]),
     ...deviceFlags,
   ])
+  // One more hand sets a flag: a migration, on a save from before this lot
+  // (`PRE_POSSE_SAVE.drawer`: a drawer opened before it held a key). No play
+  // of this build sets it, which is the point of it, so it is not in the
+  // list above: a call that waits for it is not loose wiring, and nothing is
+  // accused of setting a flag for it.
+  const flagsOfOlderSaves: ReadonlySet<string> = new Set([PRE_POSSE_SAVE.drawer.flag])
   for (const flag of flagsRead) {
-    if (!flagsSet.has(flag)) {
+    if (!flagsSet.has(flag) && !flagsOfOlderSaves.has(flag)) {
       error('flag-never-set', flag, `A condition waits for flag "${flag}" (or for its absence), and nothing sets it.`)
     }
   }

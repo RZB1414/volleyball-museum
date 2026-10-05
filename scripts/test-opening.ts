@@ -26,6 +26,7 @@ import {
   settleKnownDebt,
   type KnownDebt,
 } from '../src/content/knownDebt.ts'
+import { PRE_POSSE_SAVE } from '../src/content/legacySave.ts'
 import { MUSEUM } from '../src/content/museum.ts'
 import type { ExhibitMount, MuseumContent, RoomData } from '../src/content/schema.ts'
 import { simulateProgress } from '../src/content/simulate.ts'
@@ -205,7 +206,7 @@ test('reading the notebook takes it from the desk and opens the journal', () => 
   const drawer = containerById(MUSEUM, 'office-cabinet')
   assert.ok(drawer)
   assert.equal(
-    isContainerTaken(MUSEUM, drawer, ['doc-predecessor']),
+    isContainerTaken(MUSEUM, drawer, ['doc-otavio-handover']),
     false,
     'an ordinary drawer stays where it is',
   )
@@ -251,16 +252,28 @@ test('the list is data: every line has a box or a date, and counts what is done 
   const items = checklist.items ?? []
   assert.deepEqual(
     items.map((item) => item.labelKey),
-    ['notebook.todo.power', 'notebook.todo.catalogue', 'notebook.todo.vault'],
+    [
+      'notebook.todo.power',
+      'notebook.todo.catalogue',
+      'notebook.todo.vault',
+      'notebook.todo.drawer',
+      'notebook.todo.safe-key',
+      'notebook.todo.posse',
+      'notebook.todo.proof',
+    ],
   )
-  for (const item of items) {
+  for (const [index, item] of items.entries()) {
     // A line with neither is a box nothing ever ticks; one with both is a
     // promise that pretends to be a task.
     assert.ok(
       (item.doneWhen === undefined) !== (item.deferredUntilLot === undefined),
       `${item.labelKey} has a box to tick or the lot that gives it one, and not both`,
     )
-    assert.equal(item.author, 'helena', `${item.labelKey} is in the director's ink`)
+    // Three lines in the director's ink, there from the start; under them
+    // the curator's own pencil, each line written when the night gives it
+    // a reason (the Posse).
+    assert.equal(item.author, index < 3 ? 'helena' : 'curator', `${item.labelKey}: whose hand`)
+    assert.equal(item.appearsWhen === undefined, index < 3, `${item.labelKey}: on the page from the start, or from a moment of the night`)
   }
   const [power, catalogue, vault] = items
   assert.ok(power.doneWhen && catalogue.doneWhen)
@@ -342,6 +355,47 @@ test('the list is data: every line has a box or a date, and counts what is done 
   for (const [locale, dictionary] of [['pt-BR', ptBR], ['en', en]] as const) {
     assert.ok(dictionary['notebook.todo.vault.note'].length > 0, `${locale}: the note is written`)
   }
+
+  // Under the ink, the pencil. None of the four is on the page as the night
+  // begins (the rows above are three), and each comes by what the save
+  // holds, never by a call having been heard.
+  const pencil = (progress: Save) =>
+    listAsRead(items, progress)
+      .slice(3)
+      .map((row) => `${row.line}: ${row.done}`)
+  const night = freshSave()
+  assert.deepEqual(pencil(night), [])
+  // The drawer and its question: by the message heard to its end, or by the
+  // keypad touched, whichever comes first.
+  assert.deepEqual(pencil({ ...night, documentsRead: ['doc-otavio-tape'] }), ['notebook.todo.drawer: false'])
+  assert.deepEqual(pencil({ ...night, locksSeen: ['office-drawer'] }), ['notebook.todo.drawer: false'])
+  assert.deepEqual(pencil({ ...night, locksSeen: ['office-safe'] }), [], 'another lock touched is not this one')
+  // Open: ticked, and the key is noted under it.
+  const opened = { ...night, locksSeen: ['office-drawer'], locksOpened: ['office-drawer'] }
+  assert.deepEqual(pencil(opened), ['notebook.todo.drawer: true', 'notebook.todo.safe-key: false'])
+  // The safe open: ticked. The Book read: the deed, to be signed. The proof
+  // read: a line with no box and its note, like the vault's above it.
+  const inTheSafe = { ...opened, locksOpened: ['office-drawer', 'office-safe'], documentsRead: ['doc-termos', 'doc-label-proof-office'] }
+  assert.deepEqual(listAsRead(items, inTheSafe).slice(3), [
+    { line: 'notebook.todo.drawer', done: true, note: null, counts: [] },
+    { line: 'notebook.todo.safe-key', done: true, note: null, counts: [] },
+    { line: 'notebook.todo.posse', done: false, note: null, counts: [] },
+    { line: 'notebook.todo.proof', done: null, note: 'notebook.todo.proof.note', counts: [] },
+  ])
+  assert.deepEqual(pencil({ ...inTheSafe, flags: ['posse-signed'] })[2], 'notebook.todo.posse: true')
+  // The Book alone, read by a save that holds no proof (another build's): the deed and not the note.
+  assert.deepEqual(pencil({ ...night, documentsRead: ['doc-termos'] }), ['notebook.todo.posse: false'])
+  const proof = items[6]
+  assert.deepEqual([proof.deferredUntilLot, proof.noteKey, proof.doneWhen], [12, 'notebook.todo.proof.note', undefined])
+  for (const [locale, dictionary] of [['pt-BR', ptBR], ['en', en]] as const) {
+    assert.ok(dictionary['notebook.todo.proof.note'].length > 0, `${locale}: the pencil promise says why not tonight`)
+  }
+  // What the list has just gained is news once, at the write that puts it
+  // on the page; a tick is not a line.
+  assert.deepEqual(checklistNews(items, night, opened, MUSEUM), ['notebook.todo.drawer', 'notebook.todo.safe-key'])
+  assert.deepEqual(checklistNews(items, opened, inTheSafe, MUSEUM), ['notebook.todo.posse', 'notebook.todo.proof'])
+  assert.deepEqual(checklistNews(items, inTheSafe, { ...inTheSafe, flags: ['posse-signed'] }, MUSEUM), [])
+  assert.deepEqual(checklistNews(items, inTheSafe, night, MUSEUM), [], 'a new game announces nothing')
 
   // What a line counts is what ticks it: the counts of a line, together,
   // name exactly the ids its box waits for.
@@ -491,7 +545,7 @@ test('a door powered from beyond itself is a soft-lock the gate catches', () => 
     'the authored museum is playable',
   )
   assert.deepEqual([...authored.final.roomsVisited].sort(), ['atrium', 'holyoke', 'office'])
-  assert.deepEqual(authored.final.locksOpened, ['office-drawer'])
+  assert.deepEqual(authored.final.locksOpened, ['office-drawer', 'office-safe'])
 })
 
 // ---------------------------------------------------------------------------
@@ -661,13 +715,14 @@ test('the clock is put right once, with the lamp on, and from then on shows the 
   assert.deepEqual(nightTime(night, 1), { hours: 19, minutes: 10 })
   assert.deepEqual(nightTime(night, 2), { hours: 19, minutes: 40 })
   assert.deepEqual(nightTime(night, 3), { hours: 20, minutes: 10 })
-  assert.deepEqual(nightTime(night, night.milestones.length), { hours: 22, minutes: 40 })
+  // Ten things done is twenty to midnight: the night with everything done.
+  assert.deepEqual(nightTime(night, night.milestones.length), { hours: 23, minutes: 40 })
   assert.deepEqual(nightTime({ ...night, startsAt: { hours: 23, minutes: 50 } }, 2), { hours: 0, minutes: 20 }, 'past midnight it wraps')
 
   // A point for each milestone met, in whatever order they were met.
   const points = (patch: Partial<Save> & { flags?: string[] }) => nightPoints(night, { ...freshSave(), ...patch }, MUSEUM)
   const pieces = MUSEUM.exhibits.map((exhibit) => exhibit.id)
-  assert.equal(night.milestones.length, 8)
+  assert.equal(night.milestones.length, 10)
   assert.equal(points({}), 0)
   assert.equal(points({ roomsPowered: ['office'] }), 1)
   assert.equal(points({ roomsPowered: ['holyoke', 'office'] }), 2, 'Wing 1 before the hall is two points all the same')
@@ -680,6 +735,14 @@ test('the clock is put right once, with the lamp on, and from then on shows the 
   )
   assert.equal(points({ catalogued: ['a-piece-of-another-wing', 'and-another', 'and-a-third'] }), 0, 'three pieces that are not of the house')
   assert.equal(points({ roomsPowered: ['office', 'atrium', 'holyoke'], locksOpened: ['office-drawer'], catalogued: pieces }), 8)
+  // The iron safe opened and the deed of office signed are the ninth and the tenth, whenever they come.
+  assert.equal(points({ locksOpened: ['office-safe'] }), 1)
+  assert.equal(points({ flags: ['posse-signed'] }), 1)
+  assert.equal(points({ termsSigned: ['termo-posse'] } as Partial<Save>), 0, 'the point is the flag the signature sets, which the same write carries')
+  assert.equal(
+    points({ roomsPowered: ['office', 'atrium', 'holyoke'], locksOpened: ['office-drawer', 'office-safe'], catalogued: pieces, flags: ['posse-signed'] }),
+    10,
+  )
   // Setting the clock is not a milestone: it shows the night, it does not move it.
   assert.equal(points({ roomsPowered: ['office'], flags: ['clock-set'] }), 1)
 
@@ -702,11 +765,29 @@ test('the clock is put right once, with the lamp on, and from then on shows the 
   // What the porter would say of each hour, and that it is that hour.
   assert.equal(nightPhraseKey(night, 0), null)
   assert.deepEqual(
-    [1, 2, 3, 4, 5, 6, 7, 8].map((count) => ptBR[nightPhraseKey(night, count) as 'night.hour.1']),
-    ['Passa das sete', 'Quase oito', 'Passa das oito', 'Quase nove', 'Passa das nove', 'Quase dez', 'Passa das dez', 'Quase onze'],
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((count) => ptBR[nightPhraseKey(night, count) as 'night.hour.1']),
+    [
+      'Passa das sete',
+      'Quase oito',
+      'Passa das oito',
+      'Quase nove',
+      'Passa das nove',
+      'Quase dez',
+      'Passa das dez',
+      'Quase onze',
+      'Passa das onze',
+      'Quase meia-noite',
+    ],
   )
-  assert.equal(nightPhraseKey(night, 99), 'night.hour.8', 'past the last milestone it is the last hour')
-  const HOURS: Record<number, readonly [string, string]> = { 19: ['sete', 'seven'], 20: ['oito', 'eight'], 21: ['nove', 'nine'], 22: ['dez', 'ten'], 23: ['onze', 'eleven'] }
+  assert.equal(nightPhraseKey(night, 99), 'night.hour.10', 'past the last milestone it is the last hour')
+  const HOURS: Record<number, readonly [string, string]> = {
+    19: ['sete', 'seven'],
+    20: ['oito', 'eight'],
+    21: ['nove', 'nine'],
+    22: ['dez', 'ten'],
+    23: ['onze', 'eleven'],
+    24: ['meia-noite', 'midnight'],
+  }
   for (let count = 1; count <= night.milestones.length; count += 1) {
     const time = nightTime(night, count)
     const key = nightPhraseKey(night, count) as 'night.hour.1'
@@ -1218,15 +1299,15 @@ test('each validator the gate lacked fails a museum broken on purpose', () => {
     }),
   )
 
-  // The drawer is locked and the note inside it says it is not: the solver
-  // would read the note without ever opening the drawer.
+  // The drawer is locked and the sheet inside it says it is not: the solver
+  // would read the sheet without ever opening the drawer.
   proves(
     'document-lock-disagrees-with-container',
-    'doc-predecessor',
+    'doc-otavio-handover',
     gate({
       ...MUSEUM,
       documents: MUSEUM.documents.map((doc) => {
-        if (doc.id !== 'doc-predecessor') return doc
+        if (doc.id !== 'doc-otavio-handover') return doc
         const { lockId: _, ...unlocked } = doc
         return unlocked
       }),
@@ -1238,10 +1319,12 @@ test('each validator the gate lacked fails a museum broken on purpose', () => {
   // no reader to hold the badge to. A breaker's lock is still a keypad or
   // nothing, and a lock on a doorway is never asked for at all.
   const badgeLock = { kind: 'badge', id: 'staff-reader', requires: 'indoor', mapLabelKey: 'lock.office-drawer.mapLabel' } as const
+  // A tool the house does not hand out. (It asked for the key of the iron
+  // safe until the Posse, when the drawer began to give that one.)
   const toolLock = {
     kind: 'tool',
     id: 'service-hatch',
-    requires: 'service-key',
+    requires: 'crate-dolly',
     consumesTool: false,
     mapLabelKey: 'lock.office-drawer.mapLabel',
   } as const
@@ -1255,11 +1338,11 @@ test('each validator the gate lacked fails a museum broken on purpose', () => {
   })
   proves('lock-host-kind-unsupported', 'holyoke-cabinet-a', gate(onCabinet(badgeLock)))
   // The same cabinet with a tool lock was this accusation until L3: it is a
-  // cabinet the key opens now, and what is wrong with it is only that
-  // nothing in this museum hands over the key.
+  // cabinet a tool opens now, and what is wrong with it is only that
+  // nothing in this museum hands over that tool.
   const keyed = gate(onCabinet(toolLock))
   if (accused(keyed, 'lock-host-kind-unsupported').length > 0) noisy.push('lock-host-kind-unsupported accuses a cabinet that takes a key')
-  if (!accused(keyed, 'credential-unobtainable').includes('tool:service-key')) quiet.push('credential-unobtainable does not accuse a key nothing gives')
+  if (!accused(keyed, 'credential-unobtainable').includes('tool:crate-dolly')) quiet.push('credential-unobtainable does not accuse a tool nothing gives')
   proves(
     'lock-host-kind-unsupported',
     'holyoke-breaker',
@@ -1423,6 +1506,8 @@ test('a dated promise has no box, says so in the game, and falls due with its lo
     promises.map((promise) => `${promise.kind} ${promise.id} L${promise.untilLot} ${promise.noticeKey}`),
     [
       'device atrium-podium L11 device.atrium-podium.notice',
+      // The curator's own promise, in pencil: what the proof in the safe says of the plaques.
+      'checklist notebook.todo.proof L12 notebook.todo.proof.note',
       'checklist notebook.todo.vault L12 notebook.todo.vault.note',
     ],
   )
@@ -1437,16 +1522,17 @@ test('a dated promise has no box, says so in the game, and falls due with its lo
   assert.deepEqual(validateDeferred(MUSEUM), [])
 
   type Item = NonNullable<NonNullable<MuseumContent['documents'][number]['pages']>[number]['items']>[number]
-  const withVault = (patch: (item: Item) => Item): MuseumContent => ({
+  const withLine = (labelKey: string, patch: (item: Item) => Item): MuseumContent => ({
     ...MUSEUM,
     documents: MUSEUM.documents.map((doc) => ({
       ...doc,
       pages: doc.pages?.map((page) => ({
         ...page,
-        items: page.items?.map((item) => (item.labelKey === 'notebook.todo.vault' ? patch(item) : item)),
+        items: page.items?.map((item) => (item.labelKey === labelKey ? patch(item) : item)),
       })),
     })),
   })
+  const withVault = (patch: (item: Item) => Item) => withLine('notebook.todo.vault', patch)
   const withPodium = (patch: Record<string, unknown>): MuseumContent =>
     withRoom('atrium', (room) => ({
       devices: (room.devices ?? []).map((device) => (device.id === 'atrium-podium' ? ({ ...device, ...patch } as typeof device) : device)),
@@ -1455,7 +1541,7 @@ test('a dated promise has no box, says so in the game, and falls due with its lo
   // The lot arrives and the thing is still only a promise: the date was one.
   assert.deepEqual(accused(validateDeferred(MUSEUM, 10), 'deferred-overdue'), [])
   assert.deepEqual(accused(validateDeferred(MUSEUM, 11), 'deferred-overdue'), ['atrium-podium'])
-  assert.deepEqual(accused(validateDeferred(MUSEUM, 12), 'deferred-overdue').sort(), ['atrium-podium', 'notebook.todo.vault'])
+  assert.deepEqual(accused(validateDeferred(MUSEUM, 12), 'deferred-overdue').sort(), ['atrium-podium', 'notebook.todo.proof', 'notebook.todo.vault'])
   // And the gate asks it with the lot the debt table is judged at.
   const settledAt = (lot: number) =>
     validateContent(MUSEUM, BAKED_BUNDLES, DICTIONARY_KEYS, undefined, {
@@ -1472,6 +1558,12 @@ test('a dated promise has no box, says so in the game, and falls due with its lo
     ['notebook.todo.vault'],
   )
   assert.deepEqual(accused(gate(withPodium({ noticeKey: '' })), 'deferred-without-notice'), ['atrium-podium'])
+  // A promise in pencil is held to it like one in ink: the line about the
+  // proof with no note beside it would be a line with no box and no reason.
+  assert.deepEqual(
+    accused(gate(withLine('notebook.todo.proof', ({ noteKey: _, ...item }) => item)), 'deferred-without-notice'),
+    ['notebook.todo.proof'],
+  )
   assert.deepEqual(accused(gate(MUSEUM), 'deferred-without-notice'), [])
 
   // A promise with a box: it would sit unticked beside its own "not tonight".
@@ -1500,6 +1592,12 @@ test('a dated promise has no box, says so in the game, and falls due with its lo
     accused(gate(withVault((item) => ({ ...item, appearsWhen: { locksOpened: ['no-such-lock'] } }))), 'condition-lock-missing'),
     ['no-such-lock'],
   )
+  // A lock touched is asked by its id like a lock opened (the line about the drawer asks it).
+  assert.deepEqual(
+    accused(gate(withLine('notebook.todo.drawer', (item) => ({ ...item, appearsWhen: { anyOf: [{ locksSeen: ['office-drawr'] }] } }))), 'condition-lock-missing'),
+    ['office-drawr'],
+  )
+  assert.deepEqual(accused(gate(MUSEUM), 'condition-lock-missing'), [])
   assert.deepEqual(
     accused(
       gate(withVault((item) => ({ ...item, counters: [{ of: { catalogued: ['no-such-piece'] } }] }))),
@@ -1510,9 +1608,10 @@ test('a dated promise has no box, says so in the game, and falls due with its lo
 
   // The gate prints them on every run, soonest first, beside what is owed.
   const printed = formatKnownDebt([], promises).split('\n').filter((line) => /until L/.test(line))
-  assert.equal(printed.length, 2)
+  assert.equal(printed.length, 3)
   assert.match(printed[0], /until L11 +atrium-podium +device\.atrium-podium\.notice/)
-  assert.match(printed[1], /until L12 +notebook\.todo\.vault +notebook\.todo\.vault\.note/)
+  assert.match(printed[1], /until L12 +notebook\.todo\.proof +notebook\.todo\.proof\.note/)
+  assert.match(printed[2], /until L12 +notebook\.todo\.vault +notebook\.todo\.vault\.note/)
   assert.equal(formatKnownDebt([]), '', 'with nothing owed and nothing promised, nothing is printed')
 })
 
@@ -1654,9 +1753,11 @@ test('a condition, an effect or a trigger that points at nothing fails the gate 
         ? { ...exhibit, unlocks: [{ kind: 'grant-credential', credential: { kind: 'badge', id: 'indoor' } }] }
         : exhibit,
     ),
+    // Beside what the drawer already gives as it opens (the key, since the
+    // Posse): in its place, the hint that waits for the key would wait for good.
     locks: MUSEUM.locks.map((lock) =>
       lock.id === 'office-drawer'
-        ? { ...lock, onOpen: [{ kind: 'set-flag', flag: 'drawer-open' }, { kind: 'reveal-document', documentId: 'doc-welcome' }] }
+        ? { ...lock, onOpen: [...(lock.onOpen ?? []), { kind: 'set-flag', flag: 'drawer-open' }, { kind: 'reveal-document', documentId: 'doc-welcome' }] }
         : lock,
     ),
     triggers: [
@@ -1699,6 +1800,7 @@ test('the porter by milestone and the hour of the night: each rule of the gate, 
   const CODES = [
     'legacy-save-call',
     'legacy-save-milestone',
+    'legacy-save-drawer',
     'radio-lapse-not-positive',
     'hint-points-to-nothing',
     'radio-hint-coverage',
@@ -1743,6 +1845,32 @@ test('the porter by milestone and the hour of the night: each rule of the gate, 
     SHORTCUT,
     gate(withRoom('atrium', (room) => ({ portals: room.portals.map((portal) => (portal.id === SHORTCUT ? { ...portal, id: 'atrium-service-door' } : portal)) }))),
   )
+  // The drawer that was open before it held a key. The migration knows such
+  // a save by a lock that is open and a trigger that never fired, both by
+  // name. With the lock renamed in the content no save is ever marked, and
+  // the porter asks a player of last month what was in a drawer they opened
+  // then; the trigger is spelt from the lock's id, so it goes with it.
+  const DRAWER = PRE_POSSE_SAVE.drawer
+  assert.deepEqual([DRAWER.lockId, DRAWER.triggerId, DRAWER.flag], ['office-drawer', 'lock:office-drawer:opened', 'legacy-pre-L3-drawer'])
+  const renamedDrawer = gate({
+    ...MUSEUM,
+    locks: MUSEUM.locks.map((lock) => (lock.id === DRAWER.lockId ? { ...lock, id: 'office-top-drawer' } : lock)),
+  })
+  proves('legacy-save-drawer', DRAWER.lockId, renamedDrawer)
+  proves('legacy-save-drawer', DRAWER.triggerId, renamedDrawer)
+  // With the lock in place and nothing handed over as it opens, the content
+  // compiles no trigger of that name: every save with the drawer open would
+  // be marked for good, the one that opened it a minute ago among them.
+  const keyless = gate({
+    ...MUSEUM,
+    locks: MUSEUM.locks.map((lock) => {
+      if (lock.id !== DRAWER.lockId) return lock
+      const { onOpen: _, ...bare } = lock
+      return bare
+    }),
+  })
+  proves('legacy-save-drawer', DRAWER.triggerId, keyless)
+  if (accused(keyless, 'legacy-save-drawer').includes(DRAWER.lockId)) noisy.push('legacy-save-drawer accuses a lock that is there')
 
   // --- calls that lapse -----------------------------------------------------------
   proves(
@@ -1779,90 +1907,53 @@ test('the porter by milestone and the hour of the night: each rule of the gate, 
   // Each kind of thing a hint may point at, in the museum as it is.
   assert.deepEqual(
     radioEntry.device.hints.map((hint) => hint.targetId ?? null),
-    ['office-notebook', 'atrium-breaker', 'holyoke-breaker', 'portrait-morgan', null],
+    ['office-notebook', 'atrium-breaker', 'holyoke-breaker', 'portrait-morgan', 'office-safe', 'atrium-lectern', null],
   )
   spares('hint-points-to-nothing', 'a hint that points at a device, and one at a door', gate(withHint(0, (hint) => ({ ...hint, targetId: 'atrium-podium' }))))
   spares('hint-points-to-nothing', 'a hint that points at a door', gate(withHint(0, (hint) => ({ ...hint, targetId: SHORTCUT }))))
 
   // --- a porter with nothing left to say, and a term still to sign ---------------------
-  // No term exists in the house until the lectern signs one; the rule is
-  // asked of a house given one for the purpose. With the three rooms lit and
-  // the drawer open, the porter's last hint is in force.
-  const term = {
-    id: 'termo-de-teste',
-    titleKey: 'notebook.todo.heading',
-    bodyKey: 'notebook.todo.heading',
-    presentedWhen: {},
-    when: { powered: ['office', 'atrium', 'holyoke'] },
-    grants: 'teste-assinado',
-    mentions: ['atrium-podium'],
-  } as const
-  const withTerm = (content: MuseumContent, patch: object = {}): MuseumContent => ({ ...content, terms: [{ ...term, ...patch }] })
-  const uncovered = gate(withTerm(MUSEUM))
+  // The house has its term since the Posse: the deed of office, brought to
+  // the lectern of the hall by reading the Book, and a hint of the porter's
+  // that holds from the Book read until the deed is signed. The rule was
+  // proved on a term made for the test while the house had none; it is asked
+  // of the museum itself now, broken for it.
+  const deed = (MUSEUM.terms ?? [])[0]
+  assert.equal(deed?.id, 'termo-posse')
+  const withDeed = (patch: object, content: MuseumContent = MUSEUM): MuseumContent => ({ ...content, terms: [{ ...deed, ...patch }] })
+  const forTheDeed = radioEntry.device.hints.findIndex((hint) => hint.targetId === 'atrium-lectern')
+  assert.equal(forTheDeed, radioEntry.device.hints.length - 2, 'the hint for the deed is the last before the one that says there is nothing left')
+  // Without that hint there is a moment the rule is for: the rooms lit, the
+  // drawer and the safe open, the deed on the lectern, and a porter who says
+  // the post is signed and only the checking is left.
+  const withoutTheHint = withRadio((radio) => ({ hints: radio.hints.filter((_, index) => index !== forTheDeed) }))
+  const uncovered = gate(withoutTheHint)
   proves('radio-hint-coverage', 'office-radio', uncovered)
   assert.match(
     uncovered.find((issue) => issue.code === 'radio-hint-coverage')?.message ?? '',
-    /runs out of hints with "termo-de-teste" still to sign: in a save with .*power:holyoke.*lock:office-drawer/,
+    /runs out of hints with "termo-posse" still to sign: in a save with .*power:holyoke.*lock:office-safe.*doc:doc-termos/,
   )
-  // A hint that holds until the term is signed, above the last: he has something to point at.
-  const covered = withRadio((radio) => ({
-    hints: [
-      ...radio.hints.slice(0, -1),
-      { when: { flagsUnset: ['teste-assinado'] }, targetId: 'atrium-podium', heightKeys: ['radio.hint.rest'], mentions: ['atrium-podium'] },
-      ...radio.hints.slice(-1),
-    ],
-  }))
-  spares('radio-hint-coverage', 'a radio with a hint for the term', gate(withTerm(covered)))
-  // Signed, the night has nothing left: the last hint is the right one. Signed
-  // is the signature in the save (`termsSigned`), made at a desk: the lectern
-  // of the hall, here, made one for the purpose. Until this slice the rule
-  // read the flag, which a trigger of the test set by itself; a house whose
-  // flag is set and whose term nobody signed is still owed the signature.
-  const lectern = MUSEUM.rooms.find((room) => room.id === 'atrium')?.kit.find((placement) => placement.part === 'atrium-lectern')
-  assert.ok(lectern, 'the hall has a lectern to make a desk of')
-  const withDesk = (content: MuseumContent): MuseumContent => ({
-    ...content,
-    rooms: content.rooms.map((room) =>
-      room.id === 'atrium'
-        ? {
-            ...room,
-            kit: room.kit.filter((placement) => placement !== lectern),
-            devices: [
-              ...(room.devices ?? []),
-              {
-                kind: 'signing-desk' as const,
-                id: 'atrium-lectern',
-                part: 'atrium-lectern' as const,
-                position: lectern.position,
-                rotationY: lectern.rotationY,
-                titleKey: 'device.atrium-podium.title',
-                emptyNoticeKey: 'device.atrium-podium.notice',
-                termIds: [term.id],
-                holdSeconds: 1.2,
-              },
-            ],
-          }
-        : room,
-    ),
-  })
-  const signed = withDesk(withTerm(covered))
-  assert.deepEqual(simulateProgress(signed).final.termsSigned, [term.id], 'the exhaustive player signs at the lectern')
-  spares('radio-hint-coverage', 'a house whose term is signed, with a hint for it until then', gate(signed))
-  // With the desk and no hint for it, there is a moment the rule is for: the
-  // rooms lit, the drawer open, the term on the lectern, and a porter who
-  // says there is nothing left to do.
-  proves('radio-hint-coverage', 'office-radio', gate(withDesk(withTerm(MUSEUM))))
-  // And a flag that sets itself is not a signature.
+  // With it he has something to point at, until the signature; signed, the
+  // night has nothing left and the last hint is the right one. Signed is the
+  // signature in the save (`termsSigned`), made at the lectern.
+  assert.deepEqual(simulateProgress(MUSEUM).final.termsSigned, [deed.id], 'the exhaustive player signs at the lectern')
+  spares('radio-hint-coverage', 'the museum, whose porter has a hint for the deed until it is signed', authored)
+  // And a flag that sets itself is not a signature: the hint that waits for
+  // the flag falls silent, and the deed is still on the lectern, unsigned.
   const flagOnly: MuseumContent = {
-    ...withTerm(MUSEUM),
-    triggers: [{ id: 'flag-for-the-test', when: term.when, effects: [{ kind: 'set-flag', flag: 'teste-assinado' }] }],
+    ...MUSEUM,
+    triggers: [{ id: 'flag-for-the-test', when: deed.when, effects: [{ kind: 'set-flag', flag: deed.grants }] }],
   }
   proves('radio-hint-coverage', 'office-radio', gate(flagOnly))
   // A term nobody can sign in this build is owed no hint (it is another accusation's to make).
-  spares('radio-hint-coverage', 'a term that cannot be signed', gate(withTerm(MUSEUM, { when: { catalogued: ['net-1897'] } })))
-  // And what a term asks is checked like any other condition.
-  proves('condition-room-missing', 'rewrite', gate(withTerm(MUSEUM, { when: { powered: ['rewrite'] } })))
-  proves('speech-mentions-missing', 'atrium-lectern', gate(withTerm(MUSEUM, { mentions: ['atrium-lectern'] })))
+  spares(
+    'radio-hint-coverage',
+    'a term that cannot be signed',
+    gate(withDeed({ when: { documentsRead: ['doc-termos'], catalogued: ['net-1897'] } }, withoutTheHint)),
+  )
+  // And what a term asks, and what it sends the player to, are checked like any other.
+  proves('condition-room-missing', 'rewrite', gate(withDeed({ when: { powered: ['rewrite'] } })))
+  proves('speech-mentions-missing', 'atrium-rostrum', gate(withDeed({ mentions: ['atrium-rostrum'] })))
 
   // --- the hour of the night ---------------------------------------------------------
   const night = MUSEUM.nightClock
@@ -1944,9 +2035,43 @@ test('the porter by milestone and the hour of the night: each rule of the gate, 
   const { nightClock: _noClock, ...clockless } = MUSEUM
   proves('speech-token-unknown', 'radio.call.holyoke.1', gate(clockless, said('pt-BR', 'radio.call.holyoke.1', 'Ala 1 acesa. {hora}. Câmbio.')))
 
-  // What a call, a hint or a line of the list sends the player to is in the build.
-  proves('speech-mentions-missing', 'atrium-lectern', gate(withCall('porter-holyoke-lit', (call) => ({ ...call, mentions: ['holyoke', 'atrium-lectern'] }))))
-  proves('speech-mentions-missing', 'office-safe', gate(withHint(3, (hint) => ({ ...hint, mentions: [...hint.mentions, 'office-safe'] }))))
+  // What a call, a hint, a line of the list or a paper sends the player to is in the build.
+  proves('speech-mentions-missing', 'atrium-rostrum', gate(withCall('porter-holyoke-lit', (call) => ({ ...call, mentions: ['holyoke', 'atrium-rostrum'] }))))
+  proves('speech-mentions-missing', 'office-strongbox', gate(withHint(3, (hint) => ({ ...hint, mentions: [...hint.mentions, 'office-strongbox'] }))))
+  // H-23: the sheet in the drawer names a key, a safe, a book and a lectern,
+  // and each is in the build: the key as a credential the house declares,
+  // the other three by their own ids. The note it replaced sent the player
+  // to three medals and a vault that no room of the build has. Take any one
+  // of the four away, and the sheet is accused by what it no longer finds.
+  const sheet = MUSEUM.documents.find((doc) => doc.id === 'doc-otavio-handover')
+  assert.deepEqual(sheet?.mentions, ['tool:service-key', 'office-safe', 'doc-termos', 'atrium-lectern'])
+  spares('speech-mentions-missing', 'the sheet in the drawer, as written', authored)
+  const fromTheSheet = (content: MuseumContent) =>
+    gate(content)
+      .filter((issue) => issue.code === 'speech-mentions-missing' && /Document "doc-otavio-handover"/.test(issue.message))
+      .map((issue) => issue.id ?? '')
+  assert.deepEqual(fromTheSheet({ ...MUSEUM, credentials: [] }), ['tool:service-key'], 'the key, as a credential the house declares')
+  assert.deepEqual(
+    fromTheSheet({
+      ...withRoom('office', (room) => ({ containers: (room.containers ?? []).filter((container) => container.id !== 'office-safe') })),
+      locks: MUSEUM.locks.filter((lock) => lock.id !== 'office-safe'),
+    }),
+    ['office-safe'],
+    'the iron safe, which is a lock and a container of one name',
+  )
+  assert.deepEqual(fromTheSheet({ ...MUSEUM, documents: MUSEUM.documents.filter((doc) => doc.id !== 'doc-termos') }), ['doc-termos'], 'the Book of Deeds')
+  assert.deepEqual(
+    fromTheSheet(withRoom('atrium', (room) => ({ devices: (room.devices ?? []).filter((device) => device.id !== 'atrium-lectern') }))),
+    ['atrium-lectern'],
+    'the lectern',
+  )
+  // The recording is held to the same: the cabinet, the portrait and the plinth it speaks of.
+  assert.deepEqual(MUSEUM.documents.find((doc) => doc.id === 'doc-otavio-tape')?.mentions, ['office-cabinet', 'portrait-morgan', 'atrium-podium'])
+  proves(
+    'speech-mentions-missing',
+    'atrium-podium',
+    gate(withRoom('atrium', (room) => ({ devices: (room.devices ?? []).filter((device) => device.id !== 'atrium-podium') }))),
+  )
   // The portal facing a door across its opening is not the door.
   proves('speech-mentions-missing', 'holyoke-shortcut', gate(withCall('porter-shortcut', (call) => ({ ...call, mentions: ['holyoke-shortcut'] }))))
   const listing = (mentions: readonly string[]): MuseumContent => ({
@@ -1960,8 +2085,15 @@ test('the porter by milestone and the hour of the night: each rule of the gate, 
   // Every kind of thing that can be mentioned, each by one the house has.
   spares(
     'speech-mentions-missing',
-    'a room, a piece, a paper, a lock, a container, a device, a breaker and a door',
-    gate(listing(['holyoke', 'net-1897', 'doc-halstead', 'office-drawer', 'holyoke-cabinet-b', 'atrium-podium', 'office-lamp-switch', SHORTCUT])),
+    'a room, a piece, a paper, a lock, a container, a device, a breaker, a door and a credential the house declares',
+    gate(listing(['holyoke', 'net-1897', 'doc-halstead', 'office-drawer', 'holyoke-cabinet-b', 'atrium-podium', 'office-lamp-switch', SHORTCUT, 'tool:service-key'])),
+  )
+  // A credential the unions allow and the house does not declare is no more there than a room it does not have.
+  proves('speech-mentions-missing', 'tool:crate-dolly', gate(listing(['office', 'tool:crate-dolly'])))
+  spares(
+    'speech-mentions-missing',
+    'the list as written',
+    authored,
   )
 
   // Whoever names Helena says who she is: the line as it was before L3, in each language.
@@ -1979,54 +2111,32 @@ test('the porter by milestone and the hour of the night: each rule of the gate, 
 // ---------------------------------------------------------------------------
 
 const SERVICE_KEY = { kind: 'tool', id: 'service-key' } as const
-const SAFE_LOCK = {
-  kind: 'tool',
-  id: 'office-safe',
-  requires: 'service-key',
-  consumesTool: true,
-  mapLabelKey: 'lock.office-drawer.mapLabel',
-} as const
+const SAFE_LOCK_ID = 'office-safe'
 /**
- * The chain the Posse will have, on the museum as it is: the drawer hands
- * over a key, the key is declared, and the iron safe leaves the furniture to
- * be a container that key is spent on. None of it is in the real content
- * until the slice that brings the Book it guards.
+ * The chain of the Posse, which the museum has since the slice that brought
+ * the Book: the drawer hands over a key, the key is declared, and the iron
+ * safe is a container that key is spent on, with a door on a hinge and a
+ * proof on its shelf. `patch` breaks it for a case: a field of the safe, or
+ * a list of the content. (While the museum had none of it, this built the
+ * chain on top of it; the cases are the same, on the real thing.)
  */
 const withSafe = (patch: { readonly container?: object; readonly content?: Partial<MuseumContent> } = {}): MuseumContent => ({
   ...withRoom('office', (room) => ({
-    kit: room.kit.filter((placement) => placement.part !== 'office-safe'),
-    containers: [
-      ...(room.containers ?? []),
-      {
-        id: 'office-safe',
-        part: 'office-safe',
-        position: [2.55, 0, 2.45],
-        rotationY: -Math.PI / 2,
-        titleKey: 'container.office.title',
-        lockId: SAFE_LOCK.id,
-        ...patch.container,
-      },
-    ],
+    containers: (room.containers ?? []).map((container) => (container.id === 'office-safe' ? { ...container, ...patch.container } : container)),
   })),
-  locks: [
-    ...MUSEUM.locks.map((lock) =>
-      lock.id === 'office-drawer' ? { ...lock, onOpen: [{ kind: 'grant-credential', credential: SERVICE_KEY }] } : lock,
-    ),
-    SAFE_LOCK,
-  ],
-  credentials: [{ credential: SERVICE_KEY, titleKey: 'container.office.title', icon: 'key' }],
   ...patch.content,
 })
 
 test('a key that is spent, a credential that is data and a door on a hinge: each rule of the gate, on a museum broken for it (L3)', () => {
   const authored = gate(MUSEUM)
-  const sound = gate(withSafe())
   const quiet: string[] = []
   const noisy: string[] = []
   const CODES = [
     'lock-host-kind-unsupported',
     'consumable-multi-consumer',
     'container-node-missing',
+    'device-node-missing',
+    'device-part-not-baked',
     'credential-undeclared',
     'credential-unused',
     'credential-orphan',
@@ -2040,19 +2150,23 @@ test('a key that is spent, a credential that is data and a door on a hinge: each
   const spares = (code: string, what: string, issues: readonly ValidationIssue[]) => {
     if (accused(issues, code).length > 0) noisy.push(`${code} accuses ${what}: ${accused(issues, code).join(', ')}`)
   }
-  // The museum as it is has no key, no safe and no credential yet (they come
-  // with the Book they lead to), and is accused of none of this. Nor is the
-  // museum with the whole chain in it: a tool lock on a cabinet, opened by a
-  // key that an open drawer gives and the content declares.
-  assert.deepEqual(MUSEUM.credentials ?? [], [], 'the list of credentials is data, and empty until a lock asks for one')
-  assert.ok(MUSEUM.locks.every((lock) => lock.kind === 'knowledge'), 'no lock of the house takes a key yet')
-  for (const code of CODES) {
-    spares(code, 'the authored museum', authored)
-    spares(code, 'a museum with a drawer that gives a declared key and a safe that takes it', sound)
-  }
-  // And that museum can be played to the open safe: the key is obtainable
-  // and its lock opens.
-  const played = simulateProgress(withSafe()).final
+  // The museum has the whole chain, and is accused of none of this: a tool
+  // lock on a cabinet, opened by a key that an open drawer gives and the
+  // content declares by the name it is announced with.
+  assert.deepEqual(MUSEUM.credentials, [{ credential: SERVICE_KEY, titleKey: 'credential.service-key.title', icon: 'key' }], 'the one key the house hands over, as data')
+  assert.deepEqual(MUSEUM.locks.map((lock) => `${lock.id}: ${lock.kind}`), ['office-drawer: knowledge', 'office-safe: tool'])
+  const safeLock = MUSEUM.locks.find((lock) => lock.id === SAFE_LOCK_ID)
+  assert.ok(safeLock?.kind === 'tool' && safeLock.requires === 'service-key' && safeLock.consumesTool, 'the safe keeps the key that opens it')
+  const safe = (office.containers ?? []).find((container) => container.id === 'office-safe')
+  assert.deepEqual(
+    [safe?.part, safe?.lockId, safe?.door?.nodePrefix, safe?.contents],
+    ['office-safe', SAFE_LOCK_ID, 'door', [{ node: 'papers' }]],
+    'the iron safe is a container: its lock, its door and what is behind it',
+  )
+  assert.ok(!office.kit.some((placement) => placement.part === 'office-safe'), 'and it is not furniture as well')
+  for (const code of CODES) spares(code, 'the authored museum', authored)
+  // And it can be played to the open safe: the key is obtainable and its lock opens.
+  const played = simulateProgress(MUSEUM).final
   if (played.credentials.join() !== 'tool:service-key') quiet.push('the exhaustive player is not handed the key by the drawer')
   if (!played.locksOpened.includes('office-safe')) quiet.push('the exhaustive player does not open the safe with the key from the drawer')
 
@@ -2060,46 +2174,64 @@ test('a key that is spent, a credential that is data and a door on a hinge: each
   // Given by the drawer, asked by the safe, and in no list: the HUD would
   // have no name to announce it by.
   proves('credential-undeclared', 'tool:service-key', gate(withSafe({ content: { credentials: [] } })))
-  const { credentials: _undeclared, ...listless } = withSafe()
+  const { credentials: _undeclared, ...listless } = MUSEUM
   proves('credential-undeclared', 'tool:service-key', gate(listless))
   // Asked by a lock and given by nothing is undeclared too (and unobtainable, as before).
-  proves('credential-undeclared', 'badge:indoor', gate({ ...withSafe(), locks: [...withSafe().locks, { kind: 'badge', id: 'staff-reader', requires: 'indoor', mapLabelKey: 'lock.office-drawer.mapLabel' }] }))
-  // Declared, and nothing gives it or asks for it: a name for a thing the house does not have.
-  proves('credential-unused', 'tool:service-key', gate({ ...MUSEUM, credentials: [{ credential: SERVICE_KEY, titleKey: 'container.office.title', icon: 'key' }] }))
+  proves('credential-undeclared', 'badge:indoor', gate({ ...MUSEUM, locks: [...MUSEUM.locks, { kind: 'badge', id: 'staff-reader', requires: 'indoor', mapLabelKey: 'lock.office-drawer.mapLabel' }] }))
+  // Declared, and nothing gives it or asks for it: a name for a thing the
+  // house does not have. The key itself, in a museum that neither hands it
+  // over nor asks for it (no safe lock, a drawer that gives nothing, a porter
+  // with no hint about it); and a medallion beside the key in the museum as it is.
+  const nobodyAsks: MuseumContent = {
+    ...withRoom('office', (room) => ({
+      devices: (room.devices ?? []).map((device) =>
+        device.kind === 'radio' ? { ...device, hints: device.hints.filter((hint) => hint.when.credentials === undefined) } : device,
+      ),
+    })),
+    locks: MUSEUM.locks.filter((lock) => lock.id !== SAFE_LOCK_ID).map(({ onOpen: _, ...lock }) => lock),
+  }
+  proves('credential-unused', 'tool:service-key', gate(nobodyAsks))
   proves(
     'credential-unused',
     'medallion:curator',
-    gate(withSafe({ content: { credentials: [...(withSafe().credentials ?? []), { credential: { kind: 'medallion', id: 'curator' }, titleKey: 'container.office.title', icon: 'medallion' }] } })),
+    gate(withSafe({ content: { credentials: [...(MUSEUM.credentials ?? []), { credential: { kind: 'medallion', id: 'curator' }, titleKey: 'container.office.title', icon: 'medallion' }] } })),
   )
-  // A credential a condition waits for is asked for: declared, it is in use.
-  const waited = withSafe()
+  // A credential a condition waits for is asked for: declared, it is in use,
+  // with no lock taking it at all.
   spares(
     'credential-unused',
     'a credential only a condition asks for',
     gate({
       ...MUSEUM,
-      locks: waited.locks.filter((lock) => lock.id !== SAFE_LOCK.id),
-      credentials: waited.credentials,
+      locks: MUSEUM.locks.filter((lock) => lock.id !== SAFE_LOCK_ID),
       triggers: [{ id: 'key-in-hand', when: { credentials: [SERVICE_KEY] }, effects: [{ kind: 'set-flag', flag: 'clock-set' }] }],
     }),
+  )
+  // And a key that a lock asks for and nothing hands over: the drawer that gives nothing.
+  proves(
+    'credential-unobtainable',
+    'tool:service-key',
+    gate({ ...MUSEUM, locks: MUSEUM.locks.map((lock) => (lock.id === 'office-drawer' ? (({ onOpen: _, ...rest }) => rest)(lock) : lock)) }),
+  )
+  proves(
+    'lock-unopenable',
+    SAFE_LOCK_ID,
+    gate({ ...MUSEUM, locks: MUSEUM.locks.map((lock) => (lock.id === 'office-drawer' ? (({ onOpen: _, ...rest }) => rest)(lock) : lock)) }),
   )
 
   // --- a key that is spent has one lock (V3) -------------------------------------
   // Spent is "its lock is open": with two locks the key would be spent by
   // the first and still asked for by the second.
-  const second = (consumesTool: boolean): MuseumContent => {
-    const base = withSafe()
-    return {
-      ...base,
-      rooms: base.rooms.map((room) =>
-        room.id === 'holyoke'
-          ? { ...room, containers: (room.containers ?? []).map((container) => (container.id === 'holyoke-cabinet-b' ? { ...container, lockId: 'service-hatch' } : container)) }
-          : room,
-      ),
-      documents: base.documents.map((doc) => (doc.containerId === 'holyoke-cabinet-b' ? { ...doc, lockId: 'service-hatch' } : doc)),
-      locks: [...base.locks, { kind: 'tool', id: 'service-hatch', requires: 'service-key', consumesTool, mapLabelKey: 'lock.office-drawer.mapLabel' }],
-    }
-  }
+  const second = (consumesTool: boolean): MuseumContent => ({
+    ...MUSEUM,
+    rooms: MUSEUM.rooms.map((room) =>
+      room.id === 'holyoke'
+        ? { ...room, containers: (room.containers ?? []).map((container) => (container.id === 'holyoke-cabinet-b' ? { ...container, lockId: 'service-hatch' } : container)) }
+        : room,
+    ),
+    documents: MUSEUM.documents.map((doc) => (doc.containerId === 'holyoke-cabinet-b' ? { ...doc, lockId: 'service-hatch' } : doc)),
+    locks: [...MUSEUM.locks, { kind: 'tool', id: 'service-hatch', requires: 'service-key', consumesTool, mapLabelKey: 'lock.office-drawer.mapLabel' }],
+  })
   proves('consumable-multi-consumer', 'tool:service-key', gate(second(false)))
   proves('consumable-multi-consumer', 'tool:service-key', gate(second(true)))
   if (!/"office-safe".*"service-hatch"/.test(gate(second(false)).find((issue) => issue.code === 'consumable-multi-consumer')?.message ?? '')) {
@@ -2110,31 +2242,43 @@ test('a key that is spent, a credential that is data and a door on a hinge: each
   spares(
     'consumable-multi-consumer',
     'a key that is not spent, on two locks',
-    gate({ ...shared, locks: shared.locks.map((lock) => (lock.id === SAFE_LOCK.id ? { ...lock, consumesTool: false } : lock)) }),
+    gate({ ...shared, locks: shared.locks.map((lock) => (lock.id === SAFE_LOCK_ID ? { ...lock, consumesTool: false } : lock)) }),
   )
 
   // --- a door on a hinge, and what stands behind it -------------------------------
-  // The recipe of the safe bakes a body and its hardware today, and no door:
-  // a container that swings one needs the nodes, by name.
-  const hinged = { nodePrefix: 'door', hingeAt: [0.3, 0.25], openAngle: -1.75 }
-  proves('container-node-missing', 'office-safe', gate(withSafe({ container: { door: hinged } })))
-  proves('container-node-missing', 'office-safe', gate(withSafe({ container: { contents: [{ node: 'papers' }] } })))
-  const missingNodes = gate(withSafe({ container: { door: hinged, contents: [{ node: 'papers' }] } }))
+  // The recipe of the safe bakes a door of two families and the papers on
+  // its shelf (it baked a body and its hardware, and no door, until the
+  // Posse): a container that swings one needs the nodes, by name.
+  const hinged = safe?.door
+  assert.ok(hinged)
+  proves('container-node-missing', 'office-safe', gate(withSafe({ container: { door: { ...hinged, nodePrefix: 'lid' } } })))
+  proves('container-node-missing', 'office-safe', gate(withSafe({ container: { contents: [{ node: 'ledger' }] } })))
+  const missingNodes = gate(withSafe({ container: { door: { ...hinged, nodePrefix: 'lid' }, contents: [{ node: 'ledger' }] } }))
     .filter((issue) => issue.code === 'container-node-missing')
     .map((issue) => issue.message)
     .join(' | ')
-  if (!/office-safe__door.*\|.*office-safe__papers/.test(missingNodes)) quiet.push('container-node-missing does not name each missing node')
+  if (!/office-safe__lid.*\|.*office-safe__ledger/.test(missingNodes)) quiet.push('container-node-missing does not name each missing node')
   // A family that is baked answers for a door or for contents: the prefix
   // takes every node that begins with it, a content its one node.
-  spares('container-node-missing', 'a door made of a baked family', gate(withSafe({ container: { door: { ...hinged, nodePrefix: 'hardware' } } })))
-  spares('container-node-missing', 'contents that are a baked node', gate(withSafe({ container: { contents: [{ node: 'hardware' }] } })))
-  // With the node there, the same door passes.
+  spares('container-node-missing', 'a door made of one baked family', gate(withSafe({ container: { door: { ...hinged, nodePrefix: 'door-hardware' } } })))
+  spares('container-node-missing', 'contents that are a baked node', gate(withSafe({ container: { contents: [{ node: 'door' }] } })))
+  // And the content as written, against the bake as it was before the
+  // slice that drew these: the safe with no door to swing and no papers, the
+  // lectern with no lamp and no Book, and a machine nobody baked. This is
+  // what the gate said between the content being written and `npm run bake`.
   const kit = BAKED_BUNDLES.find((bundle) => bundle.name === 'kit')
   assert.ok(kit)
-  const withDoorBaked = BAKED_BUNDLES.map((bundle) =>
-    bundle === kit ? { ...bundle, parts: [...bundle.parts, { ...kit.parts[0], name: 'office-safe__door-hardware' }] } : bundle,
-  )
-  spares('container-node-missing', 'a door whose nodes the bake has', gate(withSafe({ container: { door: hinged } }), { bundles: withDoorBaked }))
+  const gone = /^(?:office-safe__(?:door|papers)|atrium-lectern__(?:led|book)|office-answering-machine)/
+  assert.equal(kit.parts.filter((part) => gone.test(part.name)).length, 8, 'the eight nodes the slice baked')
+  const beforeTheBake = BAKED_BUNDLES.map((bundle) => (bundle === kit ? { ...bundle, parts: bundle.parts.filter((part) => !gone.test(part.name)) } : bundle))
+  const unbaked = gate(MUSEUM, { bundles: beforeTheBake })
+  proves('container-node-missing', 'office-safe', unbaked)
+  proves('device-node-missing', 'atrium-lectern', unbaked)
+  proves('device-part-not-baked', 'office-answering-machine', unbaked)
+  const unbakedSaid = unbaked.filter((issue) => /node-missing|not-baked/.test(issue.code)).map((issue) => issue.message).join(' | ')
+  for (const node of ['office-safe__door', 'office-safe__papers', 'atrium-lectern__led', 'atrium-lectern__book', 'office-answering-machine']) {
+    if (!unbakedSaid.includes(node)) quiet.push(`the gate does not name "${node}" when the bake lacks it`)
+  }
 
   assert.deepEqual(quiet, [], 'every broken museum is caught')
   assert.deepEqual(noisy, [], 'and a sound one is not accused of what it does not do')
@@ -2156,9 +2300,42 @@ test('a thing that speaks: the telephone answers with a dead line, and each rule
   assert.equal(en['device.office-telephone.dead'], 'The line is dead.')
   assert.deepEqual([ptBR['device.office-telephone.title'], en['device.office-telephone.title']], ['Telefone', 'Telephone'])
   assert.deepEqual([ptBR['device.office-telephone.prompt'], en['device.office-telephone.prompt']], ['Discar', 'Dial'])
-  // No recording exists in the house yet: the one that does arrives with the
-  // answering machine.
-  assert.ok(MUSEUM.documents.every((doc) => doc.lineKeys === undefined), 'no document of the house is a transcript yet')
+  // The house has one recording, and the machine that plays it: the answering
+  // machine beside the radio, on the mains, with a lamp that blinks while
+  // the message waits unheard. What it plays is a document, line by line.
+  const voices = (office.devices ?? []).filter((device): device is Voice => device.kind === 'voice')
+  assert.deepEqual(voices.map((device) => device.id), ['office-telephone', 'office-answering-machine'])
+  const machine = voices[1]
+  assert.deepEqual(
+    [machine.part, machine.poweredBy, machine.messageLamp, machine.promptKey],
+    ['office-answering-machine', 'office', true, undefined],
+    'the machine is on the mains, shows a lamp, and is listened to by the plain verb',
+  )
+  assert.deepEqual(machine.utterances, [{ when: {}, documentId: 'doc-otavio-tape' }])
+  const recordings = MUSEUM.documents.filter((doc) => doc.lineKeys !== undefined)
+  assert.deepEqual(recordings.map((doc) => [doc.id, doc.containerId, doc.kind]), [['doc-otavio-tape', 'office-answering-machine', 'oral-history']])
+  assert.deepEqual(recordings[0].lineKeys, [1, 2, 3, 4, 5, 6, 7, 8, 9].map((line) => `tape.otavio.${line}`))
+  // It asks the question of the drawer and never answers it; it is cut off
+  // by the power going, and the last line is the machine's, in brackets.
+  for (const dictionary of [ptBR, en] as readonly Record<string, string>[]) {
+    const said = recordings[0].lineKeys!.map((key) => dictionary[key])
+    assert.ok(said.every((line) => typeof line === 'string' && line.length > 0 && line.length <= 130), 'a line of the recording is missing, or does not fit a subtitle')
+    assert.ok(said.every((line) => !/1896/.test(line)), 'the recording gives the year away')
+    assert.match(said[4], /Mintonette/)
+    assert.match(said[7], /—$/, 'the eighth line is cut off in the middle of a sentence')
+    assert.match(said[8], /^\[.*16:47\.\]$/, 'the last line is the machine speaking, with the minute the storm cut the power')
+  }
+  // The minute on its display is the minute the clock on the wall stopped at.
+  const wallClock = (office.devices ?? []).find((device) => device.kind === 'clock')
+  assert.deepEqual(wallClock?.kind === 'clock' ? wallClock.stoppedAt : null, { hours: 16, minutes: 47 })
+  assert.deepEqual(
+    [ptBR['device.office-answering-machine.title'], en['device.office-answering-machine.title']],
+    ['Secretária eletrônica', 'Answering machine'],
+  )
+  assert.deepEqual(
+    [ptBR['device.office-answering-machine.speaker'], en['device.office-answering-machine.speaker']],
+    ['Otávio · recado gravado', 'Otávio · recorded message'],
+  )
 
   const authored = gate(MUSEUM)
   const quiet: string[] = []
@@ -2172,9 +2349,10 @@ test('a thing that speaks: the telephone answers with a dead line, and each rule
   }
   for (const code of CODES) spares(code, 'the authored museum', authored)
 
+  // The telephone, patched: the machine beside it is left as it is written.
   const withVoice = (patch: Partial<Voice>, content: Partial<MuseumContent> = {}): MuseumContent => ({
     ...withRoom('office', (room) => ({
-      devices: (room.devices ?? []).map((device) => (device.kind === 'voice' ? { ...device, ...patch } : device)),
+      devices: (room.devices ?? []).map((device) => (device.id === telephone.id ? { ...device, ...patch } : device)),
     })),
     ...content,
   })
@@ -2240,6 +2418,18 @@ test('a thing that speaks: the telephone answers with a dead line, and each rule
     bundle === kit ? { ...bundle, parts: [...bundle.parts, { ...kit.parts[0], name: 'desk-telephone__led' }] } : bundle,
   )
   spares('device-node-missing', 'a voice whose lamp the bake has', gate(playing({}, { messageLamp: true }), { bundles: withLens }))
+  // The machine has its lens (the authored museum is spared above); with a
+  // bake that lost it, it is the machine that is accused, by the node.
+  const withoutLens = BAKED_BUNDLES.map((bundle) =>
+    bundle === kit ? { ...bundle, parts: bundle.parts.filter((part) => part.name !== 'office-answering-machine__led') } : bundle,
+  )
+  proves('device-node-missing', 'office-answering-machine', gate(MUSEUM, { bundles: withoutLens }))
+  // And the exhaustive player hears it out, with the lamp on: the recording is filed.
+  assert.ok(simulateProgress(MUSEUM).final.documentsRead.includes('doc-otavio-tape'), 'nobody ever hears the message')
+  // A machine with no mains to speak of would play in the dark: the gate asks the room, as for any device.
+  if (!accused(gate(withRoom('office', (room) => ({ devices: (room.devices ?? []).map((device) => (device.id === machine.id ? { ...device, poweredBy: 'tokyo' } : device)) }))), 'device-room-missing').length) {
+    quiet.push('device-room-missing does not accuse the machine fed by a room the house does not have')
+  }
   // Mains that the house does not have feed nothing.
   if (!accused(gate(withVoice({ poweredBy: 'tokyo' })), 'device-room-missing').length) quiet.push('device-room-missing does not accuse a voice fed by a room the house does not have')
 

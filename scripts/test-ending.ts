@@ -18,10 +18,14 @@
  *     the middle of them.
  *
  * The house is made for the test: three rooms, one desk, three terms. The
- * real museum has none of this until the slice that brings the Book, and a
+ * real museum had none of this until the slice that brought the Book, and a
  * suite that proved the machinery on nothing would prove nothing. The store
  * is the real one, and every press here is the function the game's own
  * handler calls (`signingDesk.ts`, `sequenceDirector.ts`), not a copy of it.
+ *
+ * The museum has its one term since then, and its own cases at the end: the
+ * deed of office at the lectern of the hall, and the save that had opened
+ * the drawer before the drawer held a key.
  */
 
 import assert from 'node:assert/strict'
@@ -30,23 +34,31 @@ import { Group, Mesh, MeshBasicMaterial, Vector3 } from 'three'
 
 import { openBrowser } from './lib/liveTabs.ts'
 import { endingWiringProblems, type SourceReader } from './lib/runtimeWiring.ts'
-import { openGame, saveOf, suite } from './lib/storePage.ts'
+import { openGame, saveOf, seeded, shrunk, suite, throughJson } from './lib/storePage.ts'
+import { ORDINARY, playToEnd, press, radioEar, reload } from './lib/playthrough.ts'
 import { readText } from './lib/readText.ts'
 
 const { graphSnapshot, parseGraphSnapshot, serialiseGraphSnapshot, validateAdditive } = await import('../src/content/additive.ts')
+const { CONTENT_LOT } = await import('../src/content/contentLot.ts')
+const { PRE_POSSE_SAVE } = await import('../src/content/legacySave.ts')
+const { SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
 const { en } = await import('../src/content/i18n/en.ts')
 const { ptBR } = await import('../src/content/i18n/pt-BR.ts')
 const { actionGrant, availableActions, contentActions, simulateProgress } = await import('../src/content/simulate.ts')
 const { validateEnding } = await import('../src/content/validate.ts')
 const { progressRulesFor } = await import('../src/engine/contentRegistry.ts')
-const { aimableDevices, airTaken, deviceInputOf, deviceIntent, deviceLive, nextRadioCall, radioCallReady, radioDeliveryStep } = await import(
+const { checklistNews, checklistRows } = await import('../src/engine/checklist.ts')
+const { aimableDevices, airTaken, deviceHeld, deviceInputOf, deviceIntent, deviceLive, nextRadioCall, radioCallReady, radioDeliveryStep, radioDevices } = await import(
   '../src/engine/deviceRules.ts'
 )
 const { hiddenInScene, paintLenses, prepareDeskNodes, showDeskNodes } = await import('../src/engine/deviceNodes.ts')
 const { HOLD_IDLE, holdStep } = await import('../src/engine/holdAction.ts')
 const { interactionHeldIdOf, interactionHeldOf, interactionWinnerOf } = await import('../src/engine/interactionTarget.ts')
 const { MUSEUM } = await import('../src/content/museum.ts')
-const { fillHour } = await import('../src/engine/nightClock.ts')
+const { toolSpent } = await import('../src/engine/lockRules.ts')
+const { fillHour, nightPhraseKey, nightPoints } = await import('../src/engine/nightClock.ts')
+const { checklistPageOf } = await import('../src/engine/notebook.ts')
+const { credentialKey } = await import('../src/engine/progressCondition.ts')
 const { placeRadioCallOn } = await import('../src/engine/radioCall.ts')
 const { sequenceStepSeconds, skipSequenceStepOn, startDueSequenceOn } = await import('../src/engine/sequenceDirector.ts')
 const { dueSequence } = await import('../src/engine/sequenceRules.ts')
@@ -54,7 +66,7 @@ const { pressSigningDeskOn, signAtDeskOn } = await import('../src/engine/signing
 const { deskShows, pendingTerm, signedTerms, signingDeskState, termBlockers, termGrant } = await import('../src/engine/termRules.ts')
 const { compileTriggers } = await import('../src/engine/triggers.ts')
 const { emptyProgress, grantProgress } = await import('../src/state/progressFields.ts')
-const { deskMissingText, devicePrompt } = await import('../src/ui/promptRules.ts')
+const { credentialsTaken, deskMissingText, devicePrompt } = await import('../src/ui/promptRules.ts')
 
 type Content = Parameters<typeof simulateProgress>[0]
 type Progress = ReturnType<typeof emptyProgress>
@@ -597,16 +609,33 @@ await test('a press is held only at a desk with a term ready: what the touch but
   assert.equal(heldOn({ focusedTransitionDoor: { id: 'hall-to-cellar', targetRoom: 'cellar', status: 'ready', armed: false } }), null)
   assert.equal(heldOn({ focusedDevice: null }), null)
 
-  // The museum as it stands has nothing a press is held on: its touch button
-  // acts on the click for every thing in it, as it did before this lot.
+  // The museum has one thing a press is held on: the lectern of the hall,
+  // and only with the deed ready on it (the Book read, the three rooms lit,
+  // not yet signed). Its touch button acts on the click for every other
+  // thing in it, as it did before this lot.
   const lit = save({ roomsPowered: ['office', 'atrium', 'holyoke'], devicesCarried: ['office-radio'], flags: ['clock-set'] })
+  const ready = { ...lit, documentsRead: ['doc-termos'] }
+  const nights = [
+    save(),
+    lit,
+    ready,
+    save({ documentsRead: ['doc-termos'], roomsPowered: ['office', 'atrium'] }),
+    { ...ready, termsSigned: ['termo-posse'], flags: ['clock-set', 'posse-signed'], sequencesSeen: ['seq-posse'] },
+  ]
   for (const { device } of aimableDevices(MUSEUM)) {
-    for (const progress of [save(), lit]) {
-      assert.equal(interactionHeldOf(focus({ focusedDevice: device.id, progress }), MUSEUM), false, `${device.id} asks for its press to be held`)
+    for (const progress of nights) {
+      assert.equal(
+        interactionHeldOf(focus({ focusedDevice: device.id, progress }), MUSEUM),
+        device.id === 'atrium-lectern' && progress === ready,
+        `${device.id}: whether its press is held, on night ${nights.indexOf(progress) + 1} of ${nights.length}`,
+      )
     }
   }
-  assert.deepEqual([MUSEUM.terms ?? [], MUSEUM.sequences ?? []], [[], []], 'the museum has a term or a sequence: this slice gave it none')
-  assert.ok(!MUSEUM.rooms.some((entry) => (entry.devices ?? []).some((device) => device.kind === 'signing-desk')), 'the museum has a signing desk: the lectern stays furniture until the Book')
+  assert.deepEqual(
+    MUSEUM.rooms.flatMap((entry) => (entry.devices ?? []).flatMap((device) => (device.kind === 'signing-desk' ? [device.id] : []))),
+    ['atrium-lectern'],
+    'the lectern of the hall is the one signing desk of the museum',
+  )
 })
 
 await test('a hold that loses the desk does not sign: looked away, let go, or cut by Escape', () => {
@@ -952,6 +981,340 @@ await test('the snapshot writes the terms down, and a term that asks for somethi
   assert.deepEqual(additive({ ...HOUSE, sequences: HOUSE.sequences!.slice(0, 1) } as Content), ['id-renamed-without-alias sequences:seq-house'])
   // A record from before there were terms holds the content to none.
   assert.deepEqual(additive(HOUSE, { ...snapshot, terms: [], ids: { ...snapshot.ids, terms: [], sequences: [] } }), [])
+})
+
+// ---------------------------------------------------------------------------
+// The Posse, on the museum itself (T19, T20)
+// ---------------------------------------------------------------------------
+
+// Everything above is proved on a house made for the purpose, because the
+// museum had no term until the slice that brought the Book. It has one now:
+// the deed of office, signed at the lectern of the hall. These are the cases
+// of the museum's own night, on the real store, by the hands the robot
+// plays with (`lib/playthrough.ts`): each of them is the handler the game
+// calls, and none is a copy of one.
+
+const MUSEUM_RULES = progressRulesFor(MUSEUM)
+const LECTERN = 'atrium-lectern'
+const POSSE = 'termo-posse'
+const KEY = 'tool:service-key'
+const KEY_TRIGGER = 'lock:office-drawer:opened'
+/** What marks a drawer that was opened before it held a key (`PRE_POSSE_SAVE.drawer`). */
+const LEGACY_DRAWER = 'legacy-pre-L3-drawer'
+const SHORTCUT = 'atrium-from-holyoke-shortcut'
+const credentialTitles = new Map((MUSEUM.credentials ?? []).map((entry) => [credentialKey(entry.credential), entry.titleKey]))
+const listItems = checklistPageOf(MUSEUM)?.items ?? []
+const pencilLines = (progress: Progress) =>
+  checklistRows(listItems, progress, MUSEUM)
+    .filter((row) => row.author === 'curator')
+    .map((row) => `${row.labelKey}: ${row.done}`)
+const throughDoor = (doorId: string, from: string, to: string) => ({ kind: 'door', doorId, from, to }) as const
+/** Somebody who hears every call the moment it is due, and never calls the porter herself. */
+const everyCall = () => radioEar(MUSEUM, { random: () => 0, promptness: 1, callChance: 0 })
+const callsOf = (ear: ReturnType<typeof everyCall>) => ear.heard.flatMap((entry) => (entry.callId ? [entry.callId] : []))
+
+/** The museum's rules in the slot, and a page of the real store opened on this save: on the title screen still. */
+async function atTheMuseum(saved?: unknown): Promise<Page> {
+  const { registerProgressRules } = await import('../src/state/progressRules.ts')
+  registerProgressRules(MUSEUM_RULES)
+  return openGame(saved)
+}
+
+await test('on the museum: the lectern names the deed once the Book is read, signs nothing while a room is dark, and with the house lit a held press signs it', async () => {
+  assert.deepEqual((MUSEUM.terms ?? []).map((term) => term.id), [POSSE], 'the museum has one term in this lot: the deed of office')
+  const desk = deskOf(MUSEUM)
+  assert.equal(desk?.id, LECTERN, 'the lectern of the hall is where it is signed')
+  const page = await atTheMuseum()
+  page.state().start()
+  const store = page.store.useMuseum
+  const intent = () => deviceIntent(desk, deviceInputOf(desk, page.state(), MUSEUM))
+  const stands = () => {
+    const now = intent()
+    assert.equal(now.kind, 'desk')
+    return (now as Extract<typeof now, { kind: 'desk' }>).state
+  }
+  const shows = () => deskShows(stands(), desk, page.progress())
+  const go = (action: Parameters<typeof press>[2]) => press(page, MUSEUM, action)
+  const roomTitle = (dictionary: Record<string, string>) => (roomId: string) => dictionary[MUSEUM.rooms.find((entry) => entry.id === roomId)!.titleKey]
+
+  // Nothing brought to it: it says what it is and what it lacks, and neither its lamp nor a Book is drawn.
+  assert.deepEqual(devicePrompt(desk, intent()), { form: 'notice', titleKey: 'device.atrium-lectern.title', noticeKey: 'device.atrium-lectern.empty' })
+  assert.deepEqual(shows(), { lamp: false, book: false })
+  assert.equal(deviceLive(intent()), false, 'an empty lectern takes the key')
+
+  // The year typed by somebody who never saw it: the key, the safe and the
+  // Book, with every room of the house dark. The Posse is not brought
+  // forward by any of it.
+  go({ kind: 'container', containerId: 'office-cabinet' })
+  go({ kind: 'code', lockId: 'office-drawer', entry: '1896' })
+  assert.deepEqual(page.progress().credentials, [KEY])
+  go({ kind: 'container', containerId: 'office-safe' })
+  assert.ok(page.progress().documentsRead.includes('doc-termos') && page.progress().documentsRead.includes('doc-label-proof-office'))
+  assert.deepEqual(toolSpent(MUSEUM.locks, page.progress()), [KEY], 'the key was not left in the safe it opened')
+  assert.deepEqual(page.progress().roomsPowered, [])
+  // The deed is on the lectern, the lamp over it lit, and it waits for the three rooms, each by name.
+  const waiting = stands()
+  assert.equal(waiting.state, 'blocked')
+  assert.deepEqual(waiting.state === 'blocked' ? [waiting.term.id, waiting.blockers] : null, [POSSE, { rooms: ['office', 'atrium', 'holyoke'], documents: [], other: false }])
+  assert.deepEqual(shows(), { lamp: true, book: false })
+
+  go({ kind: 'power', roomId: 'office' })
+  go(throughDoor('atrium-to-office', 'office', 'atrium'))
+  assert.equal(page.state().currentRoom, 'atrium')
+  const view = devicePrompt(desk, intent())
+  assert.deepEqual(view, {
+    form: 'desk',
+    titleKey: 'device.atrium-lectern.title',
+    termKey: 'term.posse.title',
+    missing: { rooms: ['atrium', 'holyoke'], documents: [], other: false },
+  })
+  // In words, in both languages: what the prompt prints after the name of the deed.
+  const missing = view?.form === 'desk' ? view.missing : { rooms: [], documents: [] }
+  assert.equal(
+    deskMissingText({ rooms: missing.rooms.map(roomTitle(ptBR)), documents: [] }, { power: ptBR['desk.missing.power'], document: ptBR['desk.missing.document'] }),
+    'falta luz em: Átrio, Ala 1 · Holyoke',
+  )
+  assert.equal(
+    deskMissingText({ rooms: missing.rooms.map(roomTitle(en)), documents: [] }, { power: en['desk.missing.power'], document: en['desk.missing.document'] }),
+    'no light yet in: Atrium, Wing 1 · Holyoke',
+  )
+  // E on it is answered (a buzz) and writes nothing; the robot's whole hand writes nothing either.
+  const dark = page.progress()
+  assert.equal(pressSigningDeskOn(store, MUSEUM, LECTERN), true)
+  go({ kind: 'sign', deviceId: LECTERN, termId: POSSE })
+  assert.equal(signAtDeskOn(store, MUSEUM, LECTERN), false, 'a hold that fired on a dark house signed the deed')
+  assert.equal(page.progress(), dark, 'a press on the lectern with two rooms dark wrote to the save')
+
+  // One room at a time: the hall, then the wing. It is not signed a room short.
+  go({ kind: 'power', roomId: 'atrium' })
+  const short = stands()
+  assert.deepEqual(short.state === 'blocked' ? short.blockers.rooms : null, ['holyoke'])
+  go({ kind: 'sign', deviceId: LECTERN, termId: POSSE })
+  assert.deepEqual(page.progress().termsSigned, [])
+  go(throughDoor('atrium-to-holyoke', 'atrium', 'holyoke'))
+  go({ kind: 'power', roomId: 'holyoke' })
+  go(throughDoor(SHORTCUT, 'holyoke', 'atrium'))
+  assert.equal(page.state().currentRoom, 'atrium')
+  assert.deepEqual(page.progress().roomsPowered, ['office', 'atrium', 'holyoke'])
+
+  // Lit. The prompt asks for the press to be held, for the seconds the lectern declares.
+  assert.equal(stands().state, 'ready')
+  assert.deepEqual(devicePrompt(desk, intent()), { form: 'hold', holdId: LECTERN, seconds: 1.2, termKey: 'term.posse.title' })
+  assert.equal(deviceHeld(intent()), true)
+  // Let go half way: nothing. A tap is not a signature (D11).
+  const request = pressSigningDeskOn(store, MUSEUM, LECTERN)
+  assert.deepEqual(request, { id: LECTERN, seconds: 1.2 })
+  const pressed = holdStep(HOLD_IDLE, { kind: 'press', request: request as { id: string; seconds: number } })
+  let gesture = pressed
+  for (let frame = 0; frame < 3; frame += 1) gesture = holdStep(gesture.gesture, { kind: 'tick', seconds: 0.25, aimed: LECTERN })
+  assert.equal(gesture.fired, null, 'three quarters of a second signed a deed that asks for more')
+  assert.deepEqual(holdStep(gesture.gesture, { kind: 'release' }), { gesture: HOLD_IDLE, fired: null })
+  // A tap asks instead («Assinar / Cancelar»). Cancel, or looking away, leaves the deed unsigned.
+  const asked = holdStep(pressed.gesture, { kind: 'release' })
+  assert.deepEqual(asked, { gesture: { phase: 'confirming', id: LECTERN }, fired: null })
+  assert.deepEqual(holdStep(asked.gesture, { kind: 'cancel' }), { gesture: HOLD_IDLE, fired: null })
+  assert.deepEqual(holdStep(asked.gesture, { kind: 'tick', seconds: 0.016, aimed: null }), { gesture: HOLD_IDLE, fired: null })
+  assert.deepEqual(page.progress().termsSigned, [], 'a press let go, or a tap never confirmed, signed the deed')
+  // Held to the end: signed, with the flag and the trigger in the same write.
+  const before = page.progress()
+  assert.equal(page.notifications(() => go({ kind: 'sign', deviceId: LECTERN, termId: POSSE })), 1, 'the signature and what follows from it are one write')
+  const signed = page.progress()
+  assert.deepEqual(signed.termsSigned, [POSSE])
+  assert.deepEqual(signed.flags, ['posse-signed'])
+  assert.deepEqual(signed.triggersFired, [KEY_TRIGGER, 'term:termo-posse:signed'])
+  assert.deepEqual(shrunk(before as Raw, signed as Raw), [])
+
+  // What follows needs no radio (this player never took it): a card, and two
+  // lines from the loudspeaker, the first with the hour of this night in words.
+  assert.deepEqual(signed.devicesCarried, [])
+  assert.deepEqual(MUSEUM.sequences?.[0]?.steps, [
+    { kind: 'card', titleKey: 'sequence.posse.card', seconds: 3.5 },
+    { kind: 'line', speakerKey: 'sequence.speaker.porter', lineKey: 'sequence.posse.1' },
+    { kind: 'line', speakerKey: 'sequence.speaker.porter', lineKey: 'sequence.posse.2' },
+  ])
+  // Owed, and until it has closed the lectern offers nothing more: its lamp is out and the Book lies open on it.
+  assert.equal(stands().state, 'signed')
+  assert.deepEqual(devicePrompt(desk, intent()), { form: 'signed', titleKey: 'device.atrium-lectern.title', termKey: 'term.posse.title' })
+  assert.deepEqual(shows(), { lamp: false, book: true })
+  assert.equal(startDueSequenceOn(store, MUSEUM, false), true, 'no sequence follows the signature')
+  assert.deepEqual([page.state().sequence?.id, page.state().sequence?.index, page.state().sequence?.steps], ['seq-posse', 0, 3])
+  const clock = MUSEUM.nightClock!
+  // Six things done on this route: the lamp, the hall, the wing, the drawer, the safe, the deed.
+  assert.equal(nightPoints(clock, signed, MUSEUM), 6)
+  const hourKey = nightPhraseKey(clock, nightPoints(clock, signed, MUSEUM))
+  assert.equal(hourKey, 'night.hour.6')
+  for (const dictionary of [ptBR, en] as Record<string, string>[]) {
+    const said = fillHour(dictionary['sequence.posse.1'], dictionary[hourKey!])
+    assert.ok(!said.includes('{') && said.endsWith(`${dictionary[hourKey!]}.`), `the first line does not say the hour: ${said}`)
+  }
+  assert.equal(fillHour(ptBR['sequence.posse.1'], ptBR[hourKey!]), 'A lâmpada do púlpito acendeu e apagou: assinou. O acervo é seu, curador. Quase dez.')
+  // Seen to its last step, and only then on record.
+  page.state().advanceSequence()
+  page.state().advanceSequence()
+  assert.deepEqual(page.progress().sequencesSeen, [])
+  page.state().advanceSequence()
+  assert.equal(page.state().sequence, null)
+  assert.deepEqual(page.progress().sequencesSeen, ['seq-posse'])
+  assert.equal(startDueSequenceOn(store, MUSEUM, false), false)
+
+  // The list: the three lines in pencil that the night added are ticked, and
+  // the fourth is a promise with its note, like the vault's above it.
+  assert.deepEqual(
+    checklistRows(listItems, page.progress(), MUSEUM).map((row) => `${row.labelKey}: ${row.done}${row.noteKey ? ` (${row.noteKey})` : ''}`),
+    [
+      'notebook.todo.power: true',
+      'notebook.todo.catalogue: false',
+      'notebook.todo.vault: null (notebook.todo.vault.note)',
+      'notebook.todo.drawer: true',
+      'notebook.todo.safe-key: true',
+      'notebook.todo.posse: true',
+      'notebook.todo.proof: null (notebook.todo.proof.note)',
+    ],
+  )
+  // Signing twice is signing once; and through the disk the night stays closed.
+  go({ kind: 'sign', deviceId: LECTERN, termId: POSSE })
+  assert.deepEqual(page.progress().termsSigned, [POSSE])
+  const back = await reload(page)
+  assert.deepEqual([back.progress().termsSigned, back.progress().sequencesSeen, back.progress().flags], [[POSSE], ['seq-posse'], ['posse-signed']])
+  assert.equal(startDueSequenceOn(back.store.useMuseum, MUSEUM, false), false, 'the card played again after a reload')
+
+  // Closed in the middle of the card instead: it starts over, from the card.
+  const cut = await atTheMuseum(saveOf({ ...throughJson(signed as Raw), sequencesSeen: [] }))
+  cut.state().start()
+  assert.equal(startDueSequenceOn(cut.store.useMuseum, MUSEUM, false), true)
+  cut.state().advanceSequence()
+  const again = await reload(cut)
+  assert.deepEqual(again.progress().sequencesSeen, [])
+  assert.equal(startDueSequenceOn(again.store.useMuseum, MUSEUM, false), true)
+  assert.equal(again.state().sequence?.index, 0, 'a sequence cut off by a closed tab went on from where it was')
+})
+
+await test('a save that opened the drawer before it held a key is owed the key as it loads, is told of it once, by its own call, and reaches the Posse (T20)', async () => {
+  assert.deepEqual((PRE_POSSE_SAVE as Raw).drawer, { lockId: 'office-drawer', triggerId: KEY_TRIGGER, flag: LEGACY_DRAWER })
+  const { registerProgressRules } = await import('../src/state/progressRules.ts')
+  const OPEN = ['production-drawer-open', 'l1-route-end', 'l2-shortcut-released'] as const
+  for (const id of OPEN) {
+    const fixture = SAVE_FIXTURES[id].save
+    const record = fixture.progress as Raw
+    assert.ok((record.locksOpened as string[]).includes('office-drawer') && (record.documentsRead as string[]).includes('doc-predecessor'), `${id} is not the save this case is about`)
+    assert.deepEqual([record.credentials ?? [], record.triggersFired ?? []], [[], []], `${id} already holds what the load is to give it`)
+
+    // As a browser loads it: the store first, on the title screen, before
+    // the content has arrived (a slot that settles nothing is the empty slot).
+    registerProgressRules({ settle: (progress) => progress })
+    const page = await openGame(fixture)
+    // The migration alone marks the drawer, and the alias files the sheet beside the old note. No key yet: that is the content's to give.
+    assert.ok(page.progress().flags.includes(LEGACY_DRAWER), `${id}: the load did not mark the drawer as opened before the key`)
+    assert.deepEqual(
+      page.progress().documentsRead.filter((documentId) => /predecessor|handover/.test(documentId)),
+      ['doc-predecessor', 'doc-otavio-handover'],
+      `${id}: the sheet that replaced the note`,
+    )
+    assert.deepEqual(page.progress().credentials, [])
+    // The content arrives, behind the button: the trigger of the open drawer fires, once.
+    registerProgressRules(MUSEUM_RULES)
+    const loaded = page.progress()
+    assert.deepEqual(loaded.credentials, [KEY], `${id}: the save, loaded, does not have the key`)
+    assert.deepEqual(loaded.triggersFired, [KEY_TRIGGER], id)
+    assert.equal(loaded.contentLot, CONTENT_LOT)
+    assert.deepEqual(shrunk(record, loaded as Raw), [], `${id}: the load took something out`)
+    assert.deepEqual([loaded.termsSigned, loaded.sequencesSeen], [[], []])
+    // The other order (the content first, the store after) ends in the same save.
+    assert.deepEqual((await atTheMuseum(fixture)).progress(), loaded, `${id}: the order the two arrive in changes what is loaded`)
+    registerProgressRules(MUSEUM_RULES)
+
+    // Nothing is announced. The HUD mounts after the content has settled the
+    // save (it imports the registry for that), so the key is already there
+    // when it first looks, and so are the two lines the open drawer puts on
+    // the list.
+    assert.deepEqual(credentialsTaken(loaded.credentials.length, loaded.credentials, credentialTitles), [], `${id}: a key owed since another night was announced on Continue`)
+    assert.deepEqual(credentialsTaken(0, loaded.credentials, credentialTitles), ['credential.service-key.title'], 'the check has teeth: a HUD mounted before the content would have announced it')
+    assert.deepEqual(checklistNews(listItems, loaded, loaded, MUSEUM), [])
+    assert.deepEqual(pencilLines(loaded), ['notebook.todo.drawer: true', 'notebook.todo.safe-key: false'])
+
+    // Continue. The porter, in his order: who he is, the light on the
+    // machine, and then the key, by the call made for this save. The call
+    // for a drawer that opens now is never his to make here.
+    page.state().start()
+    const ear = everyCall()
+    ear.listen(page)
+    assert.deepEqual(callsOf(ear), ['porter-hello', 'porter-machine-reminder', 'porter-legacy-drawer'], id)
+    assert.deepEqual(ear.heard.at(-1)?.lineKeys, ['radio.call.legacy-drawer.1'])
+    ear.listen(page)
+    assert.equal(callsOf(ear).length, 3, `${id}: a call was said twice`)
+
+    // The rest of the night, by the robot: the safe with the key it was
+    // owed, the Book, the three rooms it already had, the Posse.
+    const night = await playToEnd(page, MUSEUM, seeded(7), ORDINARY, MUSEUM, ear.listen)
+    const end = night.page.progress()
+    assert.deepEqual(end.termsSigned, [POSSE], `${id}: the night was never signed`)
+    assert.deepEqual(end.sequencesSeen, ['seq-posse'], id)
+    assert.ok(end.flags.includes(LEGACY_DRAWER) && end.flags.includes('posse-signed'), id)
+    assert.ok(end.documentsRead.includes('doc-predecessor') && end.documentsRead.includes('doc-otavio-handover'), `${id}: the old note left the save`)
+    assert.deepEqual(toolSpent(MUSEUM.locks, end), [KEY], id)
+    const said = callsOf(ear)
+    assert.ok(!said.includes('porter-drawer-open'), `${id}: asked what was in a drawer opened on another night`)
+    assert.equal(said.filter((callId) => callId === 'porter-legacy-drawer').length, 1, id)
+    assert.ok(said.includes('porter-safe-open'), `${id}: the safe opened and the porter said nothing`)
+  }
+})
+
+await test('a drawer that opens now hands its key over in the same write, with no mark of an older night, and the porter asks what was in it', async () => {
+  const starts: readonly (readonly [string, unknown])[] = [
+    ['a new game', undefined],
+    ['production-drawer-closed', SAVE_FIXTURES['production-drawer-closed'].save],
+  ]
+  for (const [name, saved] of starts) {
+    const page = await atTheMuseum(saved)
+    assert.deepEqual([page.progress().credentials, page.progress().flags], [[], []], `${name}: a drawer still shut was taken for one opened before the key`)
+    page.state().start()
+    const ear = everyCall()
+    assert.equal(page.state().currentRoom, 'office')
+    press(page, MUSEUM, { kind: 'power', roomId: 'office' })
+    ear.listen(page)
+    assert.equal(callsOf(ear)[0], 'porter-hello', name)
+
+    // No write ever shows the drawer open and the key not handed over.
+    const torn: string[] = []
+    const stop = page.store.useMuseum.subscribe((state) => {
+      const open = state.progress.locksOpened.includes('office-drawer')
+      if (open !== state.progress.credentials.includes(KEY) || open !== state.progress.triggersFired.includes(KEY_TRIGGER)) torn.push(JSON.stringify(state.progress.locksOpened))
+    })
+    const before = page.progress()
+    press(page, MUSEUM, { kind: 'container', containerId: 'office-cabinet' })
+    press(page, MUSEUM, { kind: 'code', lockId: 'office-drawer', entry: '1896' })
+    stop()
+    assert.deepEqual(torn, [], `${name}: the drawer was open in a write that did not carry its key`)
+    const opened = page.progress()
+    assert.deepEqual([opened.credentials, opened.triggersFired, opened.flags], [[KEY], [KEY_TRIGGER], []], name)
+    assert.ok(opened.documentsRead.includes('doc-otavio-handover') && !opened.documentsRead.includes('doc-predecessor'), `${name}: the sheet in the drawer`)
+    // Taken now: announced now, by its name; and the list gains its line in pencil.
+    assert.deepEqual(credentialsTaken(before.credentials.length, opened.credentials, credentialTitles), ['credential.service-key.title'])
+    assert.ok(checklistNews(listItems, before, opened, MUSEUM).includes('notebook.todo.safe-key'), name)
+
+    ear.listen(page)
+    assert.equal(callsOf(ear).at(-1), 'porter-drawer-open', name)
+    assert.deepEqual(ear.heard.at(-1)?.lineKeys, ['radio.call.drawer.1', 'radio.call.drawer.2'])
+    // Through the disk the mark does not appear: the trigger is on record as fired.
+    const back = await reload(page)
+    assert.deepEqual(back.progress().flags, [], `${name}: a reload took this night's drawer for an older one`)
+    const night = await playToEnd(back, MUSEUM, seeded(11), ORDINARY, MUSEUM, ear.listen)
+    assert.deepEqual([night.page.progress().termsSigned, night.page.progress().sequencesSeen], [[POSSE], ['seq-posse']], name)
+    assert.ok(!night.page.progress().flags.includes(LEGACY_DRAWER), name)
+    assert.ok(!callsOf(ear).includes('porter-legacy-drawer'), `${name}: told to look again in a drawer opened a minute ago`)
+    assert.equal(callsOf(ear).filter((callId) => callId === 'porter-drawer-open').length, 1, name)
+  }
+
+  // The two calls about the drawer are news only until the safe is open, and the one about the safe until the deed is signed.
+  const radio = radioDevices(MUSEUM)[0].device
+  const heardSoFar = radio.calls.map((call) => call.id).filter((callId) => !['porter-drawer-open', 'porter-legacy-drawer', 'porter-safe-open'].includes(callId))
+  const late = save({ roomsPowered: ['office', 'atrium', 'holyoke'], radioCalls: heardSoFar, locksOpened: ['office-drawer'], credentials: [KEY], triggersFired: [KEY_TRIGGER] })
+  assert.equal(nextRadioCall(radio, late, MUSEUM)?.id, 'porter-drawer-open')
+  assert.equal(nextRadioCall(radio, { ...late, flags: [LEGACY_DRAWER] }, MUSEUM)?.id, 'porter-legacy-drawer')
+  const safeOpen = { ...late, locksOpened: ['office-drawer', 'office-safe'] }
+  assert.equal(nextRadioCall(radio, safeOpen, MUSEUM)?.id, 'porter-safe-open')
+  assert.equal(nextRadioCall(radio, { ...safeOpen, flags: [LEGACY_DRAWER] }, MUSEUM)?.id, 'porter-safe-open')
+  assert.equal(nextRadioCall(radio, { ...safeOpen, flags: ['posse-signed'] }, MUSEUM), null)
 })
 
 // ---------------------------------------------------------------------------

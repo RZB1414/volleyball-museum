@@ -1315,6 +1315,50 @@ function furnished(roomId: string, kit: RoomData['kit']): MuseumContent {
   )
 }
 
+/**
+ * The two other things that left the furniture with the Posse are solid the
+ * same way: the lectern of the hall, as a device, and the iron safe in the
+ * office, as a container. Each is walked at from the side a player comes
+ * to it by; in a world without it the capsule goes on through where it
+ * stood. (The safe's collider is its carcass alone since its door became a
+ * node of its own: the capsule stops at the frame, a few centimetres nearer
+ * than it did, and an open door is no wall.)
+ */
+for (const { id, list, side } of [
+  { id: 'atrium-lectern', list: 'devices', side: 1 },
+  { id: 'office-safe', list: 'containers', side: -1 },
+] as const) {
+  const room = MUSEUM.rooms.find((candidate) => (candidate[list] ?? []).some((entry) => entry.id === id))
+  const placed = room ? (room[list] ?? []).find((entry) => entry.id === id) : undefined
+  const collider = placed ? colliderPartsOf(placed.part)[0]?.collider : undefined
+  if (!room || !placed || !collider) throw new Error(`${id} is placed among the ${list} with a collider, or this check is about nothing`)
+  const turn = placed.rotationY ?? 0
+  // The collider's centre and its half along the world's x, turned with the placement.
+  const half = Math.abs(collider.halfExtents[0] * Math.cos(turn)) + Math.abs(collider.halfExtents[2] * Math.sin(turn))
+  const offsetX = collider.centre[0] * Math.cos(turn) + collider.centre[2] * Math.sin(turn)
+  const offsetZ = -collider.centre[0] * Math.sin(turn) + collider.centre[2] * Math.cos(turn)
+  const centre = roomPoint(room.id, placed.position[0] + offsetX, placed.position[2] + offsetZ)
+  const start = centre.clone().add(new Vector3(side * (half + CAPSULE.radius + 0.25), 0, 0))
+  const towards = new Vector3(-side, 0, 0)
+  const without = buildMuseumWorld({
+    ...MUSEUM,
+    rooms: MUSEUM.rooms.map((candidate) => ({ ...candidate, [list]: (candidate[list] ?? []).filter((entry) => entry.id !== id) })),
+  })
+  const stopped = walkUntilStopped(world, start, towards, 2)
+  const through = walkUntilStopped(without, start, towards, 2)
+  const face = centre.x + side * (half + CAPSULE.radius)
+  check(
+    `${id} is solid among the ${list}: the capsule stops against it`,
+    Math.abs(stopped.x - face) < 0.02 && side * (face - through.x) > 0.2,
+    `stopped at x ${stopped.x.toFixed(2)} (its face is at ${face.toFixed(2)}); with it out of the world, at ${through.x.toFixed(2)}`,
+  )
+  check(
+    `and no piece of furniture stands in for it: ${id} is placed once, among the ${list}`,
+    MUSEUM.rooms.every((candidate) => candidate.kit.every((placement) => placement.part !== placed.part)) &&
+      MUSEUM.rooms.flatMap((candidate) => [...(candidate.devices ?? []), ...(candidate.containers ?? [])]).filter((entry) => entry.part === placed.part).length === 1,
+  )
+}
+
 {
   const started = performance.now()
   const survey = surveyStanding()
@@ -1410,6 +1454,33 @@ function furnished(roomId: string, kit: RoomData['kit']): MuseumContent {
         ? 'no place to dial it from'
         : 'the telephone is not a target the flood judged',
   )
+  // The three things the Posse is worked through: the answering machine on
+  // the strip of walnut behind the radio, the iron safe in the corner past
+  // the last bookcase, and the lectern against the wall of Wing 1. Each has
+  // a place to stand, in its own room, within the reach of the ray that
+  // works it and outside its own box.
+  for (const [id, kind, roomId, reach] of [
+    ['office-answering-machine', 'device', 'office', INTERACTION_REACH.device],
+    ['office-safe', 'container', 'office', INTERACTION_REACH.container],
+    ['atrium-lectern', 'device', 'atrium', INTERACTION_REACH.device],
+  ] as const) {
+    const verdict = survey.verdicts.find(({ volume }) => volume.id === id)
+    check(
+      `${id} is worked from a place in its own room, within its ray's reach and outside its box`,
+      Boolean(
+        verdict?.volume.kind === kind &&
+          verdict.usable &&
+          verdict.usable.distance > 0 &&
+          verdict.usable.distance <= reach &&
+          roomContaining(verdict.usable.point)?.id === roomId,
+      ),
+      verdict?.usable
+        ? `the eye is ${verdict.usable.distance.toFixed(2)} m from it, of ${reach}`
+        : verdict
+          ? 'no place to work it from'
+          : 'not a target the flood judged',
+    )
+  }
   console.log(`  note  ${[...byKind].map(([kind, count]) => `${count} ${kind}`).join(', ')}`)
   for (const kind of byKind.keys()) {
     const distances = survey.verdicts.flatMap((verdict) =>

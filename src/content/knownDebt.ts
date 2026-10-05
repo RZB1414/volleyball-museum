@@ -152,19 +152,13 @@ export const KNOWN_DEBT: readonly KnownDebt[] = [
   },
 
   // The text lint (L2) reads what the museum prints, and found two things
-  // written before there was a rule. The predecessor's note counts the
-  // museum's age from today; it is a document, so it is held to the rule for
-  // collection text, and it leaves with the lot that replaces it by the
-  // handover sheet. (The other was three answers of the porter's that spoke
+  // written before there was a rule, both paid in L3. The predecessor's note
+  // counted the museum's age from today, and gave way to the first sheet of
+  // the handover, which counts nothing. Three answers of the porter's spoke
   // of the dark, the blackout and the rain whatever the night was doing: an
-  // answer has a `when` since L3, and they look first.)
-  {
-    gate: 'validate:content',
-    code: 'text-ages',
-    id: 'document.predecessor.body',
-    untilLot: 3,
-    note: 'H-23: «existe há cento e trinta anos»; the note gives way to `doc-otavio-handover`',
-  },
+  // answer has a `when` now, and they look first. What that left is one
+  // line, about the rain.
+  //
   // The rain in the dead air is said while it rains, which is until the pump
   // has dried the basement (`flagsUnset: ['basement-drained']`). The pump is
   // the vault's lot. Until then nothing sets the flag and it rains all

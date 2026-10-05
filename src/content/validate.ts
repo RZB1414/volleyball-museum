@@ -738,7 +738,7 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
     ]) {
       if (!roomIds.has(roomId)) error('condition-room-missing', `${where} names unknown room "${roomId}".`, roomId)
     }
-    for (const lockId of [...(condition.locksOpened ?? []), ...(condition.locksClosed ?? [])]) {
+    for (const lockId of [...(condition.locksOpened ?? []), ...(condition.locksClosed ?? []), ...(condition.locksSeen ?? [])]) {
       if (!lockIds.has(lockId)) error('condition-lock-missing', `${where} names unknown lock "${lockId}".`, lockId)
     }
     for (const documentId of [...(condition.documentsRead ?? []), ...(condition.documentsUnread ?? [])]) {
@@ -1087,6 +1087,21 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
         news.id,
       )
     }
+  }
+  // And for the drawer that held a key. The migration marks a save by a lock
+  // that is open and a trigger that never fired: with the lock renamed no
+  // save is ever marked, and with the trigger renamed (it is spelt from the
+  // lock's id) every save is, the one whose drawer opened a minute ago too.
+  const { drawer } = PRE_POSSE_SAVE
+  if (!lockIds.has(drawer.lockId)) {
+    error('legacy-save-drawer', `The pre-Posse save migration watches unknown lock "${drawer.lockId}".`, drawer.lockId)
+  }
+  if (!triggers.some((trigger) => trigger.id === drawer.triggerId)) {
+    error(
+      'legacy-save-drawer',
+      `The pre-Posse save migration takes a drawer for one opened before its key while "${drawer.triggerId}" has not fired, and the content compiles no trigger of that id.`,
+      drawer.triggerId,
+    )
   }
   issues.push(...validateSaveAliases(content))
 
@@ -1726,6 +1741,9 @@ export function validateBake(
         issues.push({
           severity: 'error',
           code: 'device-part-not-baked',
+          // By its id, like the node missing below: an accusation a suite or
+          // the debt table can name.
+          id: device.id,
           message: `Device "${device.id}" uses recipe "${device.part}", which the bake does not produce.`,
         })
         continue
@@ -2409,9 +2427,14 @@ const DIRECTOR_WORDS: Record<string, RegExp> = {
   en: /director/i,
 }
 
-/** Every id a `mentions` may name: whatever in the build a player can be sent to. */
+/**
+ * Every id a `mentions` may name: whatever in the build a player can be sent
+ * to, and whatever the house hands over by name (a credential it declares,
+ * spelt as the save spells it: a sheet may say «the key pinned to this»).
+ */
 function mentionableIds(content: MuseumContent): Set<string> {
   return new Set<string>([
+    ...(content.credentials ?? []).map((entry) => credentialKey(entry.credential)),
     ...content.rooms.flatMap((room) => [
       room.id,
       ...(room.containers ?? []).map((container) => container.id),
@@ -2436,7 +2459,7 @@ function mentionableIds(content: MuseumContent): Set<string> {
  * is not a fixed one: a line that needs it says `{hora}`, which is filled
  * from the night's clock, and no other token means anything. Whoever names
  * Helena says who she is, every time: a line is heard alone. And whatever a
- * call, a hint or a line of the list says it sends the player to
+ * call, a hint, a line of the list or a paper says it sends the player to
  * (`mentions`) is something the build has.
  */
 export function validateSpeech(content: MuseumContent, dictionaries: Dictionaries): ValidationIssue[] {
@@ -2522,6 +2545,9 @@ export function validateSpeech(content: MuseumContent, dictionaries: Dictionarie
     }
   }
   for (const doc of content.documents) {
+    // A paper gives directions too: the sheet in the drawer names a key, a
+    // safe, a book and a lectern, and each has to be in the build (H-23).
+    mentioned.push({ by: `Document "${doc.id}"`, ids: doc.mentions ?? [] })
     for (const page of doc.pages ?? []) {
       for (const item of page.items ?? []) mentioned.push({ by: `Checklist item "${item.labelKey}"`, ids: item.mentions ?? [] })
     }
@@ -2534,7 +2560,7 @@ export function validateSpeech(content: MuseumContent, dictionaries: Dictionarie
       error(
         'speech-mentions-missing',
         id,
-        `${by} sends the player to "${id}", which is no room, piece, paper, lock, container, device, breaker or door of this build.`,
+        `${by} sends the player to "${id}", which is no room, piece, paper, lock, container, device, breaker, door or declared credential of this build.`,
       )
     }
   }

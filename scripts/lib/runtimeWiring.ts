@@ -208,6 +208,20 @@ export function progressWiringProblems(read: SourceReader, components: readonly 
   if (!source('ui/Hud.tsx').includes('lockStatus(')) {
     problems.push('ui/Hud.tsx no longer asks lockStatus whether a container is locked')
   }
+  // A shut lock is not the whole of it: with the key in the hand the same
+  // press opens it, and the prompt went on saying «precisa de chave». Whether
+  // it still bars is the lock rule's answer to the press (`lockBars`), and
+  // the wording is told when a shut lock gives.
+  if (!source('ui/Hud.tsx').includes('lockBars(lock, MUSEUM.facts, { locksOpened, credentials })')) {
+    problems.push(
+      'ui/Hud.tsx no longer asks lockBars whether a shut lock gives to the press: a safe says it needs the key the player is holding',
+    )
+  }
+  if (!source('ui/Hud.tsx').includes('containerPrompt(container, lock, barred, shut && !barred)')) {
+    problems.push(
+      'ui/Hud.tsx no longer tells containerPrompt when a shut lock gives to the press: the prompt says «Ler» over an E that turns a key',
+    )
+  }
   for (const path of components) {
     const component = source(path)
     if (/\bopenLock\(/.test(component)) {
@@ -990,6 +1004,9 @@ export function deviceWiringProblems(read: SourceReader): string[] {
  * the very function the component calls, so the hand proves the function and
  * not the `case` that reaches it; nothing in Node draws a reader, swings a
  * door or mounts a toast. These hold each component to the call.
+ *
+ * A fifth joined them with the Posse: the toast of a line the curator has
+ * just noted on the list (`checklistToastStep`).
  */
 export function officeAnswersWiringProblems(read: SourceReader): string[] {
   const problems: string[] = []
@@ -1146,6 +1163,34 @@ export function officeAnswersWiringProblems(read: SourceReader): string[] {
     problems.push(
       'ui/Hud.tsx no longer imports engine/contentRegistry: its toasts may first see a save the content has not settled, and announce what a trigger gives at load',
     )
+  }
+
+  // --- a line just noted in the notebook (L3, the Posse) -------------------------------
+  // «Anotado no caderno» is decided by a rule over two saves, the one the HUD
+  // last saw and the one it sees now (`checklistToastStep`). The component's
+  // part is to hand it those two, and the list the notebook itself draws.
+  need(
+    'ui/Hud.tsx',
+    'const step = checklistToastStep(checklistItems, seen.current, progress, MUSEUM, unlocked)',
+    'the toast of a line just noted is no longer decided by the rule: it would greet a Continue, or a player who has no notebook to look in',
+  )
+  need(
+    'ui/Hud.tsx',
+    'const checklistItems = checklistPageOf(MUSEUM)?.items ?? []',
+    'the toast watches a list of its own, and not the one the notebook draws',
+  )
+  need(
+    'ui/Hud.tsx',
+    'const seen = useRef(progress)',
+    'the toast has no save to compare with: its first render would announce every line a save arrives with',
+  )
+  need(
+    'ui/Hud.tsx',
+    'seen.current = progress',
+    'the toast never moves on from the save it first saw: every later write would announce the same line again',
+  )
+  if (!/<div className="toast-stack">(?:(?!<\/div>).)*<ChecklistToast \/>/.test(squeezed(read('ui/Hud.tsx')))) {
+    problems.push('ui/Hud.tsx no longer mounts ChecklistToast in the stack of toasts: a line is added to a page the player is not looking at, without a word')
   }
   return problems
 }

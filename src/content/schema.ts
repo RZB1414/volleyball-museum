@@ -375,6 +375,12 @@ export type ProgressCondition = {
   readonly unpowered?: readonly EraId[]
   readonly locksOpened?: readonly string[]
   readonly locksClosed?: readonly string[]
+  /**
+   * All of these locks were touched, open or not: the keypad came up, or the
+   * safe said what it needs. A lock once touched stays touched, and that is
+   * the moment the curator has something to write down about it.
+   */
+  readonly locksSeen?: readonly string[]
   readonly documentsRead?: readonly string[]
   /**
    * None of these has been read yet. The reading layer stays optional, so
@@ -502,6 +508,10 @@ export type DocumentData = {
     | 'scorecard'
     | 'oral-history'
     | 'notebook'
+    /** A bound book of the house: the deeds each curator signs. */
+    | 'ledger'
+    /** A printer's proof: a thing made to be corrected, with the corrections on it. */
+    | 'proof'
   readonly titleKey: string
   /** The body, or for a paged notebook the one-line summary the archive lists. */
   readonly bodyKey: string
@@ -525,6 +535,15 @@ export type DocumentData = {
   /** Set when the container is locked. Gates the DEPTH layer, never a gallery. */
   readonly lockId?: string
   readonly revealsFactId?: string
+  /**
+   * Ids of the build this paper sends the player to, as a call of the
+   * porter's does: a room, a piece, another paper, a lock, a container, a
+   * device, or a credential the house declares (spelt as the save spells
+   * it). A sheet that says «the key pinned to this sheet is for the iron
+   * safe» is a direction like any other, and the gate holds it to a key and
+   * a safe the build has. Omitted: it sends the player nowhere.
+   */
+  readonly mentions?: readonly string[]
 }
 
 // ---------------------------------------------------------------------------
@@ -618,6 +637,7 @@ export type KitPartId =
   | 'curator-notebook'
   | 'desk-radio'
   | 'desk-telephone'
+  | 'office-answering-machine'
   | 'office-wall-clock'
   | 'door-access-panel'
 
@@ -1240,7 +1260,7 @@ export type MuseumContent = {
   readonly triggers?: readonly Trigger[]
   /** The hour of the night, by what has been done. Without it no line may say `{hora}`. */
   readonly nightClock?: NightClock
-  /** What the curator signs, oldest first. None until the lectern is a signing desk. */
+  /** What the curator signs, oldest first. Each is signed at a signing desk that lists it. */
   readonly terms?: readonly Term[]
   /** What the game shows by itself, once each, in this order when two are owed. */
   readonly sequences?: readonly DirectedSequence[]

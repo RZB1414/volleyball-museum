@@ -1,7 +1,7 @@
 /**
  * The working props of the opening scene: the curator's notebook, the
- * porter's radio, the stopped electric clock, the door's access panel and the
- * desk telephone.
+ * porter's radio, the stopped electric clock, the door's access panel, the
+ * desk telephone and the answering machine beside it.
  *
  * They follow the office conventions. Desk props stand on y = 0, their support
  * datum. Wall props sit on the wall plane z = 0, project into the room along
@@ -695,4 +695,65 @@ export function buildDeskTelephone() {
     family.computeBoundingBox()
   }
   return { body: moulding, card: numbers }
+}
+
+// ---------------------------------------------------------------------------
+// 6. The answering machine
+// Recipe id: office-answering-machine
+// ---------------------------------------------------------------------------
+
+/**
+ * A desk answering machine of the cassette years: a low black case, the lid
+ * of the tape well raised at the back, a slotted speaker, a row of keys along
+ * the front and a message lamp on top. Front (the keys) is +Z; it stands on
+ * y = 0 like every desk prop, 0.15 m wide and 0.21 m from front to back, so
+ * that it fits the strip of walnut between the blotter and the desk's edge.
+ *
+ * Three families, as few as say what it is. `led` is the lamp, a lens the
+ * runtime lights and darkens: it blinks while a message waits unheard, and
+ * it is on top, where it shows from every side of the desk. `play` is the
+ * row of keys, in brass against the black so that the one thing to press
+ * reads from across the room. Everything else is the case.
+ */
+export function buildAnsweringMachine({ width = 0.15, depth = 0.21, height = 0.046 } = {}) {
+  const body = []
+  const play = []
+  const led = []
+
+  const front = depth / 2
+
+  const housing = bevelledBox(width, height, depth, 0.006, 1)
+  housing.translate(0, height / 2, 0)
+  body.push(housing)
+
+  // The lid of the tape well, a few millimetres proud at the back.
+  const lid = { width: 0.108, depth: 0.092, rise: 0.007, z: -0.046 }
+  const well = bevelledBox(lid.width, lid.rise, lid.depth, 0.003, 1)
+  well.translate(-0.012, height + lid.rise / 2 - 0.001, lid.z)
+  body.push(well)
+
+  // The speaker, as slots standing a millimetre proud so that they catch the
+  // lamp: black on black is read by its edges or not at all.
+  for (let slot = 0; slot < 4; slot += 1) {
+    body.push(plainBox(0.058, 0.0015, 0.004, -0.034, height + 0.00075, 0.018 + slot * 0.0095))
+  }
+
+  // Five keys in a row along the front edge.
+  const key = { width: 0.02, depth: 0.017, rise: 0.006, pitch: 0.026 }
+  for (let index = -2; index <= 2; index += 1) {
+    play.push(plainBox(key.width, key.rise, key.depth, index * key.pitch, height + key.rise / 2, front - 0.022))
+  }
+
+  // The message lamp: a low lens on top, to the right of the speaker.
+  const lens = new CylinderGeometry(0.0065, 0.0075, 0.005, 8)
+  lens.translate(0.046, height + 0.0025, 0.034)
+  led.push(lens)
+
+  return {
+    // Bevelled and plain boxes only, so `crease: null` keeps their normals.
+    body: finalize(merge(body), { crease: null, metresPerTile: 0.15 }),
+    play: finalize(merge(play), { crease: null, metresPerTile: 0.08 }),
+    led: finalize(merge(led), { crease: Math.PI / 5, metresPerTile: 0.05 }),
+    layout: { width, depth, height: height + lid.rise - 0.001, front },
+  }
 }

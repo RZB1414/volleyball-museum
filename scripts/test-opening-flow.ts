@@ -76,6 +76,7 @@ const {
   radioCallReady,
   radioDevices,
   radioHintFor,
+  radioHintIndex,
   savedClockSeconds,
 } = await import('../src/engine/deviceRules.ts')
 const {
@@ -100,8 +101,9 @@ const {
 const { hiddenInScene } = await import('../src/engine/deviceNodes.ts')
 const { checklistPageOf, containerById, journalUnlocked, notebookPagesFor } = await import('../src/engine/notebook.ts')
 const { containerGrant } = await import('../src/engine/progressGrants.ts')
+const { lockBars } = await import('../src/engine/lockRules.ts')
 const { containerReadQueue, readerAdvance, readerKeyPage, readerPageCount, transcriptText } = await import('../src/engine/readingQueue.ts')
-const { contentActions } = await import('../src/content/simulate.ts')
+const { contentActions, simulateProgress } = await import('../src/content/simulate.ts')
 const { isHoldCancelKey, isInteractKey, isUnclaimedInteractKey } = await import('../src/engine/primaryAction.ts')
 const { progressConditionMet } = await import('../src/engine/progressCondition.ts')
 const {
@@ -126,7 +128,7 @@ const {
   shouldAnnounceJournal,
 } = await import('../src/ui/hudRules.ts')
 const { portalOpening } = await import('../src/ui/mapGeometry.ts')
-const { containerPrompt, credentialsTaken, devicePrompt } = await import('../src/ui/promptRules.ts')
+const { checklistToastStep, containerPrompt, credentialsTaken, devicePrompt } = await import('../src/ui/promptRules.ts')
 const { deviceWiringProblems, holdWiringProblems, officeAnswersWiringProblems } = await import('./lib/runtimeWiring.ts')
 
 type Progress = ReturnType<typeof migrateProgress>
@@ -183,8 +185,10 @@ test('a pre-opening save keeps its journal and hears no stale first call', () =>
   // No call sends them to a lit breaker, and none tells them what they did
   // on another night: the calls for the hall, for Wing 1 and for the first
   // piece checked count as heard (L3). What is owed is the porter's
-  // introduction, which every save hears once.
-  assert.deepEqual(dueRadioCalls(radio, progress, MUSEUM).map((call) => call.id), ['porter-hello'])
+  // introduction, which every save hears once, and his word about the
+  // light on the answering machine, which is blinking tonight whatever was
+  // done on another night.
+  assert.deepEqual(dueRadioCalls(radio, progress, MUSEUM).map((call) => call.id), ['porter-hello', 'porter-machine-reminder'])
   for (const id of ['porter-atrium-service', 'porter-holyoke-lit', 'porter-first-catalogued']) {
     assert.ok(progress.radioCalls.includes(id), `"${id}" would be told as news`)
   }
@@ -271,9 +275,10 @@ test('a save from another version or full of junk degrades to a valid one', () =
 
 test('the first call only plays while the atrium is still dark', () => {
   // With the hall lit the instruction for its breaker is gone, for good; the
-  // porter's introduction and his word about the hall are what is owed.
+  // porter's introduction, his word about the hall and (since the Posse)
+  // the one about the light on the answering machine are what is owed.
   const lit = progressWith({ roomsPowered: ['office', 'atrium'], documentsRead: ['doc-welcome'] })
-  assert.deepEqual(dueRadioCalls(radio, lit, MUSEUM).map((call) => call.id), ['porter-hello', 'porter-atrium-service'])
+  assert.deepEqual(dueRadioCalls(radio, lit, MUSEUM).map((call) => call.id), ['porter-hello', 'porter-atrium-service', 'porter-machine-reminder'])
   const dark = progressWith({ roomsPowered: ['office'], documentsRead: ['doc-welcome'] })
   assert.deepEqual(dueRadioCalls(radio, dark, MUSEUM).map((call) => call.id), ['porter-hello', 'porter-first-call'])
 })
@@ -380,7 +385,16 @@ test('the notebook opens on the list, from the key and from the icon (L3)', () =
   const page = checklistPageOf(MUSEUM)
   assert.equal(page?.style, 'checklist')
   assert.equal(page?.headingKey, 'notebook.todo.heading')
-  assert.deepEqual(page?.items?.map((item) => item.labelKey), ['notebook.todo.power', 'notebook.todo.catalogue', 'notebook.todo.vault'])
+  assert.deepEqual(page?.items?.map((item) => item.labelKey), [
+    'notebook.todo.power',
+    'notebook.todo.catalogue',
+    'notebook.todo.vault',
+    // In the curator's pencil, each from the moment the night gives it a reason.
+    'notebook.todo.drawer',
+    'notebook.todo.safe-key',
+    'notebook.todo.posse',
+    'notebook.todo.proof',
+  ])
   assert.equal(checklistPageOf({ documents: MUSEUM.documents.filter((doc) => !doc.pages) }), null, 'a content with no list has none to show')
   assert.ok(journal.includes('const page = checklistPageOf(MUSEUM)'), 'the tab asks the rule for its page')
   assert.ok(journal.includes('<NotebookPageView page={page} />'), 'and draws it as the notebook does: alive')
@@ -570,13 +584,45 @@ test('a thing that only says something holds the prompt and never the key (L3)',
   assert.equal(podium.room.id, 'atrium')
   assert.equal(podium.device.kind, 'notice')
   // The crosshair rests on what answers it: the radio, the plinth, the clock
-  // on the office wall (it can be put right) and the telephone on the desk
-  // (it has a dead line to say). A door reader says nothing to E, and is not
-  // in the list.
+  // on the office wall (it can be put right), the telephone on the desk (it
+  // has a dead line to say) and, since the Posse, the answering machine
+  // beside it and the lectern of the hall. A door reader says nothing to E,
+  // and is not in the list.
   assert.deepEqual(
     aimableDevices(MUSEUM).map((entry) => `${entry.room.id}/${entry.device.id}`).sort(),
-    ['atrium/atrium-podium', 'office/office-clock', 'office/office-radio', 'office/office-telephone'],
+    [
+      'atrium/atrium-lectern',
+      'atrium/atrium-podium',
+      'office/office-answering-machine',
+      'office/office-clock',
+      'office/office-radio',
+      'office/office-telephone',
+    ],
   )
+  // The lectern with nothing brought to it is the plinth's kind of answer:
+  // it holds the prompt with what it is and what it lacks, and never the key.
+  const lectern = aimableDevices(MUSEUM).find((entry) => entry.device.id === 'atrium-lectern')!.device
+  const bare = focusState({ focusedDevice: 'atrium-lectern', focusedDeviceDistance: 1.4, progress: progressWith({ roomsPowered: ['office', 'atrium', 'holyoke'] }) })
+  assert.deepEqual(interactionWinnerOf(bare, MUSEUM), { kind: 'device', id: 'atrium-lectern', live: false })
+  assert.deepEqual(devicePrompt(lectern, deviceIntent(lectern, deviceInputOf(lectern, bare, MUSEUM))), {
+    form: 'notice',
+    titleKey: 'device.atrium-lectern.title',
+    noticeKey: 'device.atrium-lectern.empty',
+  })
+  assert.equal(`${ptBR['device.atrium-lectern.title']} — ${ptBR['device.atrium-lectern.empty']}`, 'Púlpito — mesa de assinatura: falta o Livro de Termos')
+  assert.equal(`${en['device.atrium-lectern.title']} — ${en['device.atrium-lectern.empty']}`, 'Lectern — signing desk: the Book of Deeds is missing')
+  // The machine: dead in the dark and saying so with no key; with the lamp
+  // on, a thing E plays; and once heard to its end, a thing E plays again.
+  const machine = aimableDevices(MUSEUM).find((entry) => entry.device.id === 'office-answering-machine')!.device
+  const machineView = (progress: Progress) => devicePrompt(machine, deviceIntent(machine, deviceInputOf(machine, { progress, radio: null }, MUSEUM)))
+  assert.deepEqual(machineView(progressWith()), { form: 'action', key: false, labelKey: 'prompt.voice.dead', titleKey: 'device.office-answering-machine.title' })
+  assert.deepEqual(machineView(progressWith({ roomsPowered: ['office'] })), { form: 'action', key: true, labelKey: 'prompt.voice.play', titleKey: 'device.office-answering-machine.title' })
+  assert.deepEqual(machineView(progressWith({ roomsPowered: ['office'], documentsRead: ['doc-otavio-tape'] })), {
+    form: 'action',
+    key: true,
+    labelKey: 'prompt.voice.again',
+    titleKey: 'device.office-answering-machine.title',
+  })
 
   // Alone under the crosshair it owns the prompt, and E has nothing to do:
   // dark or lit, with the radio in the pocket or not.
@@ -992,7 +1038,7 @@ test('a credential is announced by its name when it is taken, and never because 
   // A credential this content does not declare (another build's) has no name to be announced by.
   assert.deepEqual(credentialsTaken(0, ['badge:beach'], titles), [])
   assert.deepEqual(credentialsTaken(0, ['badge:beach', KEY], titles), ['credential.service-key.title'])
-  assert.deepEqual(credentialsTaken(0, [KEY], new Map()), [], 'with no credential declared, as in this slice, nothing can be announced')
+  assert.deepEqual(credentialsTaken(0, [KEY], new Map()), [], 'in a content that declares no credential, nothing can be announced')
   // The words: «Você pegou — {nome}».
   assert.equal(ptBR['credential.taken'], 'Você pegou')
   assert.equal(en['credential.taken'], 'You took')
@@ -1000,7 +1046,57 @@ test('a credential is announced by its name when it is taken, and never because 
   // was owed) is in the save before the HUD first looks: `test:locks` plays
   // that load against the store, and the wiring further down holds the HUD
   // to importing the registry that makes it so.
-  assert.deepEqual(MUSEUM.credentials ?? [], [])
+  //
+  // The house declares one: the key pinned to the sheet in the drawer.
+  assert.deepEqual(MUSEUM.credentials, [{ credential: { kind: 'tool', id: 'service-key' }, titleKey: 'credential.service-key.title', icon: 'key' }])
+  const declared = new Map((MUSEUM.credentials ?? []).map((entry) => [`${entry.credential.kind}:${entry.credential.id}`, entry.titleKey]))
+  const [announced] = credentialsTaken(0, [KEY], declared)
+  assert.equal(`${ptBR['credential.taken']} — ${ptBR[announced as 'credential.service-key.title']}`, 'Você pegou — Chave do cofre de ferro')
+  assert.equal(`${en['credential.taken']} — ${en[announced as 'credential.service-key.title']}`, 'You took — Key to the iron safe')
+})
+
+test('a line in the curator\'s pencil is said once, when it is written, to whoever holds the notebook (L3)', () => {
+  // «Anotado no caderno». The list gains a line by a condition over several
+  // lists of the save, so the rule is asked of two saves: the one the HUD
+  // last saw and the one it sees now.
+  const items = checklistPageOf(MUSEUM)?.items ?? []
+  const step = (before: Progress, after: Progress, holdsNotebook = true) => checklistToastStep(items, before, after, MUSEUM, holdsNotebook)
+  const night = progressWith({ roomsPowered: ['office'], documentsRead: ['doc-welcome'] })
+  // On mount the save is whole: the HUD compares it with itself.
+  assert.equal(step(night, night), 'keep')
+  // The message heard to its end: the drawer and its question are noted.
+  const heard = { ...night, documentsRead: ['doc-welcome', 'doc-otavio-tape'] }
+  assert.equal(step(night, heard), 'show')
+  // The keypad touched instead: the same line, by the other way to it.
+  assert.equal(step(night, { ...night, locksSeen: ['office-drawer'] }), 'show')
+  // Noted already: touching the keypad after the message adds no line.
+  assert.equal(step(heard, { ...heard, locksSeen: ['office-drawer'] }), 'keep')
+  // The drawer opens: its line is ticked (no news) and the key is noted (news).
+  const opened = { ...heard, locksSeen: ['office-drawer'], locksOpened: ['office-drawer'], credentials: ['tool:service-key'] }
+  assert.equal(step(heard, opened), 'show')
+  // The safe: the deed and the proof, in one write, are one toast.
+  const safe = { ...opened, locksOpened: ['office-drawer', 'office-safe'], documentsRead: [...heard.documentsRead, 'doc-termos', 'doc-label-proof-office'] }
+  assert.equal(step(opened, safe), 'show')
+  // Signing ticks a line and writes none; a room lit, a piece checked, a call heard write none.
+  assert.equal(step(safe, { ...safe, termsSigned: ['termo-posse'], flags: ['posse-signed'] }), 'keep')
+  assert.equal(step(night, { ...night, roomsPowered: ['office', 'atrium'], catalogued: ['portrait-morgan'], radioCalls: ['porter-hello'] }), 'keep')
+  // The director's lines were in ink before the night began: none of them is ever news.
+  assert.equal(step(progressWith(), night), 'keep')
+  // Without the notebook the line is written all the same, and nothing is
+  // said: there is no page to go and look at. Taking the notebook later
+  // announces nothing either, the line being there already.
+  const noNotebook = progressWith({ roomsPowered: ['office'] })
+  const heardWithout = { ...noNotebook, documentsRead: ['doc-otavio-tape'] }
+  assert.equal(step(noNotebook, heardWithout, false), 'keep')
+  assert.equal(step(heardWithout, { ...heardWithout, documentsRead: ['doc-otavio-tape', 'doc-welcome'] }, true), 'keep')
+  // A new game takes the lines away: a toast still up belongs to the game that was erased.
+  assert.equal(step(safe, progressWith()), 'hide')
+  assert.equal(step(safe, progressWith(), false), 'hide')
+  // And a save that arrives with its lines (a drawer opened on another night,
+  // the key handed over at load) is the save the HUD first sees: nothing to say.
+  const loaded = progressWith({ roomsPowered: ['office'], documentsRead: ['doc-welcome'], locksSeen: ['office-drawer'], locksOpened: ['office-drawer'], credentials: ['tool:service-key'] })
+  assert.equal(step(loaded, loaded), 'keep')
+  assert.deepEqual([ptBR['checklist.noted'], en['checklist.noted']], ['Anotado no caderno', 'Noted in your notebook'])
 })
 
 // ---------------------------------------------------------------------------
@@ -1204,7 +1300,7 @@ test('a door swings on its hinge without moving a node, and what stands behind i
   assert.equal(doorAngleAfter(0.3, 0, 0, 1), 0, 'a door that opens by nothing is where it is told to be')
 })
 
-test('the components ask those rules: the voice, the reader, the hinge and the toast of a credential (L3)', () => {
+test('the components ask those rules: the voice, the reader, the hinge, the toast of a credential and the toast of a line just noted (L3)', () => {
   assert.deepEqual(officeAnswersWiringProblems(source), [])
   const changed = (path: string, from: string | RegExp, to: string) => (asked: string) => {
     if (asked !== path) return source(asked)
@@ -1248,6 +1344,13 @@ test('the components ask those rules: the voice, the reader, the hinge and the t
     ['a credential named by the component', changed('ui/Hud.tsx', '[credentialKey(entry.credential), entry.titleKey]', "[credentialKey(entry.credential), 'credential.taken']")],
     ['a toast nobody mounts', changed('ui/Hud.tsx', /\n\s*<CredentialToast \/>/, '')],
     ['a HUD that may see the save before the content settled it', changed('ui/Hud.tsx', /import '\.\.\/engine\/contentRegistry'\n/, '')],
+    // The toast of a line just noted in the notebook.
+    ['a toast for a line the save arrived with', changed('ui/Hud.tsx', 'checklistToastStep(checklistItems, seen.current, progress, MUSEUM, unlocked)', 'checklistToastStep(checklistItems, EMPTY_PROGRESS, progress, MUSEUM, unlocked)')],
+    ['a toast for a player with no notebook to look in', changed('ui/Hud.tsx', 'checklistToastStep(checklistItems, seen.current, progress, MUSEUM, unlocked)', 'checklistToastStep(checklistItems, seen.current, progress, MUSEUM, true)')],
+    ['a toast that watches a list of its own', changed('ui/Hud.tsx', 'const checklistItems = checklistPageOf(MUSEUM)?.items ?? []', 'const checklistItems: never[] = []')],
+    ['a toast with no save to compare with', changed('ui/Hud.tsx', 'const seen = useRef(progress)', 'const seen = useRef(EMPTY_PROGRESS)')],
+    ['a toast that says the same line at every write', changed('ui/Hud.tsx', /\n\s*seen\.current = progress/, '')],
+    ['a toast of the list that nobody mounts', changed('ui/Hud.tsx', /\n\s*<ChecklistToast \/>/, '')],
   ]
   const uncaught = refactors.filter(([, reader]) => officeAnswersWiringProblems(reader).length === 0).map(([name]) => name)
   assert.deepEqual(uncaught, [], 'a refactor this check exists to catch went through')
@@ -1865,9 +1968,16 @@ test('two safes, two names: the iron safe in the office, the vault under the hal
     'pt-BR': /(?<![\p{L}-])cofres?(?![\p{L}-])(?!\s+de\s+ferro)/iu,
     en: /(?<![\p{L}-])(?<!\biron\s)safes?(?![\p{L}-])/iu,
   }
-  // One text is let off, by key: the predecessor's note, which the handover
-  // sheet replaces at the end of this lot. From then on the list is empty.
-  const LET_OFF = new Set(['document.predecessor.body'])
+  // One text is let off, by key: the one line of the night that sets the
+  // two safes side by side so that neither is taken for the other. It says
+  // «Esse é o cofre» of the iron one, in the breath after naming it in
+  // full and before naming the vault. (Until the Posse the one let off was
+  // the predecessor's note, which the sheet in the drawer replaced.)
+  const LET_OFF = new Set(['radio.call.safe.1'])
+  for (const [locale, dictionary] of LOCALES) {
+    const line = dictionary['radio.call.safe.1']
+    assert.match(line, locale === 'pt-BR' ? /^O cofre de ferro abriu\. Esse é o cofre\. A caixa-forte é a do Fundador/ : /^The iron safe's open\. That one is the safe\. The vault is the Founder's/, `${locale}: the line names both before it uses the bare word`)
+  }
   const bare: string[] = []
   const needed = new Set<string>()
   for (const [locale, dictionary] of LOCALES) {
@@ -1919,10 +2029,36 @@ test('an open drawer is not called locked: the lock says it is shut, the name do
   assert.ok(open)
   assert.deepEqual(containerPrompt(open, undefined, false), { form: 'read', labelKey: 'prompt.read', titleKey: open.titleKey })
 
-  // The component draws what the rule says, and asks the lock rule whether it is shut.
+  // The iron safe, which a key opens (the Posse). Shut and with no key in
+  // the hand, the lock says what it needs. With the key, the same shut lock
+  // gives to the very press the prompt is for, and «precisa de chave» would
+  // be describing an empty hand: the prompt says what E does. Open, it is
+  // read like any drawer.
+  const safe = containerById(MUSEUM, 'office-safe')
+  const safeLock = MUSEUM.locks.find((candidate) => candidate.id === safe?.lockId)
+  assert.ok(safe && safeLock)
+  const emptyHanded = { locksOpened: [], credentials: [] }
+  const keyInHand = { locksOpened: [], credentials: ['tool:service-key'] }
+  const opened = { locksOpened: ['office-safe'], credentials: ['tool:service-key'] }
+  assert.deepEqual([emptyHanded, keyInHand, opened].map((progress) => lockBars(safeLock, MUSEUM.facts, progress)), [true, false, false])
+  // A keypad stands in the way until the year is typed, whatever is in the hand; open, nothing does.
+  assert.deepEqual([emptyHanded, keyInHand, { locksOpened: ['office-drawer'], credentials: [] }].map((progress) => lockBars(lock, MUSEUM.facts, progress)), [true, true, false])
+  assert.deepEqual(containerPrompt(safe, safeLock, true), { form: 'locked', titleKey: 'container.office-safe.title', sayingKey: 'lock.office-safe.prompt' })
+  assert.equal(`${ptBR['container.office-safe.title']} — ${ptBR['lock.office-safe.prompt']}`, 'Cofre de ferro — precisa de chave')
+  assert.equal(`${en['container.office-safe.title']} — ${en['lock.office-safe.prompt']}`, 'Iron safe — needs a key')
+  assert.deepEqual(containerPrompt(safe, safeLock, false, true), { form: 'read', labelKey: 'prompt.unlock', titleKey: 'container.office-safe.title' })
+  assert.equal(`${ptBR['prompt.unlock']} ${ptBR['container.office-safe.title']}`, 'Destrancar Cofre de ferro')
+  assert.equal(`${en['prompt.unlock']} ${en['container.office-safe.title']}`, 'Unlock Iron safe')
+  assert.deepEqual(containerPrompt(safe, safeLock, false), { form: 'read', labelKey: 'prompt.read', titleKey: 'container.office-safe.title' })
+  // A lock that still bars is never worded as one about to give.
+  assert.deepEqual(containerPrompt(safe, safeLock, true, true), containerPrompt(safe, safeLock, true))
+
+  // The component draws what the rule says, asks the lock rule whether it is
+  // shut, and asks it whether this press would open it.
   const hud = source('ui/Hud.tsx').replace(/\s+/g, ' ')
   assert.ok(hud.includes("lockStatus(container.lockId, { locksOpened }) === 'closed'"))
-  assert.ok(hud.includes('const view = containerPrompt(container, lock, isLocked)'), 'the prompt is worded by the rule')
+  assert.ok(hud.includes('lockBars(lock, MUSEUM.facts, { locksOpened, credentials })'), 'whether a shut lock gives to this press is the lock rule\'s to say')
+  assert.ok(hud.includes('const view = containerPrompt(container, lock, barred, shut && !barred)'), 'the prompt is worded by the rule')
   assert.ok(hud.includes("view.form === 'locked' ? ("), 'and a shut lock is drawn in its own form')
 })
 
@@ -1956,6 +2092,20 @@ test('the porter sends nobody to what is not there, in lines short enough to rea
       ...('closingKeys' in answer ? (answer.closingKeys ?? []) : []),
     ]),
   ])
+  // And what is said aloud by something other than the radio (L3): a thing
+  // that speaks, the recording it plays, the loudspeaker after a signature.
+  const voiced = MUSEUM.rooms.flatMap((room) =>
+    (room.devices ?? []).flatMap((device) =>
+      device.kind === 'voice'
+        ? device.utterances.flatMap((utterance) => utterance.lineKeys ?? MUSEUM.documents.find((doc) => doc.id === utterance.documentId)?.lineKeys ?? [])
+        : [],
+    ),
+  )
+  const shown = (MUSEUM.sequences ?? []).flatMap((sequence) => sequence.steps.map((step) => (step.kind === 'line' ? step.lineKey : step.titleKey)))
+  for (const key of [...voiced, ...shown]) spoken.add(key)
+  for (const key of ['device.office-telephone.dead', 'tape.otavio.8', 'sequence.posse.card', 'sequence.posse.2', 'radio.call.safe.1']) {
+    assert.ok(spoken.has(key), `${key} is said in this lot, and this case does not read it`)
+  }
   const wrong: string[] = []
   // That a line fits the time a subtitle stays up is the content gate's to
   // say now, line by line and by who says it (`speech-line-too-long`: 130
@@ -1967,16 +2117,16 @@ test('the porter sends nobody to what is not there, in lines short enough to rea
     'the gate accuses a line of the porter',
   )
 
-  // The porter sends nobody to what the house does not have yet. Until the
-  // slice that brings each of them, no line of his says a word of: the
-  // medals, the seals, the house lights' master switch, the pump and the
-  // platform (L11 and L12); nor the answering machine, the key, the iron
-  // safe, the Book, the lectern and the deed of office, which are this
-  // lot's own and come with the chain they belong to. The slice that builds
-  // one takes its word off the list, in the same commit.
+  // Nobody is sent to what the house does not have yet. No line said in
+  // this lot says a word of the medals, the seals, the house lights' master
+  // switch («chave geral»), the pump or the platform: they come with the
+  // plinth of the hall and the vault (L11 and L12). The answering machine,
+  // the key, the iron safe, the Book, the lectern and the deed of office
+  // were on this list until the slice that built the chain they belong to,
+  // and left it in that commit.
   const notYet: Record<string, readonly RegExp[]> = {
-    'pt-BR': [/medalha/i, /lacre/i, /chave/i, /bomba/i, /plataforma/i, /secretária/i, /cofre/i, /caixa-forte/i, /\blivro\b/i, /púlpito/i, /\bposse\b/i, /\btermo\b/i],
-    en: [/medal/i, /\bseals?\b/i, /\bkeys?\b/i, /\bpump\b/i, /platform/i, /answering machine/i, /\bsafe\b/i, /vault/i, /\bbook\b/i, /ledger/i, /lectern/i, /\bdeed\b/i],
+    'pt-BR': [/medalha/i, /lacre/i, /chave geral/i, /bomba/i, /plataforma/i],
+    en: [/medal/i, /\bseals?\b/i, /master switch|main switch/i, /\bpump\b/i, /platform/i],
   }
   for (const key of spoken) {
     for (const [locale, dictionary] of LOCALES) {
@@ -1985,8 +2135,26 @@ test('the porter sends nobody to what is not there, in lines short enough to rea
       }
     }
   }
-  // The rule reads a word as a word: a notebook is not a book.
-  assert.ok(!notYet.en.some((word) => word.test(en['radio.hint.notebook.where'])) && /\bbook\b/i.test('the Book of Deeds'))
+  // The rule reads a phrase as the thing it names: the key of the iron safe
+  // is not the master switch, and a seal is not something sealed.
+  assert.ok(!notYet['pt-BR'].some((word) => word.test(ptBR['radio.hint.key.where'])) && notYet['pt-BR'].some((word) => word.test('a chave geral do saguão')))
+  assert.ok(!notYet.en.some((word) => word.test('The envelope is sealed.')) && notYet.en.some((word) => word.test('three seals')))
+
+  // The vault is real, and out of reach tonight. Every line that names it
+  // says why in the same breath: the basement flooded, or «hoje não». One
+  // line names it and gives no reason: the one that tells the two safes
+  // apart, which sends nobody anywhere.
+  const VAULT: Record<string, RegExp> = { 'pt-BR': /caixa-forte/i, en: /\bvault\b/i }
+  const IMPEDIMENT: Record<string, RegExp> = { 'pt-BR': /alagou|hoje não/i, en: /flooded|not tonight/i }
+  for (const [locale, dictionary] of LOCALES) {
+    const naming = [...spoken].filter((key) => VAULT[locale].test(dictionary[key])).sort()
+    assert.deepEqual(naming, ['radio.call.safe.1', 'radio.hint.rest', 'radio.hint.rest.curt', 'sequence.posse.2'], `${locale}: the lines that name the vault`)
+    assert.deepEqual(
+      naming.filter((key) => !IMPEDIMENT[locale].test(dictionary[key])),
+      ['radio.call.safe.1'],
+      `${locale}: a line names the vault and does not say why not tonight`,
+    )
+  }
 
   // The call that gives the hall's breaker is the instruction and no more:
   // two lines. Who he is, and that nobody goes down tonight, is his
@@ -2010,10 +2178,14 @@ test('the porter sends nobody to what is not there, in lines short enough to rea
     }
   }
 
-  // The fallback is heard only when no hint above it applies, and every room
-  // that starts dark has one of those (the office is the radio's own supply):
-  // by the time the porter says it, the lights are all back. So it may not
-  // offer «luz» as something still to do; it says the light is done.
+  // The fallback is heard only when no hint above it applies. Every room
+  // that starts dark has one of those (the office is the radio's own supply)
+  // and so, since the Posse, have the drawer still shut, the key in the hand
+  // and the deed on the lectern: by the time the porter says it, the night's
+  // ending is signed. So it says that, and what is left (the checking), and
+  // what is not for tonight. It used to say «a luz tá feita», when the
+  // light was the last thing the night had; it may still not offer «luz» as
+  // something to do.
   assert.deepEqual(lastHint.when, {}, 'the last hint is the fallback')
   const litByThen = new Set<string>([
     radio.poweredBy,
@@ -2024,12 +2196,28 @@ test('the porter sends nobody to what is not there, in lines short enough to rea
       wrong.push(`the fallback hint can be heard with "${room.id}" still dark`)
     }
   }
-  const lightIsDone: Record<string, RegExp> = { 'pt-BR': /luz (tá )?feita/i, en: /lights are done/i }
+  // Which hint is in force as the night goes, with the house lit: the
+  // drawer, the safe, the lectern, and only with the deed signed the last.
+  const last = radio.hints.length - 1
+  const inForce = (patch: Partial<Progress>) =>
+    radioHintIndex(radio, progressWith({ roomsPowered: ['office', 'atrium', 'holyoke'], documentsRead: ['doc-welcome'], ...patch }), MUSEUM)
+  const keyInHand = { locksOpened: ['office-drawer'], credentials: ['tool:service-key'] }
+  const bookRead = { ...keyInHand, locksOpened: ['office-drawer', 'office-safe'], documentsRead: ['doc-welcome', 'doc-termos'] }
+  assert.deepEqual(
+    [inForce({}), inForce(keyInHand), inForce(bookRead), inForce({ ...bookRead, termsSigned: ['termo-posse'], flags: ['posse-signed'] })],
+    [last - 3, last - 2, last - 1, last],
+  )
+  // And asked of every step of every play, by the gate's own rule: while the
+  // deed can be signed and is not, the hint in force is never the last.
+  if (simulateProgress(MUSEUM).issues.some((issue) => issue.code === 'radio-hint-coverage')) {
+    wrong.push('the fallback hint can be heard with the deed of office still to sign')
+  }
+  const saysItIsSigned: Record<string, RegExp> = { 'pt-BR': /posse assinada/i, en: /signed/i }
   const lightStillOffered: Record<string, RegExp> = { 'pt-BR': /luz e confer/i, en: /lights and (the )?checking/i }
   for (const key of [...lastHint.heightKeys, ...(lastHint.curtLineKeys ?? [])]) {
     for (const [locale, dictionary] of LOCALES) {
       const text = dictionary[key]
-      if (!lightIsDone[locale].test(text)) wrong.push(`${key} (${locale}) does not say the light is done`)
+      if (!saysItIsSigned[locale].test(text)) wrong.push(`${key} (${locale}) does not say the deed is signed`)
       if (lightStillOffered[locale].test(text)) wrong.push(`${key} (${locale}) still offers the light as work to do`)
     }
   }

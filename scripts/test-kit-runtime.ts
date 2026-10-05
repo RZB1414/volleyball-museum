@@ -28,6 +28,9 @@ import { BAKED_BUNDLES } from '../src/content/bake.generated.ts'
 import { MUSEUM } from '../src/content/museum.ts'
 import type { BakedBundle } from '../src/content/bake.generated.ts'
 import { CollisionWorld } from '../src/engine/collision.ts'
+import { deviceInputOf } from '../src/engine/deviceRules.ts'
+import { deskShows } from '../src/engine/termRules.ts'
+import { emptyProgress } from '../src/state/progressFields.ts'
 import type { MaterialLibrary } from '../src/engine/materials.ts'
 
 let passed = 0
@@ -314,18 +317,43 @@ check(
  * moves a piece from one list to the other draws the same, and a room that
  * keeps it in both draws it twice, with every kit ceiling still green.
  * These hold the sum to what was measured before the first piece moved.
+ *
+ * The count is of what a room can draw AT ONCE, which is every node but for
+ * one case. A signing desk that signs a single term draws its lamp while
+ * the term waits and its Book once the term is signed, and never the two
+ * together (`deskShows`; the case below asks it of the lectern itself): the
+ * larger of the two groups counts. A desk with a second term can show the
+ * Book of the first under the lamp of the next, and counts both. A
+ * container counts whole, its door and what stands behind it: that is the
+ * safe standing open.
  */
+const nodesOf = (recipe: string) =>
+  kitBundle!.parts.filter((part) => part.name === recipe || part.name.startsWith(`${recipe}__`)).map((part) => part.name)
+
+function drawnAtOnce(device: NonNullable<(typeof MUSEUM.rooms)[number]['devices']>[number]) {
+  const nodes = nodesOf(device.part)
+  if (device.kind !== 'signing-desk' || device.termIds.length !== 1) return nodes.length
+  const lamp = nodes.filter((name) => name.startsWith(`${device.part}__led`)).length
+  const book = nodes.filter((name) => name.startsWith(`${device.part}__book`)).length
+  return nodes.length - Math.min(lamp, book)
+}
+
 function drawnByData(room: (typeof MUSEUM.rooms)[number]) {
-  const nodesOf = (recipe: string) =>
-    kitBundle!.parts.filter((part) => part.name === recipe || part.name.startsWith(`${recipe}__`)).map((part) => part.name)
   const kit = new Set(room.kit.flatMap((placement) => nodesOf(placement.part))).size
   const containers = (room.containers ?? []).reduce((sum, container) => sum + nodesOf(container.part).length, 0)
-  const devices = (room.devices ?? []).reduce((sum, device) => sum + nodesOf(device.part).length, 0)
+  const devices = (room.devices ?? []).reduce((sum, device) => sum + drawnAtOnce(device), 0)
   const control = room.powerControl ? nodesOf(room.powerControl.part).length : 0
   return { kit, containers, devices, control, total: kit + containers + devices + control }
 }
 
-const DRAWN_BY_DATA_CEILING: Readonly<Record<string, number>> = { atrium: 59, holyoke: 33, office: 74 }
+/**
+ * The hall and the wing draw what they drew before a piece of theirs left
+ * the kit. The office draws five nodes more since the Posse, by the lot
+ * plan's own count (L3, §7): the answering machine is three that were not
+ * there, and the safe that opens is four where it was two (its door, the
+ * brass on the door, and the proof on its shelf).
+ */
+const DRAWN_BY_DATA_CEILING: Readonly<Record<string, number>> = { atrium: 59, holyoke: 33, office: 79 }
 for (const room of MUSEUM.rooms) {
   const drawn = drawnByData(room)
   const ceiling = DRAWN_BY_DATA_CEILING[room.id]
@@ -340,15 +368,52 @@ for (const room of MUSEUM.rooms) {
   )
 }
 
-// The plinth is in the atrium's count once, as a device: its five nodes left
-// the kit, which stands at 51 batches under its ceiling of 56.
+// The plinth and the lectern are in the atrium's count once each, as
+// devices: the five nodes of the one and the four of the other left the kit,
+// which stands at 47 batches under its ceiling of 56. The lectern has a
+// fifth node since it is a signing desk, and draws four of the five at the
+// most: the temporary ceiling the plan allowed the hall for the Book
+// (ÁT-K1) is not spent.
 const atriumRoom = MUSEUM.rooms.find((room) => room.id === 'atrium')
 if (!atriumRoom) throw new Error('The atrium is required for the draw budgets.')
 const atriumDrawn = drawnByData(atriumRoom)
 check(
-  'the plinth of the hall is drawn once, as a device, and no longer by the kit',
-  atriumDrawn.kit === 51 && atriumDrawn.devices === 5,
+  'the plinth and the lectern of the hall are drawn once each, as devices, and no longer by the kit',
+  atriumDrawn.kit === 47 &&
+    atriumDrawn.devices === 9 &&
+    atriumRoom.kit.every((placement) => placement.part !== 'atrium-central-podium' && placement.part !== 'atrium-lectern'),
   `kit ${atriumDrawn.kit}, devices ${atriumDrawn.devices}`,
+)
+// The lamp or the Book, asked of the rule that draws them, on every night
+// the lectern can stand at: nothing brought to it, the deed waiting on a dark
+// house, the deed ready, signed with the card still owed, signed and seen.
+const lectern = (atriumRoom.devices ?? []).find((device) => device.kind === 'signing-desk')
+if (!lectern || lectern.kind !== 'signing-desk') throw new Error('The lectern is required for the draw budgets.')
+const lit = { roomsPowered: ['office', 'atrium', 'holyoke'] }
+const lecternNights = [
+  emptyProgress(),
+  { ...emptyProgress(), documentsRead: ['doc-termos'] },
+  { ...emptyProgress(), ...lit, documentsRead: ['doc-termos'] },
+  { ...emptyProgress(), ...lit, documentsRead: ['doc-termos'], termsSigned: ['termo-posse'], flags: ['posse-signed'] },
+  { ...emptyProgress(), ...lit, documentsRead: ['doc-termos'], termsSigned: ['termo-posse'], flags: ['posse-signed'], sequencesSeen: ['seq-posse'] },
+]
+const lecternShows = lecternNights.map((progress) => {
+  const input = deviceInputOf(lectern, { progress, radio: null, sequence: null }, MUSEUM)
+  return deskShows(input.desk, lectern, progress)
+})
+check(
+  'the lectern draws its lamp or its Book, never both: five nodes baked, four drawn at the most',
+  nodesOf('atrium-lectern').length === 5 &&
+    drawnAtOnce(lectern) === 4 &&
+    lecternShows.every((shows) => !(shows.lamp && shows.book)) &&
+    JSON.stringify(lecternShows.map((shows) => `${shows.lamp ? 'lamp' : ''}${shows.book ? 'book' : ''}`)) === JSON.stringify(['', 'lamp', 'lamp', 'book', 'book']),
+  lecternShows.map((shows) => `${shows.lamp ? 'lamp' : ''}${shows.book ? 'book' : ''}` || 'neither').join(', '),
+)
+// A desk with a second term would draw both, and is counted so.
+check(
+  'a desk that signs two terms is counted with its lamp and its Book together',
+  drawnAtOnce({ ...lectern, termIds: ['termo-posse', 'termo-reabertura'] }) === 5,
+  `${drawnAtOnce({ ...lectern, termIds: ['termo-posse', 'termo-reabertura'] })} nodes`,
 )
 // And the ceiling bites the mistake it exists for: the plinth left in the
 // furniture as well as in the devices is five draws more, under every kit
@@ -365,19 +430,27 @@ check(
 
 // The telephone on the desk left the furniture the same way (L3, F3): it has
 // a dead line to say, so it is a device. Its two nodes are out of the office
-// kit, which stands at 51 batches under its ceiling of 53, and in the count
-// of devices; the room draws what it drew.
+// kit and in the count of devices. The safe followed it with the Posse, as a
+// container: the kit stands at 49 batches under its ceiling of 53, and the
+// room draws 79 nodes by data, the five more that the machine and the
+// opening safe are.
 const officeRoom = MUSEUM.rooms.find((room) => room.id === 'office')
 if (!officeRoom) throw new Error('The office is required for the draw budgets.')
 const officeDrawn = drawnByData(officeRoom)
 const telephoneDevices = (officeRoom.devices ?? []).filter((device) => device.part === 'desk-telephone')
 check(
-  'the telephone is drawn once, as a device: the office kit is at 51 batches and the room still draws 74 nodes by data',
-  officeDrawn.kit === 51 &&
-    officeDrawn.total === 74 &&
+  'the telephone is drawn once, as a device, and the safe once, as a container: the office kit is at 49 batches and the room draws 79 nodes by data',
+  officeDrawn.kit === 49 &&
+    officeDrawn.total === 79 &&
     telephoneDevices.length === 1 &&
-    officeRoom.kit.every((placement) => placement.part !== 'desk-telephone'),
+    (officeRoom.containers ?? []).filter((container) => container.part === 'office-safe').length === 1 &&
+    officeRoom.kit.every((placement) => placement.part !== 'desk-telephone' && placement.part !== 'office-safe'),
   `kit ${officeDrawn.kit}, by data ${officeDrawn.total}, ${telephoneDevices.length} telephone(s) among the devices`,
+)
+check(
+  'the safe is four nodes, the answering machine three: what the office gained by data',
+  nodesOf('office-safe').length === 4 && nodesOf('office-answering-machine').length === 3,
+  `safe ${nodesOf('office-safe').join(', ')}; machine ${nodesOf('office-answering-machine').join(', ')}`,
 )
 
 console.log(`\n${passed} passed, ${failed} failed`)

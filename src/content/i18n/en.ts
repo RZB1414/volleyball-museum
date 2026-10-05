@@ -55,6 +55,7 @@ export const en = {
   'prompt.read': 'Read',
   'prompt.rotate': 'Drag to rotate',
   'prompt.locked': 'Locked',
+  'prompt.unlock': 'Unlock',
   'prompt.close': 'Close',
   'prompt.power': 'Restore power',
   'prompt.door.open': 'Open door',
@@ -77,6 +78,8 @@ export const en = {
   'reader.next': 'Next',
   // Followed by the name of what was taken: "You took — Key to the iron safe".
   'credential.taken': 'You took',
+  'credential.service-key.title': 'Key to the iron safe',
+  'checklist.noted': 'Noted in your notebook',
   // The signing desk. A term is a deed here: "Hold E — Sign: Deed of office".
   'desk.sign': 'Sign',
   'desk.hold.keyboard': 'Hold E',
@@ -107,9 +110,23 @@ export const en = {
   'archive.filed.touch': 'Filed in your notebook — tap the notebook icon to re-read',
   'archive.filed.noJournal': "It will be filed in the curator's notebook, still on the office desk.",
   'container.office.title': "Otávio's drawer",
-  'document.predecessor.title': 'Note from the previous curator',
-  'document.predecessor.body':
-    'If you are reading this you found the combination, which means you read the labels instead of walking past them. Good. The rest of the collection is in the vault beneath the atrium, and it does not open with numbers: it opens with three medals. One for each era you catalogue in full. Take your time. The museum reopens tomorrow, but it has been here a hundred and thirty years.',
+  // A term is a deed in English, and the book they are signed in the Book
+  // of Deeds. The safe in the office is "the iron safe", the Founder's is
+  // "the vault"; the accession ledger is the book the insurer wants.
+  'document.otavio-handover.title': 'Handover of the collection — sheet 1',
+  'document.otavio-handover.body':
+    'HANDOVER OF THE COLLECTION — SHEET 1. If you are reading this you found the year, which means you read instead of walking past. Good. The key pinned to this sheet is for the iron safe in this room. Inside it is what I owed you in person: the Book of Deeds. Sign the deed of office once the house is lit. The accession ledger, the one the insurer wants to see, is not in there: it is kept in the Founder\'s vault, beneath the atrium, and no number and no key will take you to it. Check the collection without hurry: pick each piece up, turn it over, read what is written on it. — O.',
+  'container.office-safe.title': 'Iron safe',
+  'document.termos.title': 'Book of Deeds',
+  'document.termos.summary': 'The book in which each curator signs for what is handed over.',
+  'document.termos.handover':
+    'DEED OF HANDOVER. I hand over the collection of the Volleyball Museum, checked as far as the rain allowed.',
+  'document.termos.handover.signature': '— Otávio',
+  'term.posse.title': 'Deed of office',
+  'term.posse.body': 'DEED OF OFFICE. I receive the collection and the house, lit in its three rooms.',
+  'document.label-proof-office.title': 'Label proof — the new plaques',
+  'document.label-proof-office.body':
+    'PRINTER\'S PROOF — THE NEW PLAQUES. Clipped to it, in the director\'s hand: “Otávio, they look lovely! Forty words each, as you asked. I only cut the bottom line: original, reconstruction, replica… Visitors don\'t need that to be charmed. We\'ll see about it after the reopening! — H.” Underneath, in red pencil: “They do. It is the one line I cannot write any other way. I am keeping this proof until the new curator decides. — O.”',
   'lock.title': 'Combination lock',
   'lock.prompt': 'Four digits',
   'lock.submit': 'Open',
@@ -171,6 +188,12 @@ export const en = {
   // safe", always with its metal: a bare "safe" would be either (D34).
   'notebook.todo.vault': 'The vault — only Otávio knew how to open it',
   'notebook.todo.vault.note': 'not tonight: the basement flooded',
+  'notebook.todo.drawer': "Otávio's drawer: “the year the game stopped being called Mintonette”.",
+  'notebook.todo.safe-key': 'Key to the iron safe.',
+  'notebook.todo.posse': 'Sign the deed of office, at the lectern.',
+  'notebook.todo.proof':
+    'The refit took off the plaques the line that says what each thing is. Otávio kept the proof in the iron safe.',
+  'notebook.todo.proof.note': 'not tonight: it waits for the reopening',
   'notebook.counter': '{done} of {total}',
   'device.office-radio.title': "Porter's radio",
   'device.office-clock.title': 'Office clock',
@@ -178,6 +201,23 @@ export const en = {
   'device.office-telephone.title': 'Telephone',
   'device.office-telephone.prompt': 'Dial',
   'device.office-telephone.dead': 'The line is dead.',
+  'device.office-answering-machine.title': 'Answering machine',
+  'device.office-answering-machine.speaker': 'Otávio · recorded message',
+  'document.otavio-tape.title': "Otávio's message (answering machine)",
+  'document.otavio-tape.summary': 'The message Otávio recorded before his bus, cut off when the power went.',
+  'tape.otavio.1': 'This is Otávio, the curator. The former one, as of this afternoon.',
+  'tape.otavio.2':
+    'I am recording on the machine on your desk because the handover was set for six and the road closes when it rains.',
+  'tape.otavio.3': "The last bus is the five o'clock.",
+  'tape.otavio.4': 'The handover of the collection is written down, in the top drawer of the tall cabinet.',
+  'tape.otavio.5':
+    'The drawer opens with a year: the year the game stopped being called Mintonette. I will not say which.',
+  'tape.otavio.6':
+    'It is in Wing 1, on a portrait. Whoever reads what is written on the pieces is exactly who I want opening it.',
+  'tape.otavio.7': 'The hat on the coat stand stays: it is not mine, it belongs to the post.',
+  'tape.otavio.8':
+    'And one thing about the plinth in the hall, which matters, because with this rain the basement —',
+  'tape.otavio.9': '[The recording ends here. The display reads 16:47.]',
   'night.hour.1': 'Gone seven',
   'night.hour.2': 'Nearly eight',
   'night.hour.3': 'Gone eight',
@@ -186,8 +226,12 @@ export const en = {
   'night.hour.6': 'Nearly ten',
   'night.hour.7': 'Gone ten',
   'night.hour.8': 'Nearly eleven',
+  'night.hour.9': 'Gone eleven',
+  'night.hour.10': 'Nearly midnight',
   'device.atrium-podium.title': "The Founder's plinth",
   'device.atrium-podium.notice': 'Closed off: the floor is being relaid.',
+  'device.atrium-lectern.title': 'Lectern',
+  'device.atrium-lectern.empty': 'signing desk: the Book of Deeds is missing',
   'radio.speaker.porter': 'Jorge · porter',
   // His introduction, owed to every save. "Again": he let the curator in at
   // the start of the night. He calls his post the front desk, and the room
@@ -212,6 +256,26 @@ export const en = {
     'A case just opened and shut on my panel. First one checked? That leaves… well, plenty. Over.',
   'radio.call.shortcut.1':
     "The service door opened from the inside. It stays unlocked both ways now. It's on my panel. Over.",
+  'radio.call.machine.1':
+    "There's a message light blinking on the office extension. Must be Otávio's doing. Over.",
+  'radio.call.drawer.1':
+    "Otávio's drawer just opened on my panel. Thirty years and I never saw what was in it. What was in it?",
+  'radio.call.drawer.2':
+    "If it's a key, it's for the iron safe. That was him: a key inside a drawer, a drawer inside a date. Over.",
+  'radio.call.legacy-drawer.1':
+    "Have another look in Otávio's drawer: there was a key pinned to the note. Over.",
+  // The one line that sets the two safes side by side: the only place a
+  // bare "the safe" is said.
+  'radio.call.safe.1':
+    "The iron safe's open. That one is the safe. The vault is the Founder's, down below: don't mix them up.",
+  'radio.call.safe.2':
+    "If there's a book in there, it's the Book of Deeds. A deed gets signed at the lectern in the hall, with the house lit. Over.",
+  'sequence.speaker.porter': 'Jorge · loudspeaker',
+  'sequence.posse.card': 'Deed of office signed',
+  'sequence.posse.1':
+    "The lectern lamp came on and went out: you signed. The collection's yours, curator. {hora}.",
+  'sequence.posse.2':
+    'The ledger the insurer wants is in the vault, and the basement flooded. Nobody goes down tonight. Over.',
   // One height to a call: where, what, how.
   'radio.hint.notebook.where': 'Notebook first: the director, Helena, left one on the desk.',
   'radio.hint.notebook.what': 'Red cover, next to the lamp.',
@@ -222,12 +286,20 @@ export const en = {
   'radio.hint.holyoke.where': 'Wing 1 has its own breaker, on the wall facing the doors.',
   'radio.hint.holyoke.what': 'A little red light, across the room.',
   'radio.hint.holyoke.how': 'Cross in the dark to the little red light. The torch will do.',
-  'radio.hint.drawer.where': "Otávio's drawer opens with a year. The year is in Wing 1.",
+  'radio.hint.drawer.where':
+    "Otávio's drawer opens with a year. He left a message on the office answering machine.",
   'radio.hint.drawer.what': "The year is in Wing 1, on Morgan's portrait.",
   'radio.hint.drawer.how':
     "Pick the frame up and tilt it: it's on the bottom edge. Or in the provenance archive, by the wing entrance.",
+  'radio.hint.key.where': "Otávio's key? It's for the iron safe.",
+  'radio.hint.key.what': 'In the corner of the office, beside the bookcases.',
+  'radio.hint.key.how': 'Walk up and open it. The key stays in it.',
+  'radio.hint.posse.where': 'A deed gets signed at the lectern in the hall.',
+  'radio.hint.posse.what': 'The lectern with its lamp lit, between the two doors on the Wing 1 wall.',
+  'radio.hint.posse.how': 'With all three rooms lit, hold the action down until the pen stops.',
+  // The honest close: only heard with the deed signed.
   'radio.hint.rest':
-    "The basement flooded; nobody goes down there tonight. Lights are done; beyond that, it's just checking the collection. Over.",
+    "The post is yours, signed. Now it's checking the collection, piece by piece. The vault can wait: the basement flooded.",
 
   'radio.speaker.static': 'Radio',
   'radio.call.taken.1':
@@ -239,7 +311,9 @@ export const en = {
   'radio.hint.holyoke.curt': 'Wing 1. Breaker on the far wall. Little red light. Go.',
   'radio.hint.drawer.curt':
     "Otávio's drawer: a date. Morgan's portrait, Wing 1. Pick the frame up and tilt it: it's on the bottom edge.",
-  'radio.hint.rest.curt': "Basement's flooded: nobody goes down tonight. Lights are done; the rest is just checking.",
+  'radio.hint.key.curt': 'Iron safe. Corner of the office. The key opens it. Over.',
+  'radio.hint.posse.curt': 'Lectern. The hall. Sign. Over.',
+  'radio.hint.rest.curt': "Signed. Checking is what's left. The vault: not tonight.",
   'radio.patience.t1.ready': 'Front desk, go ahead.',
   'radio.patience.t1.listening': "Go on, curator. I'm listening.",
   'radio.patience.t1.jorge': 'Jorge here. Over.',
@@ -437,6 +511,8 @@ export const en = {
   // ---------------------------------------------------------------------
   'lock.office-drawer.mapLabel': 'Combination drawer — 4 digits',
   'lock.office-drawer.prompt': 'locked (a year)',
+  'lock.office-safe.mapLabel': 'Iron safe — needs a key',
+  'lock.office-safe.prompt': 'needs a key',
   'lock.hint.highlight': 'The right plaque has lit up.',
   'lock.hint.audio': 'The docent recording repeats the year.',
   'lock.hint.reveal': 'The dial has caught on the correct digit.',

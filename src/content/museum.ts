@@ -23,6 +23,7 @@ import { SPAWN } from './spawn.ts'
 import type {
   ContainerData,
   DeviceData,
+  DirectedSequence,
   DocumentData,
   ExhibitData,
   Fact,
@@ -32,6 +33,7 @@ import type {
   ProgressCondition,
   RadioPatience,
   RoomData,
+  Term,
 } from './schema'
 
 // ---------------------------------------------------------------------------
@@ -169,6 +171,28 @@ const LOCKS = [
     // sends the player to the portrait, and `test-opening-flow` proves the
     // year is on the plaque and on nothing but those two keys.
     sourceExhibitId: 'portrait-morgan',
+    // The key is pinned to the sheet in the drawer, and is in the hand as the
+    // drawer opens: a consequence of the lock and not a press on a key, so a
+    // save in which the drawer was open before there was one is handed it on
+    // the next load, by the same trigger (`PRE_POSSE_SAVE.drawer` says how
+    // such a save is told).
+    onOpen: [{ kind: 'grant-credential', credential: { kind: 'tool', id: 'service-key' } }],
+  },
+  /**
+   * The iron safe in the office, which the key from the drawer opens.
+   *
+   * A touch by whoever holds the key opens it, and the key stays in the
+   * door: it has this one lock, and is spent by its being open. «Cofre de
+   * ferro», always with its metal: the Founder's vault under the hall is the
+   * «caixa-forte», and a bare «cofre» would be either (D34).
+   */
+  {
+    kind: 'tool',
+    id: 'office-safe',
+    requires: 'service-key',
+    consumesTool: true,
+    mapLabelKey: 'lock.office-safe.mapLabel',
+    promptKey: 'lock.office-safe.prompt',
   },
 ] as const satisfies readonly Lock[]
 
@@ -606,14 +630,102 @@ const DOCUMENTS = [
     containerId: 'holyoke-cabinet-b',
     revealsFactId: 'six-a-side',
   },
+  /**
+   * The first sheet of the handover, in the drawer the year opens.
+   *
+   * It took the place of the predecessor's note (`doc-predecessor`: a save
+   * that read the one has read the other, `SAVE_ALIASES`), which sent the
+   * player to three medals and a vault this build does not have. This one
+   * gives a direction that can be followed tonight: the key pinned to it,
+   * the iron safe, the Book, the lectern. The vault is named once, as where
+   * the accession ledger is and as somewhere no number and no key leads.
+   * Everything it sends the player to is listed, and the gate holds each to
+   * something the build has (H-23).
+   */
   {
-    id: 'doc-predecessor',
+    id: 'doc-otavio-handover',
     era: 'office',
     kind: 'letter',
-    titleKey: 'document.predecessor.title',
-    bodyKey: 'document.predecessor.body',
+    titleKey: 'document.otavio-handover.title',
+    bodyKey: 'document.otavio-handover.body',
     containerId: 'office-cabinet',
     lockId: 'office-drawer',
+    mentions: ['tool:service-key', 'office-safe', 'doc-termos', 'atrium-lectern'],
+  },
+  /**
+   * The Book of Deeds, in the iron safe: what each curator signs for.
+   *
+   * Two pages. The outgoing curator's deed of handover, in his hand and
+   * signed; and the deed of office, which is the term itself as it stands in
+   * the book: blank at its signature line until the save holds the
+   * signature. Reading it is what brings the deed to the lectern.
+   */
+  {
+    id: 'doc-termos',
+    era: 'office',
+    kind: 'ledger',
+    titleKey: 'document.termos.title',
+    bodyKey: 'document.termos.summary',
+    containerId: 'office-safe',
+    lockId: 'office-safe',
+    pages: [
+      {
+        style: 'handwritten',
+        bodyKey: 'document.termos.handover',
+        signatureKey: 'document.termos.handover.signature',
+      },
+      { style: 'term', termId: 'termo-posse' },
+    ],
+    mentions: ['atrium-lectern'],
+  },
+  /**
+   * The printer's proof of the new plaques, kept in the safe beside the Book.
+   *
+   * The first paper of the thread that runs under the whole collection: the
+   * refit cut from every plaque the line that says what a thing is (an
+   * original, a reconstruction, a replica), and the old curator would not
+   * let it go. It asks nothing tonight; the list notes it and says so.
+   */
+  {
+    id: 'doc-label-proof-office',
+    era: 'office',
+    kind: 'proof',
+    titleKey: 'document.label-proof-office.title',
+    bodyKey: 'document.label-proof-office.body',
+    containerId: 'office-safe',
+    lockId: 'office-safe',
+  },
+  /**
+   * The message on the answering machine: a recording, heard line by line
+   * and filed once it has been heard to the last.
+   *
+   * It is how the player who never calls the porter learns what the drawer
+   * asks and where the answer is: the question of the lock, and the wing and
+   * the portrait, never the year. It is cut off by the power going, in the
+   * middle of the one thing this build cannot yet answer (the plinth of the
+   * hall), and the last line says so in the machine's own voice. A document
+   * and not a line of the night: it was recorded this afternoon, and says
+   * nothing of how the night stands now.
+   */
+  {
+    id: 'doc-otavio-tape',
+    era: 'office',
+    kind: 'oral-history',
+    titleKey: 'document.otavio-tape.title',
+    bodyKey: 'document.otavio-tape.summary',
+    containerId: 'office-answering-machine',
+    lineKeys: [
+      'tape.otavio.1',
+      'tape.otavio.2',
+      'tape.otavio.3',
+      'tape.otavio.4',
+      'tape.otavio.5',
+      'tape.otavio.6',
+      'tape.otavio.7',
+      'tape.otavio.8',
+      'tape.otavio.9',
+    ],
+    mentions: ['office-cabinet', 'portrait-morgan', 'atrium-podium'],
   },
   /**
    * The first thing the player reads, on the desk they spawn facing.
@@ -628,6 +740,14 @@ const DOCUMENTS = [
    * the hall, which this build shows on the office plan and has not built.
    * It is a promise with a date: no box, and a pencil note that says why not
    * tonight. (The gate held it as a box nothing ticks until L3.)
+   *
+   * Under the ink the curator adds lines of their own, in pencil, as the
+   * night gives them something to write down: the drawer and its question
+   * (once the message is heard or the keypad touched), the key (once the
+   * drawer is open), the deed (once the Book is read), and what the proof
+   * in the safe says of the plaques. Each appears by what the save holds,
+   * never by a call having been heard; the last is a promise like the
+   * vault's, for the lot that puts the cut line back on a plaque.
    */
   {
     id: 'doc-welcome',
@@ -671,6 +791,40 @@ const DOCUMENTS = [
             // The Founder's vault is L12's room; until then nothing ticks this.
             deferredUntilLot: 12,
             noteKey: 'notebook.todo.vault.note',
+          },
+          {
+            labelKey: 'notebook.todo.drawer',
+            author: 'curator',
+            // Whichever comes first: the message that asks the question, or
+            // the keypad that asks for four digits.
+            appearsWhen: { anyOf: [{ documentsRead: ['doc-otavio-tape'] }, { locksSeen: ['office-drawer'] }] },
+            doneWhen: { locksOpened: ['office-drawer'] },
+            mentions: ['office-cabinet'],
+          },
+          {
+            labelKey: 'notebook.todo.safe-key',
+            author: 'curator',
+            appearsWhen: { locksOpened: ['office-drawer'] },
+            doneWhen: { locksOpened: ['office-safe'] },
+            mentions: ['office-safe'],
+          },
+          {
+            labelKey: 'notebook.todo.posse',
+            author: 'curator',
+            appearsWhen: { documentsRead: ['doc-termos'] },
+            doneWhen: { flags: ['posse-signed'] },
+            mentions: ['atrium-lectern'],
+          },
+          {
+            labelKey: 'notebook.todo.proof',
+            author: 'curator',
+            appearsWhen: { documentsRead: ['doc-label-proof-office'] },
+            // The line the refit cut goes back on a plaque when the curator
+            // can decide it, which is the reopening's lot; until then this
+            // is a thing noted, with no box.
+            deferredUntilLot: 12,
+            noteKey: 'notebook.todo.proof.note',
+            mentions: ['doc-label-proof-office', 'office-safe'],
           },
         ],
       },
@@ -748,6 +902,28 @@ const OFFICE_CONTAINERS = [
     titleKey: 'container.office-notebook.title',
     presentation: 'notebook',
     carriesJournal: true,
+  },
+  /**
+   * The iron safe in the corner past the last bookcase, door to the room.
+   *
+   * It was furniture: a green box with a wheel on it, which answered the
+   * crosshair with nothing. It is where the Book of Deeds is kept, behind
+   * the key from the drawer; the touch that opens it reads what is inside,
+   * as with any cabinet, and from then on its door stands open on the hinge
+   * the recipe is baked with (`layout.hinge` of the generator, which
+   * `test:kit` holds this to) and the proof is seen on its shelf. The Book
+   * is not drawn there: it is in the curator's hands from the same press,
+   * and lies open on the lectern once it has been signed.
+   */
+  {
+    id: 'office-safe',
+    part: 'office-safe',
+    position: [2.55, 0, 2.45],
+    rotationY: -Math.PI / 2,
+    titleKey: 'container.office-safe.title',
+    lockId: 'office-safe',
+    door: { nodePrefix: 'door', hingeAt: [-0.405, 0.373], openAngle: -1.75 },
+    contents: [{ node: 'papers' }],
   },
 ] as const satisfies readonly ContainerData[]
 
@@ -910,13 +1086,16 @@ const PORTER_PATIENCE = {
 /**
  * The hour of the night, which goes forward by what has been done.
  *
- * Eight milestones in this slice of the house: the three rooms lit, the
- * drawer opened, and the collection checked by threes. Each is a point, in
- * any order; the first is ten past seven, each one after it half an hour
- * later, and a point is never taken back. The phrases are what the porter
- * says of each count, rounded and spelt out: he never says an hour in a line
- * of his own, he reads this. (The iron safe and the deed of office are the
- * ninth and tenth, and come with what they are milestones of.)
+ * Ten milestones in this slice of the house: the three rooms lit, the
+ * drawer opened, the collection checked by threes, the iron safe opened and
+ * the deed of office signed. Each is a point, in any order; the first is ten
+ * past seven, each one after it half an hour later, and a point is never
+ * taken back: a night with everything done ends at twenty to midnight. The
+ * phrases are what the porter says of each count, rounded and spelt out: he
+ * never says an hour in a line of his own, he reads this. (The last two
+ * were written after the first eight and stay at the end of the list: a
+ * milestone is a point whatever its place, and the order is only the order
+ * they were written in.)
  */
 const NIGHT_CLOCK = {
   startsAt: { hours: 19, minutes: 10 },
@@ -930,6 +1109,8 @@ const NIGHT_CLOCK = {
     { id: 'catalogue-6', cataloguedAtLeast: 6, of: HOUSE_PIECES },
     { id: 'catalogue-9', cataloguedAtLeast: 9, of: HOUSE_PIECES },
     { id: 'catalogue-12', cataloguedAtLeast: 12, of: HOUSE_PIECES },
+    { id: 'safe', when: { locksOpened: ['office-safe'] } },
+    { id: 'posse', when: { flags: ['posse-signed'] } },
   ],
   phraseKeys: [
     'night.hour.1',
@@ -940,6 +1121,8 @@ const NIGHT_CLOCK = {
     'night.hour.6',
     'night.hour.7',
     'night.hour.8',
+    'night.hour.9',
+    'night.hour.10',
   ],
 } as const satisfies NightClock
 
@@ -1081,6 +1264,52 @@ const OFFICE_DEVICES = [
         lineKeys: ['radio.call.shortcut.1'],
         mentions: ['atrium-from-holyoke-shortcut'],
       },
+      {
+        // The message light on the office extension shows on his panel. He
+        // says so once the hall is lit, when the player is out of the
+        // office and may have walked past it; old news once it is heard.
+        id: 'porter-machine-reminder',
+        when: { powered: ['office', 'atrium'] },
+        lapsesWhen: { documentsRead: ['doc-otavio-tape'] },
+        delaySeconds: 4,
+        lineKeys: ['radio.call.machine.1'],
+        mentions: ['office-answering-machine'],
+      },
+      {
+        // The drawer opens on his panel: thirty years and he never saw
+        // inside it. Said to the player who opens it tonight; a save that
+        // opened it before it held a key is told by the call below instead
+        // (`PRE_POSSE_SAVE.drawer`), and never by this one. Old news, both,
+        // once the safe is open.
+        id: 'porter-drawer-open',
+        when: { locksOpened: ['office-drawer'], flagsUnset: ['legacy-pre-L3-drawer'] },
+        lapsesWhen: { locksOpened: ['office-safe'] },
+        delaySeconds: 2.5,
+        lineKeys: ['radio.call.drawer.1', 'radio.call.drawer.2'],
+        mentions: ['office-cabinet', 'office-safe'],
+      },
+      {
+        // For the save that opened the drawer on another night, and read a
+        // note that mentioned no key: it holds one now, handed over as it
+        // loaded, and nothing on the screen said so.
+        id: 'porter-legacy-drawer',
+        when: { flags: ['legacy-pre-L3-drawer'] },
+        lapsesWhen: { locksOpened: ['office-safe'] },
+        delaySeconds: 2.5,
+        lineKeys: ['radio.call.legacy-drawer.1'],
+        mentions: ['office-cabinet'],
+      },
+      {
+        // The one line of the night that sets the two safes side by side:
+        // this one is the iron safe, the vault is the Founder's (D34). And
+        // where a deed is signed. Old news once it has been.
+        id: 'porter-safe-open',
+        when: { locksOpened: ['office-safe'] },
+        lapsesWhen: { flags: ['posse-signed'] },
+        delaySeconds: 2.5,
+        lineKeys: ['radio.call.safe.1', 'radio.call.safe.2'],
+        mentions: ['office-safe', 'atrium-lectern'],
+      },
     ],
     // Ordered: the porter answers with the first thing the player still
     // needs, and says it one height to a call (where, what, how). The curt
@@ -1112,17 +1341,38 @@ const OFFICE_DEVICES = [
         mentions: ['holyoke-breaker', 'holyoke'],
       },
       {
-        // Where the year is, and how it shows; never the year.
+        // Where the year is, and how it shows; never the year. The first
+        // height sends the player to the message Otávio left, which asks
+        // the question in his own words; the next two, to the portrait.
         when: { locksClosed: ['office-drawer'] },
         targetId: 'portrait-morgan',
         heightKeys: ['radio.hint.drawer.where', 'radio.hint.drawer.what', 'radio.hint.drawer.how'],
         curtLineKeys: ['radio.hint.drawer.curt'],
-        mentions: ['office-cabinet', 'portrait-morgan', 'holyoke-cabinet-a', 'holyoke'],
+        mentions: ['office-cabinet', 'office-answering-machine', 'portrait-morgan', 'holyoke-cabinet-a', 'holyoke'],
       },
-      // The fallback, once nothing is left to point at. Until the night has
-      // an ending (the Posse, later in this lot) it tells the player what
-      // can be done tonight, and sends them to nothing that is not in the
-      // building.
+      {
+        // The key in the hand and the safe still shut.
+        when: { credentials: [{ kind: 'tool', id: 'service-key' }], locksClosed: ['office-safe'] },
+        targetId: 'office-safe',
+        heightKeys: ['radio.hint.key.where', 'radio.hint.key.what', 'radio.hint.key.how'],
+        curtLineKeys: ['radio.hint.key.curt'],
+        mentions: ['office-safe'],
+      },
+      {
+        // The Book read and the deed not signed: the lectern, and what the
+        // signature asks. While a term can be signed and is not, he has
+        // something to point at (`radio-hint-coverage` holds him to it).
+        when: { documentsRead: ['doc-termos'], flagsUnset: ['posse-signed'] },
+        targetId: 'atrium-lectern',
+        heightKeys: ['radio.hint.posse.where', 'radio.hint.posse.what', 'radio.hint.posse.how'],
+        curtLineKeys: ['radio.hint.posse.curt'],
+        mentions: ['atrium-lectern', 'atrium', 'holyoke'],
+      },
+      // The fallback, once nothing is left to point at: the honest close.
+      // Every hint above it is spent only with the deed signed, so it is
+      // said to a curator in office, and says what is left of the night
+      // (the collection, piece by piece) and what is not for tonight (the
+      // vault, and why).
       { when: {}, heightKeys: ['radio.hint.rest'], curtLineKeys: ['radio.hint.rest.curt'], mentions: [] },
     ],
     patience: PORTER_PATIENCE,
@@ -1150,6 +1400,28 @@ const OFFICE_DEVICES = [
     speakerKey: 'device.office-telephone.title',
     promptKey: 'device.office-telephone.prompt',
     utterances: [{ when: {}, lineKeys: ['device.office-telephone.dead'] }],
+  },
+  /**
+   * The answering machine, on the walnut border of the desk beside the
+   * radio's charger: keys and front towards whoever walks in.
+   *
+   * What it plays is a recording (`doc-otavio-tape`), and it is how the
+   * night's one knowledge lock is asked aloud to a player who has no radio
+   * and reads nothing: the lamp on its lid blinks from the moment the room
+   * has power until the message has been heard to its last line. On the
+   * mains, unlike the telephone: with the lamp off it is dead and says so.
+   */
+  {
+    kind: 'voice',
+    id: 'office-answering-machine',
+    part: 'office-answering-machine',
+    position: [0.615, 0.74, 0.642],
+    rotationY: -Math.PI / 2,
+    titleKey: 'device.office-answering-machine.title',
+    speakerKey: 'device.office-answering-machine.speaker',
+    poweredBy: 'office',
+    messageLamp: true,
+    utterances: [{ when: {}, documentId: 'doc-otavio-tape' }],
   },
 ] as const satisfies readonly DeviceData[]
 
@@ -1183,7 +1455,77 @@ const ATRIUM_DEVICES = [
     // Medals and the house lights (L11) are what it is for.
     deferredUntilLot: 11,
   },
+  /**
+   * The lectern against the wall of Wing 1, between its two doors: where
+   * the curator signs.
+   *
+   * It was furniture too, and is where the night ends: the deed of office
+   * is signed here, by a press that is held. Until the Book of Deeds has
+   * been read it says what it is and what it lacks; from then on the lamp
+   * under the edge of its top is lit (red while the deed waits for
+   * something, green when a held press signs it) and it names the deed and
+   * whatever the deed still waits for; signed, the lamp is out and the Book
+   * lies open on it. The lamp and the Book are two nodes of its recipe that
+   * are never drawn together while it has one term, which is what keeps the
+   * hall inside its count of draws (ÁT-K1).
+   */
+  {
+    kind: 'signing-desk',
+    id: 'atrium-lectern',
+    part: 'atrium-lectern',
+    position: [-7.15, 0, 2.2],
+    rotationY: Math.PI / 2,
+    titleKey: 'device.atrium-lectern.title',
+    emptyNoticeKey: 'device.atrium-lectern.empty',
+    termIds: ['termo-posse'],
+    holdSeconds: 1.2,
+  },
 ] as const satisfies readonly DeviceData[]
+
+/**
+ * What the curator signs.
+ *
+ * One term in this slice of the house: the deed of office, the Posse. Its
+ * words are in the Book of Deeds, and reading the Book is what brings it to
+ * the lectern; signing it asks for the Book and for light in the three rooms
+ * of the house, each named, so that a wing a later lot opens changes nothing
+ * in what was signed for. The flag it sets is the night's first ending, and
+ * what every seal of a later lot will ask for.
+ */
+const TERMS = [
+  {
+    id: 'termo-posse',
+    titleKey: 'term.posse.title',
+    bodyKey: 'term.posse.body',
+    presentedWhen: { documentsRead: ['doc-termos'] },
+    when: { documentsRead: ['doc-termos'], powered: HOUSE_ROOMS },
+    grants: 'posse-signed',
+    mentions: ['atrium-lectern'],
+  },
+] as const satisfies readonly Term[]
+
+/**
+ * What the game shows by itself once the deed is signed: a card, and two
+ * lines from the porter over the building's loudspeaker.
+ *
+ * Not a call of his radio: a player may reach the lectern having left the
+ * radio on its charger, and what closes the night is owed to that player
+ * too. The first line says the hour of this night as it stands; the second
+ * says, once and with its reason, what the night cannot give: the ledger is
+ * in the vault, and nobody goes down there tonight.
+ */
+const SEQUENCES = [
+  {
+    id: 'seq-posse',
+    when: { flags: ['posse-signed'] },
+    steps: [
+      { kind: 'card', titleKey: 'sequence.posse.card', seconds: 3.5 },
+      { kind: 'line', speakerKey: 'sequence.speaker.porter', lineKey: 'sequence.posse.1' },
+      { kind: 'line', speakerKey: 'sequence.speaker.porter', lineKey: 'sequence.posse.2' },
+    ],
+    mentions: ['atrium-lectern'],
+  },
+] as const satisfies readonly DirectedSequence[]
 
 // ---------------------------------------------------------------------------
 // Rooms
@@ -1317,9 +1659,9 @@ const ROOMS = [
       { part: 'rope-span', position: [-2.9, 0, 4.075], rotationY: Math.PI / 2 },
       { part: 'rope-span', position: [-3.725, 0, 3.25] },
 
-      // Orientation and reading station between the two west doors. Moving the
-      // former tower away also leaves the first-room breaker unobstructed.
-      { part: 'atrium-lectern', position: [-7.15, 0, 2.2], rotationY: Math.PI / 2 },
+      // The lectern between the two west doors is no longer furniture
+      // (`ATRIUM_DEVICES`): it is the desk the deed of office is signed at.
+      // Where it stands also leaves the first-room breaker unobstructed.
 
       // The north-east quarter now works as one furnished pause-and-display
       // zone. Its southern edge remains more than two metres from the podium,
@@ -1741,7 +2083,8 @@ const ROOMS = [
       { part: 'bookshelf', position: [2.68, 0, -2.28], rotationY: -Math.PI / 2 },
       { part: 'bookshelf-b', position: [2.68, 0, -0.96], rotationY: -Math.PI / 2 },
       { part: 'bookshelf', position: [2.68, 0, 0.36], rotationY: -Math.PI / 2 },
-      { part: 'office-safe', position: [2.55, 0, 2.45], rotationY: -Math.PI / 2 },
+      // The iron safe past the last bookcase is a container now
+      // (`OFFICE_CONTAINERS`), with a door that swings.
       { part: 'coat-stand', position: [-2.55, 0, -1.2] },
       { part: 'wall-sconce', position: [-2.84, 1.58, -1.12], rotationY: Math.PI / 2 },
     ],
@@ -1763,7 +2106,7 @@ const ROOMS = [
       },
     ],
     exhibitIds: [],
-    documentIds: ['doc-predecessor', 'doc-welcome'],
+    documentIds: ['doc-welcome', 'doc-otavio-tape', 'doc-otavio-handover', 'doc-termos', 'doc-label-proof-office'],
     containers: OFFICE_CONTAINERS,
     devices: OFFICE_DEVICES,
     audio: [],
@@ -1781,7 +2124,11 @@ export const MUSEUM: MuseumContent = {
   facts: FACTS,
   media: [...GENERATED_MEDIA, ...AUTHORED_MEDIA],
   nightClock: NIGHT_CLOCK,
-  // What the house hands out or asks for, by name. Nothing yet: the first
-  // is the key of the iron safe, which arrives with the safe it opens.
-  credentials: [],
+  terms: TERMS,
+  sequences: SEQUENCES,
+  // What the house hands out or asks for, by name: the key pinned to the
+  // sheet in the drawer, which opens the iron safe and stays in it.
+  credentials: [
+    { credential: { kind: 'tool', id: 'service-key' }, titleKey: 'credential.service-key.title', icon: 'key' },
+  ],
 }

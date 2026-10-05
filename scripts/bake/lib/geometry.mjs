@@ -113,6 +113,48 @@ export function bevelledBox(width, height, depth, radius = EDGE, segments = 2) {
 }
 
 /**
+ * A geometry less the triangles that lie flat on one plane: the face of a
+ * box that something opens through.
+ *
+ * A door in a cabinet is cut by leaving the face out and building a frame
+ * round the opening, not by CSG, for the reason `wallSegments` gives. A
+ * bevelled box keeps its flat faces apart from its bevels (each face is a
+ * grid, and only the middle of it is on the plane), so this takes exactly
+ * the flat of one face and leaves every arris where it was. `expected` is
+ * how many triangles the caller means to take: a different count is a plane
+ * that missed, or one that took more than a face, and either would ship a
+ * box with a hole nobody drew.
+ */
+export function withoutFlatFace(geometry, axis, value, { epsilon = 1e-5, expected = 2 } = {}) {
+  const component = 'xyz'.indexOf(axis)
+  if (component < 0) throw new Error(`withoutFlatFace: unknown axis "${axis}"`)
+  const source = geometry.index ? geometry.toNonIndexed() : geometry.clone()
+  const position = source.attributes.position
+  const kept = []
+  for (let triangle = 0; triangle < position.count / 3; triangle += 1) {
+    let flat = true
+    for (let corner = 0; corner < 3; corner += 1) {
+      if (Math.abs(position.getComponent(triangle * 3 + corner, component) - value) > epsilon) flat = false
+    }
+    if (!flat) kept.push(triangle)
+  }
+  const taken = position.count / 3 - kept.length
+  if (taken !== expected) {
+    throw new Error(`withoutFlatFace: ${taken} triangle(s) lie on ${axis} = ${value}, and ${expected} were meant.`)
+  }
+  const result = new BufferGeometry()
+  for (const [name, attribute] of Object.entries(source.attributes)) {
+    const stride = attribute.itemSize * 3
+    const array = new Float32Array(kept.length * stride)
+    kept.forEach((triangle, index) => {
+      array.set(attribute.array.subarray(triangle * stride, (triangle + 1) * stride), index * stride)
+    })
+    result.setAttribute(name, new BufferAttribute(array, attribute.itemSize))
+  }
+  return result
+}
+
+/**
  * Builds a Shape from a 2D outline given as [x, y] pairs, closed automatically.
  * Used for moulding profiles: skirting, cornice, picture rail, frame sections.
  */
