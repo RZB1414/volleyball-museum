@@ -154,6 +154,75 @@ export const CAPTURE_SETS = {
     frozen: true,
     digest: 'f29cbd37e1cd571df6cf99d012daefd12bd428969b7f2e6d1d432116fe170394',
   },
+  /**
+   * The browser route of L2 (docs/HANDOFF.md, §11): what the lot changed for
+   * the player, which is the plan in the notebook and one door. A new game
+   * from its first plan (one room and a stub) to the last (three rooms, three
+   * doors), the drawer's lock named once touched, and the service shortcut
+   * from both sides, latched and released.
+   *
+   * None of the ten is a canvas capture: the canvas has no HUD, and the plan,
+   * the prompt and the toast are all HUD. Each is the WebGL frame with the
+   * DOM layer drawn over it, the second through an SVG `foreignObject` that
+   * carries the page's own style sheets with their fonts inlined, composed at
+   * the set's size and posted to `/__capture`. What the DOM layer shows was
+   * checked against the live page's geometry before any frame was kept; the
+   * scroll bar of the keypad in `o02` is the embedding browser's, a phone
+   * draws its own.
+   *
+   * `commit` is the lot's last slice, the tree the frames were shot on. The
+   * commit after it (the notebook's panel on a phone) moves nothing a window
+   * of this size shows.
+   */
+  l2: {
+    capturedAt: '2026-10-05',
+    commit: '90dd9a6',
+    report: 'docs/HANDOFF.md',
+    filePrefix: 'l2',
+    viewport: { cssWidth: 1280, cssHeight: 720, pixelRatio: 1.2, quality: 'medium' },
+    frame: { width: 1536, height: 864 },
+    groups: {
+      o: { room: 'office', powered: true },
+      d: { room: 'atrium', powered: false },
+      a: { room: 'atrium', powered: true },
+      e: { room: 'holyoke', powered: false },
+      h: { room: 'holyoke', powered: true },
+    },
+    frozen: true,
+    digest: '9c733330ebcef9e9f728cf0c7254380d4c17c62ffdb9a823bdc8a95778460433',
+  },
+  /**
+   * The same route in the touch viewport every lot is checked in, 844 x 390,
+   * driven by the sticks and the Action button: the plan on one page of the
+   * notebook, the Action button in front of a shortcut that will not open,
+   * the toast clear of the prompt, and the keypad, of which a phone shows the
+   * question and the four digits and none of the keys (ÁT-J1; the keypad is
+   * redone with the examine panel in L4).
+   *
+   * Composed like the frames of `l2` above, at two device pixels. A set of
+   * its own because a set has one frame size. `o02`, `o03` and `d01` are of
+   * the game in English.
+   *
+   * Shot on d299df8, which brought the notebook's panel back inside the
+   * screen: on the tree before it the four frames of the plan show the panel
+   * running off the right edge.
+   */
+  'l2-touch': {
+    capturedAt: '2026-10-05',
+    commit: 'd299df8',
+    report: 'docs/HANDOFF.md',
+    filePrefix: 'l2t',
+    viewport: { cssWidth: 844, cssHeight: 390, pixelRatio: 2, quality: 'medium' },
+    frame: { width: 1688, height: 780 },
+    groups: {
+      o: { room: 'office', powered: true },
+      d: { room: 'atrium', powered: false },
+      a: { room: 'atrium', powered: true },
+      h: { room: 'holyoke', powered: true },
+    },
+    frozen: true,
+    digest: '9afc6c6c1dfa8dd22420142b62d6caa4eecb651f2929d34edeb091be59f3cdb7',
+  },
 }
 
 /** How a file name ends, and the light it says the frame was taken in. */

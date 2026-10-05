@@ -35,7 +35,7 @@ import { openGame, suite } from './lib/storePage.ts'
 const { en } = await import('../src/content/i18n/en.ts')
 const { ptBR } = await import('../src/content/i18n/pt-BR.ts')
 const { MUSEUM } = await import('../src/content/museum.ts')
-const { SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
+const { fixtureLot, SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
 const { attemptLock } = await import('../src/engine/lockRules.ts')
 const { doorGrant } = await import('../src/engine/progressGrants.ts')
 const { buildTransitionDoorSpecs } = await import('../src/engine/transitionDoorTopology.ts')
@@ -475,18 +475,43 @@ await test('north is up, and the rose stands clear of every room of the building
 // The saves players have
 // ---------------------------------------------------------------------------
 
-await test('the corpus: every save shows the rooms it visited, and nobody\'s shortcut', () => {
-  for (const [id, fixture] of Object.entries(SAVE_FIXTURES)) {
-    const progress = migrateProgress(JSON.parse(JSON.stringify(fixture.save.progress)))
-    const model = mapModel(MUSEUM, progress, standingIn(progress.lastRoom))
+await test('the corpus: every save shows the rooms it visited, and the shortcut only of who released it', () => {
+  const planOf = (id: keyof typeof SAVE_FIXTURES) => {
+    const progress = migrateProgress(JSON.parse(JSON.stringify(SAVE_FIXTURES[id].save.progress)))
+    return { progress, model: mapModel(MUSEUM, progress, standingIn(progress.lastRoom)) }
+  }
+  const ids = Object.keys(SAVE_FIXTURES) as (keyof typeof SAVE_FIXTURES)[]
+  for (const id of ids) {
+    const { progress, model } = planOf(id)
     assert.deepEqual(roomIds(model), ROOM_IDS.filter((room) => progress.roomsVisited.includes(room)), id)
-    // No save proves the player left by the shortcut (DL2-3), so it is off
-    // every plan until the next exit.
+  }
+  // A save from before L2 does not prove the player left by the shortcut
+  // (DL2-3), so it is off the plan until the next exit; and a drawer left
+  // shut waits for the next touch to be named (DL2-4).
+  const before = ids.filter((id) => fixtureLot(SAVE_FIXTURES[id]) < 2)
+  assert.ok(before.length >= 6, 'the saves from before L2 are gone from the corpus')
+  for (const id of before) {
+    const { model } = planOf(id)
     assert.equal(doorAcross(model, OPENINGS.shortcut), undefined, id)
     assert.equal(model.doors.length, 2, id)
-    // A drawer left shut waits for the next touch to be named (DL2-4).
     assert.deepEqual(model.locks, [], id)
   }
+  // The two L2 left say it themselves. One released the shortcut: three
+  // doors, none of them a stub, and no lock to name (its drawer is open).
+  const released = planOf('l2-shortcut-released').model
+  assert.ok(doorAcross(released, OPENINGS.shortcut), 'the shortcut this save released is not on its plan')
+  assert.equal(released.doors.length, 3)
+  assert.deepEqual(released.doors.filter((door) => door.stub), [])
+  assert.deepEqual(released.locks, [])
+  // The other stopped in the atrium with the wing unvisited and the drawer
+  // touched: two rooms, the wing's door a stub, nothing where the shortcut
+  // is, and the drawer by name.
+  const touched = planOf('l2-new-game-drawer-touched').model
+  assert.deepEqual(roomIds(touched), ['atrium', 'office'])
+  assert.equal(touched.doors.length, 2)
+  assert.ok(doorAt(touched, OPENINGS.wing.atrium)?.stub, 'the door to the wing nobody walked into has no stub')
+  assert.equal(doorAcross(touched, OPENINGS.shortcut), undefined)
+  assert.deepEqual(touched.locks.map((lock) => lock.id), ['office-drawer'])
   // The save from before the opening scene walked the atrium and the wing
   // and never the office: its door to the office is a stub.
   const preOpening = migrateProgress(JSON.parse(JSON.stringify(SAVE_FIXTURES['production-pre-opening'].save.progress)))

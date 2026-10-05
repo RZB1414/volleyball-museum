@@ -13,6 +13,11 @@
  * key before the store is first evaluated — and has to come out with
  * everything it went in with, naming only things the content still has.
  *
+ * Beside them stand the saves the lots left as they closed, read out of the
+ * browser. Those are held to more: a lot the plan calls done has one, a save
+ * of the lot the tree stands at loads as itself, and what the runtime of its
+ * lot guarantees of a save holds of the record.
+ *
  * `?qaSave` must exist on the dev server and nowhere else. A harness that can
  * be told by a URL to overwrite the save is a defect the day it ships, and
  * nothing in a browser session would show that it had.
@@ -39,15 +44,19 @@ const browserStorage = {
 }
 Object.assign(globalThis, { localStorage: browserStorage })
 
+const { CONTENT_LOT } = await import('../src/content/contentLot.ts')
 const { PRE_OPENING_SAVE } = await import('../src/content/legacySave.ts')
 const { MUSEUM } = await import('../src/content/museum.ts')
-const { SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
+const { fixtureLot, SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
 const { applyQaSave, QA_SAVE_PARAM, QA_SAVE_STORAGE_KEY, qaSaveRequest } = await import(
   '../src/dev/qaSave.ts'
 )
 const { dueRadioCalls, radioDevices } = await import('../src/engine/deviceRules.ts')
+const { pendingLocks } = await import('../src/engine/lockRules.ts')
 const { journalUnlocked } = await import('../src/engine/notebook.ts')
 const { progressConditionMet } = await import('../src/engine/progressCondition.ts')
+const { buildTransitionDoorSpecs, canOpenTransitionDoor } = await import('../src/engine/transitionDoorTopology.ts')
+const { lastLotDone } = await import('./lib/planLots.ts')
 const { QA_SAVE_BOOT_MODULE, qaSavePlugin } = await import('./vite-plugin-qa-save.mjs')
 
 type StoreModule = typeof import('../src/state/store.ts')
@@ -159,6 +168,9 @@ test('the corpus holds the production saves the plan lists, and the save each lo
   // leave either: the lot after starts its own route from the one before.
   const lots: Record<string, string> = {
     'l1-route-end': 'l1-f0fb5a3',
+    // Two of L2: the route begun from L1's save, and a new game of its own.
+    'l2-shortcut-released': 'l2-90dd9a6',
+    'l2-new-game-drawer-touched': 'l2-90dd9a6',
   }
   for (const [id, from] of Object.entries(lots)) {
     assert.ok(Object.hasOwn(SAVE_FIXTURES, id), `${id} is gone from the corpus`)
@@ -167,7 +179,33 @@ test('the corpus holds the production saves the plan lists, and the save each lo
   for (const id of fixtureIds) {
     assert.ok(SAVE_FIXTURES[id].summary.length > 0, `${id} says what it is`)
     assert.ok(SAVE_FIXTURES[id].from.length > 0, `${id} says which build wrote it`)
+    // A save is named after the lot that wrote it, and nothing else names a lot.
+    const lot = fixtureLot(SAVE_FIXTURES[id])
+    assert.equal(lot > 0, /^l\d+-/.test(id), `${id}: the name and the build disagree about being a lot's save`)
+    if (lot > 0) assert.ok(id.startsWith(`l${lot}-`), `${id} was written by L${lot}`)
   }
+})
+
+test('every lot the plan says is done left a save of its own in the corpus', () => {
+  // Step 12 of the plan's §9.1, and the step a closing lot forgets: L1 was
+  // written up as done with a corpus that had none of its saves, and the lot
+  // after had to play it again on the published tree. The plan's «Feito em»
+  // is what says a lot is done, so that line now asks for the save.
+  const plan = readFileSync(resolve(ROOT, 'docs/PLANO-ATE-O-FINAL.md'), 'utf8')
+  const done = lastLotDone(plan)
+  assert.ok(done >= 2, 'the plan no longer marks L2 as done: the pattern has gone stale')
+  const written = new Set(fixtureIds.map((id) => fixtureLot(SAVE_FIXTURES[id])))
+  for (let lot = 1; lot <= done; lot += 1) {
+    assert.ok(written.has(lot), `the plan says L${lot} is done and the corpus holds no save written by L${lot}`)
+  }
+  // And none from a lot that is not in the tree yet.
+  for (const lot of written) assert.ok(lot <= CONTENT_LOT, `a save of L${lot} in a tree that stands at L${CONTENT_LOT}`)
+
+  assert.equal(fixtureLot({ from: 'production-2026-10-03' }), 0)
+  assert.equal(fixtureLot({ from: 'production-before-2026-10-02' }), 0)
+  assert.equal(fixtureLot({ from: 'l1-f0fb5a3' }), 1)
+  assert.equal(fixtureLot({ from: 'l12-0a1b2c3' }), 12)
+  assert.equal(fixtureLot({ from: 'l2' }), 0, 'a lot without the commit that wrote the save names no build')
 })
 
 for (const id of fixtureIds) {
@@ -220,6 +258,7 @@ const factIds = new Set<string>(MUSEUM.facts.map((fact) => fact.id))
 const lockIds = new Set<string>(MUSEUM.locks.map((lock) => lock.id))
 const devices = MUSEUM.rooms.flatMap((room) => room.devices ?? [])
 const containers = MUSEUM.rooms.flatMap((room) => room.containers ?? [])
+const doors = buildTransitionDoorSpecs(MUSEUM.rooms)
 const radios = radioDevices(MUSEUM).map((entry) => entry.device)
 const callIds = new Set<string>(radios.flatMap((radio) => radio.calls.map((call) => call.id)))
 const hudSource = readFileSync(resolve(ROOT, 'src/ui/Hud.tsx'), 'utf8')
@@ -356,6 +395,29 @@ test('each fixture is a state the game could really have reached', () => {
     if (progress.radioCalls.includes('porter-radio-taken') || progress.hintsShown.includes('radio-taken')) {
       assert.ok(progress.devicesCarried.length > 0, say('the radio was announced as taken but is on the desk'))
     }
+
+    // What L2's runtime guarantees of a save it wrote, held for the records
+    // written from L2 on. An older record says nothing of either list, and
+    // what the load makes of that is the migration's business (`test:save`).
+    if (fixtureLot(SAVE_FIXTURES[id]) < 2) continue
+    const record = rawProgress(id)
+    const said = (field: string) => record[field] as readonly string[]
+    // A lock is seen by the touch that opens it, at the latest.
+    for (const lock of said('locksOpened')) {
+      assert.ok(said('locksSeen').includes(lock), say(`${lock} was opened and never touched`))
+    }
+    for (const lock of said('locksSeen')) assert.ok(lockIds.has(lock), say(`touched a lock the content does not have: ${lock}`))
+    // A door is released by pushing it from the room it opens from.
+    for (const doorId of said('doorsReleased')) {
+      const door = doors.find((candidate) => candidate.id === doorId)
+      assert.ok(door?.opensFrom, say(`released ${doorId}, which is not a door that opens from one side`))
+      assert.ok(said('roomsVisited').includes(door.opensFrom), say(`${doorId} was pushed from a room never entered`))
+    }
+    // The museum of L2 sets no flag and compiles no trigger.
+    if (fixtureLot(SAVE_FIXTURES[id]) === 2) {
+      assert.deepEqual(said('flags'), [], say('a flag nothing in L2 sets'))
+      assert.deepEqual(said('triggersFired'), [], say('a trigger L2 does not have'))
+    }
   }
 })
 
@@ -472,6 +534,87 @@ test('the save L1 left is the end of its route, and holds nothing production\'s 
   // Leaving by the shortcut is not among them, which is why no save of this
   // build can prove its player ever went that way.
   assert.deepEqual(Object.keys(rawProgress(id)).sort(), Object.keys(rawProgress('production-drawer-open')).sort())
+})
+
+// What L2 added to a save, in the order its migration appends it to a save
+// that had none of it.
+const ADDED_BY_L2 = ['contentLot', 'locksSeen', 'doorsReleased', 'flags', 'triggersFired']
+const SHORTCUT = 'atrium-from-holyoke-shortcut'
+
+test('the route L2 walked from L1\'s save ends with the shortcut released, and nothing of L1 touched', () => {
+  const id = 'l2-shortcut-released'
+  const raw = rawProgress(id)
+  const before = rawProgress('l1-route-end')
+  // The save of L1 carried forward: its own fields first and in its own
+  // order, then what the lot adds. Typed in any other order, the record
+  // would not be the text that was read out of the browser.
+  assert.deepEqual(Object.keys(raw), [...Object.keys(before), ...ADDED_BY_L2])
+  // Everything L1 wrote is as L1 wrote it, but for where the player stopped
+  // and the minutes the office clock ran meanwhile.
+  for (const [field, value] of Object.entries(before)) {
+    if (field === 'lastRoom' || field === 'clockSeconds') continue
+    assert.deepEqual(raw[field], value, `${field} is not what the save of L1 held`)
+  }
+  assert.equal(raw.lastRoom, 'atrium', 'out by the shortcut, into the atrium')
+  assert.ok((raw.clockSeconds as Record<string, number>)['office-clock'] > (before.clockSeconds as Record<string, number>)['office-clock'])
+  // What the lot added: its stamp, the one door, and the drawer as touched
+  // (open in the save it began from, which is all the migration needs).
+  assert.equal(raw.contentLot, 2)
+  assert.deepEqual(raw.doorsReleased, [SHORTCUT])
+  assert.deepEqual(raw.locksSeen, [DRAWER])
+  // And the point of it: for this player the door opens from the atrium.
+  const shortcut = doors.find((door) => door.id === SHORTCUT)
+  assert.ok(shortcut, 'the shortcut is gone from the content')
+  assert.equal(canOpenTransitionDoor(shortcut, 'atrium', progressOf(id).doorsReleased), true)
+  assert.equal(canOpenTransitionDoor(shortcut, 'atrium', progressOf('l1-route-end').doorsReleased), false)
+})
+
+test('the new game L2 left has a lock touched and still shut, and a wing not yet walked', () => {
+  const id = 'l2-new-game-drawer-touched'
+  const raw = rawProgress(id)
+  // A new game of this lot is written in the order of the lot's own table.
+  assert.deepEqual(Object.keys(raw), Object.keys(loaded.get(id)!.store.EMPTY_PROGRESS))
+  assert.equal(raw.contentLot, 2)
+  // Touched, not opened: the state no save before L2 can hold, and the one
+  // the plan exists to name.
+  assert.deepEqual(raw.locksSeen, [DRAWER])
+  assert.deepEqual(raw.locksOpened, [])
+  assert.deepEqual(pendingLocks(MUSEUM.locks, progressOf(id)).map((lock) => lock.id as string), [DRAWER])
+  assert.ok(!list(id, 'documentsRead').includes('doc-predecessor'), 'the letter is still in the drawer')
+  assert.deepEqual(list(id, 'factsKnown'), [], 'nobody told this player the year')
+  // Two rooms lit and walked, the wing behind a door not yet opened; the
+  // shortcut tried from its wrong side, which records nothing.
+  assert.deepEqual(list(id, 'roomsVisited'), ['office', 'atrium'])
+  assert.deepEqual(list(id, 'roomsPowered'), ['office', 'atrium'])
+  assert.deepEqual(raw.doorsReleased, [])
+  assert.equal(raw.lastRoom, 'atrium')
+  // The notebook was taken while the porter was asking for it: the runtime
+  // counts a call answered mid-line as heard, and never plays it again.
+  assert.deepEqual(list(id, 'radioCalls'), ['porter-first-call', 'porter-notebook-reminder', 'porter-radio-taken'])
+  assert.deepEqual(list(id, 'devicesCarried'), ['office-radio'])
+  assert.deepEqual(raw.radioMemory, {}, 'carried and never called')
+})
+
+test('a save the lot in the tree wrote loads as itself', () => {
+  // The other records are older than the build that loads them, and the load
+  // may add to them. A record of the lot the tree stands at is this build's
+  // own writing: read back, it has to be the same text, field for field and
+  // in the same order. A field mistyped, left out or put in another place
+  // while copying the record out of the browser shows here.
+  const own = fixtureIds.filter((id) => fixtureLot(SAVE_FIXTURES[id]) === CONTENT_LOT)
+  for (const id of own) {
+    const { state } = loaded.get(id)!
+    assert.equal(
+      JSON.stringify({ settings: state.settings, progress: state.progress }),
+      JSON.stringify(SAVE_FIXTURES[id].save),
+      `${id}: this build reads its own save as something else`,
+    )
+  }
+  // While a lot is open the corpus has no save of it yet, and this holds of
+  // nothing; the lot closes by adding one (the check on the plan, above).
+  if (lastLotDone(readFileSync(resolve(ROOT, 'docs/PLANO-ATE-O-FINAL.md'), 'utf8')) === CONTENT_LOT) {
+    assert.ok(own.length > 0, `L${CONTENT_LOT} is done and none of its saves is in the corpus`)
+  }
 })
 
 // ---------------------------------------------------------------------------

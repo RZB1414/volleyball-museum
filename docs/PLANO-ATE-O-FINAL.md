@@ -2686,6 +2686,20 @@ dono e continua pendente. Não trava L1; trava o livro-caixa de L6.
 - **Risco.** Médio: o store passa a executar gatilhos no caminho de todo `E`; a migração muda. Um
   rollback para antes de L2 perde campos novos (registrado no HANDOFF).
 - **Passagem.** Trilhos prontos; nada de história nova.
+- **Feito em 2026-10-05**, em commits locais na `main` (de `1ecc2cb` a `d299df8`, mais o do
+  fecho): as cinco fatias do plano do lote (`docs/lotes/L2-plano.md`, §14), o conserto que a rota
+  de toque pediu (no telefone o painel do caderno saía pela borda direita da tela) e o fecho.
+  `npm run check` e `npm run build` verdes. A rota do lote foi feita no navegador de
+  desenvolvimento a partir do save de L1, dos saves de produção e de um jogo novo, em pt-BR e em
+  inglês, em 1280 × 720 e em 844 × 390 pelos direcionais e pelo botão de Ação. O passo 12 está
+  feito: `docs/releases/L2.graph.json` (42 ações, 54 ids, 19 campos do save), dois saves do lote no
+  corpus (`l2-shortcut-released`, `l2-new-game-drawer-touched`), dezessete quadros congelados em
+  dois conjuntos e o registro em `docs/HANDOFF.md` §11, com o que um rollback perde. `CONTENT_LOT`
+  é 2 desde a fatia que pagou `map.legend`. Os dez pontos de referência foram medidos de novo por
+  conferência e deram os números de L1; o `BROWSER_RECORD` continua o do lote 1, de propósito, e
+  quem muda o que uma sala desenha (L3) mede e troca. **Faltam** os passos 5 (revisão adversarial
+  por quem não implementou), 8 a 11 (revisor, push, deploy e fumaça em produção, com a versão
+  Cloudflare anotada no HANDOFF) e 13 (playtest); e o aparelho real, que continua com o dono.
 
 ### L3 — Posse
 
@@ -3387,7 +3401,7 @@ gaveta.)
 |---|---|---|
 | P0 | manifesto de capturas (`test:captures`); teste de documentação, todo ID resolve (`test:docs`); saves de produção pelo caminho real de carga (`test:qa-save`); fontes lidas e registradas (`test:facts`) | `validate:content` (`fact-code-uncaptured`, `fact-source-uncaptured`, `fact-source-drift`, `fact-capture-malformed`) |
 | L1 | catracas (tamanho do `kit.glb`, bytes por caminho, programas, textura residente) | `validate:content` (M0, `fact-code-uncaptured`), `test:kit` (peça × `layout`), `test:power`, `test:navigation`, `test:opening`, `test:opening-flow`, `test:gpu-warmup` |
-| L2 | `test:save`, `test:triggers`, `test:locks`, `test:playthrough`, `test:map`, `validateAdditive`; lints de numerais e `text-ages` | `validate:content` (`simulateProgress`), `test:transition-door`, `test:navigation` |
+| L2 | `test:save`, `test:triggers`, `test:locks`, `test:playthrough`, `test:map`, `test:lints`; `validateAdditive` contra `docs/releases/L2.graph.json` | `validate:content` (`simulateProgress`; lint de texto: `numeral-exclusivity`, `numeral-printed-in-missing`, `fact-code-without-printed-in`, `fact-exception-without-patterns`, `counted-pattern`, `text-ages`, `speech-night-state-unconditional`), `test:transition-door`, `test:mobile-controls`, `test:navigation` (inundação: `no-standing-point`, `standing-point-inside-target`), `test:opening`, `test:qa-save` (um save por lote fechado), `test:captures`, `test:facts` |
 | L3 | `test:ending`, `test:speech-coherence` | `test:mobile-controls` (segurar), `test:radio`, `test:opening`, `test:opening-flow` |
 | L4 | `test:examine` | `validate:content` (detalhes), `test:locks` (escada), `test:room-runtime` |
 | L5 | `test:shell-finishes`, `test:room-placement`; estimador (M14) | bake (portões de 4.10), `test:materials`, `test:kit-runtime` (tetos por dado) |
@@ -3411,7 +3425,10 @@ gaveta.)
 | Código | O que acusa hoje | Fecha em |
 |---|---|---|
 | `exhibit-uncataloguable` | `net-1897`, `gym-suit`, `photo-gym` | L4 |
-| `checklist-item-untickable` | «Catalogar o acervo» (até L4); «Caixa-forte» (promessa datada, `deferredUntilLot` 12) | L4, L12 |
+| `checklist-item-untickable` | «Catalogar o acervo» (até L4); «Caixa-forte» (até L3, que a transforma em promessa datada sem caixa de riscar, `deferredUntilLot` 12; a promessa é paga em L12) | L4, L3 |
+| `standing-point-inside-target` | `net-1897`: sem colisor, quem anda até a rede fica com o olho dentro da caixa dela (H-31) | L14 |
+| `text-ages` | `document.predecessor.body` («há cento e trinta anos», H-23); o bilhete dá lugar a `doc-otavio-handover` | L3 |
+| `speech-night-state-unconditional` | `radio.patience.t4.dark`, `radio.patience.t5.soap.2`, `radio.deadAir.rain`: resposta do Jorge sem `when` até M9 | L3 |
 | `kit-part-unused` | 16% do kit sem uso | L5 |
 | catraca de programas | 34–35 medidos contra 25 do papel | L6 (o teto passa a ser o medido) |
 | catraca do `kit.glb` | 2.189 KB contra 800 do papel | L6 |

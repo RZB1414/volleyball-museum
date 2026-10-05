@@ -11,7 +11,7 @@
  */
 
 import assert from 'node:assert/strict'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -191,6 +191,76 @@ test('the review set is the four frames of the credit, frozen on the review comm
     review.captures.map((capture: { id: string; light: string }) => `${capture.id} ${capture.light}`),
     ['e01 dark', 'e02 torch', 'h01 lit', 'h02 lit'],
   )
+})
+
+type Capture = { readonly id: string; readonly file: string; readonly room: string; readonly light: string; readonly subject: string }
+
+test('the L2 set is the ten frames of the lot\'s route, frozen on the tree they were shot on', () => {
+  const l2 = readCaptureManifest(ROOT, 'l2')
+  assert.ok(l2, `${CAPTURE_ROOT}/l2/${MANIFEST_FILE} is missing`)
+  assert.equal(l2.count, 10)
+  assert.equal(l2.captures.length, 10)
+  // The last slice of the lot: what the player sees of L2 is all in it, and
+  // the commit after it moves nothing a desk-sized window shows.
+  assert.equal(l2.commit, '90dd9a6')
+  assert.equal(l2.frozen, true)
+  assert.equal(l2.report, 'docs/HANDOFF.md')
+  assert.deepEqual(l2.frame, { width: 1536, height: 864 })
+  // What the lot changed for the player is the plan and one door, so that is
+  // what the frames are of: the plan in each state a new game goes through,
+  // and the shortcut from both sides, before and after.
+  const subjects = (start: string) => l2.captures.filter((capture: Capture) => capture.subject.startsWith(start)).length
+  assert.equal(subjects('plan-'), 6)
+  assert.equal(subjects('shortcut-'), 3)
+  assert.equal(subjects('drawer-'), 1)
+  const count = (room: string, light: string) =>
+    l2.captures.filter((capture: Capture) => capture.room === room && capture.light === light).length
+  assert.equal(count('office', 'lit'), 3)
+  assert.equal(count('atrium', 'dark'), 1)
+  assert.equal(count('atrium', 'lit'), 4)
+  assert.equal(count('holyoke', 'dark'), 1)
+  assert.equal(count('holyoke', 'lit'), 1)
+})
+
+test('the touch set is the seven frames of the phone viewport, on the commit that centred the notebook', () => {
+  const touch = readCaptureManifest(ROOT, 'l2-touch')
+  assert.ok(touch, `${CAPTURE_ROOT}/l2-touch/${MANIFEST_FILE} is missing`)
+  assert.equal(touch.count, 7)
+  // 844 x 390, the viewport every lot's touch pass uses, at two device pixels.
+  assert.deepEqual(touch.viewport, { cssWidth: 844, cssHeight: 390, pixelRatio: 2, quality: 'medium' })
+  assert.deepEqual(touch.frame, { width: 1688, height: 780 })
+  // Shot again after the notebook's panel was brought back inside the screen:
+  // four of the seven are of that panel, and on the tree before it they show
+  // it running off the right edge.
+  assert.equal(touch.commit, 'd299df8')
+  assert.equal(touch.frozen, true)
+  assert.equal(touch.report, 'docs/HANDOFF.md')
+  assert.equal(touch.captures.filter((capture: Capture) => capture.subject.startsWith('plan-on-a-phone-')).length, 4)
+})
+
+test('the report of L2 cites every frame of its two sets, and no frame they do not hold', () => {
+  // A frame nobody argues from is a leftover, and a frame cited by a name the
+  // set does not have is evidence nobody can open. By the whole name: `a01`
+  // alone is a frame of four other sets.
+  const report = readFileSync(resolve(ROOT, 'docs/HANDOFF.md'), 'utf8')
+  const problems: string[] = []
+  const names = new Set<string>()
+  for (const setName of ['l2', 'l2-touch']) {
+    const manifest = readCaptureManifest(ROOT, setName)
+    assert.ok(manifest, `${CAPTURE_ROOT}/${setName}/${MANIFEST_FILE} is missing`)
+    for (const capture of manifest.captures as Capture[]) {
+      const name = capture.file.replace(/\.jpg$/, '')
+      names.add(name)
+      if (!report.includes(`\`${name}\``)) problems.push(`${setName}/${capture.file} is in the set and docs/HANDOFF.md never cites it`)
+    }
+  }
+  for (const path of ['docs/HANDOFF.md', 'docs/lotes/L2-plano.md', 'docs/PLANO-ATE-O-FINAL.md']) {
+    const text = readFileSync(resolve(ROOT, path), 'utf8')
+    for (const [slug] of text.matchAll(/(?<![\w-])l2t?-[a-z]\d\d(?:-[a-z0-9]+)+/g)) {
+      if (!names.has(slug)) problems.push(`${path} cites \`${slug}\`, which is not a frame of the L2 sets`)
+    }
+  }
+  assert.deepEqual([...new Set(problems)], [])
 })
 
 test('a file name is read as id, room, light, view and subject, or refused', () => {

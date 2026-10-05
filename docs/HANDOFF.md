@@ -1,8 +1,9 @@
 # Handoff — Museu do Voleibol
 
-Atualizado em 2026-10-04 (L1, o primeiro lote do plano, §10; a abertura no escritório
-é §9); o estado técnico das salas é o de 2026-08-12. Este documento é o ponto de
-entrada para retomar o projeto sem depender da conversa anterior.
+Atualizado em 2026-10-05 (L2, o segundo lote do plano, §11; L1 é §10; a abertura no
+escritório é §9); o estado técnico das salas é o de 2026-08-12. Este documento é o ponto de
+entrada para retomar o projeto sem depender da conversa anterior. **Próxima tarefa:** publicar
+L2 (§11.11, item 1) e começar L3.
 
 Leia também, nesta ordem: `docs/PLANO-DO-ZERO.md` (o desenho do jogo),
 `docs/REFERENCIA-TECNICA.md` (gramática de Resident Evil + pipeline web-3D) e
@@ -31,13 +32,16 @@ intencionalmente no commit `5e51e24`. O museu data-driven é a única aplicaçã
 
 O corte vertical está integrado, assado, caminhável e com progressão de energia.
 
-Portão verde em 2026-10-04 (`npm run check`, depois de L1 e da revisão dele, §10; a lista
-completa das suítes e o que cada uma ganhou está em §10.4):
+Portão verde em 2026-10-05 (`npm run check`, 33 passos, depois de L2, §11; a lista completa
+das suítes e o que cada uma ganhou está em §11.4, e a de L1 em §10.4):
 
-- conteúdo: 3 salas válidas, com 29 dívidas datadas impressas (`knownDebt.ts`);
-- catracas: 4/4; fontes: 28; documentação: 23/23; capturas: 12/12; saves: 19/19;
+- conteúdo: 3 salas válidas, com 37 dívidas datadas impressas (`knownDebt.ts`), o roteiro em
+  níveis e a comparação com o instantâneo do grafo (`docs/releases/L2.graph.json`);
+- lint de texto: 21/21; catracas: 4/4; fontes: 28; documentação: 23/23;
+- capturas: 15/15; saves do corpus: 27/27; save: 30/30;
 - energia: 30/30;
-- abertura: 31/31; fluxo da abertura: 44/44; rádio: 27/27;
+- abertura: 32/32; fluxo da abertura: 44/44; rádio: 27/27;
+- gatilhos: 30/30; trancas: 15/15; planta: 16/16;
 - colisão: 28/28;
 - kit e posicionamento: 339/339; vitrine corrida: 12/12;
 - materiais: 10; mesa do curador: 9; estantes: 20;
@@ -47,16 +51,17 @@ completa das suítes e o que cada uma ganhou está em §10.4):
 - aquecimento de GPU: verde; prontidão da sala: 6/6;
 - performance de render e projeção: 16/16;
 - sinalização arquitetônica: 26/26;
-- portas de transição: 29/29;
-- controles móveis e modo imersivo: 13/13;
-- navegação: 68/68;
+- portas de transição: 38/38;
+- controles móveis e modo imersivo: 14/14;
+- navegação: 108/108; partida (o robô e a simulação): 30/30;
 - bundle por caminho: 5/5;
 - `npm run build`: verde.
 
 O único aviso é o preexistente `react(only-export-components)` em `src/main.tsx:17`.
 Deploy de produção: `https://volleyball-museum.renanbuiatti14.workers.dev`, versão
 Cloudflare `1d3a4554-c21a-457a-9bf3-7d5bfc594ae4` (2026-10-04: P0 e L1 do plano, até
-`f0fb5a3`; §10). A anterior era `0027afaa` (2026-10-03, a rodada de §9).
+`f0fb5a3`; §10). A anterior era `0027afaa` (2026-10-03, a rodada de §9). **L2 está fechado e
+ainda não publicado** (commits locais até o do fecho; §11): o que está no ar é L1.
 
 Bake atual:
 
@@ -707,7 +712,10 @@ dela), e o que a medição de 2026-10-04 ensinou sobre o harness:
   mesmo endereço que o jogo usa (`performance.getEntriesByType('resource')` diz qual). Serve para
   lançar raios de visada, medir caixas e ligar ou desligar uma luz no mesmo quadro. Mover um
   objeto assim é medição, nunca conserto: devolva-o e diga no registro o que foi movido.
-- **O HUD não sai no `/__capture`.** A captura de tela do painel sai, a 800 × 450.
+- **O HUD não sai no `/__capture`.** A captura de tela do painel sai, a 800 × 450. Para um
+  quadro com a planta, o prompt ou um aviso no tamanho do conjunto, componha o canvas com a
+  camada do DOM e mande o resultado ao mesmo endpoint (§11.10 diz como; os conjuntos `l2` e
+  `l2-touch` foram feitos assim).
 
 A inspeção visual final desta etapa confirmou no build servido:
 
@@ -1074,10 +1082,10 @@ catracas) e o da revisão adversarial, que fecha ou data os 27 achados dela (10.
 5 (revisão adversarial: 10.11), o 6 (rota do lote, com as ressalvas de 10.8), o 8 (revisor: nada
 bloqueante; a folga dos tetos de bundle subiu para cerca de meio por cento), o 9 e o 10 (push e
 deploy) e o 11 (fumaça em produção: título com o nome novo, nenhum código de desenvolvimento no
-bundle, cena montada, console limpo). O 12 está feito **em parte**: este registro e os manifestos
-de capturas existem; o corpus de saves de L1 (agora que o build está no ar) e o congelamento das
-capturas, não (10.10). **Falta** o 13 (playtest) e a medição em aparelho real (P0, item 6, do
-dono).
+bundle, cena montada, console limpo). O 12 ficou feito **em parte** por L1 (este registro e os
+manifestos de capturas) e foi completado pela primeira fatia de L2: o corpus tem o save de L1 e
+os dois conjuntos de capturas estão congelados (10.10; §11.7). **Falta** o 13 (playtest) e a
+medição em aparelho real (P0, item 6, do dono).
 
 ### 10.1 O que mudou para o jogador
 
@@ -1489,8 +1497,10 @@ Do harness, para quem repetir a rota:
    Cloudflare `1d3a4554`) e coberto em `test:qa-save`; `l1` e `l1-review` estão congelados, o
    segundo em `513ec09`. A mesma fatia tirou o formato do save de `store.ts`
    (`src/state/progressFields.ts`, `saveMigrations.ts`; portão `test:save`) e moveu `CONTENT_LOT`
-   para `src/content/contentLot.ts`. O registro completo de L2 entra aqui no fecho do lote.
-2. L2 (Trilhos). Ele paga `map.legend` (`i18n-key-unused`) e move `CONTENT_LOT` para 2 no commit
+   para `src/content/contentLot.ts`. O registro completo de L2 é a seção 11.
+2. L2 (Trilhos): **feito**, §11. Ele pagou `map.legend` e moveu `CONTENT_LOT` para 2; os
+   próximos passos de agora estão em §11.11. O que este item dizia antes do lote:
+   Ele paga `map.legend` (`i18n-key-unused`) e move `CONTENT_LOT` para 2 no commit
    que a pagar. Texto novo na tela de título mexe no teto de `title` do bundle, que tem cerca de
    meio por cento de folga (28.500 sobre 28.353 medidos): se passar, sobe no mesmo commit, com o
    motivo em `scripts/lib/ratchets.ts`.
@@ -1548,3 +1558,465 @@ contraste do crédito (1,14:1); `audit:geo` e `audit:geo2` com saída 1; o conju
 guardam contra uma volta atrás, e são provadas por mutação dentro do próprio teste: as
 chamadas dos componentes (cinco e quatro refactors aplicados em memória), `CONTENT_LOT` (planos
 feitos para o teste) e a medida da legenda (um crédito mais longo quebra em mais linhas).
+
+---
+
+## 11. L2 — Trilhos (2026-10-05)
+
+O segundo lote do plano (`docs/PLANO-ATE-O-FINAL.md`, L2), executado pelo plano de lote
+`docs/lotes/L2-plano.md`, que guarda, fatia por fatia, o vermelho de cada teste, as mutações
+aplicadas e o que saiu diferente do planejado (§14 dele). Saiu em commits locais na `main`:
+
+| Commit | O que é |
+|---|---|
+| `78412ee` | o plano do lote |
+| `1ecc2cb` | F1: o save que não se perde (tabela de campos, carimbo do lote, campos desconhecidos preservados) |
+| `8a570b4` | F2: uma porta só para o progresso (condições v2, gatilhos de disparo único, `attemptLock`) |
+| `6cb861b` | F3: o atalho que fica aberto e a planta sem spoiler; `CONTENT_LOT` passa a 2 |
+| `30f2334` | F4: a prova de que se joga (`examineReach`, `simulateProgress`, o robô, o instantâneo) |
+| `90dd9a6` | F5: a inundação da navegação e o lint do que o museu imprime |
+| `d299df8` | o painel do caderno dentro da tela do telefone (achado da rota de toque do fecho) |
+| o do fecho | este registro, os dois saves do lote, os dois conjuntos de capturas, o «Feito em» |
+
+**Estado: fechado em 2026-10-05, não publicado.** Dos passos de §9.1 do plano estão feitos o 1
+(plano do lote), o 2 (teste primeiro, fatia por fatia e no fecho), o 3, o 4 (portão verde), o 6
+(rota do lote: 11.8) e o 12 (este registro, o instantâneo, o corpus e as capturas). O 7 não se
+aplica (não é lote de arte: nenhuma sala desenha nada diferente). **Faltam** o 5 (revisão
+adversarial por quem não implementou: cada fatia aplicou as próprias mutações, mas ninguém sem o
+contexto tentou refutar o lote), o 8 ao 11 (revisor, push, deploy e fumaça em produção) e o 13
+(playtest). Quem publicar anota a versão Cloudflare em §2 e aqui.
+
+### 11.1 O que mudou para o jogador
+
+- **O save não se perde.** Um save de produção carrega inteiro. Um campo que este build não
+  conhece (gravado por um lote mais novo, numa outra aba) fica no save em vez de ser descartado, e
+  uma aba velha não rebaixa o carimbo do lote.
+- **O atalho da Ala 1 fica aberto.** Depois da primeira saída por ele, abre dos dois lados, para
+  sempre, com o aviso «Atalho destrancado — Ala 1 · Holyoke» e o som do trinco, uma vez só. Do
+  saguão, antes disso, o `E` (e o botão de Ação, no toque) responde com o zumbido em vez de
+  silêncio.
+- **A planta não entrega o prédio.** Só desenha a sala visitada; a vizinha é um toco com «?»; o
+  atalho só aparece depois de aberto; a tranca só é listada depois de tocada, e sai ao abrir; o
+  marcador é uma seta que aponta para onde a câmera olha e a planta tem norte; os três estados de
+  sala diferem por padrão e por cor, com a legenda titulada («Sem energia», «Acesa, falta
+  conferir», «Completa»).
+- **Uma tranca que recusa responde** com o zumbido. Só a tranca de conhecimento abre painel.
+- **No telefone o caderno fica dentro da tela** (`d299df8`): o painel ia de x = 34 a x = 844 numa
+  tela de 844, com margem à esquerda e nenhuma à direita; agora vai de 33,8 a 810,2.
+- Nada mais: nenhuma história nova, nenhuma sala, nenhuma textura, nenhum modelo, nenhuma
+  dependência. O jogo continua com o fecho honesto de L1.
+
+### 11.2 Como ficou no código
+
+O desenho de cada peça está em `docs/lotes/L2-plano.md` §3; aqui, só o mapa.
+
+- **O save** (`src/state/progressFields.ts`, `src/state/saveMigrations.ts`,
+  `src/content/contentLot.ts`): uma tabela diz, campo a campo, o valor de um jogo novo, como
+  sanear o que veio do disco e se o campo conta como progresso; o que a tabela não conhece passa
+  adiante intocado. `SAVE_VERSION` continua 1. O que muda de lote para lote é
+  `progress.contentLot`: o save é carimbado com `max(o dele, CONTENT_LOT)`, e os migradores de um
+  lote rodam para todo save com carimbo até o dele. Campos novos de L2: `contentLot`, `locksSeen`,
+  `doorsReleased`, `flags` e `triggersFired` (os dois últimos vazios em todo save: o conteúdo de
+  L2 não compila gatilho nenhum). Um save sem `locksSeen` ganha as trancas que abriu; nenhuma
+  porta é dada como liberada para quem não a liberou.
+- **Uma porta só para o progresso** (`src/state/store.ts`, `src/state/progressRules.ts`,
+  `src/engine/triggers.ts`, `contentRegistry.ts`, `progressGrants.ts`): todo verbo é uma função
+  pura que devolve uma concessão, e o store tem uma entrada, `grant`, que aplica, assenta os
+  gatilhos e só então notifica e grava. Concessão que não acrescenta nada não escreve nem acorda
+  ninguém. O store não importa conteúdo: as regras chegam por um registro, depois do clique.
+- **Trancas** (`src/engine/lockRules.ts`): `attemptLock` é o único caminho, do toque e do teclado;
+  só o resultado `ask` abre modal.
+- **Portas** (`src/engine/transitionDoorTopology.ts`): as duas regras recebem `doorsReleased`;
+  `doorGrant` grava a liberação no aperto, do lado de `opensFrom`, antes de a folha se mover.
+- **A planta** (`src/ui/mapModel.ts`, `mapGeometry.ts`, `MuseumMap.tsx`): o que aparece é decidido
+  por uma função pura do conteúdo, do save e de onde o jogador está; o componente só desenha.
+- **Só do portão** (fora do bundle, conferido em `test:facts`): `src/content/simulate.ts` (a
+  jogadora exaustiva que substituiu `validateSolvability`), `additive.ts` (o instantâneo e
+  `validateAdditive`), `textLint.ts`, `src/engine/examineReach.ts` como conta.
+- **Bibliotecas de teste** (`scripts/lib`): `storePage.ts` (o store carregado como o navegador
+  carrega), `storeActions.ts`, `playthrough.ts` (o robô), `flood.ts` (a inundação), `museumWorld.ts`
+  (os volumes de interação), `graphSnapshots.ts`, `planLots.ts`, `staticImports.ts`,
+  `mediaTexts.ts`, `runtimeWiring.ts` (a fiação de cada regra ao componente, e agora a conta do
+  painel do caderno) e `frozen/sanitiseProgress.L1.ts` (o leitor de save que L1 publicou,
+  congelado por hash).
+
+### 11.3 Medições
+
+**Bundle** (gzip nível 9, arquivo a arquivo, a medida do portão):
+
+| Caminho | L1 (bytes) | L2 (bytes) | Teto |
+|---|---|---|---|
+| documento | 63.235 | 63.235 | 63.600 |
+| tela de título | 28.353 | 28.859 | 29.000 |
+| jogo | 388.248 | 390.761 | 392.700 |
+
+São 92,09 kB antes do clique (orçamento 250; eram 91,59) e 482,86 kB no total (orçamento 600;
+eram 479,84). O título cresceu 506 bytes com o save (a tabela de campos e a migração moram no
+store, que a tela de título importa) e com os textos e as regras de estilo da planta; o jogo,
+2.513, com o modelo da planta, as concessões e os gatilhos. Cada teto subiu no commit da fatia
+que precisou, com o motivo em `scripts/lib/ratchets.ts`. **O título tem 141 bytes de folga**: L3
+escreve texto e sobe o teto no commit dele. Kit, texturas e GLBs não mudaram (`npm run bake` não
+rodou no lote).
+
+**Pontos de referência.** Nenhuma sala desenha nada diferente, e o `BROWSER_RECORD` continua o
+do lote 1, de propósito: com `CONTENT_LOT` em 3 o portão passa a recusá-lo, e L3, que põe coisas
+no escritório, tem de medir. Mesmo assim os dez pontos foram medidos de novo no fecho, por
+conferência, em 1280 × 720, qualidade `medium`, três passadas iguais cada um:
+
+| Ponto | L1 (§10.3) | Fecho de L2 |
+|---|---|---|
+| R01 escritório, leitura | 58 · 36.086 | 58 · 36.086 |
+| R02 escritório, spawn | 66 · 37.906 | 66 · 37.906 |
+| R03 átrio, da porta do escritório | 80 · 63.940 | 80 · 63.940 |
+| R04 átrio, diagonal sudeste | 101 · 77.334 | 101 · 77.334 |
+| R05 átrio, do canto noroeste | 85 · 67.820 | 85 · 67.820 |
+| R06 átrio, da porta da Holyoke | 79 · 70.774 | 79 · 70.774 |
+| R07 Holyoke, da porta | 39 · 37.676 | 39 · 37.676 |
+| R08 Holyoke, da porta para sudoeste | 70 · 52.036 | 70 · 52.036 |
+| R09 Holyoke, do canto noroeste | 81 · 62.374 | 81 · 62.374 |
+| R10 par com a porta aberta | 125 · 100.428 | 125 · 100.428 |
+
+(draws · triângulos.) **Programas: 35** com as três salas residentes. R01 e R02 foram medidos
+como a linha de base mede: jogo novo, as três salas acesas pelo store, rádio e caderno sobre a
+mesa. R03 a R10, com `?qaSave=production-drawer-open`. **Com o rádio no bolso e o caderno pego,
+R01 e R02 dão 51 · 34.962 e 59 · 36.782**, sete draws e 1.124 triângulos a menos: são o rádio na
+base e o caderno, que saíram da mesa (com o rádio ainda na base, em
+`?qaSave=production-radio-on-desk`, 55 · 35.554 e 62 · 37.314). Não é regressão, é o estado; quem
+medir o escritório mede no estado da linha de base.
+
+**Portão.** `npm run check` inteiro leva 45 s nesta máquina, com os 33 passos.
+`test:playthrough`: as 500 noites em 8 s (19.809 apertos, 1.064 abas fechadas e reabertas). `test:navigation`: 108 casos em 3,3 s; a inundação tem 6.618 lugares e julga 26 alvos.
+`docs/releases/L2.graph.json`: 42 ações, 3 itens de lista, 54 ids, 19 campos do save (SHA-256
+`0eae15c3eaba…`); gerado de novo no fecho, não mudou um byte.
+
+### 11.4 O portão
+
+`npm run check` verde em 2026-10-05, com 33 passos (eram 27): entraram `test:lints` (depois de
+`validate:content`), `test:save` (depois de `test:qa-save`), `test:triggers`, `test:locks` e
+`test:map` (depois de `test:radio`) e `test:playthrough` (depois de `test:navigation`).
+`test:bundle` continua no fim.
+
+- conteúdo: 3 salas válidas, 37 dívidas datadas impressas (eram 29), o roteiro em níveis e a
+  comparação com o instantâneo;
+- lint de texto: 21/21 (novo); catracas: 4/4; fontes: 28; documentação: 23/23;
+- capturas: 15/15 (eram 12); saves do corpus: 27/27 (eram 19); save: 30/30 (novo);
+- energia: 30/30; abertura: 32/32 (eram 31); fluxo da abertura: 44/44; rádio: 27/27;
+- gatilhos: 30/30 (novo); trancas: 15/15 (novo); planta: 16/16 (novo);
+- colisão: 28/28; kit e posicionamento: 339/339; vitrine corrida: 12/12;
+- materiais: 10; mesa do curador: 9; estantes: 20;
+- runtime do kit: 26; runtime das salas: 19; LOD: 23; aquecimento de GPU: verde; prontidão: 6/6;
+- render: 16/16; sinalização: 26; portas: 38/38 (eram 29); controles móveis: 14/14 (eram 13);
+- navegação: 108/108 (eram 68), com duas dívidas impressas; partida: 30/30 (novo);
+- bundle: 5/5; `npm run build`: verde.
+
+Vermelho primeiro (§9.1, passo 2): o de cada fatia está em `docs/lotes/L2-plano.md` §14. No
+fecho, cada um visto antes do conserto:
+
+- `test:map`: «the notebook's panel asks for 96vw between two margins of 4vw, 104 in all»;
+- `test:captures`: «docs/contact-sheets/l2/manifest.json is missing», e depois dezessete linhas
+  «is in the set and docs/HANDOFF.md never cites it», até esta seção existir;
+- `test:qa-save`: «l2-shortcut-released is gone from the corpus», e depois «the plan no longer
+  marks L2 as done», até o «Feito em» entrar no plano;
+- com os dois saves novos no corpus, quatro suítes reprovaram onde afirmavam, de todo save, que
+  ele vinha de antes de L2 (11.5).
+
+Por mutação, com tudo verde, sobre os registros novos (o arquivo voltava ao original depois de
+cada uma): os dois saves dados como de produção; um campo fora da ordem em que o store grava; a
+porta liberada tirada do registro; `flags` esquecido. As quatro reprovam `test:qa-save`.
+
+### 11.5 Testes que mudaram de sentido (plano, 6.5)
+
+Das fatias (a tabela inteira, com arquivo e linha, está em `docs/lotes/L2-plano.md` §8.2):
+
+- `scripts/test-capture-manifest.ts`: `l1-review` deixou de ser um conjunto aberto sobre a árvore
+  de trabalho e passou a congelado em `513ec09`;
+- `scripts/test-qa-save.ts`: o corpus deixou de ser «cinco saves que nunca saem»; ganhou um por
+  lote fechado;
+- `scripts/test-power.ts`: os quatro efeitos de destranque, que eram aplicados por
+  `store.applyUnlockEffect`, passam por `effectGrant` e `grant`;
+- `scripts/test-save.ts`: a tabela de toda função do store foi para `scripts/lib/storeActions.ts`
+  (lida também por `test:triggers`); saiu `applyUnlockEffect`, entrou `grant`, e `openLock` deixa
+  também `locksSeen`. **Função nova no store entra nessa tabela**, senão duas suítes reprovam;
+- `scripts/test-transition-door.ts`: o caso que prendia o defeito («o atalho não fica aberto»)
+  virou «a folha não guarda nada; o save guarda, e aí o saguão abre»; as duas regras de porta
+  recebem a lista de portas liberadas (também em `scripts/test-opening.ts`);
+- `scripts/test-navigation.ts`: o atalho é atravessado nos dois sentidos; a suíte assenta a tabela
+  de dívidas uma vez, no fim;
+- `scripts/test-opening.ts`: `validateSolvability` deu lugar a `simulateProgress`, e «o museu de
+  hoje é jogável» assenta as dívidas antes de exigir zero erros;
+- `scripts/test-facts.ts`: a lista «só do portão» tem nove módulos (eram seis), e a regra é
+  provada com importações feitas para o teste;
+- `scripts/test-docs.ts`: `lastLotDone` foi para `scripts/lib/planLots.ts`, sem mudar de sentido.
+
+Do fecho. Quatro suítes percorriam o corpus afirmando, de todo save, o que só vale para os
+anteriores a L2. Com os saves do próprio lote no corpus, cada uma passou a perguntar antes quem
+escreveu o registro (`fixtureLot`, em `src/content/saveFixtures.ts`), e ganhou a outra metade:
+
+- `scripts/test-save.ts`: «nenhuma porta liberada para ninguém» vale para os saves sem o campo; um
+  caso novo confere que um save de L2 sai da carga com a porta que liberou e a tranca que tocou,
+  e que as duas sobrevivem a uma sessão. «Save sem `contentLot` é de produção» passou a exigir
+  também que todo save de L2 em diante traga o lote que o escreveu;
+- `scripts/test-locks.ts`: «save anterior a `locksSeen` viu exatamente as trancas que abriu»
+  (DL2-4) vale para os anteriores; caso novo: o save que diz o que tocou é acreditado, e a gaveta
+  tocada e fechada está na planta desde o primeiro quadro do «Continuar»;
+- `scripts/test-map.ts`: «todo save mostra as salas que visitou, e o atalho de ninguém» virou «…e
+  o atalho só de quem o liberou»;
+- `scripts/test-transition-door.ts`: «save anterior ao campo carrega sem porta liberada» (DL2-3)
+  vale para os anteriores; caso novo com os dois saves do lote.
+
+`scripts/test-qa-save.ts` ganhou três regras que valem daqui em diante: **todo lote que o plano
+dá como feito tem um save no corpus**; um save do lote em que a árvore está carrega como ele
+mesmo, campo a campo e na mesma ordem; e, para registros de L2 em diante, tranca aberta foi
+tocada e porta liberada foi empurrada de uma sala visitada.
+
+### 11.6 Dívidas datadas (`src/content/knownDebt.ts`, 45 linhas; eram 36)
+
+**Paga:** `i18n-key-unused` de `map.legend` (a legenda da planta ganhou título, em F3, no commit
+que moveu `CONTENT_LOT` para 2).
+
+**Abertas por L2**, cada uma no commit do validador que a acusa:
+
+| Portão | Código | O quê | Fecha em |
+|---|---|---|---|
+| `validate:content` | `exhibit-uncataloguable` | `net-1897`, `gym-suit`, `photo-gym`: o detalhe obrigatório fica fora do alcance do exame (H-01) | L4 |
+| `validate:content` | `checklist-item-untickable` | `notebook.todo.catalogue`: pede as doze peças, e três não catalogam | L4 |
+| `validate:content` | `checklist-item-untickable` | `notebook.todo.vault`: sem `doneWhen`; vira promessa datada sem caixa de riscar | L3 |
+| `validate:content` | `text-ages` | `document.predecessor.body`: «há cento e trinta anos» (H-23); o bilhete dá lugar a `doc-otavio-handover` | L3 |
+| `validate:content` | `speech-night-state-unconditional` | `radio.patience.t4.dark`, `radio.patience.t5.soap.2`, `radio.deadAir.rain`: resposta do Jorge sem `when` | L3 |
+| `test:navigation` | `standing-point-inside-target` | `net-1897`: sem colisor, o olho entra na caixa da rede (H-31) | L14 |
+
+**L3 herda cinco linhas com a data dele** (a da caixa-forte, a do bilhete e as três falas): com
+`CONTENT_LOT` em 3, cada uma que ainda acusar vira `known-debt-overdue`. As demais linhas são as
+de §10.6, sem mudança. O Anexo C do plano ganhou as linhas de L2 e os códigos novos que hoje não
+acusam nada (`no-standing-point`, `numeral-exclusivity`, `numeral-printed-in-missing`,
+`fact-code-without-printed-in`, `fact-exception-without-patterns`, `counted-pattern`).
+
+Sem código, só registradas (texto que outro lote conserta): a versão inglesa do bilhete («has
+been here a hundred and thirty years») escapa da lista inglesa de `text-ages` e vai embora com o
+bilhete, em L3; e o que a rota mostrou de passagem (11.9).
+
+### 11.7 O corpus de saves e o que um rollback perde
+
+`src/content/saveFixtures.ts` tem oito saves: os cinco de produção, o de L1 (`l1-route-end`,
+tirado do navegador pela primeira fatia de L2 sobre a árvore publicada: o item que §10.10 deixou
+aberto) e dois de L2, lidos do `localStorage` no fecho, sobre `90dd9a6`, e conferidos byte a byte
+contra o texto que o navegador devolveu:
+
+- **`l2-shortcut-released`**: a rota do lote a partir do save de L1. `Continuar`, porta do
+  escritório, `E` no atalho pelo saguão (zumbido, nada gravado), a ala pela porta principal, e a
+  saída pelo atalho. É um save de L1 trazido para a frente, e a ordem dos campos mostra: os de L1
+  primeiro, depois os cinco de L2, com `doorsReleased: ['atrium-from-holyoke-shortcut']`;
+- **`l2-new-game-drawer-touched`**: um jogo novo de L2. Luminária, a primeira chamada ouvida, o
+  caderno (pego enquanto o Jorge o pedia: a chamada do lembrete conta como ouvida), o rádio, `E`
+  na gaveta e o teclado fechado sem código, o saguão aceso, o atalho tentado pelo lado errado. O
+  que nenhum save anterior consegue guardar: **tranca tocada e ainda fechada**
+  (`locksSeen` sem `locksOpened`), sob uma planta de duas salas e um toco. É o jogador que L3
+  encontra com o teclado já visto e o ano por aprender.
+
+Os dois, lidos pelo código congelado de L1, não perdem nada do que L1 conhece (`test:save`), e
+jogados até o fim pelo robô, em três ordens cada, chegam ao estado máximo sem perder átomo
+(`test:playthrough`). L3 começa a rota dele pelos dois.
+
+**O que um rollback perde.** Publicar de novo um build anterior a L2 (o de L1 é `f0fb5a3`,
+Cloudflare `1d3a4554`) não apaga o save de ninguém, mas o leitor de L1 só copia os campos que
+conhece, e na primeira gravação o save sai sem os cinco campos de L2. Tudo o que L1 conhece volta
+igual: peças, detalhes, documentos, fatos, salas visitadas e acesas, trancas abertas, chamadas,
+relógio, lições, rádio no bolso e a memória do Jorge. Ao voltar para L2 (ou seguir para L3), o
+save sem `contentLot` é tratado como de produção:
+
+- `locksSeen` é refeito a partir de `locksOpened`: a gaveta **tocada e ainda fechada** some da
+  planta até o próximo toque;
+- `doorsReleased` não volta: o atalho tranca de novo pelo lado do saguão, e pede mais uma saída
+  pela ala (o aviso «Atalho destrancado» toca outra vez);
+- `flags` e `triggersFired` estão vazios em L2, então hoje nada se perde ali. **De L3 em diante
+  não estarão**: um rollback para antes de L2 esquece quais gatilhos já dispararam, e cada um
+  dispara de novo na primeira ação. Um gatilho de L3 só pode conceder o que é seguro conceder duas
+  vezes (as listas do save não repetem item, mas uma fala ou um aviso preso a ele repete);
+- enquanto o build antigo estiver no ar, a planta volta a desenhar o prédio inteiro e o atalho
+  volta a não ficar aberto: é o código de L1.
+
+**Um rollback para dentro de L2 não perde nada**: de `1ecc2cb` em diante todo build preserva o
+campo que não conhece. Se for preciso voltar atrás, volte para um commit a partir dele; para
+antes, só sabendo o que está escrito acima. O caso está em `docs/lotes/L2-plano.md` §5 (caso E) e
+preso em `test:save` («a save of this lot read by the code of L1 loses nothing L1 knows», «case
+E»).
+
+### 11.8 O que o navegador mostrou
+
+Servidor `museum-dev` reiniciado antes da rota e de novo depois da edição da folha de estilos;
+painel visível, o jogo em tempo real. Tudo pelo `E`, pelo `Tab`, pelas teclas e pelos botões do
+próprio jogo; o teleporte do harness só pôs a câmera diante de cada alvo dentro da sala em que o
+jogador já estava, e toda travessia de porta foi andada. O que se lê aqui saiu do DOM, do save e
+de dois espiões postos na página: um conta o que o jogo pede ao áudio, o outro anota cada mudança
+do save.
+
+**Desktop, 1280 × 720.**
+
+- **`?qaSave=production-drawer-open`, pt-BR.** Planta: três salas, duas portas, nenhuma tranca,
+  legenda com título, «N» no alto, marcador a 90° (o olhar de partida) e a −90° diante do atalho.
+  No saguão o atalho diz «Abre pelo outro lado»; dois apertos de `E`, dois zumbidos, nenhuma
+  escrita. Da ala, um `E`: uma escrita (`doorsReleased`), um som de trinco, um aviso. De volta ao
+  saguão: «Abrir porta», abre, sem aviso; planta com três portas. **Recarregado sem o parâmetro:**
+  nenhum aviso ao continuar, o atalho abre pelo saguão e se atravessa.
+- **`?qaSave=production-drawer-closed`, pt-BR e inglês.** Nenhuma tranca na planta. `E` na gaveta:
+  o teclado abre e `locksSeen` ganha a gaveta, numa escrita; `Esc`; a planta lista «Gaveta com
+  segredo — 4 dígitos» (“Combination drawer — 4 digits”); um segundo `E` não escreve nada. `1895`
+  nos botões e «Abrir»: «Não abre.», nada gravado. `1896` no teclado e `Enter`: a gaveta abre, o
+  bilhete aparece, duas escritas (a tranca, depois o documento), `triggersFired` vazio, a tranca
+  sai da planta e o escritório passa a «Completa». Reler a gaveta não escreve.
+- **A rota do atalho em inglês:** “Opens from the other side”, “Shortcut unlocked — Wing 1 ·
+  Holyoke”, “Open door”, “Legend / No power / Lit, something left to check / Complete”, “North”,
+  “You are here”.
+- **Jogo novo, pt-BR** («Novo jogo» e a confirmação). Luminária: uma escrita. A primeira chamada
+  do Jorge: três falas, cada uma uma vez, gravada ao fim. Caderno: três páginas pelo `E`; planta
+  com **uma sala e um toco** («Sala ainda não visitada»). Rádio: pego, e a chamada dele ouvida.
+  Gaveta tocada: a planta a lista. No saguão ainda escuro: duas salas, o saguão tracejado, o toco
+  na porta da Ala 1, nada no lugar do atalho. Quadro do saguão: uma escrita; um segundo `E` no
+  quadro já ligado não faz nada. Atalho pelo saguão: zumbido. Na ala escura: três salas, duas
+  portas. Quadro da ala; saída pelo atalho: uma escrita, um aviso, e um segundo `E` com a porta
+  abrindo não grava nem soa. Planta com três portas. **Recarregado:** o atalho abre pelo saguão.
+- **`?qaSave=production-pre-opening`, em inglês:** carrega com tudo o que tinha, mais o carimbo e
+  as listas novas vazias; planta em inglês com o escritório tracejado; nenhum aviso ao continuar.
+- **`?qaSave=l1-route-end`:** carrega sem escrever nada no disco; a rota do atalho se repete a
+  partir dele, e é dela que saiu `l2-shortcut-released`.
+
+**Toque, 844 × 390**, com eventos de ponteiro de tipo `touch` nos dois direcionais e toques nos
+botões do jogo.
+
+- O direcional de olhar girou a câmera de −90° a +89° e nivelou o olhar; o de andar levou o
+  jogador à porta e através dela; **Ação** abriu.
+- `l1-route-end`, pt-BR: o caderno abre pelo botão; a planta e a legenda cabem numa página, sem
+  rolagem (211 px de planta, legenda terminando em 340 de 390), os três nomes de sala dentro do
+  desenho. Diante do atalho bloqueado o botão de Ação **aparece** e dá o zumbido, duas vezes, sem
+  gravar. Da ala, Ação libera: o aviso fica no alto (y de 12 a 51) e o prompt embaixo (237 a 267),
+  sem tocar um no outro, nos direcionais nem nas ferramentas. Do saguão, Ação abre; planta com
+  três portas.
+- `production-drawer-closed`, em inglês: Ação abre o teclado; os dígitos e «Open» pelos botões
+  (depois de rolar o painel: ver 11.9); a gaveta abre; «Close» fecha.
+- Jogo novo, em inglês: luminária e caderno pelo botão de Ação, páginas pelos botões do caderno,
+  planta com uma sala e “A room not visited yet”; no saguão, duas salas e o toco na porta da ala.
+
+**Nada disparou duas vezes.** Cada aviso apareceu uma vez; cada liberação, cada sala acesa e
+cada tranca tocada foi uma escrita; `E` repetido numa porta bloqueada, numa porta abrindo, num
+quadro ligado e numa gaveta já lida não gravou nada; recarregar não repete aviso.
+`triggersFired` e `flags` ficaram vazios em todas as sessões. Console sem erro; o único aviso é o
+`THREE.Clock` de sempre.
+
+**Capturas.** Dez quadros em `docs/contact-sheets/l2/` (1536 × 864, sobre `90dd9a6`) e sete em
+`docs/contact-sheets/l2-touch/` (1688 × 780, sobre `d299df8`), os dois conjuntos congelados com
+digest. **Não são capturas do canvas**, que não tem HUD: cada quadro é o canvas com a camada do
+DOM desenhada por cima (11.10 diz como).
+
+| Quadro | O que mostra |
+|---|---|
+| `l2-o01-plan-new-game-one-room-and-a-stub-lit` | jogo novo: uma sala, um toco com «?», seta, norte, legenda |
+| `l2-o02-drawer-keypad-open-lit` | o teclado da gaveta em 720 px de altura: «Abrir» e «Fechar» abaixo da dobra do painel |
+| `l2-o03-plan-lock-touched-and-listed-lit` | a gaveta tocada, listada pelo nome |
+| `l2-d01-plan-atrium-entered-stub-at-the-wing-door-dark-notorch` | saguão escuro: duas salas, o toco na porta da ala, nada no atalho |
+| `l2-a01-shortcut-from-the-atrium-opens-from-the-other-side-lit` | o atalho pelo saguão: «Abre pelo outro lado» |
+| `l2-a02-plan-atrium-lit-shortcut-not-drawn-lit` | o marcador encostado no atalho, que a planta não desenha |
+| `l2-e01-plan-wing-entered-dark-two-doors-dark-notorch` | três salas, a ala tracejada, duas portas |
+| `l2-h01-shortcut-pushed-from-the-wing-toast-unlocked-lit` | a porta abrindo e o aviso «Atalho destrancado — Ala 1 · Holyoke» |
+| `l2-a03-shortcut-from-the-atrium-after-release-open-door-lit` | o mesmo lugar de `a01`, agora «Abrir porta» |
+| `l2-a04-plan-three-rooms-three-doors-after-release-lit` | a planta com as três portas |
+| `l2t-o01-plan-on-a-phone-three-rooms-two-doors-lit` | a planta no telefone, numa página, com a legenda |
+| `l2t-a01-blocked-shortcut-has-an-action-button-lit` | o botão de Ação diante do atalho bloqueado |
+| `l2t-h01-shortcut-released-toast-clear-of-the-prompt-lit` | aviso no alto, prompt embaixo, direcionais e ferramentas livres |
+| `l2t-a02-plan-on-a-phone-three-doors-after-release-lit` | três portas, o painel com margem dos dois lados |
+| `l2t-o02-keypad-on-a-phone-lit` | o teclado no telefone: a pergunta e os quatro dígitos, nenhuma tecla (em inglês) |
+| `l2t-o03-plan-on-a-phone-new-game-one-room-and-a-stub-lit` | jogo novo no telefone (em inglês) |
+| `l2t-d01-plan-on-a-phone-atrium-entered-stub-at-the-wing-door-dark-notorch` | saguão escuro no telefone (em inglês) |
+
+**O que não deu para conferir.**
+
+- **O giro pelo mouse:** o painel não dá `pointer lock`. A seta da planta foi vista em seis rumos
+  (90°, 83°, 126°, 0°, −34°, −137°), postos pelo harness e, no toque, pelo direcional de olhar.
+- **Toque de verdade:** foram eventos de ponteiro sintéticos, um dedo por vez, num painel de
+  desktop. Nenhum aparelho real, nenhuma área segura, nenhum multitoque, nenhuma tela cheia.
+- **O som:** contaram-se os pedidos ao áudio (`lockDenied`, `lockRelease`, `chime`, `doorOpen`,
+  `radioCrackle`); ninguém ouviu.
+- **A hachura num telefone ao sol**, que é o que a regra do padrão existe para resolver.
+- **O build publicado:** nada foi enviado nem publicado; a fumaça em produção é do passo 11.
+- As três peças que não catalogam não foram tentadas (nada mudou nelas; é L4), e a espera de
+  30 s da porta de L1 não foi repetida.
+
+### 11.9 Visto de passagem, sem conserto neste lote
+
+Nada disto é de L2, e nada ganhou código de dívida; cada item já tem lote no plano.
+
+- **O teclado da gaveta não cabe no painel.** O painel é o do exame, com teto de 46% da altura
+  da tela. Em 1280 × 720 são 330 px para 384 de conteúdo: «Abrir» e «Fechar» ficam abaixo da
+  dobra do próprio painel (`Enter` e `Esc` funcionam). Em 844 × 390 são 178 px para 359: o
+  telefone mostra a pergunta e os quatro dígitos e **nenhuma tecla**; uma rolagem põe as dez
+  teclas e «Abrir» na tela e esconde o visor. Dá para abrir, e foi aberto assim. É o painel de
+  179 px que o plano já conhece (ÁT-J1, ÁT-J2, H-52), e o teclado é refeito com o exame em L4
+  (M6b). Quadros `l2-o02-drawer-keypad-open-lit` e `l2t-o02-keypad-on-a-phone-lit`.
+- **Na planta, o marcador passa por cima do nome da sala** quando o jogador está sob ele (o
+  escritório em `l2-o03-plan-lock-touched-and-listed-lit`), e o nome do escritório é mais largo
+  que o retângulo da sala. Fica para quem mexer na planta (H-34, em L4; a planta do saguão, L9).
+- **A gaveta aberta ainda se chama «Gaveta trancada do curador»** no prompt («Ler — Gaveta
+  trancada do curador ✓»). L3 refaz a gaveta.
+- **Uma chamada começada no rádio da mesa continua na legenda depois que o jogador sai do
+  escritório sem o rádio.** «Dentro do alcance» só é perguntado para começar a chamada: com a
+  primeira chamada presa atrás do caderno e do teclado, a segunda fala apareceu no saguão. É
+  assunto de L3 (M9; D27, o alto-falante da sala).
+
+### 11.10 Lições
+
+- **Quem percorre «todo save do corpus» está afirmando a idade do corpus.** Quatro suítes diziam
+  «nenhum save tem o campo» com um laço sobre todos, e reprovaram no dia em que o lote guardou o
+  próprio save. Pergunte antes quem escreveu o registro (`fixtureLot`), e escreva as duas metades:
+  o que se infere para quem não tinha o campo, e o que se respeita de quem tem.
+- **O «Feito em» do plano é portão, e a ordem do fecho segue disso:** `npm run graph:snapshot`
+  (depois dele o instantâneo vira registro e deixa de ser comparado byte a byte), os saves do lote
+  no corpus (`test:qa-save` reprova um lote «feito» sem save), as capturas citadas no registro
+  (`test:captures`), e só então a linha no plano. `CONTENT_LOT` já tem de estar no lote
+  (`test:docs`).
+- **Save tirado do navegador se copia do texto, não da memória.** O texto lido da chave foi
+  guardado e o registro digitado foi comparado com ele byte a byte; e o portão passou a exigir que
+  um save do lote da árvore carregue como ele mesmo. Um save trazido de um lote anterior tem os
+  campos na ordem em que foram chegando, não na da tabela.
+- **Dívida de estilo também se soma.** `4vw + 96vw + 4vw` passou anos na folha porque nenhuma
+  tela de desenvolvimento tinha menos de 60rem. Onde duas regras têm de fechar uma conta, uma
+  suíte lê as duas e soma (`journalLayoutProblems`); não há motor de layout em Node, e não
+  precisa.
+- **Medir no estado da linha de base.** Um save com o rádio no bolso tira sete draws do
+  escritório; parece melhora e é só a mesa mais vazia.
+
+Do harness, para quem repetir a rota:
+
+- **HUD em captura: componha.** `/__capture` recebe o que a página mandar. Para um quadro com a
+  planta, o prompt ou o aviso: clone o `#root` sem o `canvas`, ponha-o num `foreignObject` de um
+  SVG do tamanho da viewport junto com o texto de todas as folhas de estilo (as fontes trocadas
+  por `data:`), deixe `.museum` com fundo transparente, desenhe num canvas 2D o canvas do jogo
+  logo depois de `__museumRender()` e, por cima, o SVG carregado como `data:` (como `blob:` o
+  canvas fica contaminado). As regras de mídia valem para o tamanho do SVG, então o layout de
+  toque sai certo em 844 × 390. Confira a geometria do DOM vivo antes de confiar no quadro.
+- **Teleporte para dentro de um móvel não avisa.** Em (−6,5; 6,4) do saguão há um móvel com
+  colisor (de x = −7,2 a −0,9, z = 5,8 a 7,2, com 1,3 m de altura): a câmera subiu para 1,81 m e
+  o `W` parou em 40 cm. Leia o `y` depois de teleportar; o piso dá 1,62. Diante do atalho, pelo
+  saguão, fique em x = −7,45 ou menos.
+- **O botão de Ação está no DOM também no desktop**, escondido pela folha de estilos:
+  `innerText` devolve «Ação». Visibilidade se lê da caixa e do estilo computado.
+- **O painel reduz a página, e clique por coordenada erra.** Os botões do jogo foram acionados por
+  eventos no próprio elemento; os direcionais, por `PointerEvent` com `pointerType: 'touch'` no
+  elemento: `pointerdown` no centro, `pointermove` até a borda do anel, espera, `pointerup` (o
+  direcional mede o arrasto a partir do primeiro contato, não do centro pintado).
+- **Deixe a origem limpa pelo título.** O store grava ao descarregar a página do jogo; para
+  terminar com o `localStorage` vazio, navegue até o título, espere e limpe ali.
+
+### 11.11 Próximos passos
+
+1. Fechar L2 de verdade: revisão adversarial (passo 5), revisor, push, deploy e fumaça (8 a 11).
+   Na fumaça, além do novo jogo até o primeiro marco, «Continuar» com um save do lote anterior:
+   `l1-route-end` posto sob a chave `volleyball-museum:v1` na origem de produção, e conferir que
+   nada some e que a planta abre sem tranca listada. Anotar a versão Cloudflare em §2 e no topo
+   desta seção. Se a revisão mudar conteúdo, o instantâneo já é registro: mudança aditiva passa;
+   outra coisa pede decisão escrita.
+2. **L3 (Posse).** Começa a rota por `l2-shortcut-released` e `l2-new-game-drawer-touched`. Paga
+   as cinco dívidas com data dele (11.6). É o primeiro lote com gatilho de verdade: `flags` e
+   `triggersFired` deixam de ser vazios, e o aviso de rollback de 11.7 passa a valer para eles.
+   Muda o que o escritório desenha: mede os dez pontos e troca o `BROWSER_RECORD`. Escreve texto
+   na tela de título e no jogo: o teto de `title` tem 141 bytes. Fecha na ordem de 11.10, com
+   `docs/releases/L3.graph.json` e um save próprio no corpus.
+3. Do dono, ainda: o aparelho real (P0, item 6), que trava o livro-caixa de L6.

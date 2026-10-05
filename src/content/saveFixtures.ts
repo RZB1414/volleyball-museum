@@ -21,10 +21,12 @@
  * Production here is the build of 2026-10-03 (`db4cc70`, Cloudflare version
  * `0027afaa`), except where a fixture says it is older.
  *
- * From L1 on, each lot that closes adds one more: the save at the end of the
+ * From L1 on, each lot that closes adds its own: the save at the end of the
  * lot's route, read out of the browser's storage rather than written by hand,
- * and named after the build that wrote it (`l1-…`). The lot after starts its
- * own route from it.
+ * and named after the lot that wrote it (`l1-…`, `l2-…`), with a second one
+ * where the lot can write a state no route from the older saves reaches. The
+ * lot after starts its own route from them. `npm run test:qa-save` refuses a
+ * lot the plan calls done whose save is not here.
  */
 
 export type SaveFixture = {
@@ -37,6 +39,21 @@ export type SaveFixture = {
     readonly settings: Readonly<Record<string, unknown>>
     readonly progress: Readonly<Record<string, unknown>>
   }
+}
+
+/**
+ * The lot whose build wrote a fixture, or 0 for a save of production from
+ * before the plan had lots. Read off `from`, which is `l<lot>-<commit>` for
+ * every save taken as a lot closed.
+ *
+ * What a save may be asked depends on who wrote it: a record from before L2
+ * says nothing of the locks it touched or the doors it released, and one
+ * from L2 on does. The suites that walk the corpus ask this before they ask
+ * anything else.
+ */
+export function fixtureLot(fixture: Pick<SaveFixture, 'from'>): number {
+  const match = /^l(\d+)-[0-9a-f]{7,40}$/.exec(fixture.from)
+  return match ? Number(match[1]) : 0
 }
 
 const PRODUCTION = 'production-2026-10-03'
@@ -315,6 +332,99 @@ export const SAVE_FIXTURES = {
         devicesCarried: ['office-radio'],
         radioMemory: {},
         lastRoom: 'office',
+      },
+    },
+  },
+
+  /**
+   * The end of L2's route, begun from the save L1 left.
+   *
+   * Read out of `localStorage` on 2026-10-05, on the dev server over the
+   * lot's last slice (`90dd9a6`; the commits that close the lot change no
+   * line of `src/state`, nor anything else a save is written by).
+   * `?qaSave=l1-route-end`, Continue, the office door, E on the service
+   * shortcut from the atrium (it answers with the buzz and writes nothing),
+   * the wing by its main door, and out by the shortcut: the bar pushed from
+   * inside is what `doorsReleased` records. The player stopped in the atrium.
+   *
+   * A save of L1 carried forward, and the order of its fields shows it:
+   * L1's own first, as L1 wrote them, then what this lot adds. `locksSeen`
+   * was not played for. The drawer was open in the save the route began
+   * from, and the lot's migration takes an open lock as a touched one.
+   */
+  'l2-shortcut-released': {
+    from: 'l2-90dd9a6',
+    summary: 'Fim da rota de L2 a partir do save de L1: atalho da Ala 1 liberado, o jogador parou no átrio.',
+    save: {
+      settings: UNTOUCHED_SETTINGS,
+      progress: {
+        version: 1,
+        catalogued: ['portrait-morgan'],
+        hotspots: ['portrait-morgan:date'],
+        documentsRead: ['doc-welcome', 'doc-predecessor'],
+        factsKnown: ['springfield-renaming'],
+        credentials: [],
+        roomsVisited: ['office', 'atrium', 'holyoke'],
+        roomsPowered: ['office', 'atrium', 'holyoke'],
+        locksOpened: ['office-drawer'],
+        radioCalls: ['porter-first-call', 'porter-radio-taken'],
+        clockSeconds: { 'office-clock': 194 },
+        hintsShown: ['journal-taken', 'radio-taken'],
+        devicesCarried: ['office-radio'],
+        radioMemory: {},
+        lastRoom: 'atrium',
+        contentLot: 2,
+        locksSeen: ['office-drawer'],
+        doorsReleased: ['atrium-from-holyoke-shortcut'],
+        flags: [],
+        triggersFired: [],
+      },
+    },
+  },
+
+  /**
+   * A new game of L2, stopped in the atrium with the wing not yet walked.
+   *
+   * Read out of `localStorage` on 2026-10-05, same build. "Novo jogo" on the
+   * title; the lamp; the porter's first call heard out; the notebook, taken
+   * while he was asking for it (the runtime counts a call answered mid-line
+   * as heard, which is the reminder among the calls below); the radio, and
+   * his call about it; E on the drawer and the keypad closed with no code
+   * tried; the office door; the atrium's breaker; E on the service shortcut
+   * from its wrong side, which records nothing.
+   *
+   * What no save before this lot can hold: a lock touched and still shut
+   * (`locksSeen` without `locksOpened`: the plan lists it by name), under a
+   * plan of two rooms and a stub. `production-drawer-closed` is the same
+   * drawer without the touch. The lot that makes the drawer give a key meets
+   * this player with the keypad already seen and the year not yet learnt.
+   */
+  'l2-new-game-drawer-touched': {
+    from: 'l2-90dd9a6',
+    summary: 'Jogo novo de L2: escritório e átrio acesos, rádio no bolso, gaveta tocada e ainda fechada, Ala 1 por visitar.',
+    save: {
+      settings: UNTOUCHED_SETTINGS,
+      progress: {
+        version: 1,
+        contentLot: 2,
+        catalogued: [],
+        hotspots: [],
+        documentsRead: ['doc-welcome'],
+        factsKnown: [],
+        credentials: [],
+        roomsVisited: ['office', 'atrium'],
+        roomsPowered: ['office', 'atrium'],
+        locksOpened: [],
+        locksSeen: ['office-drawer'],
+        doorsReleased: [],
+        flags: [],
+        triggersFired: [],
+        radioCalls: ['porter-first-call', 'porter-notebook-reminder', 'porter-radio-taken'],
+        clockSeconds: { 'office-clock': 225 },
+        hintsShown: ['journal-taken', 'radio-taken'],
+        devicesCarried: ['office-radio'],
+        radioMemory: {},
+        lastRoom: 'atrium',
       },
     },
   },

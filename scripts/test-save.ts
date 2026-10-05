@@ -53,7 +53,7 @@ Object.assign(globalThis, {
 const { CONTENT_LOT } = await import('../src/content/contentLot.ts')
 const { PRE_OPENING_SAVE, SAVE_ALIASES } = await import('../src/content/legacySave.ts')
 const { MUSEUM } = await import('../src/content/museum.ts')
-const { SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
+const { fixtureLot, SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
 const { SPAWN } = await import('../src/content/spawn.ts')
 const { validateOpening, validateSaveAliases } = await import('../src/content/validate.ts')
 const {
@@ -663,9 +663,13 @@ await test('a save of this lot read by the code of L1 loses nothing L1 knows', a
 
 await test('a save with no contentLot is production\'s: it loads as lot 1 and leaves stamped', async () => {
   // Production never wrote the field, and neither did L1, which changed nothing in what a save holds.
-  for (const id of fixtureIds.filter((name) => /^(?:production|l1)-/.test(name))) {
-    assert.ok(!('contentLot' in rawFixture(id)), `${id} is a record of a build that had no contentLot`)
+  // From L2 on a record carries the lot of the build that wrote it.
+  for (const id of fixtureIds) {
+    const lot = fixtureLot(SAVE_FIXTURES[id])
+    if (lot < 2) assert.ok(!('contentLot' in rawFixture(id)), `${id} is a record of a build that had no contentLot`)
+    else assert.equal(rawFixture(id).contentLot, lot, `${id} is stamped with another lot than the one that wrote it`)
   }
+  assert.ok(fixtureIds.some((id) => fixtureLot(SAVE_FIXTURES[id]) >= 2), 'the corpus holds no save that carries its lot')
   const raw = rawFixture('production-drawer-open')
   assert.equal(sanitiseProgress(raw).contentLot, 1)
   assert.equal(migrateProgress(throughJson(raw)).contentLot, CONTENT_LOT)
@@ -936,10 +940,46 @@ await test('case A and B: production saves come out as they went in, plus the lo
   // drawer is on the plan's list of touched locks, the shut one is not yet.
   assert.deepEqual((await openGame(SAVE_FIXTURES['production-drawer-open'].save)).progress().locksSeen, ['office-drawer'])
   assert.deepEqual((await openGame(SAVE_FIXTURES['production-drawer-closed'].save)).progress().locksSeen, [])
-  // Nor is a door released for anybody: not even for the save of L1's own
-  // route, whose player left the wing by the shortcut twice.
-  for (const id of fixtureIds) {
+  // Nor is a door released for anybody whose save does not say so: not even
+  // for the save of L1's own route, whose player left the wing by the
+  // shortcut twice. This used to be asked of every save of the corpus; since
+  // the lot closed, the corpus holds saves that do say so.
+  const before = fixtureIds.filter((id) => fixtureLot(SAVE_FIXTURES[id]) < 2)
+  assert.ok(before.includes('l1-route-end') && before.length >= 6, 'the saves from before the field are gone from the corpus')
+  for (const id of before) {
     assert.deepEqual((await openGame(SAVE_FIXTURES[id].save)).progress().doorsReleased, [], id)
+  }
+})
+
+await test('a save this lot wrote comes out with the door it released and the lock it touched', async () => {
+  // The other half of cases A to C: what L2 added is inferred for a save that
+  // never had it, and is the save's own word for one that has. A load that
+  // "repaired" these from `locksOpened` would shut the door again and take
+  // the drawer off the plan of the player who touched it.
+  const own = fixtureIds.filter((id) => fixtureLot(SAVE_FIXTURES[id]) >= 2)
+  assert.ok(own.length >= 2, 'the saves L2 left are gone from the corpus')
+  for (const id of own) {
+    const raw = rawFixture(id)
+    const page = await openGame(SAVE_FIXTURES[id].save)
+    for (const field of ['locksSeen', 'doorsReleased', 'flags', 'triggersFired'] as const) {
+      assert.deepEqual(page.progress()[field], raw[field], `${id}: ${field}`)
+    }
+    assert.ok(page.progress().contentLot >= (raw.contentLot as number), id)
+  }
+  // By value, for the two L2 left: the door stays released, and the drawer
+  // touched and still shut stays touched.
+  const released = await openGame(SAVE_FIXTURES['l2-shortcut-released'].save)
+  assert.deepEqual(released.progress().doorsReleased, ['atrium-from-holyoke-shortcut'])
+  const touched = await openGame(SAVE_FIXTURES['l2-new-game-drawer-touched'].save)
+  assert.deepEqual(touched.progress().locksSeen, ['office-drawer'])
+  assert.deepEqual(touched.progress().locksOpened, [])
+  // And they survive a session: played, written and read again.
+  for (const page of [released, touched]) {
+    page.state().recordHint('torch-used')
+    page.leave()
+    const back = await openGame(page.savedText()!)
+    assert.deepEqual(back.progress().doorsReleased, page.progress().doorsReleased)
+    assert.deepEqual(back.progress().locksSeen, page.progress().locksSeen)
   }
 })
 

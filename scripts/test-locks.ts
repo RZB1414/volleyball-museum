@@ -27,7 +27,7 @@ import { progressWiringProblems, type SourceReader } from './lib/runtimeWiring.t
 import { openGame, saveOf, seeded, suite, throughJson } from './lib/storePage.ts'
 
 const { MUSEUM } = await import('../src/content/museum.ts')
-const { SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
+const { fixtureLot, SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
 const { progressRulesFor } = await import('../src/engine/contentRegistry.ts')
 const { attemptLock, lockPanel, lockStatus, pendingLocks } = await import('../src/engine/lockRules.ts')
 const { containerGrant } = await import('../src/engine/progressGrants.ts')
@@ -377,7 +377,9 @@ await test('every opened lock is on record as seen, after any sequence of attemp
 await test('the corpus: a save from before `locksSeen` has seen exactly the locks it opened (DL2-4)', async () => {
   registerProgressRules(progressRulesFor(MUSEUM))
   const seenBy: Record<string, readonly string[]> = {}
-  for (const [id, fixture] of Object.entries(SAVE_FIXTURES)) {
+  // The saves from before L2. The corpus also holds saves L2 wrote, which say
+  // what they touched; those are the next check.
+  for (const [id, fixture] of Object.entries(SAVE_FIXTURES).filter(([, candidate]) => fixtureLot(candidate) < 2)) {
     const record = fixture.save.progress as Raw
     assert.ok(!('locksSeen' in record), `${id} is a record of a build that had no locksSeen`)
     const page = await openGame(fixture.save)
@@ -404,6 +406,40 @@ await test('the corpus: a save from before `locksSeen` has seen exactly the lock
   const back = await openGame(page.savedText()!)
   assert.deepEqual(pendingLocks(MUSEUM.locks, back.progress()).map((lock) => lock.id), ['office-drawer'])
   assert.deepEqual(throughJson(back.progress().locksOpened), [])
+})
+
+await test('the corpus: a save that says what it touched is believed, shut drawer and all', async () => {
+  registerProgressRules(progressRulesFor(MUSEUM))
+  const own = Object.entries(SAVE_FIXTURES).filter(([, fixture]) => fixtureLot(fixture) >= 2)
+  const pending: Record<string, readonly string[]> = {}
+  for (const [id, fixture] of own) {
+    const record = fixture.save.progress as Raw
+    assert.ok('locksSeen' in record, `${id} was written by a build that records the locks touched`)
+    const page = await openGame(fixture.save)
+    // Not rebuilt from what was opened: the record's own list, as it stands.
+    assert.deepEqual(throughJson(page.progress().locksSeen), record.locksSeen, id)
+    pending[id] = pendingLocks(MUSEUM.locks, page.progress()).map((lock) => lock.id as string)
+  }
+  // The new game of L2 touched the drawer and left it shut: the plan names it
+  // from the first frame of "Continue", with no second touch. The route from
+  // L1's save had the drawer open, so there is nothing to name.
+  assert.deepEqual(pending, {
+    'l2-shortcut-released': [],
+    'l2-new-game-drawer-touched': ['office-drawer'],
+  })
+  // The keypad still asks, and the year still opens it, for the player who
+  // had only looked: one path, whoever wrote the save.
+  const page = await openGame(SAVE_FIXTURES['l2-new-game-drawer-touched'].save)
+  const real = MUSEUM.locks.find((lock) => lock.id === 'office-drawer')!
+  const touch = attemptLock(real, MUSEUM.facts, page.progress(), TOUCH)
+  assert.equal(touch.outcome, 'ask')
+  assert.equal(page.notifications(() => touch.outcome !== 'open' && page.state().grant(touch.grant)), 0, 'a touch already recorded wrote again')
+  const year = MUSEUM.facts.find((fact) => fact.id === 'springfield-renaming')!.value
+  const code = attemptLock(real, MUSEUM.facts, page.progress(), { kind: 'code', entry: year })
+  assert.equal(code.outcome, 'opened')
+  if (code.outcome === 'opened') page.state().grant(code.grant)
+  assert.deepEqual(pendingLocks(MUSEUM.locks, page.progress()), [])
+  assert.deepEqual(throughJson(page.progress().locksOpened), ['office-drawer'])
 })
 
 // ---------------------------------------------------------------------------

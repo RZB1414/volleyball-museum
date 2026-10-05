@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { PerspectiveCamera, Vector3 } from 'three'
 
 import { MUSEUM } from '../src/content/museum.ts'
-import { SAVE_FIXTURES } from '../src/content/saveFixtures.ts'
+import { fixtureLot, SAVE_FIXTURES } from '../src/content/saveFixtures.ts'
 import { doorGrant } from '../src/engine/progressGrants.ts'
 import {
   DEFAULT_TRANSITION_DOOR_CONFIG,
@@ -557,12 +557,33 @@ await testWithStore('a save from before the field loads with no door released (D
   // No migration infers a release. `l1-route-end` is a player who left by the
   // shortcut twice, and the save cannot tell that apart from one who never
   // found it: inventing the atom would be inventing what the player did.
-  for (const [id, fixture] of Object.entries(SAVE_FIXTURES)) {
+  // Asked of every save of the corpus until the lot closed; the corpus now
+  // also holds the saves L2 wrote, which have the field (the next check).
+  const before = Object.entries(SAVE_FIXTURES).filter(([, fixture]) => fixtureLot(fixture) < 2)
+  assert.ok(before.length >= 6, 'the saves from before the field are gone from the corpus')
+  for (const [id, fixture] of before) {
     assert.ok(!('doorsReleased' in fixture.save.progress), `${id} is a record of a build that had no doorsReleased`)
     const page = await openGame(fixture.save)
     assert.deepEqual(page.progress().doorsReleased, [], id)
     assert.equal(canOpenTransitionDoor(SHORTCUT, 'atrium', page.progress().doorsReleased), false, id)
   }
+})
+
+await testWithStore('a save of the lot keeps the door as it left it: released for one player, latched for the other', async () => {
+  // Read out of the browser as the lot closed. The first pushed the bar from
+  // inside the wing; the second only tried the door from the atrium, which
+  // the game answers with a buzz and no write.
+  const released = await openGame(SAVE_FIXTURES['l2-shortcut-released'].save)
+  assert.deepEqual(released.progress().doorsReleased, [SHORTCUT_ID])
+  assert.equal(canOpenTransitionDoor(SHORTCUT, 'atrium', released.progress().doorsReleased), true)
+  assert.equal(transitionDoorBlock(SHORTCUT, 'atrium', everythingLit, released.progress().doorsReleased), null)
+  // Open already: pushing it again releases nothing and writes nothing.
+  assert.equal(doorGrant(SHORTCUT, 'holyoke', released.progress().doorsReleased), null)
+
+  const latched = await openGame(SAVE_FIXTURES['l2-new-game-drawer-touched'].save)
+  assert.deepEqual(latched.progress().doorsReleased, [])
+  assert.equal(canOpenTransitionDoor(SHORTCUT, 'atrium', latched.progress().doorsReleased), false)
+  assert.equal(transitionDoorBlock(SHORTCUT, 'atrium', everythingLit, latched.progress().doorsReleased), 'other-side')
 })
 
 await testWithStore('the release is written on the press and survives the disk', async () => {

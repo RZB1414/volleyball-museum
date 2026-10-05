@@ -1504,6 +1504,11 @@ na fatia que paga a única dívida que vence em L2, e todos os migradores de lot
   linhas de texto; a seção L2 do plano ganha o «Feito em»;
 - revisor, push, deploy e fumaça (passos 8 a 11), que este plano não autoriza por si.
 
+**Como ficou (2026-10-05).** Feitos: a rota no navegador, o instantâneo (gerado de novo, sem
+mudar um byte), o corpus (dois saves, não um), o registro em `docs/HANDOFF.md` §11 com a perda do
+rollback, o Anexo C e o «Feito em». Não feitos: a revisão adversarial (passo 5) e os passos 8 a
+11. O que saiu diferente desta lista está em §14, «Fecho do lote».
+
 ## 14. Execução, fatia por fatia
 
 O que cada fatia fez de diferente do que está acima, para a fatia seguinte não redescobrir. O
@@ -2079,3 +2084,70 @@ ponta a ponta atrás de palavra que envelhece fora das listas: o lint só conhec
   `RadioReply.when` (M9) deixa as três respostas perguntarem pela noite.
 - A versão inglesa do bilhete («has been here a hundred and thirty years») escapa da lista
   inglesa de `text-ages`; vai embora com o bilhete, e a forma fica anotada em T14.
+
+### Fecho do lote (2026-10-05; dois commits locais, sem push)
+
+Os passos 6 e 12 de §9.1. O registro completo é `docs/HANDOFF.md` §11; aqui fica o que saiu
+diferente de §10 e de §13 deste plano.
+
+**A rota de §10 foi feita inteira**, em pt-BR e em inglês, em 1280 × 720 e em 844 × 390 pelos
+direcionais e pelo botão de Ação, a partir de `production-drawer-open`, `production-drawer-closed`,
+`production-pre-opening`, `l1-route-end` e de dois jogos novos (HANDOFF §11.8). Nada do que a rota
+pedia falhou: o atalho abre pelo saguão depois da primeira saída e continua aberto depois de
+recarregar; a planta não mostra sala não visitada, tranca não tocada nem o atalho antes de aberto;
+a gaveta abre com o ano pelo teclado, por `attemptLock`; nenhum aviso, som ou escrita se repetiu.
+
+**Onde o fecho se afastou do plano.**
+
+- **Um conserto que §0 não previa** (`d299df8`). §0 dizia que o lote não muda textura, modelo nem
+  sala, e isso se manteve; mas a rota F achou o painel do caderno saindo pela borda direita em
+  844 × 390 (de x = 34 a x = 844: `4vw + 96vw + 4vw`). Não é de L2, está na folha desde agosto,
+  e é a página em que a planta de L2 mora. Uma regra de estilo mudou (`92vw`), com um teste que
+  soma as duas regras (`journalLayoutProblems`, em `test:map`). A planta e a legenda continuam
+  cabendo numa página (211 px; legenda até 340 de 390); em 1280 × 720 nada se move.
+- **Dois saves no corpus, não um, e o primeiro não saiu da rota A.** §13 pedia
+  `l2-shortcut-released` «no fim da rota A» (a partir de `production-drawer-open`, um registro
+  escrito à mão). Saiu do fim da rota E, a partir de `l1-route-end`: o lote começa do save do lote
+  anterior, e o resultado é um save de L1 trazido para a frente por L2, com os campos de L1
+  primeiro. O segundo, `l2-new-game-drawer-touched`, é um jogo novo com a gaveta tocada e fechada:
+  o estado que só L2 grava (DL2-4 ao contrário) e que L3 vai encontrar.
+- **Quatro suítes mudaram por causa do corpus.** Os laços «todo save do corpus» de `test:save`,
+  `test:locks`, `test:map` e `test:transition-door` afirmavam DL2-3 e DL2-4 de todo save; com
+  saves de L2 no corpus passaram a valer para os anteriores (`fixtureLot`, novo em
+  `saveFixtures.ts`), e cada suíte ganhou o caso do save que diz o que tocou e o que liberou. A
+  tabela de 8.2 não tinha essas linhas; estão em HANDOFF §11.5.
+- **`test:qa-save` ganhou três regras** que §8.1 não listava: todo lote com «Feito em» no plano
+  tem um save no corpus; um save do lote da árvore carrega como ele mesmo, na mesma ordem de
+  campos; e, de L2 em diante, tranca aberta foi tocada e porta liberada foi empurrada de uma sala
+  visitada.
+- **Capturas, que §10 não pedia** («nenhum item visual neste lote»). O que o lote mudou para o
+  jogador é HUD (a planta, um prompt, um aviso), e o `/__capture` só fotografa o canvas. Foram
+  feitos dezessete quadros compostos (canvas mais a camada do DOM), em dois conjuntos congelados:
+  `l2` (dez, 1536 × 864, sobre `90dd9a6`) e `l2-touch` (sete, 1688 × 780, sobre `d299df8`).
+  `test:captures` passou a exigir que o registro cite cada quadro pelo nome inteiro.
+- **Os dez pontos de referência foram medidos**, embora §0 e §9 dissessem que não seriam: deram
+  exatamente os números de L1 e 35 programas. O `BROWSER_RECORD` continua o do lote 1, como §9
+  previa, para que L3 seja obrigado a medir.
+- **O «Aceite manual» de §10** (a seta acompanhando a câmera, a hachura legível no telefone): a
+  seta foi vista em seis rumos pelo harness e girada pelo direcional de olhar no toque; a hachura
+  foi vista nos quadros, não num aparelho.
+
+**Vermelho primeiro**, cada um visto antes do conserto: `test:map` («96vw between two margins of
+4vw, 104 in all»); `test:captures` (o manifesto de `l2` ausente, depois os dezessete quadros sem
+citação); `test:qa-save` («l2-shortcut-released is gone from the corpus», depois «the plan no
+longer marks L2 as done»); e as quatro suítes do corpus, que reprovaram com os saves novos antes
+de mudarem. Quatro mutações dos registros novos reprovam `test:qa-save` (HANDOFF §11.4).
+
+**Medições.** `test:map` 16 casos (eram 15), `test:captures` 15 (12), `test:qa-save` 27 (21),
+`test:save` 30 (29), `test:locks` 15 (14), `test:transition-door` 38 (37). Bundle: documento
+63.235 bytes de gzip, título 28.859, jogo 390.761; nenhum teto mudou. `docs/releases/L2.graph.json`
+gerado de novo antes do «Feito em»: sem mudança.
+
+**O que não foi feito.** A revisão adversarial (passo 5), o revisor, o push, o deploy e a fumaça
+(8 a 11) e o playtest (13). O giro pelo mouse, o toque num aparelho, o som ouvido e a hachura ao
+sol continuam sem conferência (HANDOFF §11.8).
+
+**Para L3.** A rota começa por `l2-shortcut-released` e `l2-new-game-drawer-touched`. Cinco
+dívidas vencem nele (HANDOFF §11.6). O fecho segue a ordem de HANDOFF §11.10: instantâneo, save
+no corpus, capturas citadas, e só então o «Feito em». O teclado da gaveta não cabe no painel em
+720 px nem no telefone (HANDOFF §11.9): quem refizer o teclado em L4 (M6b) parte daí.

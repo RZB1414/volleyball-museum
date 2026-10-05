@@ -1,0 +1,54 @@
+{
+  "set": "l2",
+  "capturedAt": "2026-10-05",
+  "commit": "90dd9a6",
+  "report": "docs/HANDOFF.md",
+  "filePrefix": "l2",
+  "viewport": {
+    "cssWidth": 1280,
+    "cssHeight": 720,
+    "pixelRatio": 1.2,
+    "quality": "medium"
+  },
+  "frame": {
+    "width": 1536,
+    "height": 864
+  },
+  "groups": {
+    "o": {
+      "room": "office",
+      "powered": true
+    },
+    "d": {
+      "room": "atrium",
+      "powered": false
+    },
+    "a": {
+      "room": "atrium",
+      "powered": true
+    },
+    "e": {
+      "room": "holyoke",
+      "powered": false
+    },
+    "h": {
+      "room": "holyoke",
+      "powered": true
+    }
+  },
+  "frozen": true,
+  "count": 10,
+  "digest": "9c733330ebcef9e9f728cf0c7254380d4c17c62ffdb9a823bdc8a95778460433",
+  "captures": [
+    {"id":"a01","file":"l2-a01-shortcut-from-the-atrium-opens-from-the-other-side-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"shortcut-from-the-atrium-opens-from-the-other-side","width":1536,"height":864,"bytes":114351,"sha256":"b0d85f64134e75fb3f83a827a6bd5b162e73529ef42cf8adb25d4c5e4773763d"},
+    {"id":"a02","file":"l2-a02-plan-atrium-lit-shortcut-not-drawn-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"plan-atrium-lit-shortcut-not-drawn","width":1536,"height":864,"bytes":129233,"sha256":"9a7f1bfd335357a8a68c52ed28d965ce40188eb18e767506a724f432268cd306"},
+    {"id":"a03","file":"l2-a03-shortcut-from-the-atrium-after-release-open-door-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"shortcut-from-the-atrium-after-release-open-door","width":1536,"height":864,"bytes":113470,"sha256":"906b3882f0f0526ca87c71b90596e9bf5ace9395c7111c993f2f2d9628aa1bb4"},
+    {"id":"a04","file":"l2-a04-plan-three-rooms-three-doors-after-release-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"plan-three-rooms-three-doors-after-release","width":1536,"height":864,"bytes":173310,"sha256":"3c216cd8e0a762f61f18500795af0f0a8fe88228e8a886e27f01b883bfeb1823"},
+    {"id":"d01","file":"l2-d01-plan-atrium-entered-stub-at-the-wing-door-dark-notorch.jpg","room":"atrium","light":"dark","view":"room","subject":"plan-atrium-entered-stub-at-the-wing-door","width":1536,"height":864,"bytes":67421,"sha256":"4b5db5d397200669353a8c775f0c1aa0efa5aaf3f823f483bef9199383d81f06"},
+    {"id":"e01","file":"l2-e01-plan-wing-entered-dark-two-doors-dark-notorch.jpg","room":"holyoke","light":"dark","view":"room","subject":"plan-wing-entered-dark-two-doors","width":1536,"height":864,"bytes":141801,"sha256":"a76d00c90604d4e5f283eb9052419dfd724b8e447191caf57a322973f1d06cda"},
+    {"id":"h01","file":"l2-h01-shortcut-pushed-from-the-wing-toast-unlocked-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"shortcut-pushed-from-the-wing-toast-unlocked","width":1536,"height":864,"bytes":122101,"sha256":"cc0e4904b11c64a42d0a503e1f76ad02d7a8eefb74daa59b0c32eac71b83e02a"},
+    {"id":"o01","file":"l2-o01-plan-new-game-one-room-and-a-stub-lit.jpg","room":"office","light":"lit","view":"room","subject":"plan-new-game-one-room-and-a-stub","width":1536,"height":864,"bytes":63535,"sha256":"0bef1943f2d30d732d04c94199ce5376b5ae4f5b68017fc21dce611b29492aa5"},
+    {"id":"o02","file":"l2-o02-drawer-keypad-open-lit.jpg","room":"office","light":"lit","view":"room","subject":"drawer-keypad-open","width":1536,"height":864,"bytes":89406,"sha256":"a9bf0c714806b0755a7c1bdca76b5e21cd72c27e822c8ce29fb8336778369217"},
+    {"id":"o03","file":"l2-o03-plan-lock-touched-and-listed-lit.jpg","room":"office","light":"lit","view":"room","subject":"plan-lock-touched-and-listed","width":1536,"height":864,"bytes":52711,"sha256":"d05fb6b8e82fb8ba0b2627b588092bb988fca22eac3591823dedc01ae9920a09"}
+  ]
+}

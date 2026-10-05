@@ -1,0 +1,47 @@
+{
+  "set": "l2-touch",
+  "capturedAt": "2026-10-05",
+  "commit": "d299df8",
+  "report": "docs/HANDOFF.md",
+  "filePrefix": "l2t",
+  "viewport": {
+    "cssWidth": 844,
+    "cssHeight": 390,
+    "pixelRatio": 2,
+    "quality": "medium"
+  },
+  "frame": {
+    "width": 1688,
+    "height": 780
+  },
+  "groups": {
+    "o": {
+      "room": "office",
+      "powered": true
+    },
+    "d": {
+      "room": "atrium",
+      "powered": false
+    },
+    "a": {
+      "room": "atrium",
+      "powered": true
+    },
+    "h": {
+      "room": "holyoke",
+      "powered": true
+    }
+  },
+  "frozen": true,
+  "count": 7,
+  "digest": "9afc6c6c1dfa8dd22420142b62d6caa4eecb651f2929d34edeb091be59f3cdb7",
+  "captures": [
+    {"id":"a01","file":"l2t-a01-blocked-shortcut-has-an-action-button-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"blocked-shortcut-has-an-action-button","width":1688,"height":780,"bytes":112039,"sha256":"c26e6fbc99f06bedca25c873decf8499f4a03f0d03475bfa88e32f09569cf47e"},
+    {"id":"a02","file":"l2t-a02-plan-on-a-phone-three-doors-after-release-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"plan-on-a-phone-three-doors-after-release","width":1688,"height":780,"bytes":143903,"sha256":"074e664709c58c1e6546706165289a91d730d9485948e1ab74611dbfb68d4249"},
+    {"id":"d01","file":"l2t-d01-plan-on-a-phone-atrium-entered-stub-at-the-wing-door-dark-notorch.jpg","room":"atrium","light":"dark","view":"room","subject":"plan-on-a-phone-atrium-entered-stub-at-the-wing-door","width":1688,"height":780,"bytes":63572,"sha256":"11011eb602272176155ece4993f166dc676b2005e17faeeb5bade882fe52797d"},
+    {"id":"h01","file":"l2t-h01-shortcut-released-toast-clear-of-the-prompt-lit.jpg","room":"holyoke","light":"lit","view":"room","subject":"shortcut-released-toast-clear-of-the-prompt","width":1688,"height":780,"bytes":112374,"sha256":"9f25dfbf386d00035c3145ec79d5c76a39097b58354a1e79ad249f4248f06a7e"},
+    {"id":"o01","file":"l2t-o01-plan-on-a-phone-three-rooms-two-doors-lit.jpg","room":"office","light":"lit","view":"room","subject":"plan-on-a-phone-three-rooms-two-doors","width":1688,"height":780,"bytes":142538,"sha256":"4374e805d270107f6ea00dd3b33462617e7a91cb59fcea16fe6fdd2ed535773e"},
+    {"id":"o02","file":"l2t-o02-keypad-on-a-phone-lit.jpg","room":"office","light":"lit","view":"room","subject":"keypad-on-a-phone","width":1688,"height":780,"bytes":79512,"sha256":"c8bc20e227f5ea44e141a436304035b56bb0dfe0d6f19344bdddd48b12ed635c"},
+    {"id":"o03","file":"l2t-o03-plan-on-a-phone-new-game-one-room-and-a-stub-lit.jpg","room":"office","light":"lit","view":"room","subject":"plan-on-a-phone-new-game-one-room-and-a-stub","width":1688,"height":780,"bytes":58335,"sha256":"3ef16b651c5213a7b875b4f896c54b5de2142b1b4f1174d273a8a9e166b684ea"}
+  ]
+}
