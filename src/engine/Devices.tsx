@@ -25,12 +25,11 @@ import {
 
 import { MUSEUM } from '../content/museum'
 import type { DeviceData, RoomData } from '../content/schema'
-import { contributeToSave, isModalOpen, useMuseum } from '../state/store'
+import { contributeToSave, gameInPlay, isModalOpen, useMuseum } from '../state/store'
 import { museumAudio } from './audio'
 import { USE_DRACO, USE_MESHOPT } from './bundleCache'
+import { clockCount, type ClockStore } from './clockCount'
 import {
-  advanceClockSeconds,
-  CLOCK_SAVE_INTERVAL_SECONDS,
   clockHandAngles,
   clockTimeAfter,
   deskRadioIntent,
@@ -39,7 +38,6 @@ import {
   radioDeliveryStep,
   radioDevices,
   radioWithinEarshot,
-  savedClockSeconds,
   type RadioDevice,
 } from './deviceRules'
 import {
@@ -123,6 +121,9 @@ function worldPositionOf(room: RoomData, device: DeviceData) {
 
 type HandPivots = Partial<Record<'hour' | 'minute' | 'second', Group>>
 
+/** The store as a clock's count asks for it; the suites hand it a tab's own. */
+const CLOCK_STORE: ClockStore = { useMuseum, contributeToSave, gameInPlay }
+
 /**
  * Re-parents each hand under a pivot at the dial centre.
  *
@@ -171,48 +172,19 @@ function ClockDevice({
 }) {
   const pivots = useMemo(() => prepareClockHands(instance, device.part), [device.part, instance])
   const powered = usePowered(device.runsWithPowerOf)
-  // Seconds of play since the power came back, carried across sessions in
-  // the save: a reload used to put the hands back to 16h47 in a room that
-  // had been lit for an hour. Null while unpowered.
-  const elapsedRef = useRef<number | null>(null)
-  const sinceSaveRef = useRef(0)
+  // The seconds the clock has run, and when they go to the save, are kept
+  // outside React (`clockCount.ts`): this component says when the room has
+  // power and turns the hands, and records nothing by itself.
+  const count = useMemo(() => clockCount(device.id, CLOCK_STORE), [device.id])
 
   useEffect(() => {
-    if (!powered) {
-      elapsedRef.current = null
-      return undefined
-    }
-    if (elapsedRef.current === null) {
-      elapsedRef.current = savedClockSeconds(useMuseum.getState().progress, device.id)
-    }
-    const record = () => {
-      if (elapsedRef.current !== null) {
-        useMuseum.getState().recordClockSeconds(device.id, elapsedRef.current)
-      }
-    }
-    // A hidden tab freezes the frame loop before the next periodic write;
-    // the forced flush on hide asks for the latest value instead. Recording
-    // on unmount too keeps a room that streams back in from finding its
-    // clock up to one save interval slow.
-    const stopContributing = contributeToSave(record)
-    return () => {
-      stopContributing()
-      record()
-    }
-  }, [device.id, powered])
+    if (powered) return count.run()
+    count.stop()
+    return undefined
+  }, [count, powered])
 
   useFrame((_, delta) => {
-    let elapsed = 0
-    if (elapsedRef.current !== null) {
-      elapsed = advanceClockSeconds(elapsedRef.current, delta)
-      elapsedRef.current = elapsed
-      sinceSaveRef.current += delta
-      if (sinceSaveRef.current >= CLOCK_SAVE_INTERVAL_SECONDS) {
-        sinceSaveRef.current = 0
-        useMuseum.getState().recordClockSeconds(device.id, elapsed)
-      }
-    }
-    const angles = clockHandAngles(clockTimeAfter(device.stoppedAt, elapsed))
+    const angles = clockHandAngles(clockTimeAfter(device.stoppedAt, count.advance(delta)))
     // The dial faces local +Z, so clockwise as the visitor sees it is -Z.
     if (pivots.hour) pivots.hour.rotation.z = -angles.hour
     if (pivots.minute) pivots.minute.rotation.z = -angles.minute

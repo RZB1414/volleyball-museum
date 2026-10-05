@@ -658,3 +658,59 @@ export function interactionVolumeWiringProblems(read: SourceReader): string[] {
   )
   return problems
 }
+
+/**
+ * The clock on the wall: what it has counted, and when that goes to the
+ * save, is `engine/clockCount.ts`, which `test:save` runs against the real
+ * store in two tabs. A game started over in another tab must not begin with
+ * the time a clock ran in the erased one, and the count is where that is
+ * kept from happening.
+ *
+ * In that suite React is two lines written by hand: the effect that runs the
+ * count while the room has power, and the frame that advances it. This holds
+ * the component to those two lines, to handing the count the whole store
+ * (the game in play among it), and to recording nothing by itself: a
+ * `recordClockSeconds` left in the component writes whatever it has counted
+ * into whatever game the store holds.
+ */
+export function clockWiringProblems(read: SourceReader): string[] {
+  const problems: string[] = []
+  const devices = squeezed(read('engine/Devices.tsx'))
+  const need = (fragment: string, without: string) => {
+    if (!devices.includes(fragment)) problems.push(`engine/Devices.tsx no longer has \`${fragment}\`: ${without}`)
+  }
+
+  need(
+    'const CLOCK_STORE: ClockStore = { useMuseum, contributeToSave, gameInPlay }',
+    'the count is not handed the store as it is, and cannot tell the game it was made in from the one in play',
+  )
+  need(
+    'const count = useMemo(() => clockCount(device.id, CLOCK_STORE), [device.id])',
+    'the clock no longer keeps its count in clockCount, where the suites can run it',
+  )
+  need('const powered = usePowered(device.runsWithPowerOf)', 'the clock no longer asks whether its own room has power')
+  need(
+    'useEffect(() => { if (powered) return count.run() count.stop() return undefined }, [count, powered])',
+    'the count is not run while the room has power and stopped when it has none, as the suites run it',
+  )
+  need(
+    'useFrame((_, delta) => { const angles = clockHandAngles(clockTimeAfter(device.stoppedAt, count.advance(delta)))',
+    'the hands are not turned by the count, advanced once a frame',
+  )
+  if (/\brecordClockSeconds\b/.test(devices) || /\bcontributeToSave\(/.test(devices)) {
+    problems.push(
+      'engine/Devices.tsx records a clock by itself: a count goes to the save by clockCount, which knows the game it was made in',
+    )
+  }
+
+  // Handed the store and importing none: a count that reached for the module
+  // would be the same one in every tab a suite opens. Not squeezed: the
+  // reader of imports works on the source as written.
+  const count = read('engine/clockCount.ts')
+  for (const specifier of [...staticSpecifiers(count), ...dynamicSpecifiers(count)]) {
+    if (/state\/store|^react|^zustand/.test(specifier)) {
+      problems.push(`engine/clockCount.ts imports "${specifier}": the count is handed its store, or no suite can give it a tab's own`)
+    }
+  }
+  return problems
+}

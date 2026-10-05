@@ -27,13 +27,45 @@
  * object as it goes, so every act of a tab is made with that tab's page in
  * place. Opening a browser puts its storage there; the storage a suite had
  * before is the suite's to put back (`close` does).
+ *
+ * A tab has its own rules too. In a browser the content's rules fill a slot
+ * of the page (`state/progressRules.ts`), from behind the title button: the
+ * tab in the game has them, the tab on the title screen has not, and a tab of
+ * the build before a trigger existed never will. Node evaluates a module once
+ * per URL, and the store asks for its slot by a path that says nothing of the
+ * tab, so every tab here used to be handed the same one: rules given to one
+ * were given to all, and to every store the process had ever made. The hook
+ * below carries the tab's mark from the store's URL to the slot's.
  */
+
+import * as nodeModule from 'node:module'
 
 export const STORAGE_KEY = 'volleyball-museum:v1'
 
 type StoreModule = typeof import('../../src/state/store.ts')
+type RulesModule = typeof import('../../src/state/progressRules.ts')
 type StoreState = ReturnType<StoreModule['useMuseum']['getState']>
 type Raw = Record<string, unknown>
+
+const RULES_URL = new URL('../../src/state/progressRules.ts', import.meta.url).href
+/** The mark `open` puts on the URL of each tab's store. */
+const TAB_MARK = /[?&](liveTab=\d+)$/
+
+// Named and asked for, not imported by name: on a Node from before the hook
+// existed, that import fails as a syntax error about `node:module`, which
+// says nothing of what to do.
+if (typeof nodeModule.registerHooks !== 'function') {
+  throw new Error(`scripts/lib/liveTabs.ts needs module.registerHooks, which Node has from 22.15 on: this is ${process.version}`)
+}
+// Only an import made BY a tab's store, and only of the slot: everything
+// else the store imports is arithmetic, and is as well shared.
+nodeModule.registerHooks({
+  resolve(specifier, context, nextResolve) {
+    const resolved = nextResolve(specifier, context)
+    const tab = TAB_MARK.exec(context.parentURL ?? '')
+    return tab && resolved.url === RULES_URL ? { ...resolved, url: `${RULES_URL}?${tab[1]}` } : resolved
+  },
+})
 
 /** How the page lets the store put a write off: both ways are in the store, and browsers differ. */
 export type PageKind = 'timeout' | 'idle'
@@ -45,6 +77,11 @@ export type LiveTab = {
   progress: () => StoreState['progress'] & Raw
   /** Something the player does in this tab. */
   act: <T>(run: (state: StoreState) => T) => T
+  /**
+   * The content arrives in this tab, and in no other: what the canvas chunk
+   * does once the title button is pressed (`engine/contentRegistry.ts`).
+   */
+  registerRules: (rules: Parameters<RulesModule['registerProgressRules']>[0]) => void
   /** The browser tells this tab of every write it has not heard of yet; how many there were. */
   hear: () => number
   /** Every timer the store has asked this page for fires; how many there were. */
@@ -120,6 +157,8 @@ export function openBrowser(save?: unknown) {
     enter(page)
     loads += 1
     const store = (await import(`../../src/state/store.ts?liveTab=${loads}`)) as StoreModule
+    // The slot this tab's store was handed: the same URL the hook gave it.
+    const slot = (await import(`${RULES_URL}?liveTab=${loads}`)) as RulesModule
     const state = () => store.useMuseum.getState()
     const visibility = (to: 'hidden' | 'visible') => {
       enter(page)
@@ -133,6 +172,10 @@ export function openBrowser(save?: unknown) {
       act: <T>(run: (state: StoreState) => T) => {
         enter(page)
         return run(state())
+      },
+      registerRules: (rules) => {
+        enter(page)
+        slot.registerProgressRules(rules)
       },
       hear: () => {
         enter(page)

@@ -34,6 +34,7 @@ import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
 
 import { openBrowser, type LiveBrowser, type LiveTab } from './lib/liveTabs.ts'
+import { clockWiringProblems, type SourceReader } from './lib/runtimeWiring.ts'
 import { dynamicSpecifiers, staticImportGraph, staticSpecifiers } from './lib/staticImports.ts'
 import { STORE_ACTIONS as ACTIONS, STORE_ACTIONS_LEAVE as ACTED } from './lib/storeActions.ts'
 // For its dice alone. The module also puts a storage of its own on the global
@@ -66,6 +67,9 @@ const { MUSEUM } = await import('../src/content/museum.ts')
 const { fixtureLot, SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
 const { SPAWN } = await import('../src/content/spawn.ts')
 const { validateOpening, validateSaveAliases } = await import('../src/content/validate.ts')
+const { clockCount } = await import('../src/engine/clockCount.ts')
+const { CLOCK_MAX_STEP_SECONDS, CLOCK_SAVE_INTERVAL_SECONDS } = await import('../src/engine/deviceRules.ts')
+const { isRoomPowered } = await import('../src/engine/power.ts')
 const {
   emptyProgress,
   EMPTY_PROGRESS,
@@ -1211,6 +1215,11 @@ await test('"New game" still erases everything, and a tab holding the erased gam
   restarted.state().resetProgress()
   const mark = savedWhole().game
   assert.ok(typeof mark === 'string' && mark.length > 0, 'a new game is not marked as one')
+  // Each store says which game it holds, to whoever in its scene keeps a
+  // count of its own (the clock on the wall, further down): the tab that
+  // started over is in the new one, and the other has not heard yet.
+  assert.equal(restarted.store.gameInPlay(), mark)
+  assert.equal(stale.store.gameInPlay(), undefined, 'a save that never started over has a mark')
 
   stale.state().recordDocument('doc-rule-changes')
   stale.hide()
@@ -1219,6 +1228,7 @@ await test('"New game" still erases everything, and a tab holding the erased gam
   assert.deepEqual(stale.savedProgress()!.documentsRead, [], 'what the stale tab did in the erased game went into the new one')
   assert.equal(savedWhole().game, mark)
   assert.deepEqual(stale.progress().catalogued, [], 'the stale tab goes on showing a game that no longer exists')
+  assert.equal(stale.store.gameInPlay(), mark, 'the tab that took the new game does not say it is in it')
 
   // From there the stale tab plays the new game, and the tab that started it is not handed the old one.
   stale.state().recordCatalogued('ball-spalding')
@@ -1583,6 +1593,80 @@ await test('every field of the table, different in each of three tabs: they fall
   }
 })
 
+await test('rules that only one tab has: what follows from another tab\'s write is settled there, in one write more, and nobody answers it', async () => {
+  // The content's rules reach a store from behind the title button, so of two
+  // tabs the one in the game has them and the one on the title screen has
+  // not; and a tab of this build has a trigger that a tab of the build before
+  // it, still open after a deploy, has never heard of. This lot compiles no
+  // trigger, so nothing in production runs this yet; L3 does. The tabs of
+  // this suite shared one slot of rules, the process's, and could not ask:
+  // each has its own now (`lib/liveTabs.ts`).
+  //
+  // A rule of the kind a trigger is: it only adds, once, and hands back the
+  // save it was given when it has nothing to add.
+  const follows = (piece: string) => ({ credentials: [`key:${piece}`], triggersFired: [`exhibit:${piece}:catalogued`] })
+  const rules = {
+    settle: (progress: Progress) => progress.catalogued.reduce((settled, piece) => grantProgress(settled, follows(piece)), progress),
+  }
+  const night = SAVE_FIXTURES['production-drawer-open'].save
+  const owed = night.progress.catalogued.map((piece) => `key:${piece}`)
+  assert.ok(owed.length > 0 && night.progress.credentials.every((key) => !owed.includes(key)), 'the case needs a save the rules owe something to')
+
+  for (const count of [2, 3]) {
+    const browser = openBrowser(night)
+    try {
+      const inTheGame = await browser.open('this build, in the game')
+      const older = await browser.open('the build before the rule, in the game', 'idle')
+      if (count === 3) await browser.open('this build, on the title screen')
+      const writers = (since: number) => browser.writes.slice(since).map((write) => write.by)
+      const holds = (when: string, ...keys: string[]) => {
+        for (const tab of browser.tabs) {
+          for (const key of keys) assert.ok(tab.progress().credentials.includes(key), `${count} tabs, ${when}: "${tab.name}" never got "${key}"`)
+        }
+        agreed(browser, `${count} tabs, ${when}`)
+      }
+      assert.deepEqual(leftAlone(browser, `${count} tabs that only loaded the save`), [])
+
+      // "Continue" in one tab: the canvas arrives, and the rules with it. The
+      // save was owed a key for every piece catalogued before the rule
+      // existed, and that is one write, by the tab that knows the rule.
+      inTheGame.act((state) => state.start())
+      inTheGame.registerRules(rules)
+      assert.deepEqual(older.progress().credentials, night.progress.credentials, 'the rules of one tab reached the store of another')
+      leftAlone(browser, `${count} tabs, and the rules arrived in one`)
+      assert.deepEqual(writers(0), [inTheGame.name], `${count} tabs: what the save was owed is one write, by the tab that has the rules`)
+      holds('after the rules arrived', ...owed)
+
+      // The tab that has no such rule catalogues a piece: its own write, and
+      // then the one write of the tab that knows what follows from it. The
+      // first tab takes that in and has nothing to add.
+      let written = browser.writes.length
+      older.act((state) => state.start())
+      older.act((state) => state.recordCatalogued('net-1897'))
+      assert.ok(!older.progress().credentials.includes('key:net-1897'), 'a tab with no rules settled by itself')
+      leftAlone(browser, `${count} tabs, and the one without the rule catalogued a piece`)
+      assert.deepEqual(writers(written), [older.name, inTheGame.name], `${count} tabs: a write, and one more for what follows from it`)
+      holds('after a piece catalogued where the rule is not known', 'key:net-1897')
+      assert.deepEqual(browser.disk()!.progress!.triggersFired, [...night.progress.catalogued, 'net-1897'].map((piece) => `exhibit:${piece}:catalogued`))
+
+      // Where the rule is known, a piece and what follows from it are one write.
+      written = browser.writes.length
+      inTheGame.act((state) => state.recordCatalogued('gym-suit'))
+      leftAlone(browser, `${count} tabs, and the one with the rule catalogued a piece`)
+      assert.deepEqual(writers(written), [inTheGame.name])
+      holds('after a piece catalogued where the rule is known', 'key:gym-suit')
+
+      // And the rules arriving in a tab whose save is already settled are no write at all.
+      written = browser.writes.length
+      older.registerRules(rules)
+      assert.deepEqual(leftAlone(browser, `${count} tabs, and the rule reached a second one`), [])
+      assert.equal(browser.writes.length, written)
+    } finally {
+      browser.close()
+    }
+  }
+})
+
 await test('"New game" in one live tab: the other takes the new game and falls silent, and what that leaves is on record', async () => {
   const night = SAVE_FIXTURES['production-drawer-open'].save
   const browser = openBrowser(night)
@@ -1640,10 +1724,350 @@ await test('"New game" in one live tab: the other takes the new game and falls s
   }
 })
 
+// The case above ends on what a tab that took a new game leaves wrong: its
+// scene. Everything the suite could say of it was about the store, and one
+// thing in that scene writes to the save with no player to press anything:
+// the clock on the office wall, which counts the seconds it has run and
+// hands them over when its room goes dark, when the tab is hidden and every
+// fifteen seconds. Its count was the erased game's.
+
+const CLOCK = MUSEUM.rooms.flatMap((room) => room.devices ?? []).find((device) => device.kind === 'clock')!
+const CLOCK_ROOM = MUSEUM.rooms.find((room) => room.id === (CLOCK as { runsWithPowerOf: string }).runsWithPowerOf)!
+
+/**
+ * The clock on the wall as `engine/Devices.tsx` keeps it, in a live tab.
+ *
+ * The count is the component's own (`engine/clockCount.ts`). What stands in
+ * for React is its two lines, which the wiring check further down holds the
+ * component to: the effect that runs the count while the room has power, and
+ * the frame that advances it.
+ *
+ * React renders a change of the store at once and runs the effects of that
+ * render before the page's next task, in a hidden tab as in a visible one. So
+ * every task of this tab (something the player does, a write it hears of, a
+ * timer, a forced save) is followed here by that commit.
+ */
+function clockOnTheWall(tab: LiveTab) {
+  const count = clockCount(CLOCK.id, tab.store)
+  const act = tab.act
+  let mounted = true
+  let powered: boolean | null = null
+  let cleanUp: (() => void) | undefined
+  const commit = () => {
+    if (!mounted) return
+    act((state) => {
+      const now = isRoomPowered(CLOCK_ROOM, state.progress.roomsPowered)
+      if (now === powered) return
+      powered = now
+      cleanUp?.()
+      cleanUp = undefined
+      if (now) cleanUp = count.run()
+      else count.stop()
+    })
+  }
+  for (const task of ['act', 'hear', 'runTimers', 'hide', 'show'] as const) {
+    const run = tab[task] as (...given: unknown[]) => unknown
+    Object.assign(tab, {
+      [task]: (...given: unknown[]) => {
+        const result = run(...given)
+        commit()
+        return result
+      },
+    })
+  }
+  commit()
+  return {
+    /** Seconds of frames, each the longest step a clock counts; what the hands show at the end. */
+    run: (seconds: number) =>
+      act(() => {
+        let shown = 0
+        for (let frame = 0; frame < seconds / CLOCK_MAX_STEP_SECONDS; frame += 1) shown = count.advance(CLOCK_MAX_STEP_SECONDS)
+        return shown
+      }),
+    /** The room streams out, and the component with it. */
+    unmount: () => {
+      act(() => cleanUp?.())
+      mounted = false
+    },
+  }
+}
+
+const CLOCK_NIGHT = SAVE_FIXTURES['production-drawer-open'].save
+/** The seconds the clock had run when the night was saved. */
+const RAN = CLOCK_NIGHT.progress.clockSeconds[CLOCK.id]
+const clockOnDisk = (browser: LiveBrowser) => browser.disk()!.progress!.clockSeconds as Record<string, number>
+const writersSince = (browser: LiveBrowser, since: number) => browser.writes.slice(since).map((write) => write.by)
+
+/** A tab in the game, its clock a minute further on than the save found it, and that minute on the disk. */
+async function aMinuteIn(browser: LiveBrowser, name: string) {
+  const tab = await browser.open(name, 'idle')
+  tab.act((state) => state.start())
+  const clock = clockOnTheWall(tab)
+  assert.equal(clock.run(60), RAN + 60)
+  leftAlone(browser, `"${name}" played for a minute`)
+  assert.deepEqual(clockOnDisk(browser), { [CLOCK.id]: RAN + 60 }, 'a running clock saves its time every fifteen seconds')
+  return { tab, clock }
+}
+
+await test('within one game the clock hands over what it counted: every fifteen seconds, as the tab is hidden, as its room streams out', async () => {
+  assert.ok(RAN > 0 && CLOCK_NIGHT.progress.roomsPowered.includes(CLOCK_ROOM.id), 'the cases below need a save whose clock has run')
+  const browser = openBrowser(CLOCK_NIGHT)
+  try {
+    const { tab, clock } = await aMinuteIn(browser, 'playing')
+    const other = await browser.open('the other tab')
+    // The player looks at the other tab: a forced save, the clock's count in it.
+    assert.equal(clock.run(7), RAN + 67)
+    tab.hide()
+    leftAlone(browser, 'the tab in the game was hidden')
+    assert.deepEqual(clockOnDisk(browser), { [CLOCK.id]: RAN + 67 }, 'a hidden tab did not save what its clock had counted')
+    // A write of the same game is no reason to drop a count: a setting changed on the title screen.
+    other.act((state) => state.setSetting('brightness', 1.2))
+    leftAlone(browser, 'a setting changed in the other tab')
+    tab.show()
+    assert.equal(clock.run(15), RAN + 82)
+    tab.hide()
+    leftAlone(browser, 'the clock ran on, and the tab was hidden again')
+    assert.deepEqual(clockOnDisk(browser), { [CLOCK.id]: RAN + 82 }, 'the clock stopped saving after another tab of the same game wrote')
+    agreed(browser, 'one game, a clock running in one tab')
+
+    // The room streams out with seconds not yet saved: they go with it.
+    tab.show()
+    assert.equal(clock.run(9.5), RAN + 91.5)
+    clock.unmount()
+    leftAlone(browser, 'the office streamed out')
+    assert.deepEqual(clockOnDisk(browser), { [CLOCK.id]: RAN + 91 }, 'a clock unmounted with its room lost the seconds since its last save')
+    // And streams back in: the hands start from the save.
+    assert.equal(clockOnTheWall(tab).run(1), RAN + 92)
+  } finally {
+    browser.close()
+  }
+})
+
+await test('a clock that ran in the erased game adds nothing to the new one, as its room goes dark in the tab that takes the new game', async () => {
+  const browser = openBrowser(CLOCK_NIGHT)
+  try {
+    const { tab: playing, clock } = await aMinuteIn(browser, 'playing')
+    const title = await browser.open('title')
+    assert.equal(clock.run(7), RAN + 67)
+    playing.hide()
+    leftAlone(browser, 'the player looked at the other tab')
+
+    const written = browser.writes.length
+    title.act((state) => state.resetProgress())
+    // The tab in the game hears of it and takes the new game: the office has
+    // no power in it, and React stops the clock.
+    leftAlone(browser, '"New game" on the title screen')
+    assert.deepEqual(clockOnDisk(browser), {}, 'the game that was started over begins with the time the clock ran in the erased one')
+    assert.deepEqual(writersSince(browser, written), ['title'], 'the tab that took the new game wrote something of the old one into it')
+    assert.deepEqual(playing.progress().clockSeconds, {})
+    agreed(browser, 'after "New game"')
+    assert.deepEqual((await browser.open('loaded afterwards')).progress().clockSeconds, {})
+
+    // Looked at again, in an office with no power: the hands stand still.
+    playing.show()
+    assert.equal(clock.run(3), 0, 'the clock of a room with no power is running')
+    // The office is lit again, in the new game: the clock starts from the
+    // minute the storm stopped it at, and what it counts now is saved.
+    playing.act((state) => state.powerRoom(CLOCK_ROOM.id))
+    assert.equal(clock.run(20), 20, 'the hands went on from the time of the erased game')
+    leftAlone(browser, 'the clock runs in the new game')
+    assert.deepEqual(clockOnDisk(browser), { [CLOCK.id]: CLOCK_SAVE_INTERVAL_SECONDS }, 'fifteen seconds are counted from the moment the clock starts')
+    playing.hide()
+    leftAlone(browser, 'hidden, in the new game')
+    assert.deepEqual(clockOnDisk(browser), { [CLOCK.id]: 20 }, 'a clock that changed games no longer saves its time')
+    agreed(browser, 'the new game, its clock running')
+  } finally {
+    browser.close()
+  }
+})
+
+await test("nor when the new game arrives with the office already lit: not as the tab is hidden, not at its next save, and the hands are the new game's", async () => {
+  // A tab a phone froze in the background hears late, and all at once: the
+  // save it finds is another game, played on, with the office lit. Its room
+  // never went dark, so React has nothing to commit, and the count the clock
+  // holds is still the one it would hand over.
+  const browser = openBrowser(CLOCK_NIGHT)
+  try {
+    const { tab: frozen, clock } = await aMinuteIn(browser, 'frozen')
+    const other = await browser.open('the other tab')
+    frozen.hide()
+    leftAlone(browser, 'the tab in the game was hidden')
+
+    other.act((state) => state.resetProgress())
+    other.act((state) => state.start())
+    other.act((state) => state.powerRoom(CLOCK_ROOM.id))
+    const theirs = clockOnTheWall(other)
+    assert.equal(theirs.run(40), 40)
+    other.runTimers()
+    assert.deepEqual(clockOnDisk(browser), { [CLOCK.id]: 30 })
+
+    // Thawed. It hears, and is hidden again before a single frame is drawn:
+    // the forced save asks the clock for its count.
+    let written = browser.writes.length
+    frozen.show()
+    frozen.hear()
+    assert.deepEqual(frozen.progress().roomsPowered, [CLOCK_ROOM.id])
+    frozen.hide()
+    assert.deepEqual(clockOnDisk(browser), { [CLOCK.id]: 30 }, "the erased game's time went into the new game as the tab was hidden")
+    assert.equal(browser.writes.length, written, 'a tab that took the new game as it is had something to write')
+    // And when it is looked at: the hands are the new game's, and so is what it saves.
+    frozen.show()
+    assert.equal(clock.run(20), 50, 'the hands went on from the time of the erased game')
+    written = browser.writes.length
+    leftAlone(browser, 'the thawed tab ran its clock')
+    assert.deepEqual(clockOnDisk(browser), { [CLOCK.id]: 45 })
+    assert.deepEqual(writersSince(browser, written), ['frozen'])
+    frozen.hide()
+    other.hide()
+    leftAlone(browser, 'both hidden')
+    assert.deepEqual(clockOnDisk(browser), { [CLOCK.id]: 50 }, 'the longer of the two counts, both of them made in this game')
+    agreed(browser, 'the new game, a clock running in each tab')
+  } finally {
+    browser.close()
+  }
+})
+
+await test('nor in the tab that starts over itself with its clock running', async () => {
+  // No screen does this yet (the title screen has no canvas under it). The
+  // tab that is one day taken back to it (L16) will have a clock running, and
+  // "New game" forces a save, which asks the clock.
+  const browser = openBrowser(CLOCK_NIGHT)
+  try {
+    const { tab, clock } = await aMinuteIn(browser, 'the only tab')
+    assert.equal(clock.run(5), RAN + 65)
+    tab.act((state) => state.resetProgress())
+    assert.deepEqual(clockOnDisk(browser), {}, '"New game" kept the time of the clock that was running')
+    leftAlone(browser, '"New game" with a clock running')
+    assert.deepEqual(clockOnDisk(browser), {})
+    assert.deepEqual(tab.progress(), emptyProgress())
+  } finally {
+    browser.close()
+  }
+})
+
+await test('the clock in the scene is the count these cases run, and records nothing by itself', () => {
+  // `clockOnTheWall` is this suite's hand, written after the component and
+  // not by it. What it copies is held here, line by line, on the source.
+  const readSource: SourceReader = (path) => read(`src/${path}`)
+  assert.deepEqual(clockWiringProblems(readSource), [])
+
+  // Each of these is a refactor the check exists to catch, applied to the
+  // real source in memory.
+  const changed =
+    (path: string, from: string | RegExp, to: string): SourceReader =>
+    (asked) => {
+      if (asked !== path) return readSource(asked)
+      const source = readSource(asked)
+      const next = source.replace(from, to)
+      assert.notEqual(next, source, `the refactor of ${path} found nothing to change`)
+      return next
+    }
+  const refactors: readonly (readonly [string, SourceReader])[] = [
+    [
+      'the component recording the clock at a moment of its own',
+      changed('engine/Devices.tsx', 'const angles = clockHandAngles(', 'useMuseum.getState().recordClockSeconds(device.id, 0)\n    const angles = clockHandAngles('),
+    ],
+    [
+      'the component contributing to the forced save by itself',
+      changed('engine/Devices.tsx', /( *)(if \(powered\) return count\.run\(\))/, '$1contributeToSave(() => undefined)\n$1$2'),
+    ],
+    [
+      'the count run whether the room has power or not',
+      changed('engine/Devices.tsx', /if \(powered\) return count\.run\(\)\n *count\.stop\(\)\n *return undefined/, 'return count.run()'),
+    ],
+    ['the count never stopped when the room goes dark', changed('engine/Devices.tsx', /\n *count\.stop\(\)\n/, '\n')],
+    ['the effect not run again when the power changes', changed('engine/Devices.tsx', '}, [count, powered])', '}, [count])')],
+    ['the hands turned by a count that is never advanced', changed('engine/Devices.tsx', 'count.advance(delta)', 'count.advance(0)')],
+    [
+      'a count made anew at every render',
+      changed('engine/Devices.tsx', 'useMemo(() => clockCount(device.id, CLOCK_STORE), [device.id])', 'clockCount(device.id, CLOCK_STORE)'),
+    ],
+    [
+      'a count never told which game is in play',
+      changed('engine/Devices.tsx', '{ useMuseum, contributeToSave, gameInPlay }', '{ useMuseum, contributeToSave, gameInPlay: () => undefined }'),
+    ],
+    [
+      'the clock asking after the power of another room',
+      changed('engine/Devices.tsx', 'const powered = usePowered(device.runsWithPowerOf)', "const powered = usePowered('atrium')"),
+    ],
+    [
+      'the count reaching for the store by itself',
+      changed('engine/clockCount.ts', 'import { advanceClockSeconds', "import { useMuseum } from '../state/store.ts'\nimport { advanceClockSeconds"),
+    ],
+  ]
+  const uncaught = refactors.filter(([, reader]) => clockWiringProblems(reader).length === 0).map(([name]) => name)
+  assert.deepEqual(uncaught, [], 'a refactor this check exists to catch went through')
+})
+
+await test('nor does a call that was in the air in the erased game count as heard in the new one', async () => {
+  // The other thing a scene finishes by itself. A call is recorded as heard
+  // when its last line ends, and the lines move on by a timer; held under a
+  // hidden tab, it is dropped as heard the moment the tab is looked at, if
+  // what it says no longer holds. Either way the tab that took the new game
+  // wrote the old game's call into it, and the new game never placed that
+  // call: the porter's first one, with the way to the breaker in it.
+  const CALL = { deviceId: 'office-radio', speakerKey: 'radio.speaker.porter', lineKeys: ['a', 'b'] }
+  const night = SAVE_FIXTURES['production-drawer-open'].save
+  const browser = openBrowser(night)
+  try {
+    const playing = await browser.open('playing', 'idle')
+    const other = await browser.open('the other tab')
+    playing.act((state) => state.start())
+    leftAlone(browser, 'one tab in the game')
+
+    // Within one game, another tab's write leaves a call in the air alone,
+    // and it is heard out.
+    playing.act((state) => state.startRadio({ ...CALL, callId: 'a-call-heard-out' }))
+    other.act((state) => state.setSetting('brightness', 1.2))
+    leftAlone(browser, 'a setting changed in the other tab, mid-call')
+    assert.equal(playing.state().radio?.callId, 'a-call-heard-out', 'a write of the same game cut the porter off')
+    playing.act((state) => state.advanceRadio())
+    playing.act((state) => state.advanceRadio())
+    leftAlone(browser, 'the call ended')
+    assert.ok((browser.disk()!.progress!.radioCalls as string[]).includes('a-call-heard-out'))
+
+    playing.act((state) => state.startRadio({ ...CALL, callId: 'porter-first-call' }))
+    const written = browser.writes.length
+    other.act((state) => state.resetProgress())
+    leftAlone(browser, '"New game" in the other tab, mid-call')
+    // What the subtitle's timer does when a line has had its time, twice,
+    // and what the end of a hold does: none of them has a call to end.
+    playing.act((state) => state.advanceRadio())
+    playing.act((state) => state.advanceRadio())
+    playing.act((state) => state.dropRadio())
+    leftAlone(browser, 'the call would have ended')
+    assert.deepEqual(browser.disk()!.progress!.radioCalls, [], 'a call placed in the erased game was recorded as heard in the new one')
+    assert.deepEqual(writersSince(browser, written), [other.name])
+    assert.equal(playing.state().radio, null, 'the call of the erased game is still in the air')
+    agreed(browser, 'after "New game", mid-call')
+
+    // Started over once more, with nothing else to tell the two games apart:
+    // both are empty, and this tab has changed no setting. The call in the
+    // air is the only thing the tab has to let go of.
+    playing.act((state) => state.startRadio({ ...CALL, callId: 'porter-first-call' }))
+    other.act((state) => state.resetProgress())
+    leftAlone(browser, '"New game" again, mid-call')
+    assert.equal(playing.state().radio, null, 'a call was kept in the air because the two games looked alike')
+  } finally {
+    browser.close()
+  }
+})
+
 await test('a seeded run of tabs that play, hide, close and start over in any order ends in silence, with nothing lost', async () => {
   const ROOMS = ['office', 'atrium', 'holyoke']
   const SEEDS = 48
+  /**
+   * A third as many nights again, in which some of the tabs have rules and
+   * the others have not: the tab in the game beside the one on the title
+   * screen, or a build that knows a trigger beside one that does not. After
+   * the others, so that the dice of the first 48 falls as it always did.
+   */
+  const RULED = 16
   const STEPS = 120
+  // What a trigger is to the store: it only adds, and hands back the save it
+  // was given when there is nothing to add. A flag for every piece, so that
+  // what it adds says its step like everything else these nights write.
+  const RULES = { settle: (progress: Progress) => grantProgress(progress, { flags: progress.catalogued }) }
   /** One verb of the store per list it adds an id to. */
   const LISTS: Record<string, (state: StoreState, id: string) => void> = {
     catalogued: (state, id) => state.recordCatalogued(id),
@@ -1663,8 +2087,11 @@ await test('a seeded run of tabs that play, hide, close and start over in any or
 
   let longest = 0
   let mostWrites = 0
+  let longestRuled = 0
+  let mostWritesRuled = 0
   let nightsStartedOver = 0
-  for (let seed = 1; seed <= SEEDS; seed += 1) {
+  for (let seed = 1; seed <= SEEDS + RULED; seed += 1) {
+    const ruled = seed > SEEDS
     const random = seeded(seed)
     const pick = <T>(list: readonly T[]): T => list[Math.floor(random() * list.length)]
     const say = (what: string) => `night ${seed}: ${what}`
@@ -1672,9 +2099,17 @@ await test('a seeded run of tabs that play, hide, close and start over in any or
     const browser = openBrowser(fixture.save)
     try {
       let opened = 0
-      const open = () => {
+      const knowing = new Set<LiveTab>()
+      const open = async () => {
         opened += 1
-        return browser.open(`tab ${opened}`, pick(['timeout', 'idle'] as const))
+        const tab = await browser.open(`tab ${opened}`, pick(['timeout', 'idle'] as const))
+        // The first tab of a night with rules has them; every other one, and
+        // every reload, by the dice.
+        if (ruled && (opened === 1 || random() < 0.5)) {
+          tab.registerRules(RULES)
+          knowing.add(tab)
+        }
+        return tab
       }
       for (let tab = 0; tab < 3; tab += 1) await open()
 
@@ -1747,11 +2182,21 @@ await test('a seeded run of tabs that play, hide, close and start over in any or
 
       const writtenBefore = browser.writes.length
       const rounds = leftAlone(browser, say(`after ${STEPS} steps`))
-      longest = Math.max(longest, rounds.length)
-      mostWrites = Math.max(mostWrites, browser.writes.length - writtenBefore)
+      if (ruled) {
+        longestRuled = Math.max(longestRuled, rounds.length)
+        mostWritesRuled = Math.max(mostWritesRuled, browser.writes.length - writtenBefore)
+      } else {
+        longest = Math.max(longest, rounds.length)
+        mostWrites = Math.max(mostWrites, browser.writes.length - writtenBefore)
+      }
       agreed(browser, say('at the end'))
 
       const disk = browser.disk()!.progress!
+      // While a tab that has the rules is open, what follows from the save is
+      // in it, whichever tab did the thing it follows from.
+      if (browser.tabs.some((tab) => knowing.has(tab))) {
+        for (const piece of disk.catalogued as string[]) assert.ok((disk.flags as string[]).includes(piece), say(`"${piece}" was catalogued and what follows from it never reached the disk`))
+      }
       if (startedOverAt < 0) {
         // Nobody started over: everything anybody did is there, with all the save began with.
         for (const [field, id] of added) assert.ok((disk[field] as string[]).includes(id), say(`${field} lost "${id}"`))
@@ -1780,12 +2225,19 @@ await test('a seeded run of tabs that play, hide, close and start over in any or
   }
   assert.ok(nightsStartedOver >= SEEDS / 4, `only ${nightsStartedOver} of ${SEEDS} nights started over: the dice no longer tries "New game"`)
   // The ceiling, which is what was measured (in these 48 nights, and in 800
-  // run once by hand) and what three tabs need at the most: each writes what
-  // it still held, once, and the last of them writes everything; the round
-  // after is the others hearing of it. A write more is a tab answering one
-  // that brought it nothing, which is how the endless exchange begins.
+  // run once by hand) and what three tabs need at the most when all of them
+  // have the same rules, or none as here: each writes what it still held,
+  // once, and the last of them writes everything; the round after is the
+  // others hearing of it. A write more is a tab answering one that brought
+  // it nothing, which is how the endless exchange begins.
   assert.ok(longest <= 2, `a night took ${longest} rounds to fall silent`)
   assert.ok(mostWrites <= 3, `a night took ${mostWrites} writes to fall silent: more than one a tab`)
+  // With rules in some tabs only, there is one write more to make and it is
+  // not an answer: the last tab to write may have none, and what follows from
+  // its write is then written by a tab that has them, a round later. Measured
+  // too (these 16 nights, and 800 run once by hand): three rounds, four writes.
+  assert.ok(longestRuled <= 3, `a night with rules in some tabs took ${longestRuled} rounds to fall silent`)
+  assert.ok(mostWritesRuled <= 4, `a night with rules in some tabs took ${mostWritesRuled} writes to fall silent: more than one a tab and one for what follows`)
 })
 
 // ---------------------------------------------------------------------------
@@ -1965,6 +2417,81 @@ await test('nor is it taken from another tab: a running tab goes on as it was, a
     for (const hint of ['torch-used', 'a-lesson-in-the-second-tab', 'a-lesson-in-the-first']) {
       for (const each of [tab, second]) assert.ok(each.progress().hintsShown.includes(hint), `"${each.name}" lacks "${hint}"`)
     }
+  } finally {
+    browser.close()
+  }
+})
+
+await test('nor does a setting the disk no longer has go back to its default: a running tab keeps what it ran on, and its next write says so', async () => {
+  // A build from before a setting existed writes the settings without it,
+  // every time it writes anything. Every case above hands the tab all ten
+  // keys, so none of them saw what an absent one does; with the default in
+  // its place the suite stayed green, and a player's head-bob would have
+  // switched itself off in the middle of a game.
+  const ABSENT: readonly string[] = ['locale', 'brightness', 'headBob']
+  const fewer = Object.fromEntries(Object.entries(CHOSEN).filter(([key]) => !ABSENT.includes(key)))
+  const browser = openBrowser({ settings: CHOSEN, progress: OLD_TAB_PROGRESS })
+  try {
+    const tab = await browser.open('this build')
+    tab.act((state) => state.start())
+    leftAlone(browser, 'one tab, in the game')
+    const defaults = tab.store.DEFAULT_SETTINGS as Raw
+    const written = browser.writes.length
+
+    browser.anotherBuildWrites({ settings: fewer, progress: browser.disk()!.progress })
+    leftAlone(browser, 'a build that has three settings fewer wrote the ones it has')
+    assert.deepEqual(tab.state().settings, CHOSEN, 'a setting the disk does not have was put back to its default in a running tab')
+    // What the tab goes on with is a fallback, and a fallback is never a
+    // reason to write: two builds would answer each other for ever.
+    assert.equal(browser.writes.length, written, 'the tab answered with a write of its own')
+    assert.deepEqual(browser.disk()!.settings, fewer)
+    // The other half of the rule: a page that loads now has nothing to go on
+    // with, and an absent setting is the default.
+    const loaded = await browser.open('this build, loaded with the three absent', 'idle')
+    assert.deepEqual(loaded.state().settings, { ...CHOSEN, ...Object.fromEntries(ABSENT.map((key) => [key, defaults[key]])) })
+    loaded.close()
+    assert.equal(browser.writes.length, written, 'a page that only loaded the save wrote it')
+
+    // The first thing the running tab has to write takes the three back to
+    // the disk, as it runs on them.
+    tab.act((state) => state.recordHint('torch-used'))
+    leftAlone(browser, 'this build plays on')
+    assert.equal(browser.writes.length, written + 1)
+    assert.deepEqual(browser.disk()!.settings, CHOSEN, 'the settings the other build left out did not go back to the disk with the tab\'s next write')
+    assert.deepEqual((await browser.open('this build, loaded afterwards')).state().settings, CHOSEN)
+  } finally {
+    browser.close()
+  }
+})
+
+await test('on record: a setting chosen here is undone by a tab of the build before this one, while that tab is open', async () => {
+  // The mirror, for the settings, of the limit held under '"New game" in one
+  // live tab'. A tab of the build before this one has no ear for other tabs:
+  // it writes everything it holds, its settings as it loaded them among it
+  // (the office clock makes it do so every 15 s while it is visible). To a
+  // tab of this build that write is the player choosing in another tab, and
+  // nothing on the disk tells the two apart. It ends when the old tab is
+  // closed or loaded again: every page loaded from the deploy on is of this
+  // build.
+  const before = OLD_TAB.settings as Raw
+  assert.equal(before.locale, 'pt-BR', 'the case needs a save whose language is not the one chosen below')
+  const browser = openBrowser(OLD_TAB)
+  try {
+    const tab = await browser.open('this build')
+    tab.act((state) => state.setSetting('locale', 'en'))
+    leftAlone(browser, 'English, chosen on the title screen of this build')
+    assert.equal(browser.disk()!.settings!.locale, 'en')
+
+    // The old tab saves its clock, and its settings with it.
+    browser.anotherBuildWrites({ settings: before, progress: { ...OLD_TAB_PROGRESS, clockSeconds: { 'office-clock': 240 } } })
+    leftAlone(browser, 'a tab of the build before this one saved its clock')
+    assert.equal(tab.state().settings.locale, 'pt-BR')
+    assert.equal(browser.disk()!.settings!.locale, 'pt-BR')
+    assert.equal(browser.writes.length, 1, 'the tab of this build has nothing to answer: its choice went to the disk once, and was written over')
+    // Chosen again, it stands until the old tab's next write.
+    tab.act((state) => state.setSetting('locale', 'en'))
+    leftAlone(browser, 'English, chosen again')
+    assert.equal(browser.disk()!.settings!.locale, 'en')
   } finally {
     browser.close()
   }

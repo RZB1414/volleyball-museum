@@ -2387,3 +2387,63 @@ e §11.9: «Novo jogo» desfeito por uma aba de L1 ainda aberta; a aba que adota
 e fica na cena antiga até recarregar; carga e junção quadráticas em saves adulterados; e o que
 um rollback para L1 deixa de regravar. O push, o deploy e a fumaça (passos 9 a 11) e o playtest
 (13) continuam por fazer, e o conserto ainda não foi lido pelo revisor.
+
+### Reconferência do conserto (2026-10-05; um commit local, sem push)
+
+Dois verificadores releram o commit acima com o store de verdade em abas vivas e devolveram um
+defeito e três notas; os quatro são reais e estão fechados, e a conferência do primeiro achou um
+quinto da mesma família. A tabela, o vermelho de cada caso, as dezesseis mutações e o que o
+navegador mostrou estão em `docs/HANDOFF.md` §11.14; aqui fica o que muda o que este plano e as
+seções acima diziam.
+
+**«A aba que adota um jogo recomeçado fica na cena antiga» tinha duas consequências que gravam
+sozinhas.** A seção acima registrou o limite como de interface (a aba não joga o jogo novo até
+recarregar, L16). Duas coisas dessa cena terminavam, sem gesto do jogador, algo **começado no
+jogo apagado**, e o gravavam no novo:
+
+- **O relógio do escritório.** Contava os segundos em que andou e os entregava ao save quando a
+  sala apagava, quando a aba era ocultada e a cada 15 s. A sala apaga justamente ao adotar o jogo
+  novo. A contagem agora é um módulo fora do componente (`src/engine/clockCount.ts`) e é de um
+  jogo: guarda em que jogo foi feita, não se grava em outro, e é relida do save quando o relógio
+  anda num jogo que não é o dela. Para isso o store diz em que jogo está: `gameInPlay` devolve a
+  marca do jogo desta aba, ou nada para um save que nunca recomeçou. Não é estado do store nem
+  campo do save. A guarda proposta (gravar só com a sala acesa) foi recusada: não cobre a aba que
+  ouve tarde e acha o jogo novo já com o escritório aceso, nem a que um dia for levada à tela de
+  título com o relógio andando.
+- **A chamada do rádio no ar.** É gravada como ouvida quando a última fala termina, e as falas
+  andam por temporizador. Ao tomar um jogo que é outro, o store solta a chamada (`radio`, estado
+  de sessão) sem gravar nada. Uma escrita do mesmo jogo não a corta.
+
+O que o jogador **fizer** na aba antiga continua indo para o jogo novo, e a cena continua a do
+antigo: isso é L16. **Para os próximos lotes:** o que a cena passar a contar por conta própria
+para gravar depois pergunta `gameInPlay` antes de gravar, e o que o store guardar na sessão e
+gravar ao terminar é solto junto com a chamada.
+
+**Os ajustes ganharam o limite que faltava** (HANDOFF §11.7): um ajuste trocado numa aba deste
+build volta atrás enquanto uma aba de L1 estiver aberta e gravando. Sem código; preso como
+registro. E «ajuste que o disco não tem fica como a aba o tinha», da seção acima, ganhou o caso
+que o prende.
+
+**As abas vivas têm as regras de cada uma** (`scripts/lib/liveTabs.ts`). O registro de regras
+(`src/state/progressRules.ts`) é um módulo, o Node avalia um módulo uma vez por URL, e todas as
+abas da suíte recebiam o mesmo: regras dadas a uma eram dadas a todas, e a todo store que o
+processo já tinha criado. Um gancho de resolução (`registerHooks`, de `node:module`; Node 22.15
+em diante) leva a marca da aba do URL do store ao do registro, e `registerRules` entrega as
+regras a uma aba só. Com isso `test:save` roda o que L3 põe em produção: uma aba com gatilhos e
+outra sem. O teto de «duas rodadas e três escritas» vale com as mesmas regras em toda aba; com
+regras só em algumas são três e quatro, medido e preso.
+
+**Vermelho primeiro.** O relógio, com a contagem extraída do componente linha por linha e sem o
+conserto: três casos reprovam («the game that was started over begins with the time the clock
+ran in the erased one», com 2207 s num jogo novo; o mesmo ao ocultar a aba, com 2200 onde havia
+30; e na aba que recomeça ela mesma, com 2205). A chamada: «a call placed in the erased game was
+recorded as heard in the new one». As regras por aba, com as abas vivas como estavam: «the rules
+of one tab reached the store of another». Os dois casos dos ajustes nascem verdes (um
+comportamento que já estava certo, provado por mutação, e um registro).
+
+**Medições.** `test:save` 57 casos (eram 48), em cerca de 4 s (eram 2,8). Bundle: título 29.913
+bytes de gzip (eram 29.884; nenhum teto subiu), jogo 390.995 (eram 390.891), documento 63.234.
+`docs/releases/L2.graph.json` não mudou.
+
+**O que não foi feito.** A aba que adota um jogo recomeçado continua na cena antiga (L16). O
+push, o deploy e a fumaça (passos 9 a 11) e o playtest (13) continuam por fazer.

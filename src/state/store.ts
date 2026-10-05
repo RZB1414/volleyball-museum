@@ -250,6 +250,19 @@ const initial: Persisted = readPersisted(initialText) ?? {
 }
 const initialSettings = usableSettings(initial.settings, DEFAULT_SETTINGS)
 
+/**
+ * Which playthrough this tab holds: the mark its last "New game" left beside
+ * the save (`newGameMark`), or undefined for a save never started over.
+ *
+ * Not the store's state, and nothing is drawn by it. It is for whoever counts
+ * something of its own while the game runs and hands it to the save later
+ * (the clock on the office wall, `engine/clockCount.ts`): the game can be
+ * replaced under a running scene, by "New game" in another tab, and a count
+ * made in the erased one must not be the first thing the new one holds.
+ */
+let game = initial.game
+export const gameInPlay = () => game
+
 export type DirectionalInput = { x: number; y: number }
 export type TransitionDoorBlock = 'other-side' | 'unpowered'
 export type TransitionDoorPrompt = {
@@ -483,9 +496,9 @@ export const useMuseum = create<MuseumStore>((set, get) => {
   // of this state rather than the mechanism that drives it.
   let persistHandle: number | null = null
   let persistUsesIdleCallback = false
-  // Which game this tab is playing, and what another build keeps beside the
-  // save. Neither is the store's state; both go to the disk with it.
-  let game = initial.game
+  // What another build keeps beside the save. Like the game this tab is
+  // playing (`game`, above), it is not the store's state and goes to the disk
+  // with it.
   let beside = initial.beside
   /**
    * The disk as this tab last saw it.
@@ -548,7 +561,7 @@ export const useMuseum = create<MuseumStore>((set, get) => {
    * result. One exception: a save marked as another game was started over in
    * another tab, and joining the erased game to it would bring the erased
    * game back. That one is taken as it is, and what this tab still held of
-   * the old game goes with the old game.
+   * the old game goes with the old game, a call in the air among it.
    *
    * What the tab then compares itself with, to know whether it has anything
    * to write, is the disk's save as IT would hold it with nothing to add:
@@ -592,7 +605,11 @@ export const useMuseum = create<MuseumStore>((set, get) => {
       const taken: Partial<MuseumStore> = {}
       if (differs(progress, mine.progress)) taken.progress = progress
       if (differs(settings, mine.settings)) taken.settings = settings
-      if (taken.progress || taken.settings) set(taken)
+      // A call in the air was placed in the erased game, and a call is
+      // recorded as heard when its last line ends: heard out here, it would
+      // be one the new game never places. It goes with the game it was of.
+      if (anotherGame && mine.radio) taken.radio = null
+      if (Object.keys(taken).length > 0) set(taken)
     } catch {
       // A disk that cannot be read is not a reason to stop the game.
     }
