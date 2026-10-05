@@ -925,8 +925,13 @@
   background: rgb(6 6 8 / 82%);
 }
 
+/* Each figure is what the backdrop's padding leaves: 100 less twice 4. The
+   width asked for 96vw, four more than there is, and on any window under
+   60rem wide the panel ran to the right edge of the screen: on a phone the
+   plan had a margin on its left and none on its right. `npm run test:map`
+   adds the two rules up. */
 .journal-panel {
-  width: min(60rem, 96vw);
+  width: min(60rem, 92vw);
   height: min(42rem, 88vh);
   display: flex;
   flex-direction: column;

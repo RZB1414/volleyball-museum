@@ -377,6 +377,52 @@ export function planWiringProblems(read: SourceReader): string[] {
 }
 
 /**
+ * The notebook's panel inside its backdrop (`styles/museum.css`).
+ *
+ * The backdrop keeps a margin on every side, a share of the viewport, and the
+ * panel asks for a share of the viewport too. The two were written apart:
+ * 4vw + 96vw + 4vw is 104. On any window narrower than the panel's 60rem the
+ * panel was wider than the room left for it, the grid track grew to hold it,
+ * and it ran to the right edge of the screen with no margin there at all. A
+ * phone held sideways is such a window, and the plan is the first page of
+ * that panel.
+ *
+ * No layout engine runs in Node, so the two rules are read and added up. A
+ * rule rewritten in another form is a problem too: better to be asked to
+ * teach this check the new form than to have it pass on nothing.
+ */
+export function journalLayoutProblems(read: SourceReader): string[] {
+  const css = read('styles/museum.css').replace(/\/\*[\s\S]*?\*\//g, ' ')
+  const body = (selector: string) =>
+    new RegExp(`(?:^|\\n)${selector.replaceAll('.', '\\.')}\\s*\\{([^}]*)\\}`).exec(css)?.[1] ?? ''
+  const cannot = (what: string) => [`styles/museum.css no longer ${what}: the check that the notebook fits the screen cannot add it up`]
+
+  const padding = /\bpadding:\s*([\d.]+)vh\s+([\d.]+)vw\s*;/.exec(body('.journal'))
+  if (!padding) return cannot('pads `.journal` as `<n>vh <n>vw`')
+  const width = /\bwidth:\s*min\(\s*[\d.]+rem\s*,\s*([\d.]+)vw\s*\)\s*;/.exec(body('.journal-panel'))
+  if (!width) return cannot('sizes the width of `.journal-panel` as `min(<n>rem, <n>vw)`')
+  const height = /\bheight:\s*min\(\s*[\d.]+rem\s*,\s*([\d.]+)vh\s*\)\s*;/.exec(body('.journal-panel'))
+  if (!height) return cannot('sizes the height of `.journal-panel` as `min(<n>rem, <n>vh)`')
+
+  const problems: string[] = []
+  const across = Number(width[1]) + 2 * Number(padding[2])
+  if (across > 100) {
+    problems.push(
+      `the notebook's panel asks for ${width[1]}vw between two margins of ${padding[2]}vw, ${across} in all: ` +
+        `on a narrow window it runs off the right edge of the screen`,
+    )
+  }
+  const down = Number(height[1]) + 2 * Number(padding[1])
+  if (down > 100) {
+    problems.push(
+      `the notebook's panel asks for ${height[1]}vh between two margins of ${padding[1]}vh, ${down} in all: ` +
+        `on a short window its last line is under the bottom edge`,
+    )
+  }
+  return problems
+}
+
+/**
  * The volumes the flood measures (M15). `test:navigation` proves that a
  * player can stand in front of every interactive with the eye within its
  * ray's reach and outside its volume, and it builds each volume itself

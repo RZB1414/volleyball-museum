@@ -29,7 +29,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
-import { planWiringProblems, type SourceReader } from './lib/runtimeWiring.ts'
+import { journalLayoutProblems, planWiringProblems, type SourceReader } from './lib/runtimeWiring.ts'
 import { openGame, suite } from './lib/storePage.ts'
 
 const { en } = await import('../src/content/i18n/en.ts')
@@ -566,6 +566,36 @@ await test('the notebook draws the model, and the controller tells it which way 
   ]
   const uncaught = refactors.filter(([, reader]) => planWiringProblems(reader).length === 0).map(([name]) => name)
   assert.deepEqual(uncaught, [], 'a refactor this check exists to catch went through')
+})
+
+await test('the notebook\'s panel fits the room its backdrop leaves it, on a phone as on a desk', () => {
+  // The plan is the first page of this panel. In the browser, at 844 x 390,
+  // the panel stood from x = 34 to x = 844: a margin on the left and none on
+  // the right, because it asked for 96vw of a backdrop that keeps 4vw a side.
+  assert.deepEqual(journalLayoutProblems(readSource), [])
+
+  const styled =
+    (from: RegExp, to: string): SourceReader =>
+    (asked) => {
+      const source = readSource(asked)
+      if (asked !== 'styles/museum.css') return source
+      const next = source.replace(from, to)
+      assert.notEqual(next, source, 'the change found nothing to change')
+      return next
+    }
+  const problemsWith = (from: RegExp, to: string) => journalLayoutProblems(styled(from, to)).join('\n')
+  // Named groups: `$1` followed by a digit of the new value would read as another group.
+  const panelWidth = /(?<rule>\n\.journal-panel \{\s*width: )min\(60rem, [\d.]+vw\)/
+  const panelHeight = /(?<rule>\n\.journal-panel \{[^}]*height: )min\(42rem, [\d.]+vh\)/
+  const backdrop = /(?<rule>\n\.journal \{[^}]*padding: )4vh 4vw/
+  // The width the game shipped with since August, by value.
+  assert.match(problemsWith(panelWidth, '$<rule>min(60rem, 96vw)'), /96vw between two margins of 4vw, 104 in all/)
+  assert.match(problemsWith(backdrop, '$<rule>4vh 6vw'), /between two margins of 6vw/)
+  assert.match(problemsWith(panelHeight, '$<rule>min(42rem, 96vh)'), /96vh between two margins of 4vh, 104 in all/)
+  // A rule in a form the check cannot add up is not a rule that passes.
+  assert.match(problemsWith(panelWidth, '$<rule>60rem'), /cannot add it up/)
+  assert.match(problemsWith(backdrop, '$<rule>1.5rem'), /cannot add it up/)
+  assert.match(problemsWith(panelHeight, '$<rule>88vh'), /cannot add it up/)
 })
 
 done('plan checks')
