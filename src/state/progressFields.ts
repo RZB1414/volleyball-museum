@@ -19,7 +19,9 @@
  *
  * The same four hold between two tabs. A tab that finds on the disk a save it
  * did not write joins it with its own (`joinProgress`), field by field, by
- * the rule each field carries in the table.
+ * the rule each field carries in the table. Every rule but one brings two
+ * tabs to the same value; the one that does not (`lastRoom`) is named in
+ * `withTabsOwn`, which is what lets them stop writing.
  *
  * Imports the spawn and the lot and nothing else: the store is on the title
  * screen, and the content set must not follow it there.
@@ -147,7 +149,7 @@ type FieldSpec<T> = {
 const wholeAtLeast = (value: unknown, minimum: number) =>
   typeof value === 'number' && Number.isFinite(value) && value >= minimum ? Math.floor(value) : null
 const idOrNull = (value: unknown) => (typeof value === 'string' ? value : null)
-const isRecord = (value: unknown): value is Record<string, unknown> =>
+export const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value)
 
 /** The strings of a list, in order; null for anything that is not a list. */
@@ -301,7 +303,8 @@ export const PROGRESS_FIELDS = {
     fresh: (): string => SPAWN.room,
     read: (raw) => (typeof raw === 'string' ? raw : null),
     counts: false,
-    // Where a tab's player stands is that tab's to say.
+    // Where a tab's player stands is that tab's to say. The one rule here
+    // that leaves two tabs holding different saves: see `withTabsOwn`.
     join: (_disk, tab) => tab,
   },
 } satisfies {
@@ -357,6 +360,28 @@ export function joinProgress(disk: Progress, tab: Progress): Progress {
     }),
   )
   return { ...disk, ...onlyInTab, ...known, version: SAVE_VERSION } as Progress
+}
+
+/**
+ * The disk's copy as a tab with nothing to add to it holds it: the same
+ * save, standing where that tab stands.
+ *
+ * A tab knows it has something to write by holding another save than the one
+ * it last saw on the disk. Asked against the disk's copy as it is, two tabs
+ * in two rooms always had: each found the other's room there, took its own
+ * for something new, wrote it, and woke the other to do the same, for as
+ * long as both were open. So at the moment a tab reads another tab's write,
+ * where it stands is not news. A door it crosses afterwards is still a write
+ * of its own; one crossed in the very breath of that read goes to the disk
+ * with the next thing the tab writes, and nothing reads `lastRoom` back in
+ * the meantime (every session starts at the spawn).
+ *
+ * A field whose rule in the table is "the tab's" belongs here, by name. One
+ * left out brings the two tabs back to writing at each other, and `npm run
+ * test:save` runs three tabs that differ in every field to say so.
+ */
+export function withTabsOwn(disk: Progress, tab: Progress): Progress {
+  return { ...disk, lastRoom: tab.lastRoom }
 }
 
 /** The save with the grant added; the same object when it adds nothing. */

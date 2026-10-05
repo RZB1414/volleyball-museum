@@ -1,7 +1,8 @@
 # Handoff — Museu do Voleibol
 
 Atualizado em 2026-10-05 (L2, o segundo lote do plano, §11, com a revisão adversarial dele em
-§11.12; L1 é §10; a abertura no escritório é §9); o estado técnico das salas é o de 2026-08-12.
+§11.12 e a revisão antes do push em §11.13; L1 é §10; a abertura no escritório é §9); o estado
+técnico das salas é o de 2026-08-12.
 Este documento é o ponto de entrada para retomar o projeto sem depender da conversa anterior.
 **Próxima tarefa:** publicar L2 (§11.11, item 1) e começar L3.
 
@@ -32,13 +33,13 @@ intencionalmente no commit `5e51e24`. O museu data-driven é a única aplicaçã
 
 O corte vertical está integrado, assado, caminhável e com progressão de energia.
 
-Portão verde em 2026-10-05 (`npm run check`, 33 passos, depois de L2 e da revisão dele, §11; a
-lista completa das suítes e o que cada uma ganhou está em §11.4, e a de L1 em §10.4):
+Portão verde em 2026-10-05 (`npm run check`, 33 passos, depois de L2 e das duas revisões dele,
+§11; a lista completa das suítes e o que cada uma ganhou está em §11.4, e a de L1 em §10.4):
 
 - conteúdo: 3 salas válidas, com 38 dívidas datadas impressas (`knownDebt.ts`), o roteiro em
   níveis e a comparação com o instantâneo do grafo (`docs/releases/L2.graph.json`);
 - lint de texto: 21/21; catracas: 4/4; fontes: 28; documentação: 25/25;
-- capturas: 15/15; saves do corpus: 27/27; save: 39/39;
+- capturas: 15/15; saves do corpus: 27/27; save: 48/48;
 - energia: 30/30;
 - abertura: 33/33; fluxo da abertura: 44/44; rádio: 27/27;
 - gatilhos: 30/30; trancas: 15/15; planta: 17/17;
@@ -61,7 +62,8 @@ O único aviso é o preexistente `react(only-export-components)` em `src/main.ts
 Deploy de produção: `https://volleyball-museum.renanbuiatti14.workers.dev`, versão
 Cloudflare `1d3a4554-c21a-457a-9bf3-7d5bfc594ae4` (2026-10-04: P0 e L1 do plano, até
 `f0fb5a3`; §10). A anterior era `0027afaa` (2026-10-03, a rodada de §9). **L2 está fechado,
-revisado e ainda não publicado** (commits locais até o da revisão; §11): o que está no ar é L1.
+revisado e ainda não publicado** (commits locais até o da revisão antes do push; §11): o que
+está no ar é L1.
 
 Bake atual:
 
@@ -1583,27 +1585,49 @@ aplicadas e o que saiu diferente do planejado (§14 dele). Saiu em commits locai
 | `90dd9a6` | F5: a inundação da navegação e o lint do que o museu imprime |
 | `d299df8` | o painel do caderno dentro da tela do telefone (achado da rota de toque do fecho) |
 | `02f9992` | o fecho: este registro, os dois saves do lote, os dois conjuntos de capturas, o «Feito em» |
-| o da revisão | os 18 achados da revisão adversarial (11.12): a aba que não sobrescreve mais o save de outra, o instantâneo que não se regrava sozinho, a fiação que faltava, `.gitattributes` |
+| `3af1f0e` | os 18 achados da revisão adversarial (11.12): a aba que não sobrescreve mais o save de outra, o instantâneo que não se regrava sozinho, a fiação que faltava, `.gitattributes` |
+| o da revisão antes do push | os quatro achados do revisor (11.13): duas abas em salas diferentes que não paravam de gravar, o ajuste que este build não sabe usar, o ajuste que não é valor simples, o storage que nem se deixa nomear |
 
 **Estado: fechado e revisado em 2026-10-05, não publicado.** Dos passos de §9.1 do plano estão
-feitos o 1 (plano do lote), o 2 (teste primeiro, fatia por fatia, no fecho e na revisão), o 3, o
-4 (portão verde), o 5 (revisão adversarial por quem não implementou: 11.12), o 6 (rota do lote:
-11.8) e o 12 (este registro, o instantâneo, o corpus e as capturas). O 7 não se aplica (não é
-lote de arte: nenhuma sala desenha nada diferente). **Faltam** o 8 ao 11 (revisor, push, deploy
-e fumaça em produção) e o 13 (playtest). Quem publicar anota a versão Cloudflare em §2 e aqui, e
-troca, na seção L2 do plano, «Feito em 2026-10-05» pela forma que diz que o lote foi publicado:
-é essa frase que solta o instantâneo de acompanhar o conteúdo (11.10).
+feitos o 1 (plano do lote), o 2 (teste primeiro, fatia por fatia, no fecho e nas revisões), o 3,
+o 4 (portão verde), o 5 (revisão adversarial por quem não implementou: 11.12), o 6 (rota do
+lote: 11.8) e o 12 (este registro, o instantâneo, o corpus e as capturas). O 7 não se aplica
+(não é lote de arte: nenhuma sala desenha nada diferente). O 8 (revisor antes do push) rodou uma
+vez e devolveu um bloqueio e três defeitos, consertados em 11.13; conferir o conserto é dele.
+**Faltam** o 9 ao 11 (push, deploy e fumaça em produção) e o 13 (playtest). Quem publicar anota
+a versão Cloudflare em §2 e aqui, e troca, na seção L2 do plano, «Feito em 2026-10-05» pela
+forma que diz que o lote foi publicado: é essa frase que solta o instantâneo de acompanhar o
+conteúdo (11.10).
 
 ### 11.1 O que mudou para o jogador
 
 - **O save não se perde.** Um save de produção carrega inteiro. Um campo que este build não
   conhece (gravado por um lote mais novo, numa outra aba) fica no save em vez de ser descartado.
-- **Duas abas não se atropelam** (da revisão, 11.12). Uma aba que já estava aberta quando outra
-  gravou lê o disco antes de gravar e junta as duas cópias: o carimbo do lote fica o maior, o
-  campo desconhecido e o progresso da outra aba ficam, o brilho escolhido lá não é desfeito, e a
-  aba passa a mostrar o que juntou assim que o navegador avisa. Antes, ela punha o save dela por
-  cima; a garantia «aba velha não rebaixa» só valia para a aba que carregava **depois**. «Novo
-  jogo» continua apagando tudo, e uma aba que ainda tinha o jogo apagado não o traz de volta.
+- **Uma aba não apaga o que a outra gravou** (da revisão, 11.12). Uma aba que já estava aberta
+  quando outra gravou lê o disco antes de gravar e junta as duas cópias: o carimbo do lote fica o
+  maior, o campo desconhecido e o progresso da outra aba ficam, o brilho escolhido lá não é
+  desfeito, e a aba passa a mostrar o que juntou assim que o navegador avisa. Antes, ela punha o
+  save dela por cima; a garantia «aba velha não rebaixa» só valia para a aba que carregava
+  **depois**. «Novo jogo» continua apagando tudo, e uma aba deste build que ainda tinha o jogo
+  apagado não o traz de volta (com uma aba do build de L1 aberta, traz: 11.7).
+- **E duas abas deixadas abertas se calam** (da revisão antes do push, 11.13). O conserto acima
+  tinha um defeito que nenhuma suíte via: duas abas em salas diferentes gravavam o save uma em
+  resposta à outra, sem parar, enquanto as duas ficassem abertas. Bastava «Continuar» numa delas
+  com um save que parou fora do escritório. Nada se perdia; o custo era o laço (ler, migrar,
+  juntar e gravar em cada aba, na cadência do navegador). Agora cada porta atravessada é uma
+  escrita, e a outra aba não responde. O que está provado, com abas vivas (os temporizadores
+  disparam e cada escrita é avisada às outras): duas e três abas em salas diferentes se calam,
+  ficam com o mesmo save a menos de onde cada uma está, e a aba que não tem nada de novo não
+  grava nem quando é ocultada. O que **não** está: o mesmo com uma aba do build de L1, que não
+  ouve as outras (os limites estão em 11.7).
+- **Um ajuste que este build não sabe usar não derruba o jogo** (11.13). Um idioma ou um nível
+  de qualidade de um build seguinte, escolhido na aba dele, chegava à aba aberta deste build e a
+  tela ficava em branco no meio do jogo; o mesmo com um save adulterado. Agora a aba segue com o
+  que tinha (ou com o padrão, ao carregar), e devolve ao disco o que achou, sem pôr o dela por
+  cima da escolha feita na outra.
+- **Com o armazenamento bloqueado o jogo abre** (11.13; defeito anterior ao lote). Num perfil
+  que bloqueia dados do site (o Chrome com todos os cookies bloqueados) a página ficava em
+  branco. O jogo roda; só não guarda.
 - **O atalho da Ala 1 fica aberto.** Depois da primeira saída por ele, abre dos dois lados, para
   sempre, com o aviso «Atalho destrancado — Ala 1 · Holyoke» e o som do trinco, uma vez só. Do
   saguão, antes disso, o `E` (e o botão de Ação, no toque) responde com o zumbido em vez de
@@ -1648,7 +1672,14 @@ O desenho de cada peça está em `docs/lotes/L2-plano.md` §3; aqui, só o mapa.
   `storage`. Um jogo recomeçado leva uma marca, `game`, gravada **ao lado** de `settings` e
   `progress`: não é campo do save (`PROGRESS_FIELDS` tem os mesmos 19, e o instantâneo não
   mudou), e um save que nunca recomeçou não a tem. O que outro build gravar nesse nível também
-  passa adiante.
+  passa adiante. `lastRoom` é a única regra que não leva duas abas ao mesmo valor, e por isso
+  tem nome em `withTabsOwn` (11.13): a aba se compara com o save do disco **como ela o teria**,
+  na sala dela, para saber se tem algo a gravar. Campo novo cuja regra seja «o da aba» entra lá.
+- **Os ajustes** (`src/state/store.ts`, `USABLE_SETTING`, `usableSettings`; 11.13): cada ajuste
+  lido do disco é conferido contra o que este build sabe usar (lista ou faixa); o que não serve
+  não é usado, e o que o disco dizia (`said`) volta para ele na escrita, a menos que o jogador
+  mude o ajuste nesta aba. Chave desconhecida passa adiante, como no progresso. Ajuste novo sem
+  linha na tabela não compila. Todo acesso ao `localStorage` passa por `saveStorage`.
 - **Uma porta só para o progresso** (`src/state/store.ts`, `src/state/progressRules.ts`,
   `src/engine/triggers.ts`, `contentRegistry.ts`, `progressGrants.ts`): todo verbo é uma função
   pura que devolve uma concessão, e o store tem uma entrada, `grant`, que aplica, assenta os
@@ -1669,7 +1700,12 @@ O desenho de cada peça está em `docs/lotes/L2-plano.md` §3; aqui, só o mapa.
   `mediaTexts.ts`, `runtimeWiring.ts` (a fiação de cada regra ao componente, e agora a conta do
   painel do caderno) e `frozen/sanitiseProgress.L1.ts` (o leitor de save que L1 publicou,
   congelado por hash). Da revisão: `readText.ts` (todo arquivo de texto lido por uma suíte chega
-  com final de linha Unix; `test:docs` recusa a leitura crua) e, na raiz, `.gitattributes`.
+  com final de linha Unix; `test:docs` recusa a leitura crua) e, na raiz, `.gitattributes`. Da
+  revisão antes do push: `liveTabs.ts`, um navegador com várias abas do store real sobre um
+  storage só, em que os temporizadores disparam e cada escrita é avisada às outras abas, até o
+  silêncio e com teto (11.13). É a página para perguntar o que duas abas fazem uma à outra; as
+  de `storePage.ts` e de `test-save.ts`, cujo temporizador nunca dispara, continuam sendo as de
+  perguntar o que uma escrita forçada deixa no disco.
 - **O instantâneo do grafo tem três estados** (`scripts/lib/graphSnapshots.ts`, da revisão):
   rascunho de um lote aberto, arquivo de um lote fechado (digest fixado em `FROZEN_SNAPSHOTS`,
   o script recusa regravar sem `--reopen`) e registro, que é com o que o conteúdo é comparado. O
@@ -1682,18 +1718,22 @@ O desenho de cada peça está em `docs/lotes/L2-plano.md` §3; aqui, só o mapa.
 | Caminho | L1 (bytes) | L2 (bytes) | Teto |
 |---|---|---|---|
 | documento | 63.235 | 63.235 | 63.600 |
-| tela de título | 28.353 | 29.598 | 29.800 |
-| jogo | 388.248 | 390.892 | 392.700 |
+| tela de título | 28.353 | 29.884 | 30.050 |
+| jogo | 388.248 | 390.891 | 392.700 |
 
-São 92,83 kB antes do clique (orçamento 250; eram 91,59) e 483,73 kB no total (orçamento 600;
-eram 479,84). O título cresceu 1.245 bytes: 506 nas fatias, com o save (a tabela de campos e a
+São 93,12 kB antes do clique (orçamento 250; eram 91,59) e 484,01 kB no total (orçamento 600;
+eram 479,84). O título cresceu 1.531 bytes: 506 nas fatias, com o save (a tabela de campos e a
 migração moram no store, que a tela de título importa) e com os textos e as regras de estilo da
-planta; e 739 na revisão, quase tudo o store lendo o disco antes de gravar e juntando as duas
+planta; 739 na revisão, quase tudo o store lendo o disco antes de gravar e juntando as duas
 cópias, mais a folha de estilos (a página da planta como coluna, o cadeado, a tela de título
-deitada). O jogo cresceu 2.644, com o modelo da planta, as concessões e os gatilhos. Cada teto
-subiu no commit que precisou, com o motivo em `scripts/lib/ratchets.ts`; o do título foi de
-29.000 a 29.800 na revisão. **O título tem 202 bytes de folga**: L3 escreve texto e sobe o teto
-no commit dele. Kit, texturas e GLBs não mudaram (`npm run bake` não rodou no lote).
+deitada); e 286 na revisão antes do push, todos do store: 128 são a tabela do que cada ajuste
+pode valer, o resto é a leitura dos ajustes e a comparação que deixa duas abas se calarem
+(devolver ao disco o que ele dizia custou 4 bytes, e o acesso seguro ao storage, nenhum). O
+jogo cresceu 2.643, com o modelo da planta, as concessões e os gatilhos. Cada teto subiu no
+commit que precisou, com o motivo em `scripts/lib/ratchets.ts`; o do título foi de 29.000 a
+29.800 na revisão e a 30.050 na revisão antes do push. **O título tem 166 bytes de folga**: L3
+escreve texto e sobe o teto no commit dele. Kit, texturas e GLBs não mudaram (`npm run bake` não
+rodou no lote).
 
 **Pontos de referência.** Nenhuma sala desenha nada diferente, e o `BROWSER_RECORD` continua o
 do lote 1, de propósito: com `CONTENT_LOT` em 3 o portão passa a recusá-lo, e L3, que põe coisas
@@ -1721,7 +1761,8 @@ base e o caderno, que saíram da mesa (com o rádio ainda na base, em
 `?qaSave=production-radio-on-desk`, 55 · 35.554 e 62 · 37.314). Não é regressão, é o estado; quem
 medir o escritório mede no estado da linha de base.
 
-**Portão.** `npm run check` inteiro leva 47 s nesta máquina, com os 33 passos.
+**Portão.** `npm run check` inteiro leva 49 s nesta máquina, com os 33 passos (47 antes dos
+casos de abas vivas de `test:save`, que levam dois deles).
 `test:playthrough`: as 500 noites em 9 s (19.809 apertos, 2.441 deles à toa, 1.064 abas fechadas
 e reabertas; 87 noites acham o detalhe da fotografia do ginásio, que só a sorte acha: 11.12).
 `test:navigation`: 108 casos em 3,3 s; a inundação tem 6.618 lugares e julga 26 alvos.
@@ -1740,7 +1781,8 @@ com `--reopen`: não mudou um byte.
 - conteúdo: 3 salas válidas, 38 dívidas datadas impressas (eram 29; 37 no fecho), o roteiro em
   níveis e a comparação com o instantâneo;
 - lint de texto: 21/21 (novo); catracas: 4/4; fontes: 28; documentação: 25/25 (23 no fecho);
-- capturas: 15/15 (eram 12); saves do corpus: 27/27 (eram 19); save: 39/39 (novo; 30 no fecho);
+- capturas: 15/15 (eram 12); saves do corpus: 27/27 (eram 19); save: 48/48 (novo; 30 no fecho,
+  39 na revisão);
 - energia: 30/30; abertura: 33/33 (eram 31; 32 no fecho); fluxo da abertura: 44/44; rádio: 27/27;
 - gatilhos: 30/30 (novo); trancas: 15/15 (novo); planta: 17/17 (novo; 16 no fecho);
 - colisão: 28/28; kit e posicionamento: 339/339; vitrine corrida: 12/12;
@@ -1764,6 +1806,8 @@ fecho, cada um visto antes do conserto:
 Por mutação, com tudo verde, sobre os registros novos (o arquivo voltava ao original depois de
 cada uma): os dois saves dados como de produção; um campo fora da ordem em que o store grava; a
 porta liberada tirada do registro; `flags` esquecido. As quatro reprovam `test:qa-save`.
+
+O vermelho e as mutações da revisão antes do push estão em 11.13.
 
 ### 11.5 Testes que mudaram de sentido (plano, 6.5)
 
@@ -1832,6 +1876,20 @@ Da revisão (11.12):
   existente pedia isso; o caso novo de duas abas pede o contrário;
 - toda suíte lê texto por `scripts/lib/readText.ts` (25 arquivos, sem mudança de sentido).
 
+Da revisão antes do push (11.13):
+
+- `scripts/test-save.ts`, no caso «two tabs of this build: what each one did reaches the disk, and
+  a tab told of a write shows it»: a última asserção dizia «two tabs with the same save go on
+  writing it at each other», e não provava isso. As duas abas dali estão na mesma sala e têm um
+  temporizador que nunca dispara, então a escrita que uma aba agenda ao ouvir a outra nunca
+  acontecia na suíte. A asserção passou a dizer o que prova («a tab holding the very save that is
+  on the disk wrote it again when it was hidden or closed»), e a pergunta «duas abas se calam?»
+  mora nos casos novos, com abas vivas;
+- o store, para quem escrever teste novo: um ajuste que o disco **não tem** deixou de voltar ao
+  padrão quando a aba lê o disco de novo (a aba segue com o que tinha; ao carregar, continua
+  sendo o padrão); e `settings` que não é um registro (um texto, uma lista) deixou de ser
+  espalhado letra a letra sobre os ajustes. Nenhum caso existente dependia de nenhum dos dois.
+
 ### 11.6 Dívidas datadas (`src/content/knownDebt.ts`, 46 linhas; eram 36)
 
 **Paga:** `i18n-key-unused` de `map.legend` (a legenda da planta ganhou título, em F3, no commit
@@ -1886,10 +1944,15 @@ jogados até o fim pelo robô, em três ordens cada, chegam ao estado máximo se
 
 **O que um rollback perde.** Publicar de novo um build anterior a L2 (o de L1 é `f0fb5a3`,
 Cloudflare `1d3a4554`) não apaga o save de ninguém, mas o leitor de L1 só copia os campos que
-conhece, e na primeira gravação o save sai sem os cinco campos de L2. Tudo o que L1 conhece volta
-igual: peças, detalhes, documentos, fatos, salas visitadas e acesas, trancas abertas, chamadas,
-relógio, lições, rádio no bolso e a memória do Jorge. Ao voltar para L2 (ou seguir para L3), o
-save sem `contentLot` é tratado como de produção:
+conhece, e na primeira gravação o save sai sem os cinco campos de L2 (`contentLot`, `locksSeen`,
+`doorsReleased`, `flags`, `triggersFired`) e sem a marca do jogo (`game`, que só existe em save
+recomeçado; o build de L1 regrava só `settings` e `progress`). O save de L2 é **lido** pelo
+build de L1 sem erro, nos três casos conferidos pelo revisor com o store publicado (um save de
+produção jogado em L2, o do atalho e um jogo recomeçado, com a marca): nada quebra. Tudo o que
+L1 conhece volta igual: peças, detalhes, documentos, fatos, salas visitadas e acesas, trancas
+abertas, chamadas, relógio, lições, rádio no bolso e a memória do Jorge. Ao voltar para L2 (ou
+seguir para L3), o save sem `contentLot` é tratado como de produção, e o save sem marca, como
+um jogo que nunca recomeçou:
 
 - `locksSeen` é refeito a partir de `locksOpened`: a gaveta **tocada e ainda fechada** some da
   planta até o próximo toque;
@@ -1908,8 +1971,28 @@ que o leitor de L1 derruba (os cinco campos de L2) a aba de L2 repõe na escrita
 limite fica registrado: «Novo jogo» feito numa aba de **build anterior à marca** (o de L1, o que
 está no ar hoje) não se distingue do save de uma aba que ainda não jogou, então a aba de L2 que
 ainda tinha o jogo antigo o junta de volta. Entre duas abas deste build em diante, não: a marca
-(`game`, ao lado de `settings` e `progress`) diz que é outro jogo, e o disco vence. A aba que
-adota o jogo novo continua de pé onde estava até recarregar; o save é o do jogo novo, inteiro.
+(`game`, ao lado de `settings` e `progress`) diz que é outro jogo, e o disco vence.
+
+Três limites a mais, registrados na revisão antes do push (11.13), sem conserto neste lote:
+
+- **O espelho do limite acima: «Novo jogo» numa aba de L2 com uma aba de L1 ainda aberta é
+  desfeito.** A aba de L1 não ouve as outras e grava o que tem: o jogo antigo, sem marca (o
+  relógio do escritório faz isso a cada 15 s enquanto a aba está visível). Para as abas de L2
+  isso se lê como uma aba que ainda não jogou, e elas juntam: o jogo apagado volta, com a marca
+  do jogo novo. Dura enquanto a aba de L1 existir, isto é, até ela ser fechada ou recarregada
+  depois do deploy; toda página carregada daí em diante é deste build. Preso, como registro, em
+  `test:save` («"New game" in one live tab…»).
+- **A aba que adota um jogo recomeçado em outra fica na cena do jogo antigo, e não consegue
+  jogar o novo até recarregar.** O save dela é o do jogo novo, inteiro; a sessão não: ela
+  continua de pé onde estava (no saguão, por exemplo), num jogo em que essa sala nunca foi
+  visitada e em que o escritório não tem energia para abrir a porta de volta. Recarregar a põe
+  no escritório, com tudo certo. Levá-la à tela de título sozinha é trabalho de interface (L16).
+- **`lastRoom` no disco é a sala da última aba que gravou, não a de quem andou por último.** Uma
+  aba que acha no disco a escrita de outra no mesmo instante em que tem uma porta para contar
+  não toma a própria sala por novidade: ela vai para o disco com a próxima coisa que a aba
+  gravar. É o preço de as abas se calarem, e nada lê `lastRoom` de volta (toda sessão começa no
+  ponto de partida). Quem um dia fizer «continuar de onde parou» decide antes o que duas abas
+  querem dizer com isso.
 
 **Um rollback para dentro de L2 não perde nada**: de `1ecc2cb` em diante todo build preserva o
 campo que não conhece. Se for preciso voltar atrás, volte para um commit a partir dele; para
@@ -2058,6 +2141,13 @@ Nada disto é de L2, e nada ganhou código de dívida; cada item já tem lote no
   escritório sem o rádio.** «Dentro do alcance» só é perguntado para começar a chamada: com a
   primeira chamada presa atrás do caderno e do teclado, a segunda fala apareceu no saguão. É
   assunto de L3 (M9; D27, o alto-falante da sala).
+- **Carregar um save e juntar duas cópias são quadráticos no número de ids** (da revisão antes
+  do push; do lote, sem conserto). Cada lista é unida item a item, com uma busca na lista por
+  item (`withValue`). Um save de verdade tem de 528 a 1.606 bytes e carrega em menos de 0,01 ms.
+  Um save adulterado com 20.000 ids em duas listas leva 1 s para carregar e 0,45 s a cada junção
+  entre abas; com 60.000, 12,6 s e 4,7 s (o leitor de L1 levava 2 ms: não unia nada). Só chega
+  lá quem edita o próprio `localStorage`, e só trava a própria aba. Fica o registro; um conjunto
+  por lista resolve, no dia em que o jogo tiver listas dessa ordem.
 
 ### 11.10 Lições
 
@@ -2087,6 +2177,20 @@ Nada disto é de L2, e nada ganhou código de dívida; cada item já tem lote no
 - **Uma garantia de save se prova com duas páginas sobre o mesmo storage.** «Aba velha não
   rebaixa» era provado com uma aba que carregava depois, que é o caso fácil; a aba que já estava
   aberta é a que existe em produção depois de um deploy.
+- **E o que duas abas fazem uma à outra só se vê com as duas vivas.** As páginas das suítes têm
+  um temporizador que nunca dispara: servem para perguntar o que uma escrita forçada deixa no
+  disco, e por isso mesmo nunca fizeram a escrita que uma aba agenda ao ouvir a outra. Era essa
+  que não parava. Pergunta de «até quando» (as abas se calam? quantas escritas?) pede
+  `scripts/lib/liveTabs.ts`, com teto de rodadas e de escritas; e uma asserção cuja mensagem
+  promete mais do que a página consegue ver é pior que não ter a asserção.
+- **Uma regra «o da aba» não converge, e alguém tem de saber disso.** Lista por união, relógio
+  pelo maior e memória pela chamada mais recente levam duas abas ao mesmo valor; «cada aba fica
+  com o seu» não leva, e se esse campo entrar na pergunta «tenho algo a gravar?», as duas gravam
+  para sempre. O caso de três abas que diferem em **todo** campo da tabela (`test:save`) reprova
+  o próximo campo assim que entrar sem nome em `withTabsOwn`.
+- **O que vem do disco é de outro build até prova em contrário, ajustes inclusive.** O progresso
+  já era lido campo a campo; os ajustes eram espalhados por cima dos padrões e usados. O que
+  este build não sabe usar não se usa **e não se sobrescreve**: é a escolha de alguém.
 - **Heredoc do shell come barra invertida** nesta máquina: script com regex ou `\n` literal se
   escreve em arquivo, não em heredoc.
 - **Save tirado do navegador se copia do texto, não da memória.** O texto lido da chave foi
@@ -2124,24 +2228,30 @@ Do harness, para quem repetir a rota:
 
 ### 11.11 Próximos passos
 
-1. Fechar L2 de verdade: revisão adversarial (passo 5), revisor, push, deploy e fumaça (8 a 11).
-   Na fumaça, além do novo jogo até o primeiro marco, «Continuar» com um save do lote anterior:
-   `l1-route-end` posto sob a chave `volleyball-museum:v1` na origem de produção, e conferir que
-   nada some e que a planta abre sem tranca listada. Vale abrir a produção em **duas abas** e
-   repetir o que 11.8 fez no servidor local. Anotar a versão Cloudflare em §2 e no topo desta
-   seção, e trocar o «Feito em» da seção L2 do plano pela forma publicada. A revisão adversarial
-   (passo 5) está feita e não mudou o grafo; **se o revisor mudar, regravar o instantâneo**
-   (`npm run graph:snapshot -- --reopen`) e fixar o digest novo no mesmo commit: até a
-   publicação o portão exige o arquivo igual ao conteúdo.
+1. Fechar L2 de verdade: o revisor confere o conserto de 11.13, e depois push, deploy e fumaça
+   (9 a 11). Na fumaça, além do novo jogo até o primeiro marco, «Continuar» com um save do lote
+   anterior: `l1-route-end` posto sob a chave `volleyball-museum:v1` na origem de produção, e
+   conferir que nada some e que a planta abre sem tranca listada. Abrir a produção em **duas
+   abas** e repetir o que 11.8 e 11.13 fizeram no servidor local: «Continuar» numa delas com um
+   save que parou fora do escritório, um espião em `Storage.prototype.setItem` em cada uma, e
+   conferir que a outra não grava nada (a que joga grava o relógio do escritório a cada 15 s, e
+   é só). Quem tiver a página de L1 aberta desde antes do deploy vive os limites de 11.7 até
+   recarregar. Anotar a versão Cloudflare em §2 e no topo desta seção, e trocar o «Feito em» da
+   seção L2 do plano pela forma publicada. As duas revisões não mudaram o grafo; **se mais algum
+   conserto mudar, regravar o instantâneo** (`npm run graph:snapshot -- --reopen`) e fixar o
+   digest novo no mesmo commit: até a publicação o portão exige o arquivo igual ao conteúdo.
 2. **L3 (Posse).** Começa a rota por `l2-shortcut-released` e `l2-new-game-drawer-touched`. Paga
    as cinco dívidas com data dele (11.6). É o primeiro lote com gatilho de verdade: `flags` e
    `triggersFired` deixam de ser vazios, e o aviso de rollback de 11.7 passa a valer para eles.
    Muda o que o escritório desenha: mede os dez pontos e troca o `BROWSER_RECORD`. Escreve texto
-   na tela de título e no jogo: o teto de `title` tem 202 bytes. Fecha na ordem de 11.10, com
+   na tela de título e no jogo: o teto de `title` tem 166 bytes. Fecha na ordem de 11.10, com
    `docs/releases/L3.graph.json`, o digest dele fixado e um save próprio no corpus. Campo novo
-   no save entra na tabela com a coluna `join` (a regra dele entre duas abas). Se `rememberRadioCall`
-   ganhar subcampos (M9), o que a entrada já tinha continua nela. As falas do rádio com `when`
-   por porta liberada podem voltar a dizer um lado; `test:opening` mede.
+   no save entra na tabela com a coluna `join` (a regra dele entre duas abas), e, se a regra for
+   «o da aba», também em `withTabsOwn`; ajuste novo entra em `USABLE_SETTING` com a lista ou a
+   faixa dele (sem a linha não compila), e um idioma novo entra em `LOCALES` junto com o
+   dicionário. Se `rememberRadioCall` ganhar subcampos (M9), o que a entrada já tinha continua
+   nela. As falas do rádio com `when` por porta liberada podem voltar a dizer um lado;
+   `test:opening` mede.
 3. Do dono, ainda: o aparelho real (P0, item 6), que trava o livro-caixa de L6.
 
 ### 11.12 Revisão adversarial (passo 5 de §9.1), 2026-10-05
@@ -2203,3 +2313,91 @@ provado tirando a linha do validador.
 à direita); o digest do instantâneo (`0eae15c3eaba…`, o mesmo do fecho); `SEED=7` com uma noite
 só e `pass` sob o nome das quinhentas (agora: 500 noites, com ou sem a variável); a linha da
 tranca fora da página em 844 × 390 (agora dentro, com 13 px de sobra).
+
+### 11.13 Revisão antes do push (passo 8 de §9.1), 2026-10-05
+
+O revisor não leu só o código: carregou o `src/state/store.ts` de verdade em várias abas sobre um
+`localStorage` em memória, **entregou os eventos `storage` e disparou os temporizadores**, que é
+o que nenhuma suíte fazia. Devolveu um bloqueio, dois defeitos, um defeito anterior ao lote e
+quatro notas. Os quatro primeiros estão consertados num commit local, teste primeiro; as notas
+estão registradas (11.7 e 11.9) e não ganharam código. `SAVE_VERSION` continua 1, o save tem os
+mesmos 19 campos, o instantâneo do grafo não mudou um byte e nenhuma dependência entrou.
+
+| Achado | O que foi feito | Onde está provado |
+|---|---|---|
+| **Bloqueio.** Duas abas deste build em salas diferentes gravavam o save uma em resposta à outra, sem parar. `lastRoom` é o único campo cuja regra entre abas não converge (cada aba fica com a sua sala); a aba comparava o que tinha com o save do disco como ele estava, achava a sala da outra, concluía que tinha novidade, gravava, e acordava a outra para fazer o mesmo. Bastava «Continuar» numa de duas abas com um save que parou fora do escritório. Nada se perdia; o custo era o laço | a aba passa a se comparar com o save do disco **como ela o teria**: na sala dela (`withTabsOwn`, em `progressFields.ts`, ao lado da regra de `lastRoom`). É a regra que o revisor propôs e testou; ficou com nome e na tabela, e não solta no store, porque o próximo campo «o da aba» precisa do mesmo. A regra «a sala é da aba» não mudou | `test:save`, cinco casos com abas vivas (`scripts/lib/liveTabs.ts`): «Continuar» numa de duas (uma escrita, e a outra não responde), duas e três abas em salas diferentes dando duas voltas no prédio (cada porta, uma escrita de quem atravessou), três abas que diferem em **todo** campo da tabela, «Novo jogo» numa aba viva, e 48 noites sorteadas com jogo, ocultação, fechamento, reabertura e «Novo jogo» no meio |
+| Um ajuste cujo valor é um objeto, gravado por um build seguinte, era desfeito pela aba deste build: «mudou nesta aba» era perguntado com `!==`, e toda leitura do disco cria objetos novos | a pergunta é feita por valor (`changedHere`) | `test:save`: uma tecla remapeada na outra aba não volta ao que era, nem quando esta aba grava outra coisa |
+| Os ajustes não eram conferidos, e desde 11.12 são adotados ao vivo de outra aba: um idioma ou um nível de qualidade que este build não tem (`locale: 'es'`) chegava a `DICTIONARIES[locale]`, que não existe, o render lançava e não há barreira de erro: tela em branco no meio do jogo. O mesmo com save adulterado ou lido depois de um rollback | cada ajuste conhecido é conferido a cada leitura (`USABLE_SETTING`: lista para idioma e qualidade, faixa para os números, booleano para as chaves); o que não serve fica como a aba já tinha, ou no padrão ao carregar; chave desconhecida passa adiante. **A mais do que o achado pedia:** o valor que este build não sabe usar não é sobrescrito, volta ao disco como foi achado, até o jogador mudar o ajuste nesta aba. Sem isso a aba deste build desfaria o idioma escolhido no build seguinte na primeira porta atravessada | `test:save`: cada ajuste com cada valor sem serventia (tipo errado, fora da faixa, fora da lista), ao carregar e ao ouvir outra aba; os extremos de cada faixa aceitos; `settings` que não é registro; chave `__proto__`; duas chaves desconhecidas que vão e voltam; duas abas deste build rodando com recuos diferentes sob um disco que diz uma terceira coisa, em silêncio |
+| `typeof localStorage` ficava fora de qualquer `try` (anterior ao lote). Num perfil em que o getter lança (o Chrome com todos os cookies bloqueados responde `SecurityError` à leitura de `window.localStorage`; `typeof` só perdoa nome que não existe), a avaliação do módulo falhava na tela de título: página em branco, embora o comentário ao lado dissesse que o caso estava coberto | um acesso só, `saveStorage`, com o `try` em volta da leitura do nome, usado por toda leitura e escrita do store. O caminho do harness de desenvolvimento (`src/dev/qaSaveBoot.ts`) já lia o nome dentro do `try` dele, e não mudou | `test:save`: com um global cujo getter de `localStorage` lança, o store carrega com os padrões, toda ação da tabela roda, e avisar de escrita, ocultar, «Novo jogo» e fechar não lançam |
+
+**O que saiu diferente do que o revisor propôs.**
+
+- **A base de comparação tem nome e mora na tabela de campos.** A linha candidata trocava só a
+  base, dentro do store. É a mesma conta, em `withTabsOwn`, com o porquê ao lado da regra de
+  `lastRoom`. Foi pesada uma regra mais exata (a sala só deixa de ser novidade se a aba não
+  andou desde a última vez que olhou o disco, como se faz com os ajustes) e recusada: é mais
+  estado para um campo que nada lê. O que a regra escolhida custa está em 11.7 e preso num caso.
+- **Ajuste que o disco não tem.** Antes, ao ler o disco de novo, voltava ao padrão; agora a aba
+  segue com o que tinha (ao carregar, continua sendo o padrão). Um build anterior que regrave os
+  ajustes sem um ajuste novo não zera esse ajuste na aba do build seguinte.
+- **As faixas.** O brilho é 0,5 a 1,8, como o tipo já dizia. Os quatro multiplicadores (andar,
+  olhar, e os dois do toque) não tinham faixa em lugar nenhum, e nenhuma tela os ajusta ainda:
+  ficaram em 0,25 a 4, longe do zero (que para o jogador e divide o passo por nada) e do
+  negativo (que inverte o olhar). A tela de ajustes (A22) pode estreitar.
+
+**Anotado, sem código** (as quatro notas do revisor):
+
+- «Novo jogo» numa aba de L2 com uma aba de L1 ainda aberta é desfeito: 11.7, o espelho do
+  limite que já estava lá, e preso como registro em `test:save`.
+- A aba que adota um jogo recomeçado fica na cena antiga e não joga o novo até recarregar: 11.7.
+- Carga e junção quadráticas em saves adulterados com dezenas de milhares de ids: 11.9, com os
+  tempos.
+- O que um rollback para L1 custa, agora com a marca do jogo entre o que o build de L1 não
+  regrava: 11.7.
+
+**Vermelho primeiro.** Os nove casos novos reprovaram `3af1f0e` antes do conserto, cada um pelo
+motivo dele: os cinco de abas vivas com «the tabs were still writing the save at each other
+after 12 rounds (writes per round: 2, 2, 2, …; the last by playing, waiting, playing, waiting)»
+(três por rodada no caso de três abas); o dos ajustes ao carregar com «locale = "es"»; o dos
+ajustes vindos de outra aba com a aba rodando em `locale: 'es'`, `quality: 'ultra'`,
+`brightness: 2.5`, `moveSpeed: 0`; o da tecla com «this tab took the keys it had loaded for keys
+it had chosen, and wrote them over the new ones»; o do storage com «the store could not be
+evaluated, which is a blank page: SecurityError».
+
+**Por mutação**, com tudo verde, o arquivo voltando ao original depois de cada uma: dezesseis,
+todas acusadas. A base de comparação sem a sala da aba (seis casos reprovam), `withTabsOwn` sem
+carregar nada, a sala carregada também quando o jogo é outro; «mudou aqui» por identidade; todo
+valor de ajuste aceito, e cada linha da tabela afrouxada (idioma, qualidade, o teto do brilho, o
+zero no multiplicador, a chave que aceita qualquer coisa); o padrão no lugar do que a aba tinha;
+o recuo da aba gravado por cima do disco; a escolha feita na aba não gravada; `settings` que não
+é registro espalhado; a base esquecendo o que o disco dizia; o storage nomeado fora do `try`.
+
+**Medido.** `test:save`: 48 casos (eram 39), em 2,8 s (eram 0,9: cada aba viva é uma avaliação
+nova do store). As 48 noites sorteadas, de 120 passos e três abas cada, 19 delas com «Novo jogo»
+no meio: no máximo **duas rodadas e três escritas** até o silêncio, que é o teto preso no caso
+(uma escrita por aba, e a rodada seguinte é as outras ouvindo); o mesmo em 800 noites rodadas
+uma vez à mão. Os roteiros do próprio revisor, repetidos sobre a árvore consertada: «Continuar»
+numa de duas abas, uma escrita (eram duas por rodada, sem fim); três abas em salas diferentes,
+0 de 150 sementes sem silêncio (eram 102 de 150); a tecla remapeada fica; a aba segue em
+`pt-BR`. Bundle: título 29.884 bytes de gzip (eram 29.598; teto de 29.800 para 30.050, com o
+motivo em `scripts/lib/ratchets.ts`), jogo 390.891, documento 63.235.
+
+**No navegador**, com duas abas de verdade no servidor local (`museum-dev`, que serve a árvore de
+trabalho; conferido que entregava o store consertado, sem reiniciar), e um espião em
+`Storage.prototype.setItem` em cada aba:
+
+- `?qaSave=l2-shortcut-released` (parou no saguão), as duas abas na tela de título, «Continuar»
+  numa: **uma** escrita (`lastRoom: 'office'`); a outra aba ouviu um evento e não gravou nada em
+  oito segundos.
+- Da segunda aba, gravado à mão o que um build seguinte gravaria (`locale: 'es'`,
+  `quality: 'ultra'`): a aba que jogava continuou de pé, com o canvas e sem erro no console. Em
+  pouco menos de um minuto ela gravou mais três vezes, a cada 15 s (o relógio do escritório), e
+  o disco continuou dizendo `es` e `ultra`; a outra aba ouviu as quatro escritas e não gravou
+  nenhuma vez.
+- Recarregada com `es` no disco, a tela de título abre em português, com os quatro botões.
+
+**O que não foi conferido.** Um perfil de verdade com os dados do site bloqueados: o caso está
+provado com um global cujo getter lança, que é o que o navegador faz, e não num Chrome
+configurado assim. Duas abas de verdade **as duas dentro do jogo**, atravessando portas: não foi
+tentado (uma das duas fica em segundo plano no painel); isso está nas suítes, com o store real.
+O conserto não foi lido pelo revisor. E nada foi enviado nem publicado.

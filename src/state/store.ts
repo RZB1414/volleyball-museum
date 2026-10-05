@@ -6,7 +6,10 @@
  *
  * Three slices, deliberately kept apart:
  *   - settings   what the player chose. Persisted, and the accessibility
- *                defaults matter more than the graphics ones.
+ *                defaults matter more than the graphics ones. Read from the
+ *                disk with the care the progress is read with: a value this
+ *                build cannot run on is not used, and is not written over
+ *                either (`usableSettings`).
  *   - session    transient per-frame input and UI state. Never persisted.
  *   - progress   what the player has found. Persisted, and able to survive
  *                content ids being renamed, a lot that adds fields and a tab
@@ -28,7 +31,9 @@ import { SPAWN } from '../content/spawn.ts'
 import {
   emptyProgress,
   grantProgress,
+  isRecord,
   joinProgress,
+  withTabsOwn,
   type Progress,
   type ProgressGrant,
   type RadioMemory,
@@ -51,8 +56,11 @@ export {
 } from './progressFields.ts'
 export { migrateProgress } from './saveMigrations.ts'
 
-export type Locale = 'pt-BR' | 'en'
-export type QualityTier = 'low' | 'medium' | 'high'
+// As lists, because a setting read from the disk is checked against them.
+const LOCALES = ['pt-BR', 'en'] as const
+const QUALITY_TIERS = ['low', 'medium', 'high'] as const
+export type Locale = (typeof LOCALES)[number]
+export type QualityTier = (typeof QUALITY_TIERS)[number]
 
 const STORAGE_KEY = 'volleyball-museum:v1'
 
@@ -91,26 +99,107 @@ const DEFAULT_SETTINGS: Settings = {
   subtitles: true,
 }
 
+/** Something read from the disk and not yet judged: a record, and no more is known of it. */
+type Saved = Readonly<Record<string, unknown>>
+
+const oneOf = (allowed: readonly unknown[]) => (value: unknown) => allowed.includes(value)
+const between = (least: number, most: number) => (value: unknown) =>
+  typeof value === 'number' && value >= least && value <= most
+const isSwitch = (value: unknown) => typeof value === 'boolean'
+/**
+ * No screen sets these four yet, so the range is the engine's and nobody's
+ * taste: wide, and clear of the zero that stops the player and divides the
+ * footsteps by nothing, and of the negative that turns the look around.
+ */
+const isMultiplier = between(0.25, 4)
+
+/**
+ * Which values of each setting this build can run on.
+ *
+ * A setting comes off the disk like a field of the save, and what is there
+ * is not always this build's doing: a tab of a later build may have a
+ * language or a quality tier this one has not, and so may a save read after
+ * a rollback, or one edited by hand. A locale with no dictionary throws in
+ * the first component that translates, and nothing catches it: a blank page,
+ * in the middle of a game, the moment the other tab's write is heard.
+ *
+ * Typed by `Settings`, so a setting added without a line here does not
+ * compile.
+ */
+const USABLE_SETTING: { readonly [K in keyof Settings]: (value: unknown) => boolean } = {
+  locale: oneOf(LOCALES),
+  quality: oneOf(QUALITY_TIERS),
+  brightness: between(0.5, 1.8),
+  headBob: isSwitch,
+  fovPush: isSwitch,
+  moveSpeed: isMultiplier,
+  lookSensitivity: isMultiplier,
+  touchLookSensitivity: isMultiplier,
+  touchMoveSensitivity: isMultiplier,
+  subtitles: isSwitch,
+}
+
+/**
+ * The settings a game runs on, out of what the disk says.
+ *
+ * A setting the disk does not have, or has at a value this build cannot use,
+ * is `otherwise`'s: the default as a page loads, and what the tab was already
+ * running on when the disk is read again. A key this build does not know is
+ * carried as it is. Nothing here is thrown away for good: what the disk said
+ * stays in `said`, below, and goes back to it.
+ *
+ * Settings survive a progress that could not be read: they are the player's
+ * preferences, not game state, and losing "I turned head-bob off" is
+ * user-hostile.
+ */
+function usableSettings(said: Saved, otherwise: Settings): Settings {
+  const known = Object.entries(USABLE_SETTING).map(([key, usable]) => [
+    key,
+    Object.hasOwn(said, key) && usable(said[key]) ? said[key] : otherwise[key as keyof Settings],
+  ])
+  // The defaults first for the order alone: it is the order every build has
+  // written the settings in.
+  return { ...DEFAULT_SETTINGS, ...said, ...Object.fromEntries(known) } as Settings
+}
+
 /**
  * What sits under the save key, as this build reads it.
  *
- * `game` tells one playthrough from the next (`newGameMark`); a save that was
- * never started over has none. `beside` is whatever another build wrote next
- * to the settings and the progress: carried along, like a field of the save
- * this build does not know.
+ * `settings` are in the disk's own words, usable here or not; what the game
+ * runs on is `usableSettings` of them. `game` tells one playthrough from the
+ * next (`newGameMark`); a save that was never started over has none. `beside`
+ * is whatever another build wrote next to the settings and the progress:
+ * carried along, like a field of the save this build does not know.
  */
 type Persisted = {
-  readonly settings: Settings
+  readonly settings: Saved
   readonly progress: Progress
   readonly game: string | undefined
-  readonly beside: Readonly<Record<string, unknown>>
+  readonly beside: Saved
+}
+
+/**
+ * The browser's storage, or null where there is none to use.
+ *
+ * Every use of it starts here, because naming it is already a read that can
+ * fail. `typeof` forgives a name that does not exist and nothing else: in a
+ * profile that blocks site data (Chrome with every cookie blocked) the name
+ * exists and its getter throws a SecurityError. This module is evaluated on
+ * the title screen, so asking outside a `try` was a blank page for exactly
+ * the players the `catch` beside it was written for.
+ */
+function saveStorage(): Pick<Storage, 'getItem' | 'setItem'> | null {
+  try {
+    return typeof localStorage === 'undefined' ? null : localStorage
+  } catch {
+    return null
+  }
 }
 
 /** The text under the save key, or null: no storage, nothing saved, or a profile that refuses the read. */
 function storedText(): string | null {
-  if (typeof localStorage === 'undefined') return null
   try {
-    return localStorage.getItem(STORAGE_KEY)
+    return saveStorage()?.getItem(STORAGE_KEY) ?? null
   } catch {
     return null
   }
@@ -121,13 +210,10 @@ function readPersisted(text: string | null): Persisted | null {
   if (!text) return null
   try {
     const parsed: unknown = JSON.parse(text)
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
-    const { settings, progress, game, ...beside } = parsed as Record<string, unknown>
+    if (!isRecord(parsed)) return null
+    const { settings, progress, game, ...beside } = parsed
     return {
-      // Settings survive a progress that could not be read: they are the
-      // player's preferences, not game state, and losing "I turned head-bob
-      // off" is user-hostile.
-      settings: { ...DEFAULT_SETTINGS, ...(settings as Partial<Settings> | undefined) },
+      settings: isRecord(settings) ? settings : {},
       progress: migrateProgress(progress),
       game: typeof game === 'string' ? game : undefined,
       beside,
@@ -157,11 +243,12 @@ const newGameMark = () => `${Date.now().toString(36)}-${Math.random().toString(3
 
 const initialText = storedText()
 const initial: Persisted = readPersisted(initialText) ?? {
-  settings: DEFAULT_SETTINGS,
+  settings: {},
   progress: emptyProgress(),
   game: undefined,
   beside: {},
 }
+const initialSettings = usableSettings(initial.settings, DEFAULT_SETTINGS)
 
 export type DirectionalInput = { x: number; y: number }
 export type TransitionDoorBlock = 'other-side' | 'unpowered'
@@ -405,17 +492,44 @@ export const useMuseum = create<MuseumStore>((set, get) => {
    *
    *   text      what was under the key: another text there now means another
    *             tab has written since;
-   *   settings  the settings in it: the ones that differ in this tab are the
-   *             ones this tab changed;
-   *   snapshot  the save in it as this build holds it. A tab whose own
-   *             snapshot is the same has nothing new and writes nothing: a
-   *             forced flush on every tab switch must not let a tab that
-   *             changed nothing write at all.
+   *   settings  the settings this tab ran on when it looked: the ones that
+   *             differ in it now are the ones this tab changed;
+   *   said      the settings in the disk's own words, which is how the ones
+   *             this tab did not change go back to it;
+   *   snapshot  what this tab would write if it had nothing to add. A tab
+   *             whose own snapshot is the same writes nothing: a forced flush
+   *             on every tab switch must not let a tab that changed nothing
+   *             write at all.
    */
-  let disk = { text: initialText, settings: initial.settings, snapshot: serialise(initial) }
-  const snapshotNow = () => {
+  let disk = {
+    text: initialText,
+    settings: initialSettings,
+    said: initial.settings,
+    snapshot: serialise({ ...initial, settings: { ...initialSettings, ...initial.settings } }),
+  }
+  const differs = (first: unknown, second: unknown) => JSON.stringify(first) !== JSON.stringify(second)
+  /**
+   * The settings this tab changed since it last looked at the disk.
+   *
+   * By value. Every read of the disk makes its objects anew, so asking `!==`
+   * of a setting that is not a plain value (one of a later build: this one
+   * has none) made it "changed here" from the first write the tab heard of,
+   * and the tab wrote its old copy over the next change to it.
+   */
+  const changedHere = (settings: Settings) =>
+    Object.fromEntries(Object.entries(settings).filter(([key, value]) => differs(value, (disk.settings as Saved)[key])))
+  /**
+   * The settings as this tab writes them: what it runs on, in the disk's own
+   * words wherever it changed nothing. A value this build cannot use is some
+   * other build's choice, and writing this tab's fallback over it would undo
+   * that choice in the tab that made it.
+   */
+  const settingsToWrite = (settings: Settings): Saved => ({ ...settings, ...disk.said, ...changedHere(settings) })
+  /** What this tab holds now, in the shape `disk` keeps what it last saw. */
+  const heldNow = () => {
     const { settings, progress } = get()
-    return serialise({ settings, progress, game, beside })
+    const said = settingsToWrite(settings)
+    return { settings, said, snapshot: serialise({ settings: said, progress, game, beside }) }
   }
 
   /**
@@ -429,12 +543,19 @@ export const useMuseum = create<MuseumStore>((set, get) => {
    *
    * So the disk is read before every write, and whenever the browser says
    * the key changed. What is there is joined with what this tab holds
-   * (`joinProgress`); the settings are the disk's, with the ones this tab
-   * changed on top; the triggers settle on the result. One exception: a save
-   * marked as another game was started over in another tab, and joining the
-   * erased game to it would bring the erased game back. That one is taken as
-   * it is, and what this tab still held of the old game goes with the old
-   * game.
+   * (`joinProgress`); the settings are the disk's where this build can use
+   * them, with the ones this tab changed on top; the triggers settle on the
+   * result. One exception: a save marked as another game was started over in
+   * another tab, and joining the erased game to it would bring the erased
+   * game back. That one is taken as it is, and what this tab still held of
+   * the old game goes with the old game.
+   *
+   * What the tab then compares itself with, to know whether it has anything
+   * to write, is the disk's save as IT would hold it with nothing to add:
+   * standing in its own room (`withTabsOwn`) and with its own fallback for a
+   * setting it cannot use. Compared with the disk's save as it is, a tab that
+   * differs from it only in those always had something to write, and so had
+   * the other tab, in answer, for ever.
    */
   const takeInOtherTabs = () => {
     try {
@@ -450,18 +571,24 @@ export const useMuseum = create<MuseumStore>((set, get) => {
       const anotherGame = theirs.game !== undefined && theirs.game !== game
       const joined = anotherGame ? theirs.progress : joinProgress(theirs.progress, mine.progress)
       const progress = progressRules()?.settle(joined) ?? joined
-      const seenOnDisk: Readonly<Record<string, unknown>> = disk.settings
-      const changedHere = Object.fromEntries(
-        Object.entries(mine.settings).filter(([key, value]) => value !== seenOnDisk[key]),
-      )
-      const settings = { ...theirs.settings, ...changedHere } as Settings
+      // What the disk cannot tell this build, the tab goes on with as it was.
+      const seen = usableSettings(theirs.settings, disk.settings)
+      const settings = { ...seen, ...changedHere(mine.settings) } as Settings
 
       game = theirs.game ?? game
       beside = theirs.beside
-      disk = { text, settings: theirs.settings, snapshot: serialise(theirs) }
+      disk = {
+        text,
+        settings: seen,
+        said: theirs.settings,
+        snapshot: serialise({
+          ...theirs,
+          settings: { ...seen, ...theirs.settings },
+          progress: anotherGame ? theirs.progress : withTabsOwn(theirs.progress, mine.progress),
+        }),
+      }
       // Only what differs is set: a write that brought this tab nothing new
       // wakes nobody.
-      const differs = (first: unknown, second: unknown) => JSON.stringify(first) !== JSON.stringify(second)
       const taken: Partial<MuseumStore> = {}
       if (differs(progress, mine.progress)) taken.progress = progress
       if (differs(settings, mine.settings)) taken.settings = settings
@@ -476,13 +603,14 @@ export const useMuseum = create<MuseumStore>((set, get) => {
    * erase whatever the disk holds.
    */
   const writePersisted = (join = true) => {
-    if (typeof localStorage === 'undefined') return
+    const storage = saveStorage()
+    if (!storage) return
     if (join) takeInOtherTabs()
     try {
-      const snapshot = snapshotNow()
-      if (snapshot === disk.snapshot) return
-      localStorage.setItem(STORAGE_KEY, snapshot)
-      disk = { text: snapshot, settings: get().settings, snapshot }
+      const held = heldNow()
+      if (held.snapshot === disk.snapshot) return
+      storage.setItem(STORAGE_KEY, held.snapshot)
+      disk = { text: held.snapshot, ...held }
     } catch {
       // Private browsing, quota, or a locked-down profile. Losing the save is
       // acceptable; throwing during gameplay is not.
@@ -580,7 +708,7 @@ export const useMuseum = create<MuseumStore>((set, get) => {
     // What this tab holds that the disk now lacks goes back like any other
     // change: a tab of an earlier build rewrites the save from the fields it
     // knows.
-    if (snapshotNow() !== disk.snapshot) persist()
+    if (heldNow().snapshot !== disk.snapshot) persist()
   }
   const storageTarget = typeof window === 'undefined' ? null : window
   storageTarget?.addEventListener('storage', onStorage)
@@ -606,14 +734,14 @@ export const useMuseum = create<MuseumStore>((set, get) => {
 
   // A store created after the content registered (a hot reload of this
   // module, the playthrough robot) has nobody to wait for: what it loaded is
-  // settled here. `lastWrittenSnapshot` stays what was loaded, so whatever
+  // settled here. `disk.snapshot` stays what was loaded, so whatever
   // settling added is something new to write, and is scheduled like any
   // other change.
   const loaded = progressRules()?.settle(initial.progress) ?? initial.progress
   if (loaded !== initial.progress) persist()
 
   return {
-    settings: initial.settings,
+    settings: initialSettings,
     setSetting: (key, value) => {
       set((state) => ({ settings: { ...state.settings, [key]: value } }))
       persist()

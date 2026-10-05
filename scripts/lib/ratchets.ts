@@ -278,10 +278,25 @@ export const BUNDLE_BUDGETS = {
  *     a second question mark, and the title's own column on a phone held
  *     sideways. The game grew 131 bytes (390,892, inside its ceiling) and the
  *     document none (63,235).
+ *
+ * Raised by the review before the push of L2:
+ *   - `title` +250 bytes, on 29,884 measured (it was 29,800 on 29,598). The
+ *     store again, all 286 bytes of it, for three things it could not do.
+ *     Two tabs standing in two rooms wrote the save at each other for as long
+ *     as both were open; they stop because the store now knows what is each
+ *     tab's own (`withTabsOwn`). A setting was used as the disk had it, so a
+ *     language or a quality tier of a later build, chosen in its tab, was a
+ *     blank page in a running tab of this one; each setting is now checked
+ *     against what this build can run on (the table of the ten is 128 of the
+ *     bytes, the largest single piece), and what it cannot use goes back to
+ *     the disk as it was found, which cost 4. And the storage was named
+ *     outside any `try`, which a profile that blocks site data answers with
+ *     an exception: one accessor names it now, for no bytes at all. The game
+ *     and the document did not move (390,891 and 63,235).
  */
 export const BUNDLE_PATH_CEILINGS = {
   document: 63_600,
-  title: 29_800,
+  title: 30_050,
   game: 392_700,
 } as const
 

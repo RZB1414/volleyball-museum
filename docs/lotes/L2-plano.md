@@ -2309,3 +2309,81 @@ validador já existia; com ela tirada os dois casos novos reprovam.
 §11.8); a fala nova do Jorge não foi ouvida nem lida na tela, só nas suítes; nenhum aparelho
 real. O revisor, o push, o deploy e a fumaça (passos 8 a 11) e o playtest (13) continuam por
 fazer.
+
+### Revisão antes do push (2026-10-05; um commit local, sem push)
+
+O passo 8 de §9.1. O revisor rodou o store de verdade em várias abas sobre um `localStorage` em
+memória, entregando os eventos `storage` e disparando os temporizadores, e devolveu um bloqueio,
+dois defeitos, um defeito anterior ao lote e quatro notas. A tabela achado por achado, o vermelho
+de cada caso, as dezesseis mutações e o que o navegador mostrou estão em `docs/HANDOFF.md`
+§11.13; aqui fica o que muda o que este plano e a seção acima diziam.
+
+**«`lastRoom` é o da aba» tinha uma consequência que a seção acima não viu.** É a única regra da
+coluna `join` que não leva duas abas ao mesmo valor: cada uma fica com a sua sala, e o disco, com
+a de quem gravou por último. A aba decidia se tinha algo a gravar comparando o que tinha com o
+save do disco **como ele estava**; duas abas em salas diferentes sempre tinham, e cada escrita
+de uma acordava a outra para gravar de volta, enquanto as duas ficassem abertas. Bastava
+«Continuar» numa de duas abas, com um save que parou fora do escritório.
+
+- **A regra.** Ao ler o disco, a aba passa a guardar, como base da comparação, o save do disco
+  como **ela** o teria sem nada a acrescentar: na sala dela. `withTabsOwn`, em
+  `src/state/progressFields.ts`, ao lado da regra de `lastRoom`. É a regra que o revisor propôs
+  e testou; a regra «a sala é da aba» não mudou, nem `joinProgress`.
+- **Quando o jogo no disco é outro** (a marca), nada disso vale: o save do disco é tomado como
+  está, sala inclusive, e a base é ele.
+- **O que custa, registrado e preso num caso:** a aba que acha no disco a escrita de outra no
+  mesmo instante em que tem uma porta para contar não toma a própria sala por novidade; a sala
+  vai para o disco com a próxima coisa que ela gravar. Nada lê `lastRoom` de volta.
+- **Para os próximos lotes:** campo novo cuja regra entre abas seja «o da aba» entra em
+  `withTabsOwn`. O caso de três abas que diferem em todo campo da tabela reprova quem esquecer.
+
+**Os ajustes passam a ser lidos com o cuidado do progresso** (substitui «os ajustes são os do
+disco, mais as chaves que esta aba mudou», da seção acima):
+
+- cada ajuste conhecido é conferido a cada leitura do disco, na carga e ao ouvir outra aba
+  (`USABLE_SETTING`, em `src/state/store.ts`): idioma e qualidade contra a lista deste build,
+  brilho em 0,5 a 1,8, os quatro multiplicadores em 0,25 a 4, as três chaves como booleano. O
+  que não serve não é usado: vale o padrão ao carregar, e o que a aba já tinha ao ouvir outra;
+- **o que o disco dizia volta para ele.** A aba guarda os ajustes nas palavras do disco (`said`)
+  e os regrava como achou, a menos que o jogador mude o ajuste nela. Um valor que este build não
+  sabe usar é a escolha feita num build seguinte, não lixo deste;
+- «mudou nesta aba» é perguntado por valor, não por identidade: um ajuste que seja um objeto
+  (hoje nenhum; um build seguinte pode ter) era dado como mudado aqui desde a primeira leitura
+  do disco, e a cópia antiga da aba ia por cima da mudança seguinte;
+- chave que este build não conhece passa adiante, como campo desconhecido do save; `settings`
+  que não é um registro não é ajuste nenhum;
+- ajuste que o disco **não tem** deixou de voltar ao padrão quando a aba lê o disco de novo.
+
+**O storage.** Todo acesso passa por `saveStorage`, que nomeia o `localStorage` dentro de um
+`try`: num perfil que bloqueia dados do site, ler o nome já lança, e o módulo do store é avaliado
+na tela de título. Defeito anterior ao lote.
+
+**Uma biblioteca de teste nova:** `scripts/lib/liveTabs.ts`, um navegador com várias abas do
+store real sobre um storage só. Os temporizadores que o store pede disparam, e cada escrita é
+avisada às outras abas (só quando o texto muda, como num navegador), em rodadas, até o silêncio
+e com teto. É a página para toda pergunta do tipo «até quando», e `test:save` (8.1) é a suíte
+que a usa; as páginas de temporizador parado continuam sendo as de perguntar o que uma escrita
+forçada deixa no disco.
+
+**Testes que mudaram de sentido** (plano, 6.5): em `test:save`, a última asserção do caso «two
+tabs of this build…» dizia «two tabs with the same save go on writing it at each other» e não
+provava isso (as duas abas estão na mesma sala, e o temporizador delas nunca dispara). Passou a
+dizer o que prova; a pergunta mora nos casos de abas vivas.
+
+**Vermelho primeiro.** Os nove casos novos reprovaram a árvore de `3af1f0e`: os cinco de abas
+vivas («the tabs were still writing the save at each other after 12 rounds»), os dois dos
+ajustes («locale = "es"», e a aba rodando em `es`, `ultra`, brilho 2,5 e velocidade 0), o da
+tecla remapeada (a aba gravou a cópia antiga por cima) e o do storage («the store could not be
+evaluated, which is a blank page: SecurityError»).
+
+**Medições.** `test:save` 48 casos (eram 39), em 2,8 s (eram 0,9). Nas 48 noites sorteadas do
+portão, e em 800 rodadas uma vez à mão, três abas se calam em no máximo duas rodadas e três
+escritas. Bundle: título 29.884 bytes de gzip (eram 29.598; teto de 29.800 para 30.050, com o
+motivo em `scripts/lib/ratchets.ts`), jogo 390.891, documento 63.235.
+`docs/releases/L2.graph.json` não mudou (o conserto não toca o conteúdo nem os campos do save).
+
+**O que não foi feito.** As quatro notas do revisor não ganharam código e estão em HANDOFF §11.7
+e §11.9: «Novo jogo» desfeito por uma aba de L1 ainda aberta; a aba que adota um jogo recomeçado
+e fica na cena antiga até recarregar; carga e junção quadráticas em saves adulterados; e o que
+um rollback para L1 deixa de regravar. O push, o deploy e a fumaça (passos 9 a 11) e o playtest
+(13) continuam por fazer, e o conserto ainda não foi lido pelo revisor.

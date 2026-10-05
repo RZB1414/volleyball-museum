@@ -20,6 +20,11 @@
  * The store is loaded the way a browser loads it, as in `test-qa-save.ts`:
  * the save is under the key before the module is first evaluated, and what
  * comes back is read from the storage after the page is left.
+ *
+ * Those pages have a timer that never fires. What two tabs do to each other
+ * once they are left alone is asked of tabs that are alive (`lib/liveTabs.ts`,
+ * from "Tabs that are alive" on): the writes the store schedules are made and
+ * every write is told to the other tabs, until silence and under a ceiling.
  */
 
 import assert from 'node:assert/strict'
@@ -28,8 +33,13 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
 
+import { openBrowser, type LiveBrowser, type LiveTab } from './lib/liveTabs.ts'
 import { dynamicSpecifiers, staticImportGraph, staticSpecifiers } from './lib/staticImports.ts'
 import { STORE_ACTIONS as ACTIONS, STORE_ACTIONS_LEAVE as ACTED } from './lib/storeActions.ts'
+// For its dice alone. The module also puts a storage of its own on the global
+// object as it is imported; the one this suite uses is put there below, after
+// every import has run, and is the one that stays.
+import { seeded } from './lib/storePage.ts'
 import { readText } from './lib/readText.ts'
 
 // ---------------------------------------------------------------------------
@@ -1129,14 +1139,18 @@ await test('two tabs of this build: what each one did reaches the disk, and a ta
   assert.ok((disk.factsKnown as string[]).includes('first-rulebook'))
   assert.equal(savedWhole().settings?.brightness, 0.8, 'the first tab put the brightness back')
   assert.equal(savedWhole().settings?.headBob, true)
-  // Both settle on the same save, and then neither has anything to write.
+  // Both hold the same save now and stand in the same room: made to write
+  // (hidden, then closed), neither does. That is all these two pages can
+  // say. Their timer never fires, so the write a tab schedules as it hears of
+  // another tab's is never made here, and whether two tabs fall silent when
+  // left alone is asked further down, of tabs that are alive.
   second.toldOfAWrite()
   const settled = first.savedText()
   for (const tab of [first, second]) {
     tab.hide()
     tab.leave()
   }
-  assert.equal(first.savedText(), settled, 'two tabs with the same save go on writing it at each other')
+  assert.equal(first.savedText(), settled, 'a tab holding the very save that is on the disk wrote it again when it was hidden or closed')
   assert.deepEqual(throughJson(second.progress()), disk)
 
   // The whole storage wiped (the browser's "clear site data" names no key):
@@ -1324,6 +1338,711 @@ await test('joining two copies of a save only adds, field by field, and joining 
     assert.equal(Object.getPrototypeOf(result), Object.prototype)
     assert.deepEqual(Object.getOwnPropertyDescriptor(result, '__proto__')?.value, { polluted: true })
     assert.equal(({} as Raw).polluted, undefined)
+  }
+})
+
+// ---------------------------------------------------------------------------
+// Tabs that are alive
+// ---------------------------------------------------------------------------
+
+// Every tab above has a timer that never fires, and hears of another tab's
+// write only when its case says so. Nothing there could see what two tabs do
+// to each other once they are left alone, and what they did was write the
+// save at each other for as long as both were open. Where a tab's player
+// stands is that tab's to say (`lastRoom`), so two tabs in two rooms never
+// hold the same save: each took the other's room on the disk for something
+// it had not written yet, wrote its own, and woke the other to do the same.
+// From here on the tabs are the ones of `lib/liveTabs.ts`: a timer the store
+// asked for fires, and a write is told to every other tab, round after round
+// until nobody has anything left to do.
+
+type StoreState = ReturnType<StoreModule['useMuseum']['getState']>
+
+/**
+ * How many rounds "until silence" may take before a case gives up. The
+ * longest any of them needs is measured in the seeded run below, and held
+ * there to a ceiling of its own.
+ */
+const ROUNDS = 12
+
+/**
+ * What a tab says of itself, and no other tab has to agree with. By name: a
+ * second field like it is a decision somebody makes, and the store has to be
+ * told of it (`withTabsOwn`, in `progressFields.ts`), or two tabs holding
+ * different values of it never fall silent.
+ */
+const EACH_TABS_OWN: readonly Field[] = ['lastRoom']
+const butEachTabsOwn = (progress: Raw): Raw => ({ ...progress, ...Object.fromEntries(EACH_TABS_OWN.map((field) => [field, null])) })
+
+/** The tabs are left alone until nobody has anything to do. Hands back the writes of each round. */
+function leftAlone(browser: LiveBrowser, when: string): number[] {
+  const { quiet, rounds } = browser.settle(ROUNDS)
+  const lastWriters = browser.writes.slice(-4).map((write) => write.by).join(', ')
+  assert.ok(
+    quiet,
+    `${when}: the tabs were still writing the save at each other after ${ROUNDS} rounds ` +
+      `(writes per round: ${rounds.join(', ')}; the last by ${lastWriters})`,
+  )
+  return rounds
+}
+
+/**
+ * The tabs have fallen silent: they and the disk hold one save, but for
+ * where each of them stands, and none has anything left to write.
+ */
+function agreed(browser: LiveBrowser, when: string) {
+  const disk = browser.disk()
+  assert.ok(disk?.progress && disk.settings, `${when}: there is no save on the disk`)
+  for (const tab of browser.tabs) {
+    assert.deepEqual(
+      butEachTabsOwn(throughJson(tab.progress())),
+      butEachTabsOwn(disk.progress),
+      `${when}: "${tab.name}" and the disk hold different saves`,
+    )
+    assert.deepEqual(throughJson(tab.state().settings), disk.settings, `${when}: "${tab.name}" and the disk hold different settings`)
+  }
+  // "A tab with nothing new writes nothing", asked the hard way: every one of
+  // them is made to write, which is what switching between tabs does.
+  const written = browser.writes.length
+  for (const tab of browser.tabs) {
+    tab.hide()
+    tab.show()
+  }
+  assert.equal(browser.writes.length, written, `${when}: a tab with nothing new wrote as it was hidden`)
+  assert.deepEqual(browser.settle(ROUNDS), { quiet: true, rounds: [] }, `${when}: hiding the tabs gave one of them something to do`)
+}
+
+await test('two tabs on the title screen and "Continue" in one: one write, and the other has nothing to answer', async () => {
+  // "Continue" starts every session in the office, and this player stopped
+  // in the atrium: from the first click the two tabs stand in different
+  // rooms, without anybody having walked anywhere.
+  const save = SAVE_FIXTURES['l2-shortcut-released'].save
+  assert.notEqual(save.progress.lastRoom, SPAWN.room, 'the case needs a save whose player stopped outside the room every session starts in')
+  for (const kind of ['timeout', 'idle'] as const) {
+    const browser = openBrowser(save)
+    try {
+      const playing = await browser.open('playing', kind)
+      const waiting = await browser.open('waiting', kind)
+      assert.deepEqual(leftAlone(browser, 'two tabs that only loaded the save'), [], 'a tab that only loaded the save wrote it')
+
+      playing.act((state) => state.start())
+      leftAlone(browser, `"Continue" in one of two tabs (a page with ${kind})`)
+      assert.deepEqual(
+        browser.writes.map((write) => write.by),
+        ['playing'],
+        'the tab left on the title screen answered a write that brought it nothing',
+      )
+      assert.equal(playing.progress().lastRoom, SPAWN.room)
+      assert.equal(waiting.progress().lastRoom, save.progress.lastRoom, "where a tab stands is still that tab's to say")
+      agreed(browser, 'after "Continue"')
+    } finally {
+      browser.close()
+    }
+  }
+})
+
+await test('two tabs, and three, each in a room of its own: a door crossed is one write, and nobody answers it', async () => {
+  const ROOMS = ['office', 'atrium', 'holyoke']
+  // A player who has been in all three rooms: crossing a door adds no room
+  // to the save, it only moves `lastRoom`.
+  const save = SAVE_FIXTURES['l2-shortcut-released'].save
+  assert.deepEqual([...save.progress.roomsVisited].sort(), [...ROOMS].sort(), 'the case needs a save that has been everywhere')
+
+  for (const count of [2, 3]) {
+    const browser = openBrowser(save)
+    try {
+      const tabs: LiveTab[] = []
+      for (let index = 0; index < count; index += 1) {
+        tabs.push(await browser.open(`the tab in the ${ROOMS[index]}`, index % 2 === 0 ? 'timeout' : 'idle'))
+      }
+      const standing = ROOMS.slice(0, count)
+      tabs.forEach((tab, index) => {
+        tab.act((state) => state.start())
+        tab.act((state) => state.setCurrentRoom(ROOMS[index]))
+      })
+      const check = (when: string) => {
+        tabs.forEach((tab, index) => assert.equal(tab.progress().lastRoom, standing[index], `${when}: "${tab.name}" was moved by another tab`))
+        agreed(browser, when)
+      }
+      leftAlone(browser, `${count} tabs, each walked to a room of its own`)
+      assert.ok(browser.writes.length <= count, `${count} tabs took ${browser.writes.length} writes to stand in their rooms: more than one each`)
+      check(`${count} tabs in ${count} rooms`)
+
+      // Each walks on in turn, one door at a time, twice round the building.
+      for (let step = 0; step < count * 6; step += 1) {
+        const index = step % count
+        const next = ROOMS[(ROOMS.indexOf(standing[index]) + 1) % ROOMS.length]
+        const written = browser.writes.length
+        tabs[index].act((state) => state.setCurrentRoom(next))
+        standing[index] = next
+        leftAlone(browser, `${count} tabs, and "${tabs[index].name}" walked into the ${next}`)
+        assert.deepEqual(
+          browser.writes.slice(written).map((write) => write.by),
+          [tabs[index].name],
+          `${count} tabs: a door crossed is one write, by the tab that crossed it`,
+        )
+        assert.equal(browser.disk()?.progress?.lastRoom, next)
+      }
+      check(`${count} tabs, twice round the building`)
+
+      // On record, what this costs. A tab that finds another tab's write on
+      // the disk in the same breath as it has a door to report has, by the
+      // rule that keeps the tabs silent, nothing new: its room goes to the
+      // disk with the next thing it does, not by itself. Nothing reads
+      // `lastRoom` back (every session starts at the spawn), and the other
+      // choice is the two tabs writing for ever.
+      const [reader, walker] = tabs
+      const written = browser.writes.length
+      reader.act((state) => state.recordHint('a-lesson-read-in-one-tab'))
+      reader.runTimers()
+      const next = ROOMS[(ROOMS.indexOf(standing[1]) + 1) % ROOMS.length]
+      walker.act((state) => state.setCurrentRoom(next))
+      standing[1] = next
+      // The walker's write comes due before the browser has told it of the reader's.
+      walker.runTimers()
+      assert.deepEqual(browser.writes.slice(written).map((write) => write.by), [reader.name])
+      assert.equal(browser.disk()?.progress?.lastRoom, standing[0])
+      assert.ok(walker.progress().hintsShown.includes('a-lesson-read-in-one-tab'), 'the walker did not take in what it found on the disk')
+      walker.act((state) => state.recordHint('a-lesson-read-in-the-other'))
+      leftAlone(browser, 'the walker did something else')
+      assert.equal(browser.disk()?.progress?.lastRoom, next, "the walker's room did not go with its next write")
+      check(`${count} tabs, after a door and a write crossed`)
+    } finally {
+      browser.close()
+    }
+  }
+})
+
+/**
+ * Another valid value for every field of the table, by the kind of its
+ * sample: what a tab that played somewhere else would hold. A field of a new
+ * kind has no rule here, and the case below says so before it proves
+ * anything.
+ */
+function elsewhere(tab: number): Raw {
+  const other = (field: Field): unknown => {
+    const sample = sampleOf(field)
+    if (Array.isArray(sample)) return [`${field}-of-tab-${tab}`, sample[0]]
+    if (typeof sample === 'number') return sample + tab
+    if (typeof sample === 'string') return `room-of-tab-${tab}`
+    // A record. Every entry of the sample has moved on a little (a clock that
+    // ran longer, a porter called later), and one more is this tab's alone.
+    const moved = Object.entries(sample as Record<string, unknown>).map(([key, value]): [string, unknown] => [
+      key,
+      typeof value === 'number' ? value + tab : { ...(value as Raw), calls: 9 + tab, lastCallAt: (value as { lastCallAt: number }).lastCallAt + tab },
+    ])
+    return Object.fromEntries([...moved, [`${field}-of-tab-${tab}`, moved[0][1]]])
+  }
+  return { version: 1, ...Object.fromEntries(fields.map((field) => [field, other(field)])), nightsWorked: 3 + tab }
+}
+
+await test('every field of the table, different in each of three tabs: they fall silent holding all of it, and differ only in where each stands', async () => {
+  // The two cases above are the field that bit. This one is every field the
+  // table has, and will have: one whose rule for two copies does not bring
+  // two tabs to the same value, and which the store does not know to be each
+  // tab's own, keeps them writing here.
+  const held = [{ ...SAMPLE_SAVE, ...UNKNOWN }, elsewhere(1), elsewhere(2)]
+  const browser = openBrowser(saveOf(held[0]))
+  try {
+    // Each tab loads what a later moment left on the disk, and the ones
+    // already open have not been told yet: a tab in the background hears late.
+    const tabs = [await browser.open('first')]
+    browser.anotherBuildWrites(saveOf(held[1]))
+    tabs.push(await browser.open('second', 'idle'))
+    browser.anotherBuildWrites(saveOf(held[2]))
+    tabs.push(await browser.open('third'))
+    const valuesOf = (field: Field) => new Set(tabs.map((tab) => JSON.stringify(tab.progress()[field])))
+    for (const field of fields) {
+      assert.equal(valuesOf(field).size, 3, `${field}: the three tabs do not start with three values: give "elsewhere" a value for a field of this kind`)
+    }
+
+    const rounds = leftAlone(browser, 'three tabs holding three saves')
+    assert.ok(browser.writes.length <= tabs.length, `three tabs took ${browser.writes.length} writes to hold one save (per round: ${rounds.join(', ')})`)
+    agreed(browser, 'three tabs holding three saves')
+
+    const disk = browser.disk()!.progress!
+    const knownOf = (save: Raw): Raw => Object.fromEntries(fields.map((field) => [field, save[field]]))
+    held.forEach((save, index) => assert.deepEqual(shrunk(knownOf(save), disk), [], `what "${tabs[index].name}" held is not all on the disk`))
+    assert.equal(disk.contentLot, SAMPLES.contentLot + 2, 'the lot of a save is the highest any tab says')
+    assert.deepEqual(disk.clockSeconds, { 'office-clock': 614, 'atrium-clock': 2.5, 'clockSeconds-of-tab-1': 613, 'clockSeconds-of-tab-2': 614 })
+    assert.equal((disk.radioMemory as Record<string, Raw>)['office-radio'].calls, 11, 'the porter remembers the call that came last')
+    // What this build does not know is the disk's, and the first tab's where
+    // the disk had none: rule 1 holds with three tabs alive as with one.
+    for (const field of ['termsSigned', 'socketsFilled', 'wiresJoined'] as const) {
+      assert.deepEqual(disk[field], UNKNOWN[field], `${field}: a field no tab knows went missing between them`)
+    }
+    assert.equal(disk.nightsWorked, 5, 'a field this build does not know is as the last tab to load found it')
+
+    // What the tabs still differ in, by name; and each kept its own.
+    assert.deepEqual(fields.filter((field) => valuesOf(field).size > 1), [...EACH_TABS_OWN])
+    for (const field of EACH_TABS_OWN) {
+      tabs.forEach((tab, index) => assert.deepEqual(tab.progress()[field], held[index][field], `"${tab.name}" lost its own ${field}`))
+    }
+  } finally {
+    browser.close()
+  }
+})
+
+await test('"New game" in one live tab: the other takes the new game and falls silent, and what that leaves is on record', async () => {
+  const night = SAVE_FIXTURES['production-drawer-open'].save
+  const browser = openBrowser(night)
+  try {
+    const restarting = await browser.open('restarting')
+    const playing = await browser.open('playing', 'idle')
+    playing.act((state) => state.start())
+    playing.act((state) => state.setCurrentRoom('atrium'))
+    leftAlone(browser, 'one tab on the title screen and one in the atrium')
+
+    const written = browser.writes.length
+    restarting.act((state) => state.resetProgress())
+    leftAlone(browser, '"New game" in the tab on the title screen')
+    assert.deepEqual(
+      browser.writes.slice(written).map((write) => write.by),
+      ['restarting'],
+      'the tab that takes the new game as it is has nothing to answer, not even where it stands',
+    )
+    assert.deepEqual(playing.progress(), emptyProgress(), 'the tab that was playing still holds some of the erased game')
+    agreed(browser, 'after "New game"')
+    const mark = browser.disk()!.game
+    assert.ok(typeof mark === 'string' && mark.length > 0)
+
+    // On record: the tab that took the new game is still standing where it
+    // stood in the old one, in an atrium the new game has never entered and
+    // behind an office door that game has no power to open. Its save is
+    // right and its scene is not, until the page is loaded again. Taking it
+    // back to the title screen is interface work (L16).
+    assert.equal(playing.state().started, true)
+    assert.equal(playing.state().currentRoom, 'atrium')
+    assert.deepEqual(playing.progress().roomsVisited, [])
+    assert.deepEqual(playing.progress().roomsPowered, [])
+    // What it does next goes into the new game, and the old one stays erased.
+    playing.act((state) => state.recordHint('torch-used'))
+    leftAlone(browser, 'the tab that took the new game plays on')
+    assert.deepEqual(browser.disk()!.progress!.hintsShown, ['torch-used'])
+    assert.deepEqual(browser.disk()!.progress!.catalogued, [])
+    assert.equal(browser.disk()!.game, mark)
+    agreed(browser, 'the new game, played on')
+
+    // On record too, the mirror of the limit held further up: a tab of the
+    // build before the mark is still open. It has no ear for other tabs and
+    // writes what it holds, the erased game, with no mark on it; to the tabs
+    // of this build that reads like a tab that had not played yet, and they
+    // join it. "New game" with such a tab open is undone. It ends when that
+    // tab is closed: every page loaded from now on is of this build.
+    const erased = throughJson(frozenL1.migrateProgress(throughJson(rawFixture('production-drawer-open')))) as unknown as Raw
+    browser.anotherBuildWrites({ settings: night.settings, progress: erased })
+    leftAlone(browser, 'a tab of the build before the mark wrote the erased game')
+    assert.deepEqual(shrunk(rawFixture('production-drawer-open'), browser.disk()!.progress!), [])
+    assert.equal(browser.disk()!.game, mark)
+    agreed(browser, 'the erased game, joined back')
+  } finally {
+    browser.close()
+  }
+})
+
+await test('a seeded run of tabs that play, hide, close and start over in any order ends in silence, with nothing lost', async () => {
+  const ROOMS = ['office', 'atrium', 'holyoke']
+  const SEEDS = 48
+  const STEPS = 120
+  /** One verb of the store per list it adds an id to. */
+  const LISTS: Record<string, (state: StoreState, id: string) => void> = {
+    catalogued: (state, id) => state.recordCatalogued(id),
+    hotspots: (state, id) => state.grant({ hotspots: [id] }),
+    documentsRead: (state, id) => state.recordDocument(id),
+    factsKnown: (state, id) => state.recordFact(id),
+    credentials: (state, id) => state.grantCredential(id),
+    locksOpened: (state, id) => state.openLock(id),
+    locksSeen: (state, id) => state.grant({ locksSeen: [id] }),
+    doorsReleased: (state, id) => state.grant({ doorsReleased: [id] }),
+    flags: (state, id) => state.grant({ flags: [id] }),
+    radioCalls: (state, id) => state.recordRadioCall(id),
+    devicesCarried: (state, id) => state.carryDevice(id),
+    hintsShown: (state, id) => state.recordHint(id),
+  }
+  const listFields = Object.keys(LISTS) as Field[]
+
+  let longest = 0
+  let mostWrites = 0
+  let nightsStartedOver = 0
+  for (let seed = 1; seed <= SEEDS; seed += 1) {
+    const random = seeded(seed)
+    const pick = <T>(list: readonly T[]): T => list[Math.floor(random() * list.length)]
+    const say = (what: string) => `night ${seed}: ${what}`
+    const fixture = SAVE_FIXTURES[pick(fixtureIds)]
+    const browser = openBrowser(fixture.save)
+    try {
+      let opened = 0
+      const open = () => {
+        opened += 1
+        return browser.open(`tab ${opened}`, pick(['timeout', 'idle'] as const))
+      }
+      for (let tab = 0; tab < 3; tab += 1) await open()
+
+      // Every id says the step it was added at: what is on the disk at the
+      // end can be asked when it got there.
+      let step = 0
+      let startedOverAt = -1
+      const added: [Field, string][] = []
+      const clocks: Record<string, number> = {}
+      const calls: Record<string, number> = {}
+      let time = 0
+      const plays: ((state: StoreState) => void)[] = [
+        ...listFields.map((field) => (state: StoreState) => {
+          const id = `step-${step}`
+          LISTS[field](state, id)
+          added.push([field, id])
+        }),
+        (state) => state.start(),
+        (state) => state.setCurrentRoom(pick(ROOMS)),
+        (state) => state.setCurrentRoom(pick(ROOMS)),
+        (state) => state.powerRoom(pick(ROOMS)),
+        (state) => {
+          // A clock only ever reports a longer time, and a call is placed at
+          // a later instant than the one before, as on a real wall.
+          time += 1 + Math.floor(random() * 30)
+          const clock = pick(['clock-a', 'clock-b'])
+          state.recordClockSeconds(clock, time)
+          clocks[clock] = time
+        },
+        (state) => {
+          time += 1 + Math.floor(random() * 30)
+          const radio = pick(['radio-a', 'radio-b'])
+          state.rememberRadioCall(radio, {
+            calls: Math.floor(random() * 9),
+            temper: Math.floor(random() * 4),
+            lastCallAt: time,
+            lastHint: -1,
+            lastReplyId: pick([null, 'a-reply', 'another']),
+            lastOutburstId: null,
+          })
+          calls[radio] = time
+        },
+        (state) => state.setSetting('brightness', pick([0.8, 1, 1.2, 1.4])),
+        (state) => state.setSetting('headBob', random() < 0.5),
+        (state) => state.setSetting('locale', pick(['pt-BR', 'en'] as const)),
+        // Half the nights never start over, so that "nothing is lost" can be
+        // asked of everything anybody did.
+        (state) => {
+          if (seed % 2 === 1 || random() < 0.5) return
+          state.resetProgress()
+          startedOverAt = step
+        },
+      ]
+
+      for (step = 0; step < STEPS; step += 1) {
+        const tab = pick(browser.tabs)
+        const roll = random()
+        if (roll < 0.55) tab.act(pick(plays))
+        else if (roll < 0.7) tab.hear()
+        else if (roll < 0.85) tab.runTimers()
+        else if (roll < 0.9) {
+          tab.hide()
+          tab.show()
+        } else if (roll < 0.94) {
+          // Closed, and the game opened again in a new tab: a reload.
+          tab.close()
+          await open()
+        } else browser.settle(3)
+      }
+
+      const writtenBefore = browser.writes.length
+      const rounds = leftAlone(browser, say(`after ${STEPS} steps`))
+      longest = Math.max(longest, rounds.length)
+      mostWrites = Math.max(mostWrites, browser.writes.length - writtenBefore)
+      agreed(browser, say('at the end'))
+
+      const disk = browser.disk()!.progress!
+      if (startedOverAt < 0) {
+        // Nobody started over: everything anybody did is there, with all the save began with.
+        for (const [field, id] of added) assert.ok((disk[field] as string[]).includes(id), say(`${field} lost "${id}"`))
+        assert.deepEqual(shrunk(migrateProgress(throughJson(fixture.save.progress)) as Raw, disk), [], say('the save it began with shrank'))
+        for (const [clock, seconds] of Object.entries(clocks)) {
+          assert.equal((disk.clockSeconds as Record<string, number>)[clock], seconds, say(`${clock} ran backwards`))
+        }
+        for (const [radio, at] of Object.entries(calls)) {
+          assert.equal((disk.radioMemory as Record<string, Raw>)[radio].lastCallAt, at, say(`${radio}: the later call is not the one remembered`))
+        }
+      } else {
+        // Somebody did: nothing from before the last "New game" is back,
+        // whichever tab still held it and whatever it was doing.
+        nightsStartedOver += 1
+        for (const field of listFields) {
+          for (const id of disk[field] as string[]) {
+            const at = /^step-(\d+)$/.exec(id)
+            assert.ok(at && Number(at[1]) > startedOverAt, say(`${field} holds "${id}", from before the game was started over at step ${startedOverAt}`))
+          }
+        }
+        assert.equal(typeof browser.disk()!.game, 'string', say('the game that was started over lost its mark'))
+      }
+    } finally {
+      browser.close()
+    }
+  }
+  assert.ok(nightsStartedOver >= SEEDS / 4, `only ${nightsStartedOver} of ${SEEDS} nights started over: the dice no longer tries "New game"`)
+  // The ceiling, which is what was measured (in these 48 nights, and in 800
+  // run once by hand) and what three tabs need at the most: each writes what
+  // it still held, once, and the last of them writes everything; the round
+  // after is the others hearing of it. A write more is a tab answering one
+  // that brought it nothing, which is how the endless exchange begins.
+  assert.ok(longest <= 2, `a night took ${longest} rounds to fall silent`)
+  assert.ok(mostWrites <= 3, `a night took ${mostWrites} writes to fall silent: more than one a tab`)
+})
+
+// ---------------------------------------------------------------------------
+// The settings beside the save
+// ---------------------------------------------------------------------------
+
+// The settings are read by the same door as the progress, and until now with
+// none of its care: whatever the disk held was spread over the defaults and
+// used. A later build that has a language or a quality tier this one has not
+// is one click away from handing it to a running tab of this build, and a
+// locale with no dictionary throws in the first component that translates,
+// with nothing to catch it: a blank page, mid-game.
+
+/** Every setting away from its default, at a value this build can use. */
+const CHOSEN = {
+  locale: 'en',
+  quality: 'high',
+  brightness: 1.4,
+  headBob: true,
+  fovPush: true,
+  moveSpeed: 1.5,
+  lookSensitivity: 0.5,
+  touchLookSensitivity: 2,
+  touchMoveSensitivity: 0.75,
+  subtitles: false,
+}
+const NOT_A_SWITCH = ['true', 1, 0, null, {}]
+const NOT_A_MULTIPLIER = [0, -1, 0.2, 4.01, 1e9, '1', null, false, [1]]
+/** What a later build, a rollback or a hand might leave in each setting. The first of each is what the cases below write. */
+const UNUSABLE: Record<keyof typeof CHOSEN, readonly unknown[]> = {
+  locale: ['es', 'pt', 'EN', '', 7, null, ['en'], { code: 'en' }],
+  quality: ['ultra', 'Medium', '', 2, null, ['high']],
+  brightness: [2.5, 0.49, 1.81, 0, -1, '1.2', null, true, [1]],
+  headBob: NOT_A_SWITCH,
+  fovPush: NOT_A_SWITCH,
+  moveSpeed: NOT_A_MULTIPLIER,
+  lookSensitivity: NOT_A_MULTIPLIER,
+  touchLookSensitivity: NOT_A_MULTIPLIER,
+  touchMoveSensitivity: NOT_A_MULTIPLIER,
+  subtitles: NOT_A_SWITCH,
+}
+/** The ends of every range and every value of every list: all of them usable. */
+const USABLE: Record<keyof typeof CHOSEN, readonly unknown[]> = {
+  locale: ['pt-BR', 'en'],
+  quality: ['low', 'medium', 'high'],
+  brightness: [0.5, 1, 1.8],
+  headBob: [true, false],
+  fovPush: [true, false],
+  moveSpeed: [0.25, 1, 4],
+  lookSensitivity: [0.25, 1, 4],
+  touchLookSensitivity: [0.25, 1, 4],
+  touchMoveSensitivity: [0.25, 1, 4],
+  subtitles: [true, false],
+}
+const settingKeys = Object.keys(CHOSEN) as (keyof typeof CHOSEN)[]
+/** Settings a later build keeps beside the ones this build knows. */
+const LATER_SETTINGS = { keybinds: { interact: 'KeyE', journal: 'Tab' }, colourFilter: 'deutan' }
+
+await test('a setting this build cannot use is not used: the default on load, the rest as chosen, and the disk left as it was found', async () => {
+  const defaults = (await openGame()).store.DEFAULT_SETTINGS as Raw
+  assert.deepEqual([...settingKeys].sort(), Object.keys(defaults).sort(), 'a setting of the store has no line in this suite')
+  for (const key of settingKeys) assert.notEqual(CHOSEN[key], defaults[key], `${key}: the chosen value is the default, and would prove nothing`)
+
+  // What is chosen and usable is what the game runs on.
+  assert.deepEqual((await openGame({ settings: CHOSEN, progress: SAMPLE_SAVE })).state().settings, CHOSEN)
+  for (const key of settingKeys) {
+    for (const value of USABLE[key]) {
+      const page = await openGame({ settings: { ...CHOSEN, [key]: value }, progress: SAMPLE_SAVE })
+      assert.deepEqual(page.state().settings, { ...CHOSEN, [key]: value }, `${key} = ${JSON.stringify(value)} was refused`)
+    }
+    for (const value of UNUSABLE[key]) {
+      const page = await openGame({ settings: { ...CHOSEN, [key]: value }, progress: SAMPLE_SAVE })
+      assert.deepEqual(page.state().settings, { ...CHOSEN, [key]: defaults[key] }, `${key} = ${JSON.stringify(value)}`)
+      assert.deepEqual(page.progress(), SAMPLE_SAVE, 'a setting that could not be used cost the save')
+    }
+  }
+  // Settings that are no record at all are no settings, and leave nothing behind.
+  for (const junk of ['abc', 7, null, true, [1, 2], ['en']]) {
+    const page = await openGame({ settings: junk, progress: SAMPLE_SAVE })
+    assert.deepEqual(page.state().settings, defaults, `settings = ${JSON.stringify(junk)}`)
+  }
+  // Nor is a tampered key somebody's prototype.
+  const tampered = await openGame('{"settings":{"__proto__":{"locale":"es","polluted":true},"locale":"en"},"progress":{"version":1,"radioCalls":[]}}')
+  assert.equal(tampered.state().settings.locale, 'en')
+  assert.equal(Object.getPrototypeOf(tampered.state().settings), Object.prototype)
+  assert.equal(({} as Raw).polluted, undefined)
+
+  // Every setting unusable at once, and two this build has never heard of.
+  // What it cannot use is another build's choice, not junk of this one's: it
+  // goes back to the disk as it was found, and so does what it does not
+  // know (rule 1 of the save, for the settings).
+  const found = { ...Object.fromEntries(settingKeys.map((key) => [key, UNUSABLE[key][0]])), ...LATER_SETTINGS }
+  const page = await openGame({ settings: found, progress: SAMPLE_SAVE })
+  assert.deepEqual(page.state().settings, { ...defaults, ...LATER_SETTINGS })
+  page.state().recordHint('torch-used')
+  page.leave()
+  assert.deepEqual(savedWhole().settings, found, 'a write put this build\'s defaults over what another build had chosen')
+  // Until the player chooses here: that one is this tab's to write.
+  page.state().setSetting('locale', 'en')
+  page.state().setSetting('brightness', 1.2)
+  page.leave()
+  assert.deepEqual(savedWhole().settings, { ...found, locale: 'en', brightness: 1.2 })
+  const back = await openGame(page.savedText()!)
+  assert.deepEqual(back.state().settings, { ...defaults, ...LATER_SETTINGS, locale: 'en', brightness: 1.2 })
+  back.state().recordHint('journal-taken')
+  back.leave()
+  assert.deepEqual(savedWhole().settings, { ...found, locale: 'en', brightness: 1.2 }, 'a second session lost what the first one kept')
+})
+
+await test('nor is it taken from another tab: a running tab goes on as it was, and the other build keeps its choice', async () => {
+  const browser = openBrowser({ settings: CHOSEN, progress: OLD_TAB_PROGRESS })
+  try {
+    const tab = await browser.open('this build')
+    tab.act((state) => state.start())
+    leftAlone(browser, 'one tab, in the game')
+    const written = browser.writes.length
+
+    // The tab of a later build: a language, a tier and a range this build
+    // has not, two settings turned to nonsense, one this build can use, and
+    // two it has never heard of.
+    const theirs = {
+      ...CHOSEN,
+      locale: 'es',
+      quality: 'ultra',
+      brightness: 2.5,
+      moveSpeed: 0,
+      subtitles: 'on-request',
+      headBob: false,
+      ...LATER_SETTINGS,
+    }
+    browser.anotherBuildWrites({ settings: theirs, progress: OLD_TAB_PROGRESS })
+    leftAlone(browser, 'a later build wrote its settings')
+    // As it was, which is not the default: the player of this tab chose English.
+    assert.deepEqual(tab.state().settings, { ...CHOSEN, headBob: false, ...LATER_SETTINGS })
+    assert.equal(browser.writes.length, written, 'the tab answered with a write of its own')
+    assert.deepEqual(browser.disk()!.settings, theirs)
+
+    // Its next write leaves the other build's choices where they are.
+    tab.act((state) => state.recordHint('torch-used'))
+    leftAlone(browser, 'this build plays on')
+    assert.equal(browser.writes.length, written + 1)
+    assert.deepEqual(browser.disk()!.settings, theirs, 'this tab put its own settings over the ones it could not use')
+    assert.ok((browser.disk()!.progress!.hintsShown as string[]).includes('torch-used'))
+
+    // What the player changes here is this tab's to write, usable there or not.
+    tab.act((state) => state.setSetting('locale', 'pt-BR'))
+    tab.act((state) => state.setSetting('quality', 'low'))
+    leftAlone(browser, 'the player chooses in this tab')
+    assert.deepEqual(browser.disk()!.settings, { ...theirs, locale: 'pt-BR', quality: 'low' })
+
+    // And when the other build chooses again, this tab keeps running on its
+    // own and takes what it can use.
+    const again = { ...theirs, locale: 'es', quality: 'low', brightness: 3, subtitles: true, keybinds: { interact: 'KeyF' } }
+    browser.anotherBuildWrites({ settings: again, progress: browser.disk()!.progress })
+    leftAlone(browser, 'the later build chose again')
+    assert.deepEqual(tab.state().settings, { ...CHOSEN, locale: 'pt-BR', quality: 'low', headBob: false, subtitles: true, colourFilter: 'deutan', keybinds: { interact: 'KeyF' } })
+    assert.deepEqual(browser.disk()!.settings, again, 'the tab undid a choice made in the other build')
+    assert.equal(browser.writes.length, written + 2)
+
+    // A second tab of this build, opened now, has only the defaults to fall
+    // back on. The two run on different settings under a disk that says a
+    // third thing, and that is no more a reason to write than standing in
+    // different rooms is: what a tab falls back on is never written.
+    const second = await browser.open('this build, opened later', 'idle')
+    assert.equal(second.state().settings.brightness, 1)
+    assert.equal(tab.state().settings.brightness, CHOSEN.brightness)
+    assert.equal(second.state().settings.moveSpeed, 1)
+    assert.equal(tab.state().settings.moveSpeed, CHOSEN.moveSpeed)
+    assert.deepEqual(leftAlone(browser, 'two tabs of this build on different fallbacks'), [])
+    second.act((state) => state.recordHint('a-lesson-in-the-second-tab'))
+    tab.act((state) => state.recordHint('a-lesson-in-the-first'))
+    leftAlone(browser, 'two tabs of this build on different fallbacks, both playing')
+    assert.equal(browser.writes.length, written + 4, 'a lesson in each tab is a write in each, and no answer')
+    assert.deepEqual(browser.disk()!.settings, again)
+    assert.equal(second.state().settings.brightness, 1)
+    assert.equal(tab.state().settings.brightness, CHOSEN.brightness)
+    for (const hint of ['torch-used', 'a-lesson-in-the-second-tab', 'a-lesson-in-the-first']) {
+      for (const each of [tab, second]) assert.ok(each.progress().hintsShown.includes(hint), `"${each.name}" lacks "${hint}"`)
+    }
+  } finally {
+    browser.close()
+  }
+})
+
+await test('a setting that is not a plain value, changed in another tab, is not put back as this tab loaded it', async () => {
+  // The store told "changed in this tab" from "as the disk had it" with
+  // `!==`. For a number or a word that is the question; for an object every
+  // read of the disk makes a new one, so from the first write it heard of,
+  // the tab took every such setting for one it had chosen, and wrote its
+  // old copy over the next change to it.
+  const hints = OLD_TAB_PROGRESS.hintsShown as string[]
+  const laterBuild = (keybinds: Raw, hintsShown: string[]) => ({
+    settings: { ...OLD_TAB.settings, keybinds },
+    progress: { ...OLD_TAB_PROGRESS, contentLot: CONTENT_LOT + 1, hintsShown },
+  })
+  const browser = openBrowser(laterBuild({ interact: 'KeyE' }, hints))
+  try {
+    const tab = await browser.open('this build')
+    // The other tab makes progress and changes no setting: an ordinary write.
+    browser.anotherBuildWrites(laterBuild({ interact: 'KeyE' }, [...hints, 'a-later-lesson']))
+    leftAlone(browser, 'a write that changed no setting')
+    // Then the player rebinds a key there.
+    const rebound = laterBuild({ interact: 'KeyF', journal: 'KeyJ' }, [...hints, 'a-later-lesson'])
+    browser.anotherBuildWrites(rebound)
+    leftAlone(browser, 'a key rebound in the other tab')
+    assert.deepEqual(browser.writes, [], 'this tab took the keys it had loaded for keys it had chosen, and wrote them over the new ones')
+    assert.deepEqual(browser.disk()!.settings!.keybinds, { interact: 'KeyF', journal: 'KeyJ' })
+    assert.deepEqual((tab.state().settings as unknown as Raw).keybinds, { interact: 'KeyF', journal: 'KeyJ' })
+
+    // And when this tab does have something to write, the keys go with it as the other tab left them.
+    tab.act((state) => state.setSetting('subtitles', false))
+    leftAlone(browser, 'a setting changed in this tab')
+    assert.deepEqual(browser.disk()!.settings, { ...rebound.settings, subtitles: false })
+    assert.equal(browser.disk()!.progress!.contentLot, CONTENT_LOT + 1)
+  } finally {
+    browser.close()
+  }
+})
+
+// ---------------------------------------------------------------------------
+// A browser that will not hand over its storage
+// ---------------------------------------------------------------------------
+
+await test('a profile that will not even let the storage be named still gets a game', async () => {
+  // Chrome with every cookie blocked: reading `window.localStorage` throws a
+  // SecurityError. `typeof` forgives a name that does not exist, not a getter
+  // that throws, and the store asked `typeof localStorage` outside any `try`
+  // as its module was evaluated, on the title screen: a blank page.
+  const before = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')!
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    get() {
+      throw new DOMException("Failed to read the 'localStorage' property from 'Window': Access is denied for this document.", 'SecurityError')
+    },
+  })
+  try {
+    assert.throws(() => typeof localStorage, { name: 'SecurityError' }, 'the stand-in is not the browser it stands for')
+    const page = await openTab().catch((error: unknown) => assert.fail(`the store could not be evaluated, which is a blank page: ${String(error)}`))
+    assert.deepEqual(page.progress(), emptyProgress())
+    assert.deepEqual(page.state().settings, page.store.DEFAULT_SETTINGS)
+
+    // Everything the game does, and everything the browser tells it: none of
+    // it may throw for want of a place to keep the save.
+    for (const [name, act] of Object.entries(ACTIONS)) assert.doesNotThrow(() => act(page.state()), name)
+    assert.doesNotThrow(() => page.toldOfAWrite(), 'told of a write')
+    assert.doesNotThrow(() => page.toldOfAWrite(null), 'told the storage was cleared')
+    assert.doesNotThrow(() => page.hide(), 'hidden')
+    // The night was played all the same; it is only not kept.
+    for (const [field, expected] of Object.entries(ACTED)) {
+      if (typeof expected === 'string') assert.equal(page.progress()[field], expected, field)
+      else for (const item of expected) assert.ok((page.progress()[field] as string[]).includes(item), `${field} never got "${item}"`)
+    }
+    assert.doesNotThrow(() => page.state().resetProgress(), '"New game"')
+    assert.deepEqual(page.progress(), emptyProgress())
+    assert.doesNotThrow(() => page.leave(), 'closed')
+  } finally {
+    Object.defineProperty(globalThis, 'localStorage', before)
   }
 })
 
