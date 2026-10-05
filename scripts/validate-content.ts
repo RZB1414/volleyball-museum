@@ -27,6 +27,7 @@ import { MUSEUM } from '../src/content/museum.ts'
 import { formatScript, simulateProgress } from '../src/content/simulate.ts'
 import { formatIssues, formatKnownDebt, validateContent } from '../src/content/validate.ts'
 import { newestSnapshot, RELEASES_DIRECTORY, snapshotForGate } from './lib/graphSnapshots.ts'
+import { readMediaTexts } from './lib/mediaTexts.ts'
 import { KEY_NAMED_NOT_USED, keysCitedIn, readSourceTree } from './lib/translationUsage.ts'
 
 // The committed record of what each source held, never the network: the gate
@@ -44,6 +45,10 @@ const keysCitedByCode = keysCitedIn(
   readSourceTree(fileURLToPath(new URL('../src', import.meta.url)), KEY_NAMED_NOT_USED),
 )
 
+// What is lettered on the authored images: text the museum prints outside
+// any dictionary, read by the numeral lint with everything else.
+const mediaTexts = readMediaTexts(MUSEUM.media, fileURLToPath(new URL('../public', import.meta.url)))
+
 // What the lot before this one gave its players, as it wrote it down.
 const snapshot = newestSnapshot(fileURLToPath(new URL(`../${RELEASES_DIRECTORY}`, import.meta.url)))
 const previous = snapshotForGate(snapshot, CONTENT_LOT)
@@ -51,6 +56,7 @@ const previous = snapshotForGate(snapshot, CONTENT_LOT)
 const issues = [
   ...validateContent(MUSEUM, BAKED_BUNDLES, translationKeys, captures, {
     dictionaries: { 'pt-BR': ptBR, en },
+    mediaTexts,
     keysCitedByCode,
     knownDebt: { lines: debtOf('validate:content'), lot: CONTENT_LOT },
     ...(previous.graph ? { previousGraph: previous.graph } : {}),

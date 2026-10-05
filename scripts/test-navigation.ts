@@ -32,18 +32,29 @@
  * a convenient point in the middle of the floor.
  */
 
-import { Vector3 } from 'three'
+import { readFileSync } from 'node:fs'
+
+import { BoxGeometry, Mesh, MeshBasicMaterial, Vector3 } from 'three'
 
 import { BAKED_BUNDLES, type BakedBundle } from '../src/content/bake.generated.ts'
 import { CONTENT_LOT, debtOf, settleKnownDebt } from '../src/content/knownDebt.ts'
 import { MUSEUM } from '../src/content/museum.ts'
-import type { RoomData } from '../src/content/schema.ts'
+import type { MuseumContent, RoomData } from '../src/content/schema.ts'
 import type { ValidationIssue } from '../src/content/validate.ts'
-import { movePlayer } from '../src/engine/collision.ts'
-import { INTERACTION_REACH } from '../src/engine/interactionTarget.ts'
+import { movePlayer, worldFromMeshes } from '../src/engine/collision.ts'
+import { radioDevices } from '../src/engine/deviceRules.ts'
+import { INTERACTION_REACH, PROXY_MINIMUM } from '../src/engine/interactionTarget.ts'
+import { isNotebook } from '../src/engine/notebook.ts'
 import { MOUNT_PARTS } from '../src/engine/runtimePlacedParts.ts'
+import { TRANSITION_DOOR_GATE_DEPTH } from '../src/engine/transitionDoorCollision.ts'
+import {
+  buildTransitionDoorSpecs,
+  TRANSITION_DOOR_PLANE_Z,
+  TRANSITION_DOOR_TARGET_DEPTH,
+} from '../src/engine/transitionDoorTopology.ts'
 // @ts-expect-error - the bake is plain JS with no type declarations.
 import { prepareRoomShells } from './bake/kit.mjs'
+import { FLOOD_ARRIVAL, FLOOD_CELL, floodFrom, nearestPlace, surveyStanding, walkBack } from './lib/flood.ts'
 import {
   arrivalPoint,
   buildMuseumWorld,
@@ -51,13 +62,20 @@ import {
   colliderPartsFor as colliderPartsOf,
   controlNormal,
   controlPoint,
+  distanceToVolume,
+  EYE_HEIGHT,
+  interactionVolumes,
   isWallControl,
   reachFromWhereTheCapsuleStops,
+  recipeBounds,
+  roomContaining,
   roomPoint,
   STEP,
   WALK_SPEED as SPEED,
+  walkUntilStopped,
   type Placement,
 } from './lib/museumWorld.ts'
+import { interactionVolumeWiringProblems, type SourceReader } from './lib/runtimeWiring.ts'
 
 /** Give up after this many simulated seconds; a real crossing takes about six. */
 const TIME_LIMIT = 30
@@ -77,6 +95,14 @@ function check(name: string, condition: boolean, detail = '') {
     console.log(`  FAIL  ${name}${detail ? ` — ${detail}` : ''}`)
   }
 }
+
+/**
+ * Everything this gate accuses the museum of, by code and id: the lighthouse
+ * walk and the flood. Collected as the suite runs and settled against the
+ * debt table once, at the end. Settling each block by itself would hand the
+ * table lines the block could never raise, and those come back as "paid".
+ */
+const accusations: ValidationIssue[] = []
 
 // ---------------------------------------------------------------------------
 // Build the museum, once, exactly as the bake does.
@@ -867,19 +893,10 @@ for (const route of ATRIUM_WALK_ROUTES) {
         `${short.toFixed(2)} m short of it and E does not reach.`,
     })
   }
-  const settled = settleKnownDebt(blocked, debtOf('test:navigation'), CONTENT_LOT)
-  for (const issue of settled) {
-    if (issue.severity !== 'debt') continue
-    console.log(`  debt  ${issue.code} ${issue.id}: until L${issue.debt?.untilLot} — ${issue.debt?.note}`)
-  }
-  const unsettled = settled
-    .filter((issue) => issue.severity === 'error')
-    .map((issue) => `[${issue.code}] ${issue.message}`)
-  check(
-    'walking straight at each breaker from the door gets there, beyond what the debt table dates',
-    unsettled.length === 0,
-    unsettled.join('; '),
-  )
+  // Judged at the end of the suite, with everything else this gate accuses:
+  // the debt table is settled once, or a line of the flood's would be read
+  // here as paid.
+  accusations.push(...blocked)
 }
 
 for (const crossing of CROSSINGS) {
@@ -939,6 +956,525 @@ while (grew) {
 
 for (const room of MUSEUM.rooms) {
   check(`${room.id} is reachable on foot from the spawn`, reachable.has(room.id))
+}
+
+// ---------------------------------------------------------------------------
+// Every interactive, from where a player can stand (M15)
+// ---------------------------------------------------------------------------
+
+/**
+ * The flood itself, on a floor built for the purpose: a slab six metres by
+ * four with a wall across the middle and one gap in the wall. The capsule is
+ * sixty centimetres wide, so a gap of fifty is a wall and one of seventy-five
+ * is a door, and nothing else about the two worlds differs.
+ */
+{
+  const box = (size: readonly [number, number, number], at: readonly [number, number, number]) => {
+    const mesh = new Mesh(new BoxGeometry(...size), new MeshBasicMaterial())
+    mesh.position.set(...at)
+    return mesh
+  }
+  // The wall runs half a metre past the slab on each side: nothing goes
+  // round its end by hanging over the edge.
+  const slab = (gap: number) => {
+    const length = 2.5 - gap / 2
+    return worldFromMeshes([
+      box([6, 0.2, 4], [0, -0.1, 0]),
+      box([0.2, 2.4, length], [0, 1.2, -(gap / 2 + length / 2)]),
+      box([0.2, 2.4, length], [0, 1.2, gap / 2 + length / 2]),
+    ])
+  }
+  const start = new Vector3(-1.5, 0, 0)
+  const shut = floodFrom(slab(0.5), start)
+  const open = floodFrom(slab(0.75), start)
+
+  check(
+    'flood: a gap narrower than the capsule is a wall',
+    shut.points.length > 100 && shut.points.every((point) => point.x < 0),
+    `${shut.points.length} place(s), ${shut.points.filter((point) => point.x >= 0).length} beyond the wall`,
+  )
+  check(
+    'flood: a gap wider than the capsule is a way through',
+    open.points.some((point) => point.x > 1.5) && open.points.length > shut.points.length * 1.6,
+    `${open.points.length} place(s) against ${shut.points.length} with the gap shut`,
+  )
+  const offCentre = open.points.filter((point) => {
+    const column = Math.round((point.x - start.x) / FLOOD_CELL)
+    const row = Math.round((point.z - start.z) / FLOOD_CELL)
+    return Math.hypot(point.x - (start.x + column * FLOOD_CELL), point.z - (start.z + row * FLOOD_CELL)) > FLOOD_ARRIVAL + 1e-9
+  })
+  check(
+    'flood: every place is within five centimetres of the centre of a cell',
+    offCentre.length === 0,
+    `${offCentre.length} place(s) off their centres`,
+  )
+  // The slab ends in the air. The engine holds a capsule whose axis is a
+  // little past an edge (the rim of its foot still bears), never one a
+  // radius out.
+  const overboard = open.points.filter(
+    (point) => Math.abs(point.x) > 3 + CAPSULE.radius || Math.abs(point.z) > 2 + CAPSULE.radius || Math.abs(point.y) > 0.05,
+  )
+  check('flood: nothing stands where there is no floor', overboard.length === 0, `${overboard.length} place(s) off the slab`)
+  const strides = open.points.flatMap((point, index) => {
+    const parent = open.parents[index]
+    return parent < 0 ? [] : [Math.hypot(point.x - open.points[parent].x, point.z - open.points[parent].z)]
+  })
+  check(
+    'flood: every place was walked to from the cell next to it',
+    open.parents[0] === -1 && strides.length === open.points.length - 1 && strides.every((stride) => Math.abs(stride - FLOOD_CELL) <= 2 * FLOOD_ARRIVAL),
+    `strides from ${Math.min(...strides).toFixed(3)} to ${Math.max(...strides).toFixed(3)} m`,
+  )
+  const farthest = open.points.reduce((best, point, index) => (point.x > open.points[best].x ? index : best), 0)
+  const back = walkBack(slab(0.75), open, farthest)
+  check(
+    'flood: from the far side of the gap the capsule walks back to the start',
+    back.arrived && back.hops >= 12 && back.stopped.distanceTo(open.points[0]) <= FLOOD_ARRIVAL,
+    `${back.hops} hop(s), stopped at ${back.stopped.toArray().map((value) => value.toFixed(2)).join(',')}`,
+  )
+  // The same chain with the gap shut behind the capsule: the walk back is a
+  // walk, not a count of parents.
+  check('flood: and not with the gap shut behind it', !walkBack(slab(0.5), open, farthest).arrived)
+  let refused = false
+  try {
+    floodFrom(slab(0.75), new Vector3(8, 0, 0))
+  } catch {
+    refused = true
+  }
+  check('flood: it refuses to start where there is no floor', refused)
+
+  // A ledge. Two floors side by side, the second 45 cm lower: twice the
+  // step the engine climbs, so down is a drop and there is no way back up.
+  // Asked with cells of half a metre, which give a walk the time to land:
+  // on the default grid the capsule runs out of steps in mid-air and the
+  // ledge is refused for the wrong reason.
+  const ledge = worldFromMeshes([box([3, 0.2, 4], [-1.5, -0.1, 0]), box([3, 0.2, 4], [1.5, -0.55, 0])])
+  const above = floodFrom(ledge, start, 0.5)
+  const dropped = above.points.filter((point) => point.y < -0.1)
+  check(
+    'flood: a ledge is not jumped off, and a place reached by falling is no place',
+    above.points.length > 30 && dropped.length === 0 && above.points.every((point) => point.x < 0.5),
+    `${above.points.length} place(s), ${dropped.length} on the lower floor`,
+  )
+  // From below, the lower floor is a floor like any other.
+  const below = floodFrom(ledge, new Vector3(1.5, -0.45, 0), 0.5)
+  check(
+    'flood: and the lower floor is flooded from the lower floor, without climbing the ledge',
+    below.points.length > 30 && below.points.every((point) => point.y < -0.3 && point.x > -0.5),
+    `${below.points.length} place(s), ${below.points.filter((point) => point.y >= -0.3).length} on the upper floor`,
+  )
+}
+
+const readSource: SourceReader = (path) => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8')
+
+/** The bake with one recipe's collider taken out of the manifest, as it was before the recipe had one. */
+function withoutCollider(recipe: string): BakedBundle[] {
+  return BAKED_BUNDLES.map((bundle) =>
+    bundle.name !== 'kit'
+      ? bundle
+      : {
+          ...bundle,
+          parts: bundle.parts.map((part) =>
+            part.name === recipe || part.name.startsWith(`${recipe}__`)
+              ? { name: part.name, material: part.material, bounds: part.bounds, triangles: part.triangles }
+              : part,
+          ),
+        },
+  )
+}
+
+/** The museum with more furniture in one room. */
+function furnished(roomId: string, kit: RoomData['kit']): MuseumContent {
+  return {
+    ...MUSEUM,
+    rooms: MUSEUM.rooms.map((room) => (room.id === roomId ? { ...room, kit: [...room.kit, ...kit] } : room)),
+  }
+}
+
+/**
+ * The volumes themselves, before anything is asked of them: each is the box
+ * its component hangs, where the component hangs it. Points are given in
+ * the frame of the thing (its wrapper group) and asked of the world.
+ */
+{
+  const volumes = interactionVolumes()
+  const volumeOf = (id: string) => {
+    const volume = volumes.find((candidate) => candidate.id === id)
+    if (!volume) throw new Error(`the flood has no volume for "${id}"`)
+    return volume
+  }
+  const roomWith = (has: (room: RoomData) => boolean) => {
+    const room = MUSEUM.rooms.find(has)
+    if (!room) throw new Error('the content no longer has the room this check is about')
+    return room
+  }
+  type Placed = { readonly position: readonly number[]; readonly rotationY?: number; readonly scale?: number }
+  /** A point of a placed thing's own frame, in the world: turn, scale, then the room. */
+  const from = (origin: readonly number[], placed: Placed, local: readonly [number, number, number]) => {
+    const turn = placed.rotationY ?? 0
+    const scale = placed.scale ?? 1
+    return new Vector3(
+      origin[0] + placed.position[0] + scale * (local[0] * Math.cos(turn) + local[2] * Math.sin(turn)),
+      origin[1] + placed.position[1] + scale * local[1],
+      origin[2] + placed.position[2] + scale * (-local[0] * Math.sin(turn) + local[2] * Math.cos(turn)),
+    )
+  }
+  const inside = (id: string, point: Vector3) => distanceToVolume(volumeOf(id).mesh, point) === 0
+  const boundsOf = (recipe: string, bundleName: string) => {
+    const bounds = recipeBounds(recipe, BAKED_BUNDLES.find((bundle) => bundle.name === bundleName))
+    if (!bounds) throw new Error(`recipe "${recipe}" is not in ${bundleName}`)
+    return bounds
+  }
+  const middle = (bounds: ReturnType<typeof boundsOf>) =>
+    [0, 1, 2].map((axis) => (bounds.min[axis] + bounds.max[axis]) / 2) as [number, number, number]
+
+  // A piece: the box of its recipe, at the scale it is shown. The founding
+  // ball stands at 2.65, so its box is that many times its recipe's.
+  const hero = MUSEUM.exhibits.find((exhibit) => (exhibit.scale ?? 1) > 1.5)
+  if (!hero) throw new Error('no enlarged exhibit is left to prove the scale with')
+  const heroRoom = roomWith((room) => room.exhibitIds.includes(hero.id))
+  const heroReach = boundsOf(hero.recipe, `exhibits-${heroRoom.id}`).max[0]
+  const heroAt = (x: number) => from(heroRoom.origin, hero, [x, 0, 0])
+  check(
+    `${hero.id}: a piece is aimed at through the box of its recipe, at the scale it is shown`,
+    inside(hero.id, heroAt(heroReach - 0.004)) &&
+      !inside(hero.id, heroAt(heroReach + 0.004)) &&
+      // A scaled metre away is a metre away, in the world's metres.
+      Math.abs(distanceToVolume(volumeOf(hero.id).mesh, from(heroRoom.origin, { ...hero, scale: 1 }, [heroReach * (hero.scale ?? 1) + 1, 0, 0])) - 1) < 1e-6,
+    `its recipe reaches ${heroReach.toFixed(4)} m and it is shown at ${hero.scale}`,
+  )
+
+  // A cabinet: the chest-high box, which reaches in front of the carcass and
+  // above it, turned with the cabinet. Behind the cabinet there is none.
+  const wing = roomWith((room) => (room.containers ?? []).some((container) => !isNotebook(container) && (container.rotationY ?? 0) !== 0))
+  const turned = (wing.containers ?? []).find((container) => !isNotebook(container) && (container.rotationY ?? 0) !== 0)
+  if (!turned) throw new Error('no turned cabinet is left to prove the turn with')
+  const carcass = boundsOf(turned.part, 'kit')
+  const chestHigh: readonly [number, number, number] = [0, carcass.max[1] + 0.2, carcass.max[2] + 0.15]
+  check(
+    `${turned.id}: a cabinet is aimed at through the chest-high box in front of it, turned with it`,
+    inside(turned.id, from(wing.origin, turned, chestHigh)) &&
+      !inside(turned.id, from(wing.origin, turned, [chestHigh[0], chestHigh[1], -chestHigh[2]])) &&
+      !inside(turned.id, from(wing.origin, { position: turned.position }, chestHigh)),
+    `the carcass ends at y ${carcass.max[1]}, z ${carcass.max[2]}`,
+  )
+
+  // A notebook, a radio: their own bounds, grown to the minimum and no more.
+  const office = roomWith((room) => (room.containers ?? []).some(isNotebook))
+  const notebook = (office.containers ?? []).find(isNotebook)
+  const radio = radioDevices(MUSEUM)[0]
+  if (!notebook || !radio) throw new Error('the notebook and the radio are what this check is about')
+  for (const [thing, origin, minimum] of [
+    [notebook, office.origin, PROXY_MINIMUM.notebook],
+    [radio.device, radio.room.origin, PROXY_MINIMUM.radio],
+  ] as const) {
+    const own = boundsOf(thing.part, 'kit')
+    const centre = middle(own)
+    // Along the axis the object is thinnest on: the padding is all there is.
+    const axis = [0, 1, 2].reduce((thinnest, candidate) =>
+      own.max[candidate] - own.min[candidate] < own.max[thinnest] - own.min[thinnest] ? candidate : thinnest,
+    )
+    const out = (by: number) => centre.map((value, index) => (index === axis ? value + by : value)) as [number, number, number]
+    check(
+      `${thing.id}: aimed at through its own bounds, padded to the minimum and no further`,
+      own.max[axis] - own.min[axis] < minimum[axis] - 0.05 &&
+        inside(thing.id, from(origin, thing, out(minimum[axis] / 2 - 0.005))) &&
+        !inside(thing.id, from(origin, thing, out(minimum[axis] / 2 + 0.005))),
+      `${(own.max[axis] - own.min[axis]).toFixed(3)} m of object in a ${minimum[axis]} m box`,
+    )
+  }
+
+  // A door: the whole opening on the plane of the leaves, the same box from
+  // either room, and nothing on the line of the wall it was authored on.
+  for (const door of buildTransitionDoorSpecs(MUSEUM.rooms)) {
+    const local = (z: number) => from([0, 0, 0], door, [0, door.height / 2, z])
+    const sides = volumes.filter((volume) => volume.id.startsWith(`${door.id}@`))
+    check(
+      `${door.id}: a door is aimed at on the plane of its leaves, from each of its two rooms`,
+      sides.length === 2 &&
+        new Set(sides.map((side) => side.roomId)).size === 2 &&
+        sides.every(
+          (side) =>
+            [door.ownerRoomId, door.otherRoomId].includes(side.roomId as never) &&
+            side.id === `${door.id}@${side.roomId}` &&
+            distanceToVolume(side.mesh, local(TRANSITION_DOOR_PLANE_Z)) === 0 &&
+            distanceToVolume(side.mesh, local(0)) > 0.25 &&
+            distanceToVolume(side.mesh, local(TRANSITION_DOOR_PLANE_Z - TRANSITION_DOOR_TARGET_DEPTH / 2 - 0.01)) > 0 &&
+            // Shut, it is solid there: a capsule on the plane is in the gate.
+            side.gate?.intersects(local(TRANSITION_DOOR_PLANE_Z).setY(0), CAPSULE) === true &&
+            side.gate.intersects(local(TRANSITION_DOOR_PLANE_Z + 1).setY(0), CAPSULE) === false,
+        ),
+      `${sides.length} side(s): ${sides.map((side) => side.roomId).join(', ')}`,
+    )
+  }
+}
+
+/**
+ * What stands under a mounted piece is solid. No exhibit of today's museum
+ * is on a plinth (the wing's are in built cases), so the proof brings one:
+ * a ball on a plinth in the open floor of the atrium, walked at from two
+ * metres away. With the base in the world the capsule stops against it;
+ * in the world as it was, it walks through the place the plinth stands.
+ */
+{
+  const ball = MUSEUM.exhibits[0]
+  const plinth = colliderPartsOf(MOUNT_PARTS.plinth?.part ?? '')[0]?.collider
+  if (!plinth) throw new Error('the plinth has no collider in the manifest')
+  const mounted: MuseumContent = {
+    ...MUSEUM,
+    exhibits: [...MUSEUM.exhibits, { ...ball, id: 'ball-on-a-plinth', position: [3, 1.18, 3], rotationY: 0, mount: 'plinth' }],
+    rooms: MUSEUM.rooms.map((room) =>
+      room.id === 'atrium' ? { ...room, exhibitIds: [...room.exhibitIds, 'ball-on-a-plinth'] } : room,
+    ),
+  }
+  const north = new Vector3(0, 0, -1)
+  const stopped = walkUntilStopped(buildMuseumWorld(mounted), roomPoint('atrium', 3, 5), north, 2)
+  const through = walkUntilStopped(world, roomPoint('atrium', 3, 5), north, 2)
+  const face = roomPoint('atrium', 3, 3).z + plinth.halfExtents[2] + CAPSULE.radius
+  check(
+    'the base under a mounted piece is solid: the capsule stops against a plinth',
+    Math.abs(stopped.z - face) < 0.02 && through.z < roomPoint('atrium', 3, 3).z - 1,
+    `stopped at z ${stopped.z.toFixed(2)} (the plinth's face is at ${face.toFixed(2)}); without the base, at ${through.z.toFixed(2)}`,
+  )
+  check(
+    'and the flood is asked about the piece on it like any other',
+    interactionVolumes(mounted).some((volume) => volume.id === 'ball-on-a-plinth' && volume.roomId === 'atrium'),
+  )
+}
+
+{
+  const started = performance.now()
+  const survey = surveyStanding()
+  const seconds = (performance.now() - started) / 1000
+  const between = survey.flood.points.length - [...survey.placesByRoom.values()].reduce((sum, count) => sum + count, 0)
+  console.log(
+    `  note  flood from the spawn: ${survey.flood.points.length} places in ${seconds.toFixed(2)} s ` +
+      `(${[...survey.placesByRoom].map(([room, count]) => `${room} ${count}`).join(', ')}, ${between} in doorways)`,
+  )
+
+  // (c) The flood stands in every room, reaches where the player arrives in
+  // each, and from there the capsule walks back to where the night began.
+  for (const room of MUSEUM.rooms) {
+    const places = survey.placesByRoom.get(room.id) ?? 0
+    const arrival = nearestPlace(survey.flood, arrivalPoint(room.id))
+    const back = walkBack(survey.world, survey.flood, arrival.index)
+    check(
+      `${room.id}: the flood stands in the room, where the player arrives in it`,
+      places > 0 && arrival.distance <= FLOOD_CELL,
+      `${places} place(s), the nearest ${arrival.distance.toFixed(2)} m from the arrival point`,
+    )
+    check(
+      `${room.id}: and from there the capsule walks back to the spawn`,
+      back.arrived,
+      `stopped after ${back.hops} hop(s) at ${back.stopped.toArray().map((value) => value.toFixed(2)).join(',')}`,
+    )
+  }
+
+  // Everything E works on is judged: no kind and no room is left out because
+  // the list was written by hand.
+  const expected =
+    MUSEUM.rooms.reduce(
+      (sum, room) => sum + room.exhibitIds.length + (room.containers?.length ?? 0) + (room.powerControl ? 1 : 0),
+      0,
+    ) +
+    radioDevices(MUSEUM).length +
+    2 * buildTransitionDoorSpecs(MUSEUM.rooms).length
+  const judged = new Set(survey.verdicts.map((verdict) => verdict.volume.id))
+  const byKind = new Map<string, number>()
+  for (const { volume } of survey.verdicts) byKind.set(volume.kind, (byKind.get(volume.kind) ?? 0) + 1)
+  check(
+    'the flood judges every piece, container, power control and radio, and both sides of every door',
+    survey.verdicts.length === expected &&
+      judged.size === expected &&
+      MUSEUM.exhibits.every((exhibit) => judged.has(exhibit.id)),
+    `${survey.verdicts.length} judged, ${expected} in the content`,
+  )
+  console.log(`  note  ${[...byKind].map(([kind, count]) => `${count} ${kind}`).join(', ')}`)
+  for (const kind of byKind.keys()) {
+    const distances = survey.verdicts.flatMap((verdict) =>
+      verdict.volume.kind === kind && verdict.nearest ? [verdict.nearest.distance] : [],
+    )
+    console.log(
+      `  note  ${kind}: from the nearest place, the eye is ${Math.min(...distances).toFixed(2)} to ` +
+        `${Math.max(...distances).toFixed(2)} m from the volume`,
+    )
+  }
+  accusations.push(...survey.issues)
+
+  // The eye the flood measures from is the camera's, and the hood of a
+  // vitrine table is the one runtime-placed recipe the world leaves out.
+  check('the flood looks from the height of the camera', EYE_HEIGHT > CAPSULE.height - CAPSULE.radius && EYE_HEIGHT < CAPSULE.height)
+  const solidHoods = Object.values(MOUNT_PARTS).flatMap((mount) =>
+    mount?.extra && colliderPartsOf(mount.extra).length > 0 ? [mount.extra] : [],
+  )
+  check(
+    'no hood of a mount is solid: the world places the base under a piece and nothing on it',
+    solidHoods.length === 0,
+    `${solidHoods.join(', ')} gained a collider: place it in mountPlacements`,
+  )
+
+  // What the flood answered with is a place of the target's own room, and
+  // the usable one has the eye outside the volume: the wing's cabinets are
+  // less than a metre from the atrium, through the wall.
+  const misplaced = survey.verdicts.filter(
+    ({ volume, usable, nearest }) =>
+      !usable ||
+      !nearest ||
+      usable.distance <= 0 ||
+      usable.distance > volume.reach ||
+      roomContaining(usable.point)?.id !== volume.roomId ||
+      roomContaining(nearest.point)?.id !== volume.roomId,
+  )
+  check(
+    "every place the flood answers with is in the target's own room, the usable one within reach and outside the volume",
+    misplaced.length === 0,
+    misplaced.map(({ volume }) => volume.id).join(', '),
+  )
+  // A door is aimed at while it is shut, and shut it stops the capsule: its
+  // axis rests a radius from the gate, which is thinner than the box.
+  const atTheGate = CAPSULE.radius + TRANSITION_DOOR_GATE_DEPTH / 2 - TRANSITION_DOOR_TARGET_DEPTH / 2
+  const doorSides = survey.verdicts.filter(({ volume }) => volume.kind === 'door')
+  const pastTheGate = doorSides.filter(({ nearest }) => !nearest || nearest.distance < atTheGate - 1e-6)
+  check(
+    'in front of a shut door the capsule stops at the gate',
+    doorSides.length === 2 * buildTransitionDoorSpecs(MUSEUM.rooms).length && pastTheGate.length === 0,
+    pastTheGate.map(({ volume, nearest }) => `${volume.id}: ${nearest?.distance.toFixed(3)} m, under ${atTheGate.toFixed(3)}`).join('; '),
+  )
+
+  // Teeth, on the museum itself. The breaker's collider is what L1 paid
+  // ÁT-A1 with: out of the manifest, the capsule walks up to the plaster and
+  // the place nearest the atrium breaker has the eye inside its box.
+  const soft = surveyStanding(MUSEUM, withoutCollider('breaker-panel'))
+  check(
+    'without the breaker panel\'s collider, the place nearest the atrium breaker puts the eye inside its volume (ÁT-A1)',
+    soft.issues.some((issue) => issue.code === 'standing-point-inside-target' && issue.id === 'atrium-breaker') &&
+      !survey.issues.some((issue) => issue.id === 'atrium-breaker'),
+    soft.issues.map((issue) => `${issue.code} ${issue.id}`).join(', ') || 'nothing accused',
+  )
+
+  // And a thing nobody can get near. Reach is distance, so one partition is
+  // not enough: across the office lane it leaves the way round the desk, and
+  // a metre in front of the cabinet it leaves the cabinet within reach of
+  // the far side. Two of them, wall to wall just north of the spawn, shut
+  // away every place within 2.4 m of the drawer.
+  const walled = surveyStanding(
+    furnished('office', [
+      { part: 'partition', position: [-1.3, 0, -0.45], rotationY: Math.PI },
+      { part: 'partition', position: [1.9, 0, -0.45], rotationY: Math.PI },
+    ]),
+  )
+  const cabinet = walled.verdicts.find((verdict) => verdict.volume.id === 'office-cabinet')
+  check(
+    'with the office walled across north of the spawn, the locked cabinet has no place to stand',
+    walled.issues.some((issue) => issue.code === 'no-standing-point' && issue.id === 'office-cabinet') &&
+      !survey.issues.some((issue) => issue.id === 'office-cabinet'),
+    `the nearest place is ${cabinet?.nearest?.distance.toFixed(2) ?? 'nowhere'} m from the drawer, ` +
+      `${walled.placesByRoom.get('office')} place(s) left in the office`,
+  )
+
+  // And a room nobody can enter: a partition across each of the wing's two
+  // doorways, on the atrium's side. Reach alone would not notice. The
+  // archive cabinets stand against the wall the two rooms share, and a place
+  // in the atrium is well inside their 2.4 m; it is "in its own room" that
+  // refuses it.
+  const sealed = surveyStanding(
+    furnished('atrium', [
+      { part: 'partition', position: [-8.8, 0, -2], rotationY: Math.PI / 2 },
+      { part: 'partition', position: [-8.8, 0, 6.4], rotationY: Math.PI / 2 },
+    ]),
+  )
+  const inTheWing = sealed.verdicts.filter(({ volume }) => volume.roomId === 'holyoke')
+  const stillStanding = inTheWing.filter(
+    ({ volume }) => !sealed.issues.some((issue) => issue.code === 'no-standing-point' && issue.id === volume.id),
+  )
+  const throughTheWall = inTheWing.filter(
+    ({ volume }) =>
+      volume.kind === 'container' &&
+      sealed.flood.points.some((point) => {
+        const eye = point.clone().setY(point.y + EYE_HEIGHT)
+        return distanceToVolume(volume.mesh, eye) <= volume.reach
+      }),
+  )
+  check(
+    'with both doorways of the wing walled up, nothing in it has a place to stand, however near the atrium comes through the wall',
+    sealed.placesByRoom.get('holyoke') === 0 &&
+      (sealed.placesByRoom.get('atrium') ?? 0) > 1000 &&
+      inTheWing.length >= 13 &&
+      stillStanding.length === 0 &&
+      throughTheWall.length === 2,
+    `${sealed.placesByRoom.get('holyoke')} place(s) in the wing; still standing: ` +
+      `${stillStanding.map(({ volume }) => volume.id).join(', ') || 'none'}; ` +
+      `${throughTheWall.length} cabinet(s) within reach of the atrium`,
+  )
+
+  // What the flood measured is what each component mounts.
+  const problems = interactionVolumeWiringProblems(readSource)
+  check('each component mounts the volume the flood measured', problems.length === 0, problems.join('; '))
+  const changed =
+    (path: string, from: string | RegExp, to: string): SourceReader =>
+    (asked) => {
+      if (asked !== path) return readSource(asked)
+      const source = readSource(asked)
+      const next = source.replace(from, to)
+      if (next === source) throw new Error(`the refactor of ${path} found nothing to change`)
+      return next
+    }
+  const refactors: readonly (readonly [string, SourceReader])[] = [
+    ['a door reached by a number of its own', changed('engine/TransitionDoors.tsx', 'INTERACTION_REACH.door', '3.4')],
+    ['a door box of a depth of its own', changed('engine/TransitionDoors.tsx', 'spec.height, TRANSITION_DOOR_TARGET_DEPTH]', 'spec.height, 0.6]')],
+    ['a door box off the plane of the leaves', changed('engine/TransitionDoors.tsx', /TRANSITION_DOOR_PLANE_Z,\n        \]\}\n        visible/, '0,\n        ]}\n        visible')],
+    ['a shut door that is not solid', changed('engine/TransitionDoors.tsx', 'return registerTransitionDoorGate(collision, spec)', 'return undefined')],
+    ['a cabinet aimed at by a box of its own', changed('engine/Containers.tsx', 'if (!notebook) return DRAWER_PROXY', 'if (!notebook) return { centre: [0, 0.6, 0], size: [2, 1.2, 2] }')],
+    ['a notebook padded to the radio\'s minimum', changed('engine/Containers.tsx', 'PROXY_MINIMUM.notebook', 'PROXY_MINIMUM.radio')],
+    ['a container reached by a number of its own', changed('engine/Containers.tsx', 'INTERACTION_REACH.container', '3')],
+    ['a control with no padding', changed('engine/PowerControls.tsx', 'return paddedProxy(new Box3().setFromObject(instance), PROXY_MINIMUM.powerControl)', 'return paddedProxy(new Box3().setFromObject(instance), [0, 0, 0])')],
+    ['a control whose ray has no end', changed('engine/PowerControls.tsx', 'instance.far = REACH', 'instance.far = Infinity')],
+    ['a radio padded by a number of its own', changed('engine/Devices.tsx', 'PROXY_MINIMUM.radio', '[0.6, 0.6, 0.6]')],
+    ['a radio whose box is not the padded one', changed('engine/Devices.tsx', '<boxGeometry args={proxy.size} />', '<boxGeometry args={[1, 1, 1]} />')],
+    ['a piece reached by the container\'s number', changed('engine/Interaction.tsx', 'INTERACTION_REACH.exhibit', 'INTERACTION_REACH.container')],
+    ['a piece drawn at twice its scale', changed('scenes/MuseumScene.tsx', 'scale={exhibit.scale ?? 1}', 'scale={(exhibit.scale ?? 1) * 2}')],
+  ]
+  const uncaught = refactors
+    .filter(([, reader]) => interactionVolumeWiringProblems(reader).length === 0)
+    .map(([name]) => name)
+  check('and a component that mounts another is caught', uncaught.length === 0, uncaught.join('; '))
+}
+
+// ---------------------------------------------------------------------------
+// What this gate accuses, against what the debt table dates
+// ---------------------------------------------------------------------------
+
+{
+  const settled = settleKnownDebt(accusations, debtOf('test:navigation'), CONTENT_LOT)
+  for (const issue of settled) {
+    if (issue.severity !== 'debt') continue
+    console.log(`  debt  ${issue.code} ${issue.id}: until L${issue.debt?.untilLot} — ${issue.debt?.note}`)
+  }
+  const errors = settled.filter((issue) => issue.severity === 'error')
+  // A stale or overdue line is about the code it dates: its id starts with it.
+  const about = (code: string) =>
+    errors.filter((issue) => issue.code === code || issue.id?.startsWith(`${code}:`))
+  const said = (issues: readonly ValidationIssue[]) => issues.map((issue) => `[${issue.code}] ${issue.message}`).join('; ')
+
+  const lighthouse = about('lighthouse-walk-blocked')
+  check(
+    'walking straight at each breaker from the door gets there, beyond what the debt table dates',
+    lighthouse.length === 0,
+    said(lighthouse),
+  )
+  const unreached = about('no-standing-point')
+  check(
+    'every interactive has a place to stand in its own room, within reach and outside its own volume',
+    unreached.length === 0,
+    said(unreached),
+  )
+  const walkedInto = about('standing-point-inside-target')
+  check(
+    'and from the place nearest to it too, beyond what the debt table dates',
+    walkedInto.length === 0,
+    said(walkedInto),
+  )
+  const rest = errors.filter((issue) => ![...lighthouse, ...unreached, ...walkedInto].includes(issue))
+  check('this gate owes nothing else', rest.length === 0, said(rest))
 }
 
 console.log(`${checks - failures}/${checks} checks passed`)

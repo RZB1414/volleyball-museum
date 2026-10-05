@@ -27,6 +27,7 @@ export const INTERACTION_REACH = {
   container: 2.4,
   powerControl: 2.7,
   device: 2.6,
+  door: 2.6,
 } as const
 
 /**

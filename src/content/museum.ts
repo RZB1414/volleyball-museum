@@ -82,6 +82,12 @@ const FACTS = [
     confidence: 'high',
     verifiedAt: '2026-10-04',
     usedAsCode: true,
+    // The only two texts allowed to print the year, in either language: the
+    // plaque of the portrait and the title of the Springfield document. A
+    // code has one home (`numeral-exclusivity`); this one has two because it
+    // is the first lock of the game and the drawer teaches how they work.
+    printedIn: ['hotspot.portrait-morgan.date.label', 'document.halstead.title'],
+    exception: 'tutorial',
     sources: [
       FIVB_HISTORY,
       {

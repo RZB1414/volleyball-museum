@@ -375,3 +375,111 @@ export function planWiringProblems(read: SourceReader): string[] {
   }
   return problems
 }
+
+/**
+ * The volumes the flood measures (M15). `test:navigation` proves that a
+ * player can stand in front of every interactive with the eye within its
+ * ray's reach and outside its volume, and it builds each volume itself
+ * (`interactionVolumes`, in `museumWorld.ts`) by the rule the component is
+ * supposed to follow. A component that pads by a number of its own, reaches
+ * by a number of its own or hangs its box somewhere else would be proved
+ * reachable by a box the player never aims at.
+ */
+export function interactionVolumeWiringProblems(read: SourceReader): string[] {
+  const problems: string[] = []
+  const need = (path: string, source: string, fragment: string, without: string) => {
+    if (!source.includes(fragment)) problems.push(`${path} no longer has \`${fragment}\`: ${without}`)
+  }
+
+  const scene = squeezed(read('scenes/MuseumScene.tsx'))
+  need(
+    'scenes/MuseumScene.tsx',
+    scene,
+    'name={`exhibit:${exhibit.id}`} position={exhibit.position as unknown as [number, number, number]} rotation={[0, exhibit.rotationY ?? 0, 0]} scale={exhibit.scale ?? 1}',
+    'a piece is placed by something other than its position, turn and scale, and the flood measured it where the content says',
+  )
+
+  const view = squeezed(read('engine/Interaction.tsx'))
+  need('engine/Interaction.tsx', view, 'const REACH = INTERACTION_REACH.exhibit', 'the piece is reached by a number the flood does not read')
+  need('engine/Interaction.tsx', view, 'instance.far = REACH', 'the ray at a piece no longer stops at its reach')
+
+  const containers = squeezed(read('engine/Containers.tsx'))
+  need('engine/Containers.tsx', containers, 'const REACH = INTERACTION_REACH.container', 'the cabinet is reached by a number the flood does not read')
+  need('engine/Containers.tsx', containers, 'instance.far = REACH', 'the ray at a cabinet no longer stops at its reach')
+  need('engine/Containers.tsx', containers, 'if (!notebook) return DRAWER_PROXY', 'a cabinet is aimed at by a box other than DRAWER_PROXY')
+  need(
+    'engine/Containers.tsx',
+    containers,
+    'return paddedProxy(new Box3().setFromObject(instance), PROXY_MINIMUM.notebook)',
+    'the notebook is aimed at by a box other than its own bounds padded to the minimum',
+  )
+  need(
+    'engine/Containers.tsx',
+    containers,
+    'name={`container:${container.id}`} position={container.position as unknown as [number, number, number]} rotation={[0, container.rotationY ?? 0, 0]}',
+    'a container is placed by something other than its position and turn',
+  )
+
+  const controls = squeezed(read('engine/PowerControls.tsx'))
+  need('engine/PowerControls.tsx', controls, 'const REACH = INTERACTION_REACH.powerControl', 'the control is reached by a number the flood does not read')
+  need('engine/PowerControls.tsx', controls, 'instance.far = REACH', 'the ray at a control no longer stops at its reach')
+  need(
+    'engine/PowerControls.tsx',
+    controls,
+    'return paddedProxy(new Box3().setFromObject(instance), PROXY_MINIMUM.powerControl)',
+    'a power control is aimed at by a box other than its own bounds padded to the minimum',
+  )
+
+  const devices = squeezed(read('engine/Devices.tsx'))
+  need('engine/Devices.tsx', devices, 'const REACH = INTERACTION_REACH.device', 'the radio is reached by a number the flood does not read')
+  need('engine/Devices.tsx', devices, 'instance.far = REACH', 'the ray at a radio no longer stops at its reach')
+  need(
+    'engine/Devices.tsx',
+    devices,
+    'return paddedProxy(new Box3().setFromObject(instance), PROXY_MINIMUM.radio)',
+    'the radio is aimed at by a box other than its own bounds padded to the minimum',
+  )
+
+  // Every padded target hangs its box at the padded centre, at the padded size.
+  for (const [path, component] of [
+    ['engine/Containers.tsx', containers],
+    ['engine/PowerControls.tsx', controls],
+    ['engine/Devices.tsx', devices],
+  ] as const) {
+    need(
+      path,
+      component,
+      '<mesh position={proxy.centre} visible={false}> <boxGeometry args={proxy.size} />',
+      'its interaction box is not the one the padding returned',
+    )
+  }
+
+  const doors = squeezed(read('engine/TransitionDoors.tsx'))
+  need('engine/TransitionDoors.tsx', doors, 'const INTERACTION_DISTANCE = INTERACTION_REACH.door', 'the door is reached by a number the flood does not read')
+  need(
+    'engine/TransitionDoors.tsx',
+    doors,
+    'hits.find((candidate) => candidate.distance <= INTERACTION_DISTANCE)',
+    'a door answers from further than its reach',
+  )
+  need(
+    'engine/TransitionDoors.tsx',
+    doors,
+    '<boxGeometry args={[spec.width, spec.height, TRANSITION_DOOR_TARGET_DEPTH]} />',
+    'the door is aimed at by a box other than its opening, as deep as the topology says',
+  )
+  need(
+    'engine/TransitionDoors.tsx',
+    doors,
+    'position={[ 0, TRANSITION_DOOR_SILL_Y + spec.height / 2, TRANSITION_DOOR_PLANE_Z, ]} visible={canTargetDoor(phase)}',
+    "the door's box no longer hangs on the plane of the leaves",
+  )
+  // Shut, a door is solid: that gate is what keeps the eye out of the box.
+  need(
+    'engine/TransitionDoors.tsx',
+    doors,
+    'return registerTransitionDoorGate(collision, spec)',
+    'a shut door no longer stops the capsule, and the eye walks into its box',
+  )
+  return problems
+}

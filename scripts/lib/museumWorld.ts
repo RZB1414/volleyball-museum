@@ -10,9 +10,17 @@
  * power suite and the navigation suite walk the same building, from the
  * doors a player really arrives by.
  *
+ * The flood of L2 asked a third thing of it. Every interactive had to be
+ * walked up to, not only the breakers, so the world gained the bases the
+ * scene stands under a mounted piece (the one solid thing it was missing)
+ * and this module gained the volume each kind of target is aimed at, built
+ * the way its component builds it (`interactionVolumes`).
+ *
  * Nothing here is a second source of truth: positions come from `museum.ts`,
- * colliders from `bake.generated.ts`, the interaction volume from
- * `interactionProxy.ts`, the capsule and the eye from `playerPosition.ts`.
+ * colliders from `bake.generated.ts`, the interaction volumes from
+ * `interactionProxy.ts` and `interactionTarget.ts`, the door's from
+ * `transitionDoorTopology.ts`, the capsule and the eye from
+ * `playerPosition.ts`.
  */
 
 import {
@@ -30,10 +38,24 @@ import { MUSEUM } from '../../src/content/museum.ts'
 import type { MuseumContent, PowerControlData, RoomData, Vec3 } from '../../src/content/schema.ts'
 import { nearestWallFace } from '../../src/content/validate.ts'
 import { CollisionWorld, movePlayer, worldFromMeshes } from '../../src/engine/collision.ts'
-import { INTERACTION_REACH, PROXY_MINIMUM } from '../../src/engine/interactionTarget.ts'
-import { PROXY_MATERIAL_PROPS, paddedProxy } from '../../src/engine/interactionProxy.ts'
+import { radioDevices } from '../../src/engine/deviceRules.ts'
+import { INTERACTION_REACH, PROXY_MINIMUM, type InteractionKind } from '../../src/engine/interactionTarget.ts'
+import {
+  DRAWER_PROXY,
+  PROXY_MATERIAL_PROPS,
+  paddedProxy,
+  type InteractionProxy,
+} from '../../src/engine/interactionProxy.ts'
+import { isNotebook } from '../../src/engine/notebook.ts'
 import { PLAYER_CAPSULE, PLAYER_EYE_HEIGHT } from '../../src/engine/playerPosition.ts'
-import { buildTransitionDoorSpecs } from '../../src/engine/transitionDoorTopology.ts'
+import { MOUNT_PARTS } from '../../src/engine/runtimePlacedParts.ts'
+import { registerTransitionDoorGate } from '../../src/engine/transitionDoorCollision.ts'
+import {
+  buildTransitionDoorSpecs,
+  TRANSITION_DOOR_PLANE_Z,
+  TRANSITION_DOOR_SILL_Y,
+  TRANSITION_DOOR_TARGET_DEPTH,
+} from '../../src/engine/transitionDoorTopology.ts'
 // @ts-expect-error - the bake is plain JS with no type declarations.
 import { buildRoomShell, prepareRoomShells } from '../bake/kit.mjs'
 
@@ -100,10 +122,31 @@ function addColliders(meshes: Mesh[], room: RoomData, placement: Placement, bund
 }
 
 /**
+ * The base the scene stands under each mounted exhibit of a room, as a
+ * placement: on the floor at the exhibit's position, turned with it
+ * (`ExhibitMount`, in `MuseumScene.tsx`). The exhibit itself is not here.
+ * No piece has a collider, which is why the capsule walks through the net
+ * (H-31) and why the flood has to say so.
+ *
+ * Only the base. The hood a vitrine table carries rides on it and has no
+ * collider in the manifest; `test:navigation` holds the manifest to that, so
+ * the day a hood is solid this function is where it gets placed.
+ */
+export function mountPlacements(room: RoomData, content: MuseumContent = MUSEUM): Placement[] {
+  return room.exhibitIds.flatMap((exhibitId) => {
+    const exhibit = content.exhibits.find((candidate) => candidate.id === exhibitId)
+    const part = exhibit ? MOUNT_PARTS[exhibit.mount]?.part : undefined
+    if (!exhibit || !part) return []
+    const position: Vec3 = [exhibit.position[0], 0, exhibit.position[2]]
+    return [{ part, position, rotationY: exhibit.rotationY, scale: 1 }]
+  })
+}
+
+/**
  * Everything solid, placed as the runtime places it: the shells, then every
- * kit placement, container and power control that the manifest gives a
- * collider. A recipe with no collider (a desk lamp, a ceiling spot) adds
- * nothing, exactly as in the game.
+ * kit placement, container, power control and exhibit mount that the
+ * manifest gives a collider. A recipe with no collider (a desk lamp, a
+ * ceiling spot) adds nothing, exactly as in the game.
  */
 export function buildMuseumWorld(
   content: MuseumContent = MUSEUM,
@@ -126,6 +169,7 @@ export function buildMuseumWorld(
     for (const placement of room.kit) addColliders(meshes, room, placement, bundles)
     for (const container of room.containers ?? []) addColliders(meshes, room, { ...container, scale: 1 }, bundles)
     if (room.powerControl) addColliders(meshes, room, room.powerControl, bundles)
+    for (const mount of mountPlacements(room, content)) addColliders(meshes, room, mount, bundles)
   }
   return worldFromMeshes(meshes)
 }
@@ -384,4 +428,188 @@ export function reachFromWhereTheCapsuleStops(
     hitDistance: hit ? hit.distance : null,
     eyeInsideProxy: proxyContains(mesh, eye),
   }
+}
+
+// ---------------------------------------------------------------------------
+// What the player aims at: every interactive, as its component mounts it
+// ---------------------------------------------------------------------------
+
+/** The room a floor point lies in, by the centre lines of its walls; null in a doorway between two. */
+export function roomContaining(point: Vector3, content: MuseumContent = MUSEUM): RoomData | null {
+  return (
+    content.rooms.find(
+      (room) =>
+        Math.abs(point.x - room.origin[0]) <= room.shell.width / 2 &&
+        Math.abs(point.z - room.origin[2]) <= room.shell.depth / 2,
+    ) ?? null
+  )
+}
+
+export type InteractionVolume = {
+  readonly kind: InteractionKind
+  /** What a failure or a debt line names. A door has one per side: `<door>@<room>`. */
+  readonly id: string
+  /** The room the player stands in to aim at it. */
+  readonly roomId: string
+  /** How far that kind's ray reaches (`INTERACTION_REACH`). */
+  readonly reach: number
+  /** The box the centre-of-screen ray has to find, under the wrapper that carries the placement. */
+  readonly mesh: Mesh
+  /**
+   * A door is aimed at while it is shut, and shut it is solid: its gate, in a
+   * world of its own. A point the capsule could only stand on with the leaves
+   * open is not one the door is opened from.
+   */
+  readonly gate?: CollisionWorld
+}
+
+type Wrapper = {
+  readonly position: readonly number[]
+  readonly rotationY?: number
+  readonly scale?: number
+}
+
+/** A box under a wrapper group, as every component hangs its target: never a transform on the box itself. */
+function boxUnder(wrapper: Wrapper, box: InteractionProxy): Mesh {
+  const group = new Group()
+  group.position.set(wrapper.position[0], wrapper.position[1], wrapper.position[2])
+  group.rotation.y = wrapper.rotationY ?? 0
+  group.scale.setScalar(wrapper.scale ?? 1)
+  const mesh = new Mesh(new BoxGeometry(...box.size), new MeshBasicMaterial(PROXY_MATERIAL_PROPS))
+  mesh.position.set(...box.centre)
+  group.add(mesh)
+  group.updateMatrixWorld(true)
+  mesh.geometry.computeBoundingBox()
+  return mesh
+}
+
+const boxOf = (bounds: Bounds) => new Box3(new Vector3(...bounds.min), new Vector3(...bounds.max))
+
+/** A room-local placement, in world space. */
+function placedIn(room: RoomData, placed: Wrapper): Wrapper {
+  return {
+    position: [0, 1, 2].map((axis) => room.origin[axis] + placed.position[axis]),
+    rotationY: placed.rotationY,
+    scale: placed.scale,
+  }
+}
+
+function bakedBounds(recipe: string, bundle: BakedBundle | undefined, owner: string): Bounds {
+  const bounds = recipeBounds(recipe, bundle)
+  if (!bounds) throw new Error(`recipe "${recipe}" of "${owner}" is not baked`)
+  return bounds
+}
+
+/**
+ * The volume of every thing E works on, built as the runtime builds it.
+ *
+ *   - an exhibit is hit on its own meshes (`Interaction.tsx`), so the box of
+ *     its recipe stands for them, under the piece's position, turn and scale;
+ *   - a cabinet by the chest-high `DRAWER_PROXY`, a notebook by its own
+ *     bounds padded to the minimum (`Containers.tsx`);
+ *   - a power control and a radio by their bounds padded to the minimum
+ *     (`PowerControls.tsx`, `Devices.tsx`); a clock and a door reader answer
+ *     to nothing and are not here;
+ *   - a door by the box of its whole opening on the plane of the leaves
+ *     (`TransitionDoors.tsx`), once from each of its two rooms.
+ *
+ * Which line of each component this copies is held by
+ * `interactionVolumeWiringProblems`: a component that pads by a number of
+ * its own would be proved reachable here by a box the player never aims at.
+ */
+export function interactionVolumes(
+  content: MuseumContent = MUSEUM,
+  bundles: readonly BakedBundle[] = BAKED_BUNDLES,
+): InteractionVolume[] {
+  const kit = kitOf(bundles)
+  const volumes: InteractionVolume[] = []
+
+  for (const room of content.rooms) {
+    const pieces = bundles.find((bundle) => bundle.name === `exhibits-${room.id}`)
+    for (const exhibitId of room.exhibitIds) {
+      const exhibit = content.exhibits.find((candidate) => candidate.id === exhibitId)
+      if (!exhibit) throw new Error(`room "${room.id}" lists an exhibit "${exhibitId}" the content does not have`)
+      const bounds = boxOf(bakedBounds(exhibit.recipe, pieces, exhibit.id))
+      volumes.push({
+        kind: 'exhibit',
+        id: exhibit.id,
+        roomId: room.id,
+        reach: INTERACTION_REACH.exhibit,
+        mesh: boxUnder(placedIn(room, exhibit), {
+          centre: bounds.getCenter(new Vector3()).toArray(),
+          size: bounds.getSize(new Vector3()).toArray(),
+        }),
+      })
+    }
+
+    for (const container of room.containers ?? []) {
+      const box = isNotebook(container)
+        ? paddedProxy(boxOf(bakedBounds(container.part, kit, container.id)), PROXY_MINIMUM.notebook)
+        : DRAWER_PROXY
+      volumes.push({
+        kind: 'container',
+        id: container.id,
+        roomId: room.id,
+        reach: INTERACTION_REACH.container,
+        mesh: boxUnder(placedIn(room, { position: container.position, rotationY: container.rotationY }), box),
+      })
+    }
+
+    if (room.powerControl) {
+      volumes.push({
+        kind: 'power-control',
+        id: room.powerControl.id,
+        roomId: room.id,
+        reach: INTERACTION_REACH.powerControl,
+        mesh: powerControlProxy(room, room.powerControl, bundles).mesh,
+      })
+    }
+  }
+
+  for (const { room, device } of radioDevices(content)) {
+    volumes.push({
+      kind: 'device',
+      id: device.id,
+      roomId: room.id,
+      reach: INTERACTION_REACH.device,
+      mesh: boxUnder(
+        placedIn(room, { position: device.position, rotationY: device.rotationY }),
+        paddedProxy(boxOf(bakedBounds(device.part, kit, device.id)), PROXY_MINIMUM.radio),
+      ),
+    })
+  }
+
+  for (const door of buildTransitionDoorSpecs(content.rooms)) {
+    const gate = new CollisionWorld()
+    registerTransitionDoorGate(gate, door)
+    for (const roomId of [door.ownerRoomId, door.otherRoomId]) {
+      volumes.push({
+        kind: 'door',
+        id: `${door.id}@${roomId}`,
+        roomId,
+        reach: INTERACTION_REACH.door,
+        mesh: boxUnder(
+          { position: door.position, rotationY: door.rotationY },
+          {
+            centre: [0, TRANSITION_DOOR_SILL_Y + door.height / 2, TRANSITION_DOOR_PLANE_Z],
+            size: [door.width, door.height, TRANSITION_DOOR_TARGET_DEPTH],
+          },
+        ),
+        gate,
+      })
+    }
+  }
+
+  return volumes
+}
+
+/** How far a point is from a volume, in metres of the world; zero inside it. */
+export function distanceToVolume(mesh: Mesh, point: Vector3) {
+  const local = mesh.worldToLocal(point.clone())
+  mesh.geometry.computeBoundingBox()
+  const box = mesh.geometry.boundingBox as Box3
+  if (box.containsPoint(local)) return 0
+  // Clamped in the box's own frame, measured in the world's: a scaled piece
+  // (the Spalding ball stands at 2.65) is as far away as it looks.
+  return mesh.localToWorld(box.clampPoint(local, new Vector3())).distanceTo(point)
 }

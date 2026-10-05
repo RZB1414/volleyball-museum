@@ -993,11 +993,23 @@ test('the office drawer code is printed where the lock points, and nowhere else'
     // they found. The year stays on the plaque and on the title of the one
     // document that reveals the same fact; the catalogue entry used to repeat
     // it, and so did two other cards.
-    const allowed = [
-      teaching.labelKey,
-      ...MUSEUM.documents.filter((doc) => doc.revealsFactId === fact.id).map((doc) => doc.titleKey),
-    ].sort()
+    //
+    // The fact says so itself now (`printedIn`), and the numeral lint holds
+    // every code to what its fact says (`test:lints`). What stays here is
+    // what the lint cannot know: that the two keys the fact names are the
+    // ones the lock points at, the plaque the player is reading as they learn
+    // the year and the title of the document that reveals it.
+    const allowed = [...(fact.printedIn ?? [])].sort()
+    assert.deepEqual(
+      allowed,
+      [
+        teaching.labelKey,
+        ...MUSEUM.documents.filter((doc) => doc.revealsFactId === fact.id).map((doc) => doc.titleKey),
+      ].sort(),
+      `${fact.id}: printedIn names the plaque and the document title, and nothing else`,
+    )
     assert.equal(allowed.length, 2, 'the plaque and one document title')
+    assert.equal(fact.exception, 'tutorial', 'two keys are the tutorial exception')
     for (const [locale, dictionary] of LOCALES) {
       assert.ok(dictionary[teaching.labelKey].includes(fact.value), `${locale}: the plaque shows ${fact.value}`)
       const printedOn = Object.keys(dictionary)

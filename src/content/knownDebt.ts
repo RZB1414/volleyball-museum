@@ -146,6 +146,37 @@ export const KNOWN_DEBT: readonly KnownDebt[] = [
     note: 'no `doneWhen`: in L3 it becomes a dated promise, a line with no box to tick (M32)',
   },
 
+  // The text lint (L2) reads what the museum prints, and found two things
+  // written before there was a rule. The predecessor's note counts the
+  // museum's age from today; it is a document, so it is held to the rule for
+  // collection text, and it leaves with the lot that replaces it by the
+  // handover sheet. And three of the porter's answers speak of the dark, the
+  // blackout and the rain with no `when` to ask whether the night still
+  // looks like that: an answer of his patience cannot carry one until the
+  // radio's replies do (M9, `RadioReply.when`).
+  {
+    gate: 'validate:content',
+    code: 'text-ages',
+    id: 'document.predecessor.body',
+    untilLot: 3,
+    note: 'H-23: «existe há cento e trinta anos»; the note gives way to `doc-otavio-handover`',
+  },
+  ...(
+    [
+      ['radio.patience.t4.dark', '«medo do escuro», said with every light on as well'],
+      ['radio.patience.t5.soap.2', '«acabou a luz», said after the power is back'],
+      ['radio.deadAir.rain', '«só a chuva batendo nas janelas», whatever the weather has done since'],
+    ] as const
+  ).map(
+    ([id, note]): KnownDebt => ({
+      gate: 'validate:content',
+      code: 'speech-night-state-unconditional',
+      id,
+      untilLot: 3,
+      note: `${note}: an answer has no \`when\` until M9`,
+    }),
+  ),
+
   // Moving the Holyoke breaker to the far wall made it a lighthouse, and put
   // the interpretation kiosk square across the straight line to it: a player
   // who walks at the red light comes to rest against the kiosk's long face,
@@ -159,6 +190,18 @@ export const KNOWN_DEBT: readonly KnownDebt[] = [
     id: 'holyoke-breaker',
     untilLot: 14,
     note: 'the kiosk stands across the straight line from the door to the breaker: re-sited with the wing (L14)',
+  },
+  // The flood (L2) walks the capsule up to every interactive, and no piece
+  // has a collider. Eleven of the twelve stand on or in furniture that
+  // stops it short. The net stands on the floor by itself: the capsule
+  // walks through the cords and the eye, at 1.62 m, ends inside the box the
+  // ray is cast at. The wing's lot gives the net a blade of collision.
+  {
+    gate: 'test:navigation',
+    code: 'standing-point-inside-target',
+    id: 'net-1897',
+    untilLot: 14,
+    note: 'H-31: no collider, so the place nearest the net has the eye inside its own box',
   },
 
   // Ratchets held at what was measured, above what the plan budgets. Both

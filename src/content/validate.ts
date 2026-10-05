@@ -29,6 +29,7 @@ import type {
   UnlockEffect,
 } from './schema'
 import { simulateProgress } from './simulate.ts'
+import { validateText } from './textLint.ts'
 
 export type ValidationIssue = {
   /**
@@ -1919,8 +1920,17 @@ export function validateSpeech(content: MuseumContent, dictionaries: Dictionarie
 
 /** What only the gate script can supply; a test supplies its own. */
 export type ContentGateExtras = {
-  /** Every dictionary, by locale: what is said is read in each language. */
+  /**
+   * Every dictionary, by locale: what is said and what is printed are read in
+   * each language (`validateSpeech`, and `validateText` in `textLint.ts`).
+   */
   readonly dictionaries?: Dictionaries
+  /**
+   * The words drawn in the authored images, by media id: a code lettered on
+   * a plan is as printed as one on a label. The gate script reads the files;
+   * without it only the dictionaries and the credit lines are read.
+   */
+  readonly mediaTexts?: Readonly<Record<string, readonly string[]>>
   /** Dictionary keys the code cites by hand; see `validateTranslations`. */
   readonly keysCitedByCode?: ReadonlySet<string>
   /**
@@ -1963,6 +1973,9 @@ export function validateContent(
     ...(bundles ? validateBake(content, bundles) : []),
     ...(translationKeys ? validateTranslations(content, translationKeys, extras.keysCitedByCode) : []),
     ...(extras.dictionaries ? validateSpeech(content, extras.dictionaries) : []),
+    ...(extras.dictionaries
+      ? validateText(content, extras.dictionaries, extras.mediaTexts ? { mediaTexts: extras.mediaTexts } : {})
+      : []),
     ...(extras.previousGraph ? validateAdditive(extras.previousGraph, content) : []),
   ]
   return extras.knownDebt

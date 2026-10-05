@@ -46,14 +46,18 @@ import {
   transitionDoorSwingSign,
   TRANSITION_DOOR_PLANE_Z,
   TRANSITION_DOOR_SILL_Y,
+  TRANSITION_DOOR_TARGET_DEPTH,
   type TransitionDoorSpec,
 } from './transitionDoorTopology'
+import { INTERACTION_REACH } from './interactionTarget'
 import { PLAYER_CAPSULE, playerPosition } from './playerPosition'
 import { isRoomPowered } from './power'
 
 const CENTRE = new Vector2(0, 0)
 const INTERACTION_LAYER = 7
-const INTERACTION_DISTANCE = 2.6
+// With the other four reaches, where the navigation suite reads it: the
+// flood proves a player can stand this close to every door, on both sides.
+const INTERACTION_DISTANCE = INTERACTION_REACH.door
 const OPEN_ANGLE = Math.PI * 0.53
 const ABANDON_DISTANCE_PADDING = 0.5
 const DOORS = buildTransitionDoorSpecs(MUSEUM.rooms)
@@ -209,7 +213,7 @@ function DoorAssembly({
         ]}
         visible={canTargetDoor(phase)}
       >
-        <boxGeometry args={[spec.width, spec.height, 0.1]} />
+        <boxGeometry args={[spec.width, spec.height, TRANSITION_DOOR_TARGET_DEPTH]} />
         <meshBasicMaterial colorWrite={false} depthWrite={false} />
       </mesh>
     </group>

@@ -1161,6 +1161,15 @@ tem colisor e deixa o olho entrar na própria caixa. Distâncias do melhor ponto
 0,88 m; `ball-spalding` 0,64 m; vitrine corrida 1,03 a 1,38 m; arquivos 0,16 m; caderno 1,20 m;
 luminária 0,70 m; rádio 0,69 m; quadros 0,25 e 0,30 m; portas 0,22 e 0,43 m.
 
+**[medido em F5, com a suíte]**: 6.618 lugares em 0,56 s (saguão 3.939, Ala 1 2.321, escritório
+346, 12 em vãos), os mesmos com um orçamento de passos de 1× a 6×; os 26 alvos passam em (a) e em
+(b) reprova só `net-1897`, como previsto. A contagem difere em 3% porque a grade é ancorada no
+spawn (o script da medição do plano não ficou no repositório; a fase da grade decide se a última
+fileira cabe junto de cada parede). Do lugar mais próximo: bolas do saguão 0,93 a 0,94 m;
+`ball-spalding` 0,66 m; `gym-suit` 0,30 m (o olho passa 30 cm acima do manequim, que tem 1,32 m);
+vitrine corrida 0,77 a 1,33 m; arquivos 0,08 a 0,23 m; caderno 1,24 m; luminária 0,67 m; rádio
+0,73 m; quadros 0,31 e 0,38 m; portas 0,29 a 0,49 m (com a folha fechada: ver «Como ficou»).
+
 `KNOWN_DEBT`: `{ gate: 'test:navigation', code: 'standing-point-inside-target', id: 'net-1897',
 untilLot: 14 }` (H-31: a rede ganha lâmina de colisão).
 
@@ -1172,7 +1181,45 @@ toda sala).
 **Vermelho hoje.** A acusação de `net-1897` (fora da tabela até a linha entrar). O resto nasce
 verde; prova-se por mutação, dentro do próprio teste: sem o colisor de `breaker-panel` no
 manifesto, o olho do ponto mais próximo entra no volume do `atrium-breaker` (é ÁT-A1 voltando);
-com uma `partition` atravessada na faixa do escritório, `office-cabinet` fica sem ponto de pé.
+com **duas** `partition` fechando o escritório de parede a parede, logo ao norte do spawn,
+`office-cabinet` fica sem ponto de pé. (O plano dizia «uma `partition` atravessada na faixa», e
+isso não tira o ponto de pé: corrigido em F5, abaixo.)
+
+**Como ficou (F5).**
+
+- **Alcance é distância, como no jogo.** Cada raio de mira só é lançado contra os alvos do seu
+  tipo: o `E` no arquivo atravessa uma cadeira, e uma partition. Por isso uma `partition` na
+  faixa do escritório não tira o ponto de pé do arquivo por dois motivos medidos: a cápsula dá a
+  volta pela mesa (o lugar mais próximo continua a 0,08 m), e mesmo um muro a um metro do arquivo
+  deixa o lado de cá a 1,95 m, dentro dos 2,4 m. (a) pega o que **nenhum** lugar andável alcança;
+  o resto do que um jogador encontra é (b). A suíte prova (a) de dois jeitos: o escritório
+  murado de parede a parede (o lugar mais próximo fica a 2,69 m) e a Ala 1 com os dois vãos
+  murados, em que os dois arquivos continuam a menos de 2,4 m de um lugar do **saguão**, através
+  da parede, e é o «na sala dele» que recusa.
+- **Códigos:** `no-standing-point` para (a) e `standing-point-inside-target` para (b), um por
+  alvo; uma porta tem um alvo por lado, `<porta>@<sala>`. `test:navigation` passou a assentar a
+  tabela de dívidas **uma vez**, no fim, com a caminhada do farol e a inundação juntas (assentar
+  cada bloco sozinho daria ao outro as linhas dele como «pagas»).
+- **Porta fechada é sólida.** O jogador mira uma porta enquanto ela está fechada, e fechada ela
+  para a cápsula. O mundo da inundação não tem folhas (é o que deixa cobrir as três salas), então
+  cada alvo de porta leva o próprio portão (`registerTransitionDoorGate`, num mundo só dele) e um
+  lugar em que a cápsula encostaria no portão não conta. Sem isso o lugar mais próximo ficava
+  dentro do vão, a 3 cm da caixa ou com o olho dentro dela.
+- **A volta é andada.** A inundação guarda de que célula cada lugar foi alcançado, e `walkBack`
+  anda a cápsula de volta por essa cadeia, de onde o jogador chega em cada sala até o spawn.
+- **Cair não é chegar.** Uma caminhada que termina mais de um degrau (0,22 m + 2 cm) abaixo de
+  onde começou foi queda, medida caminhada a caminhada; e a chegada pergunta ao piso o que o
+  spawn pergunta (`hasWalkableSupportBelow`), porque `grounded` também é o que o motor diz de uma
+  cápsula que ele acabou de subir num degrau, e uma que afunda na borda de uma laje é «subida»
+  contra o lado dela. Nenhum dos dois acontece no museu de hoje; os dois têm caso com lajes
+  feitas para o teste.
+- **Dois números saíram do componente:** `INTERACTION_REACH.door` (2,6 m, que era
+  `INTERACTION_DISTANCE` em `TransitionDoors.tsx`) e `TRANSITION_DOOR_TARGET_DEPTH` (0,1 m, que
+  era um literal no `boxGeometry`). `interactionVolumeWiringProblems` (`runtimeWiring.ts`) prende
+  cada componente à caixa que a suíte mede, e é provada por treze refactors em memória.
+- **Os suportes de peça** entram no mundo por `mountPlacements`; nenhuma peça de hoje usa plinto
+  ou vitrine de mesa, então a prova traz uma bola num plinto e anda contra ele. A cúpula da
+  vitrine de mesa não tem colisor e a suíte prende o manifesto a isso.
 
 ### T14 — Lint de numerais e do que envelhece (M11; H-22, CN13, EN-A7; D14) · F5
 
@@ -1217,7 +1264,42 @@ o texto de antes de L1, guardado no teste (`exhibit.handbook-1897.catalogue` e
 `exhibit.photo-gym.catalogue` com o ano). `text-ages` acusa `document.predecessor.body` («existe
 há cento e trinta anos») e `speech-night-state-unconditional` acusa `radio.patience.t4.dark`,
 `radio.patience.t5.soap.2` e `radio.deadAir.rain` [previsto, pela varredura feita para este
-plano]: entram em `KNOWN_DEBT` no mesmo commit.
+plano]: entram em `KNOWN_DEBT` no mesmo commit. **[confirmado em F5: as quatro, e só elas.]**
+
+**Como ficou (F5).**
+
+- **Uma acusação por chave**, nomeando as línguas e as palavras: uma linha de dívida data uma
+  chave, e a tabela impressa tem uma linha por dívida (37 com as quatro novas).
+- **Onde o texto mora:** uma chave de dicionário; `credit:<id da mídia>` para a linha de crédito
+  (nas duas línguas); `media:<id da mídia>` para o que está escrito num SVG, que não tem língua.
+  Quem lê os arquivos é `scripts/lib/mediaTexts.ts` (o `<text>` de cada SVG de `media`, com os
+  `<tspan>` juntos e as entidades decodificadas; um arquivo que sumiu lança erro), e
+  `validate-content.ts` passa o resultado em `extras.mediaTexts`. `printedIn` aceita qualquer um
+  dos três.
+- **O tokenizador lê duas coisas antes dos dígitos soltos:** a hora (`16h47`, `8h55`, `9h`, e
+  também `16:47` e `9 a.m.`, que é como o inglês escreve) e o número com separador de milhar
+  (`1,896`, `200.000`: um número só, com os dígitos juntos). `1:200`, a escala da planta, não é
+  hora; `1,98`, a altura da rede, não é milhar.
+- **Código contado não é preso aos dígitos:** com `exception: 'counted'` ou `'geometry'` o fato
+  fica fora de `numeral-exclusivity` (um `14` solto está em metade das placas) e dentro de
+  `counted-pattern`; a chave de `printedIn` dele só precisa existir. **Código novo:**
+  `fact-exception-without-patterns` (o esquema dizia «required with», e nada conferia).
+- **`counted-pattern`:** palavras são sequências de letras, números e o `×`; a hora é uma palavra
+  que não casa com nada; a distância é contada da borda mais próxima da forma; as palavras da
+  própria forma não contam como o significado dela («dezesseis» começa com «dez»); radical é
+  começo de palavra («combinação» contém «naç» e não é nação).
+- **`text-ages`** lê cada palavra da lista com as flexões simples («únicas», «maiores»,
+  «recordes»; *world records*) e nada além da lista. Em inglês `for N years` pede o plural.
+  **O que escapa:** a versão inglesa do bilhete do Otávio diz *it has been here a hundred and
+  thirty years*, sem *for*, e não casa com nenhuma das treze formas; a chave é acusada pelo
+  português e a dívida a data nas duas línguas. Se a lista inglesa ganhar o perfeito sem
+  preposição, é em L3 ou L8, com caso.
+- **Estado da noite:** quem não tem `when` é a resposta da paciência (`RadioReply`,
+  `RadioOutburst`, elogio e chiado); chamada e dica têm, e `conditionAsks` diz se ele pergunta
+  alguma coisa (`{}`, lista vazia e `anyOf` com um ramo vazio não perguntam). A última dica, que
+  tem `when: {}`, seria acusada se falasse de chuva.
+- **`test:opening-flow`** deixou de derivar as duas chaves: lê `printedIn` e confere que são a
+  plaqueta que ensina o fato e o título do documento que o revela, com a exceção `tutorial`.
 
 ## 5. Migração: o save antes e depois
 
@@ -1333,6 +1415,7 @@ jogo 388.248 (teto 390.200). **A folga do título é de 147 bytes.**
 | jogo | `triggers.ts`, `contentRegistry.ts`, `progressGrants.ts`, `lockRules.ts` | +1,5 a +2 kB; **[medido em F2: +1.250 bytes, 389.477; o teto fica em 390.200, com 723 bytes de folga]** | F2 |
 | jogo | `mapModel.ts`, o toast, `doorGrant` | +1 kB; **[medido em F3: +1.237 bytes, 390.714; teto 392.700]** | F3 |
 | jogo | `examineReach.ts` | +0,2 kB; **[medido em F4: −6 bytes, 390.708; os tetos ficam]** (a vista só importa as duas constantes; a conta do cone não entra no bundle) | F4 |
+| jogo | `printedIn` e `exception` no fato do ano; os dois números da porta, importados | não previsto; **[medido em F5: +0,06 kB, 390,77 kB; os tetos ficam]** (`textLint.ts`, `flood.ts` e `mediaTexts.ts` não entram no bundle) | F5 |
 
 Tudo [previsto]. Cada teto sobe **no commit da fatia que precisa**, para o medido mais meio por
 cento, com o motivo escrito em `BUNDLE_PATH_CEILINGS` (`scripts/lib/ratchets.ts:237-241`), como a
@@ -1893,3 +1976,106 @@ funções continua sendo `runtimeWiring.ts`. As três peças grandes não foram 
   reprova até `npm run graph:snapshot` rodar de novo: o lote ainda está aberto.
 - `scripts/lib/playthrough.ts` exporta `press`, `everyPress`, `playToEnd` e `pressProblem`; a
   inundação de T13 pode usar `everyPress` para saber o que cada sala oferece.
+
+### F5 — O espaço e os números (2026-10-05; commit local, sem push)
+
+T13 e T14 inteiros. Nada muda para o jogador: nenhum texto de jogo mudou (os dois dicionários
+estão intocados), e o que mudou em runtime são dois números que `TransitionDoors.tsx` passou a
+importar em vez de digitar. O que entra é o portão: a inundação que anda até cada interativo, e
+as regras que leem o que o museu imprime.
+
+**Vermelho primeiro** (§9.1, passo 2), cada um visto antes do conserto:
+
+- **A rede.** Com o bloco da inundação escrito e a tabela de dívidas intocada, `test:navigation`
+  saiu com 93 de 94: «and from the place nearest to it too, beyond what the debt table dates —
+  [standing-point-inside-target] Walking up to "net-1897" in "holyoke", the capsule stands at
+  -11.70, -5.53 with the eye inside the interaction volume». A linha de §7.2 entrou depois.
+- **O texto.** Com o lint ligado em `validateContent`, sem `printedIn` no fato e sem as linhas de
+  dívida, `validate:content` saiu com 12 erros: `fact-code-without-printed-in`
+  (`springfield-renaming`), quatro `numeral-exclusivity` (as duas chaves, nas duas línguas: com
+  nada autorizado, todo lugar em que o ano está é vazamento), `text-ages` em
+  `document.predecessor.body` e seis `speech-night-state-unconditional` (as três falas, nas duas
+  línguas). Com `printedIn` e `exception: 'tutorial'` no fato, ficaram 7: exatamente as quatro
+  chaves previstas em §7.2. As quatro linhas entraram depois disso, no mesmo commit.
+- **`test:opening-flow`**: lendo `fact.printedIn` antes de o fato tê-lo, «printedIn names the
+  plaque and the document title, and nothing else» (lista vazia contra as duas chaves).
+- **A inundação numa laje sem paredes**, na primeira versão: «nothing stands where there is no
+  floor — 78 place(s) off the slab». A cápsula que afundava na borda era «subida» pelo motor
+  contra o lado da laje e contava como apoiada. Foi daí que saiu a pergunta ao piso na chegada.
+- O lint de exclusividade nasce verde, como previsto: prova-se com o texto de antes de L1
+  (`82756c4`), guardado na suíte, que acusa `exhibit.handbook-1897.catalogue` e
+  `exhibit.photo-gym.catalogue` juntas e uma de cada vez.
+
+Com tudo verde, **84 mutações** foram aplicadas uma a uma (o arquivo voltava ao original depois
+de cada uma), em `flood.ts`, `museumWorld.ts`, `textLint.ts`, `mediaTexts.ts`, `validate.ts`,
+`validate-content.ts`, `knownDebt.ts`, `museum.ts`, nos dois dicionários, em `runtimeWiring.ts`,
+`test-facts.ts`, `TransitionDoors.tsx`, `Containers.tsx` e `notebook.ts`. Na primeira rodada
+quatro escaparam, e viraram quatro casos novos; no fim todas reprovam:
+
+- «cair é chegar» (a regra da queda tirada) escapava porque, na grade de 25 cm, a cápsula fica
+  sem passos no ar antes de pousar: a queda era recusada pelo motivo errado. Virou o caso do
+  degrau de 45 cm com células de meio metro, em que a caminhada tem tempo de pousar (com a regra
+  tirada, 54 lugares no piso de baixo);
+- «o radical em qualquer parte da palavra»: virou «Catorze dígitos na combinação»;
+- «a forma é o próprio significado»: virou «Oito por dezesseis», com o radical «dez»;
+- «a fala curta não é de ninguém» escapava porque a fala usada no caso já era acusada por outro
+  dono: o caso passou a pôr na dica final uma fala que só ela diz, inteira e curta.
+
+**Onde a execução se afastou do plano.** O que muda o sentido de uma tarefa está escrito na
+própria tarefa (T13 e T14, «Como ficou»). Em resumo:
+
+- **Uma `partition` na faixa do escritório não tira o ponto de pé do arquivo** (T13). Alcance é
+  distância; são duas, de parede a parede, e há uma segunda prova com a Ala 1 murada.
+- **A inundação tem 6.618 lugares, não 6.405**, pela âncora da grade; os veredictos são os do
+  plano (26 alvos, (a) inteira, (b) só a rede).
+- **Porta fechada conta como sólida** para o alvo de porta; **a volta é andada** (`walkBack`);
+  **cair não é chegar**, por caminhada.
+- **`INTERACTION_REACH.door` e `TRANSITION_DOOR_TARGET_DEPTH`** saíram de `TransitionDoors.tsx`,
+  e `interactionVolumeWiringProblems` prende os cinco componentes às caixas medidas.
+- **Uma acusação por chave**; `credit:` e `media:` como lugares de texto; hora com `:` e
+  `a.m.`; milhar com separador; `fact-exception-without-patterns`.
+- **`test:navigation` assenta a tabela de dívidas uma vez**, no fim.
+
+**Medições.** `test:navigation`: 108 casos em 3,3 s de relógio (eram 70 em 1,0 s); cada
+inundação do museu leva 0,5 a 0,6 s e a suíte faz quatro (o museu, sem o colisor do quadro, o
+escritório murado, a Ala 1 murada). `test:lints`: 21 casos em menos de um segundo. Bundle: título
+28,86 kB de gzip (igual), jogo 390,77 kB (390,71 em F4: os dois campos do fato e a importação),
+documento 63,23 kB; nenhum teto mudou. `npm run check` e `npm run build` verdes; o portão imprime
+37 dívidas datadas em `validate:content` (eram 33) e duas em `test:navigation` (era uma).
+`docs/releases/L2.graph.json` não mudou: o instantâneo não registra `printedIn`.
+
+**No navegador, depois do verde** (servidor `museum-dev` reiniciado depois da última edição de
+`src/`; 1280 × 720, painel visível; o que se lê aqui saiu do DOM, do save e do
+`__museumScene()`). A fatia não tem nada para o jogador ver; o que se conferiu é que as portas
+continuam as mesmas com os dois números vindos de fora do componente.
+`?qaSave=production-drawer-open`, «Continuar». As três caixas de mira das portas, na cena, são as
+que a suíte constrói: 0,1 m de fundo no plano das folhas (x de 9,30 a 9,40 na do escritório, de
+−9,40 a −9,30 nas duas da Ala 1), da soleira a 2,41 m. O alcance é o de antes: com o olho a
+2,57 m da caixa o prompt diz «Abrir porta — Átrio»; a 2,71 m, nada. De dentro do escritório o `E`
+abre a porta e a travessia, andada com `W`, chega ao saguão (`lastRoom: 'atrium'`, nada perdido
+no save). No saguão, andando com `W` contra o atalho trancado, a câmera para em x = −9,00, a
+0,30 m da caixa, com «Abre pelo outro lado — Ala 1 · Holyoke» ainda na tela: é o lugar que a
+inundação dá para a porta fechada (0,29 m no mínimo), com o olho fora da caixa. Console sem erro;
+o único aviso é o `THREE.Clock` de sempre. Viewport de volta ao preset desktop e `localStorage`
+da origem de desenvolvimento vazio.
+
+**O que não deu para conferir.** A inundação anda o mundo dos colisores, não a cena: quem prende
+um ao outro continua sendo `test:room-runtime` e as fiações de `runtimeWiring.ts`. Os volumes de
+peça são a caixa da receita, não as malhas (o raio do jogo acerta a malha): para a rede a caixa é
+quase toda ar, e é por ela que a dívida de H-31 é medida. E ninguém leu os dois dicionários de
+ponta a ponta atrás de palavra que envelhece fora das listas: o lint só conhece as listas.
+
+**Para o fecho do lote.**
+
+- O Anexo C do plano mestre ganha as quatro linhas de texto e a da rede (§7.2), e os códigos
+  novos: `no-standing-point`, `standing-point-inside-target`, `numeral-exclusivity`,
+  `numeral-printed-in-missing`, `fact-code-without-printed-in`,
+  `fact-exception-without-patterns`, `counted-pattern`, `text-ages`,
+  `speech-night-state-unconditional`.
+- Todo fato `usedAsCode` novo declara `printedIn` no mesmo commit, e todo SVG novo de `media` é
+  lido sozinho pelo portão. Peça nova num plinto ou numa vitrine de mesa já entra sólida no mundo
+  das suítes.
+- L3 paga as quatro dívidas de texto: o bilhete dá lugar a `doc-otavio-handover`, e
+  `RadioReply.when` (M9) deixa as três respostas perguntarem pela noite.
+- A versão inglesa do bilhete («has been here a hundred and thirty years») escapa da lista
+  inglesa de `text-ages`; vai embora com o bilhete, e a forma fica anotada em T14.

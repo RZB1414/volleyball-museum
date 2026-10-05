@@ -114,6 +114,9 @@ export type FactSource = {
  * the content's word. The two publishers have to be pages that were read and
  * hold the value (`fact-code-uncaptured`), and every source any fact cites,
  * code or not, has to be one of those readings (`fact-source-uncaptured`).
+ *
+ * And by `validateText()` (`textLint.ts`): a code is something the player
+ * finds, so the museum prints it where the fact says and nowhere else.
  */
 export type Fact = {
   readonly id: string
@@ -129,6 +132,34 @@ export type Fact = {
    * ships in pt-BR and en, and a word-based answer cannot survive translation.
    */
   readonly usedAsCode: boolean
+  /**
+   * The dictionary keys allowed to print the code, in every language.
+   * Required when `usedAsCode`. One key: a year that every card in a wing
+   * repeats is not a year the player found. More than one needs the
+   * `tutorial` exception.
+   */
+  readonly printedIn?: readonly string[]
+  /**
+   * Why this code is not held to one key, or not to its digits at all.
+   *
+   *   - `tutorial`: the first lock of the game, printed twice on purpose;
+   *   - `counted`: the answer is a count the player makes (fourteen names on
+   *     a wall). A bare `14` is on half the labels of a museum, so what is
+   *     forbidden is the numeral beside its meaning (`forbiddenPatterns`);
+   *   - `geometry`: the answer is a measure read off a thing (a court of
+   *     eight by sixteen), forbidden the same way.
+   */
+  readonly exception?: 'tutorial' | 'counted' | 'geometry'
+  /** Required with `counted` and `geometry`; read by `counted-pattern`. */
+  readonly forbiddenPatterns?: readonly ForbiddenPattern[]
+}
+
+/** A count or a measure that is a lock's answer, and how it must not be said. */
+export type ForbiddenPattern = {
+  /** The numeral as it may be written, in any language: '14', 'catorze', 'fourteen'. */
+  readonly forms: readonly string[]
+  /** Word stems that give it its meaning: 'federaç', 'fundador', 'federation'. */
+  readonly near: readonly string[]
 }
 
 // ---------------------------------------------------------------------------

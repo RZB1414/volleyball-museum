@@ -735,7 +735,8 @@ test('nothing the game ships carries the capture record', () => {
   // table is the gate's for the same reason: a list of what is still wrong
   // is not something a player downloads. Nor are the exhaustive player and
   // the graph snapshot (L2): they are the proof that the game can be played,
-  // and the game is played without them.
+  // and the game is played without them. Nor is the lint that reads what the
+  // museum prints: its lists of words are the gate's, not the game's.
   const gateOnly = [
     'factCapture.ts',
     'facts.bank.ts',
@@ -745,9 +746,10 @@ test('nothing the game ships carries the capture record', () => {
     'knownDebt.ts',
     'simulate.ts',
     'additive.ts',
+    'textLint.ts',
   ]
   const importsTheGate = (source: string) =>
-    /(?:from|import)\s*\(?\s*['"][^'"]*(?:factCapture|facts\.bank|facts\.generated|facts\.manual|content\/validate|\.\/validate|knownDebt|(?:content|\.)\/(?:simulate|additive)(?:\.ts)?(?=['"]))[^'"]*['"]/.test(
+    /(?:from|import)\s*\(?\s*['"][^'"]*(?:factCapture|facts\.bank|facts\.generated|facts\.manual|content\/validate|\.\/validate|knownDebt|(?:content|\.)\/(?:simulate|additive|textLint)(?:\.ts)?(?=['"]))[^'"]*['"]/.test(
       source,
     )
   const offenders = sourceFiles(resolve(ROOT, 'src'), /\.(?:ts|tsx)$/)
@@ -768,6 +770,9 @@ test('nothing the game ships carries the capture record', () => {
     "const { graphSnapshot } = await import('../content/additive.ts')",
     "import { validateContent } from './validate.ts'",
     "import { KNOWN_DEBT } from '../content/knownDebt'",
+    "import { validateText } from '../content/textLint.ts'",
+    "import { numeralTokens } from './textLint'",
+    "const { ageingWordings } = await import('../content/textLint')",
   ]) {
     assert.ok(importsTheGate(reaching), `not seen as reaching the gate: ${reaching}`)
   }
@@ -776,6 +781,8 @@ test('nothing the game ships carries the capture record', () => {
     "import { MUSEUM } from '../content/museum'",
     "import { simulateStep } from './simulateStep.ts'",
     "import { additiveBlend } from '../engine/additiveBlend'",
+    "import { textLintel } from './textLintel.ts'",
+    "import { wrapText } from '../engine/textLint'",
   ]) {
     assert.ok(!importsTheGate(harmless), `taken for the gate: ${harmless}`)
   }

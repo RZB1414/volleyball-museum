@@ -6,6 +6,13 @@ export const TRANSITION_DOOR_LEAF_WIDTH = 0.8
 export const TRANSITION_DOOR_PLANE_Z = -0.3525
 /** The shared brass threshold stands 14 mm proud of the adjoining floors. */
 export const TRANSITION_DOOR_SILL_Y = 0.014
+/**
+ * How deep the box is that the centre-of-screen ray hits to find a door: the
+ * whole opening, on the plane of the leaves. Here, and not in the component
+ * that mounts it, because the navigation suite builds the same box to prove
+ * a player can stand in front of every door and aim at it.
+ */
+export const TRANSITION_DOOR_TARGET_DEPTH = 0.1
 
 export type TransitionDoorSpec = {
   readonly id: string
