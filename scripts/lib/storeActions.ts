@@ -66,6 +66,7 @@ export const STORE_ACTIONS: Record<string, (state: StoreState) => void> = {
       temper: 2,
       lastCallAt: 1791075960000,
       lastHint: 3,
+      hintHeight: 1,
       lastReplyId: null,
       lastOutburstId: 'porter-outburst-kettle',
     }),

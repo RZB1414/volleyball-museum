@@ -23,6 +23,7 @@
  * (`test:facts` checks).
  */
 
+import { deviceSetFlag } from '../engine/deviceRules.ts'
 import { lockCredentialKeys } from '../engine/lockRules.ts'
 import { credentialKey } from '../engine/progressCondition.ts'
 import { compileTriggers } from '../engine/triggers.ts'
@@ -79,8 +80,15 @@ export function saveIdsByField(content: MuseumContent): Record<ListField, Readon
     locksOpened: locks,
     locksSeen: locks,
     doorsReleased: doorIdsOf(content),
-    // A flag exists by being set: there is no list of them but the effects.
-    flags: new Set(effects.flatMap((effect) => (effect.kind === 'set-flag' ? [effect.flag] : []))),
+    // A flag exists by being set: there is no list of them but the effects,
+    // and the verbs of the devices that set one (a clock put right).
+    flags: new Set([
+      ...effects.flatMap((effect) => (effect.kind === 'set-flag' ? [effect.flag] : [])),
+      ...devices.flatMap((device) => {
+        const flag = deviceSetFlag(device)
+        return flag === null ? [] : [flag]
+      }),
+    ]),
     triggersFired: new Set(triggers.map((trigger) => trigger.id)),
     radioCalls: new Set(
       devices.flatMap((device) => (device.kind === 'radio' ? device.calls.map((call) => call.id) : [])),

@@ -483,12 +483,12 @@ function spokenLines(content: Pick<MuseumContent, 'rooms'>): SpokenLine[] {
         for (const key of call.lineKeys) lines.push({ key, by: `call "${call.id}"`, conditional: conditionAsks(call.when) })
       }
       device.hints.forEach((hint, index) => {
-        for (const key of [...hint.lineKeys, ...(hint.curtLineKeys ?? [])]) {
+        for (const key of [...hint.heightKeys, ...(hint.curtLineKeys ?? [])]) {
           lines.push({ key, by: `hint ${index + 1} of "${device.id}"`, conditional: conditionAsks(hint.when) })
         }
       })
-      // An answer of the porter's patience has no `when`: whatever it says, it
-      // says in any night.
+      // An answer of the porter's patience looks at the night when it has a
+      // `when` that asks something; without one it is said in any night.
       const patience = device.patience
       if (!patience) continue
       const answers = [
@@ -498,7 +498,7 @@ function spokenLines(content: Pick<MuseumContent, 'rooms'>): SpokenLine[] {
       ]
       for (const answer of answers) {
         const keys = [...answer.lineKeys, ...('closingKeys' in answer ? (answer.closingKeys ?? []) : [])]
-        for (const key of keys) lines.push({ key, by: `answer "${answer.id}"`, conditional: false })
+        for (const key of keys) lines.push({ key, by: `answer "${answer.id}"`, conditional: conditionAsks(answer.when) })
       }
     }
   }

@@ -559,8 +559,8 @@ await test('text-ages reads collection text, and leaves a voice its «hoje»', (
     // A page of the notebook and a line of the radio are somebody's voice.
     'notebook.welcome.letter',
     'notebook.todo.heading',
-    'radio.call.first.4',
-    'radio.hint.vault',
+    'radio.call.hello.5',
+    'radio.hint.rest',
     // Chrome and wayfinding are not what the collection says.
     'room.atrium.title',
     'container.office.title',
@@ -569,8 +569,8 @@ await test('text-ages reads collection text, and leaves a voice its «hoje»', (
     assert.ok(!keys.has(key), `${key} is not collection text`)
   }
   // The porter says «hoje ninguém desce» today, and nobody accuses him.
-  assert.ok(ageingWordings(PT['radio.call.first.4'], 'pt-BR').includes('hoje'))
-  assert.ok(!accused(validateText(MUSEUM, REAL), 'text-ages').includes('radio.call.first.4'))
+  assert.ok(ageingWordings(PT['radio.call.hello.5'], 'pt-BR').includes('hoje'))
+  assert.ok(!accused(validateText(MUSEUM, REAL), 'text-ages').includes('radio.call.hello.5'))
 
   // On a label, in either language, it is accused once, by key.
   const label = validateText(MUSEUM, reworded({ [CARD]: ['A maior rede que o museu tem até hoje.', 'The only net to this day.'] }))
@@ -663,29 +663,68 @@ function withRadio(change: (radio: Radio) => Radio): MuseumContent {
   }
 }
 
+/** The radio with one answer of the porter's patience changed, wherever in his temper it sits. */
+function withAnswer(id: string, change: (answer: Record<string, unknown>) => Record<string, unknown>): MuseumContent {
+  const changed = <T extends { readonly id: string }>(answers: readonly T[]) =>
+    answers.map((answer) => (answer.id === id ? (change(answer as unknown as Record<string, unknown>) as unknown as T) : answer))
+  return withRadio((radio) => {
+    const patience = radio.patience
+    if (!patience) return radio
+    return {
+      ...radio,
+      patience: {
+        ...patience,
+        tiers: patience.tiers.map((tier) => ({ ...tier, replies: changed(tier.replies), outbursts: tier.outbursts && changed(tier.outbursts) })),
+        praise: patience.praise && changed(patience.praise),
+        deadAir: changed(patience.deadAir),
+      },
+    }
+  })
+}
+
 await test('a line about the night belongs to someone who checks the night first', () => {
   const NIGHT = 'speech-night-state-unconditional'
   const real = accused(validateText(MUSEUM, REAL), NIGHT)
-  assert.deepEqual(real, ['radio.deadAir.rain', 'radio.patience.t4.dark', 'radio.patience.t5.soap.2'])
+  // Three answers of the porter's spoke of the dark, the blackout and the
+  // rain whatever the night was doing, and were dated until L3. Since L3 an
+  // answer has a `when`, each of the three looks first, and nothing is owed.
+  assert.deepEqual(real, [])
+  const LOOKS: Readonly<Record<string, readonly [string, string]>> = {
+    'porter-t4-dark': ['radio.patience.t4.dark', 'escuro'],
+    'porter-t5-soap': ['radio.patience.t5.soap.2', 'acabou a luz'],
+    'porter-air-rain': ['radio.deadAir.rain', 'chuva'],
+  }
+  for (const [answerId, [key, word]] of Object.entries(LOOKS)) {
+    assert.equal(nightStateWord(PT[key], 'pt-BR'), word, key)
+    // Without its `when`, or with one that asks nothing, it is accused again.
+    for (const when of [undefined, {}, { unpowered: [] }] as const) {
+      const blind = withAnswer(answerId, ({ when: _, ...answer }) => (when === undefined ? answer : { ...answer, when }))
+      assert.deepEqual(accused(validateText(blind, REAL), NIGHT), [key], `${answerId} with ${JSON.stringify(when)}`)
+    }
+  }
+  // An answer written tomorrow that speaks of the rain and does not look.
+  const tomorrow = withAnswer('porter-t1-ready', (answer) => ({ ...answer, id: 'porter-t1-rain', lineKeys: ['radio.deadAir.rain'] }))
+  assert.match(
+    validateText(tomorrow, REAL).find((issue) => issue.code === NIGHT)?.message ?? '',
+    /"radio\.deadAir\.rain" says "chuva" \(pt-BR\), "rain" \(en\), and answer "porter-t1-rain" says it whatever the night is doing/,
+  )
 
-  // The first call says "the storm" and asks whether the atrium is still dark.
-  assert.ok(nightStateWord(PT['radio.call.first.2'], 'pt-BR') && nightStateWord(EN['radio.call.first.2'], 'en'))
-  assert.ok(!real.includes('radio.call.first.2'))
+  // His introduction says "the storm" and asks whether the office has power.
+  assert.ok(nightStateWord(PT['radio.call.hello.2'], 'pt-BR') && nightStateWord(EN['radio.call.hello.2'], 'en'))
   // With a `when` that asks nothing, it is accused; so with a list of nothing.
   for (const when of [{}, { powered: [] }] as const) {
     const idle = withRadio((radio) => ({
       ...radio,
-      calls: radio.calls.map((call) => (call.id === 'porter-first-call' ? { ...call, when } : call)),
+      calls: radio.calls.map((call) => (call.id === 'porter-hello' ? { ...call, when } : call)),
     }))
-    assert.ok(accused(validateText(idle, REAL), NIGHT).includes('radio.call.first.2'), JSON.stringify(when))
+    assert.ok(accused(validateText(idle, REAL), NIGHT).includes('radio.call.hello.2'), JSON.stringify(when))
   }
 
-  // The Holyoke hint says «no escuro» and asks whether the wing is unlit.
-  assert.ok(nightStateWord(PT['radio.hint.holyoke'], 'pt-BR'))
-  assert.ok(!real.includes('radio.hint.holyoke'))
+  // The Holyoke hint says «no escuro» at its third height, and asks whether the wing is unlit.
+  assert.ok(nightStateWord(PT['radio.hint.holyoke.how'], 'pt-BR'))
   // Moved to the fallback, which asks nothing, the same line is accused: said
-  // in full, or said curtly.
-  const fallbackSaying = (lines: { readonly lineKeys?: readonly string[]; readonly curtLineKeys?: readonly string[] }) =>
+  // at a height, or said curtly.
+  const fallbackSaying = (lines: { readonly heightKeys?: readonly string[]; readonly curtLineKeys?: readonly string[] }) =>
     accused(
       validateText(
         withRadio((radio) => ({
@@ -696,11 +735,12 @@ await test('a line about the night belongs to someone who checks the night first
       ),
       NIGHT,
     )
-  assert.ok(fallbackSaying({ lineKeys: ['radio.hint.holyoke'] }).includes('radio.hint.holyoke'))
-  assert.ok(fallbackSaying({ curtLineKeys: ['radio.hint.holyoke'] }).includes('radio.hint.holyoke'))
-  assert.ok(!fallbackSaying({}).includes('radio.hint.holyoke'))
-  // One accusation for a line, however many say it.
-  const twice = fallbackSaying({ lineKeys: ['radio.patience.t4.dark'], curtLineKeys: ['radio.patience.t4.dark'] })
+  assert.ok(fallbackSaying({ heightKeys: ['radio.hint.rest', 'radio.hint.holyoke.how'] }).includes('radio.hint.holyoke.how'))
+  assert.ok(fallbackSaying({ curtLineKeys: ['radio.hint.holyoke.how'] }).includes('radio.hint.holyoke.how'))
+  assert.ok(!fallbackSaying({}).includes('radio.hint.holyoke.how'))
+  // One accusation for a line, however many say it: said by the fallback,
+  // which does not look, the joke about the dark is accused once.
+  const twice = fallbackSaying({ heightKeys: ['radio.patience.t4.dark'], curtLineKeys: ['radio.patience.t4.dark'] })
   assert.equal(twice.filter((id) => id === 'radio.patience.t4.dark').length, 1)
 
   // In one language only, it is still the line that is accused, and the message says which.
@@ -722,23 +762,16 @@ await test('a line about the night belongs to someone who checks the night first
 
 await test('the museum is clean but for what the debt table dates', () => {
   const issues = validateText(MUSEUM, REAL, { mediaTexts: MEDIA_TEXTS })
-  assert.deepEqual(
-    issues.map((issue) => `${issue.code} ${issue.id}`).sort(),
-    [
-      'speech-night-state-unconditional radio.deadAir.rain',
-      'speech-night-state-unconditional radio.patience.t4.dark',
-      'speech-night-state-unconditional radio.patience.t5.soap.2',
-      'text-ages document.predecessor.body',
-    ],
-  )
-  // Each has its line, in good standing, and no line of these codes is stale.
-  const codes = new Set(issues.map((issue) => issue.code))
-  const lines = debtOf('validate:content').filter((line) => codes.has(line.code))
-  assert.equal(lines.length, 4)
+  // There were four. The three lines about the night were paid by the slice
+  // of L3 that gave an answer its `when`; the note leaves with the last one.
+  assert.deepEqual(issues.map((issue) => `${issue.code} ${issue.id}`).sort(), ['text-ages document.predecessor.body'])
+  // It has its line, in good standing, and no line of these codes is stale.
+  const lines = debtOf('validate:content').filter((line) => line.code === 'text-ages' || line.code === 'speech-night-state-unconditional')
+  assert.equal(lines.length, 1)
   const settled = settleKnownDebt(issues, lines, CONTENT_LOT)
   assert.deepEqual(settled.filter((issue) => issue.severity === 'error'), [])
-  assert.equal(settled.filter((issue) => issue.severity === 'debt').length, 4)
-  assert.ok(lines.every((line) => line.untilLot === 3), 'the four are paid by the Posse')
+  assert.equal(settled.filter((issue) => issue.severity === 'debt').length, 1)
+  assert.ok(lines.every((line) => line.untilLot === 3), 'the one that is left is paid by the Posse')
   // The note of the predecessor is accused for the count of years it gives.
   assert.match(issues.find((issue) => issue.code === 'text-ages')?.message ?? '', /«há N anos» \(pt-BR\)/)
 })
@@ -747,7 +780,10 @@ await test('the content gate runs the lint, and runs it where the plan says', ()
   const NIGHT = 'speech-night-state-unconditional'
   const withWords = validateContent(MUSEUM, undefined, undefined, undefined, { dictionaries: REAL })
   assert.deepEqual(accused(withWords, 'text-ages'), ['document.predecessor.body'])
-  assert.equal(accused(withWords, NIGHT).length, 3)
+  assert.deepEqual(accused(withWords, NIGHT), [])
+  // The gate runs the rule about the night too: an answer that stops looking is accused there.
+  const blind = withAnswer('porter-t4-dark', ({ when: _, ...answer }) => answer)
+  assert.deepEqual(accused(validateContent(blind, undefined, undefined, undefined, { dictionaries: REAL }), NIGHT), ['radio.patience.t4.dark'])
   // The lettering of the images reaches the lint through the gate's extras.
   const lettered = validateContent(MUSEUM, undefined, undefined, undefined, {
     dictionaries: REAL,

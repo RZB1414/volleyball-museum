@@ -39,8 +39,12 @@ import {
 } from '../src/content/validate.ts'
 import { checklistNews, checklistRows, conditionTally, counterText } from '../src/engine/checklist.ts'
 import {
+  clockFaceAngles,
   clockHandAngles,
   clockTimeAfter,
+  deviceInputOf,
+  deviceIntent,
+  deviceLive,
   dueRadioCalls,
   radioDevices,
   radioHintFor,
@@ -56,6 +60,7 @@ import {
   torchIrradiance,
 } from '../src/engine/flashlightRig.ts'
 import { GALLERY_SPOT_SLOTS } from '../src/engine/galleryLightRig.ts'
+import { fillHour, nightPhraseKey, nightPoints, nightTime, setClockMinutes } from '../src/engine/nightClock.ts'
 import {
   containerById,
   isContainerTaken,
@@ -66,12 +71,14 @@ import {
 import { isRoomPowered } from '../src/engine/power.ts'
 import { buildPowerControlLightRig } from '../src/engine/powerControlLightRig.ts'
 import { progressConditionMet } from '../src/engine/progressCondition.ts'
+import { clockGrant } from '../src/engine/progressGrants.ts'
 import { MOUNT_PARTS, mountPartNames, transitionDoorPartNames } from '../src/engine/runtimePlacedParts.ts'
 import {
   buildTransitionDoorSpecs,
   transitionDoorBlock,
 } from '../src/engine/transitionDoorTopology.ts'
 import { useMuseum } from '../src/state/store.ts'
+import { clockJustSet, devicePrompt } from '../src/ui/promptRules.ts'
 import { ARRIVAL_DEPTH, arrivalOf, recipeParts } from './lib/museumWorld.ts'
 import { squeezed } from './lib/runtimeWiring.ts'
 import { bearingDegrees, projectedSize, roomObstacles, sightlineBlockers } from './lib/sightline.ts'
@@ -469,11 +476,12 @@ test('a door powered from beyond itself is a soft-lock the gate catches', () => 
   assert.deepEqual(unreachable.sort(), ['atrium', 'holyoke'], 'the atrium is unreachable from the office')
   // The authored museum is accused of nothing the debt table has not dated
   // (three pieces a hand cannot be counted on to catalogue, the list item
-  // that follows from them, and one optional detail out of reach):
+  // that follows from them, one optional detail out of reach, and the flag
+  // of the pump, which the dead air waits for and L12 sets):
   // every room is reached and every lock opens.
   const authored = simulateProgress(MUSEUM)
   const owed = debtOf('validate:content').filter((line) =>
-    ['exhibit-uncataloguable', 'checklist-item-untickable', 'hotspot-unreachable'].includes(line.code),
+    ['exhibit-uncataloguable', 'checklist-item-untickable', 'hotspot-unreachable', 'flag-never-set'].includes(line.code),
   )
   assert.deepEqual(
     settleKnownDebt(authored.issues, owed, CONTENT_LOT)
@@ -504,11 +512,15 @@ test('the radio is dead until the office has power, then calls exactly once', ()
 
   save.roomsPowered = ['office']
   assert.equal(radioIsLive(MUSEUM, radio.id, save.roomsPowered), true)
+  // Two calls, in this order: who he is and what happened to the building,
+  // and then where the hall's breaker is (L3 split the one call in two, so
+  // that a player who lights the hall first still meets him).
   const due = dueRadioCalls(radio, save, MUSEUM)
-  assert.equal(due.length, 1)
-  assert.ok(due[0].lineKeys.length >= 3, 'the first call carries the objective')
+  assert.deepEqual(due.map((call) => call.id), ['porter-hello', 'porter-first-call'])
+  assert.equal(due[0].lineKeys.length, 5, 'his introduction carries the night')
+  assert.equal(due[1].lineKeys.length, 2, 'the second carries the objective')
 
-  save.radioCalls = [due[0].id]
+  save.radioCalls = due.map((call) => call.id)
   assert.equal(dueRadioCalls(radio, save, MUSEUM).length, 0, 'heard once, never again')
 })
 
@@ -516,15 +528,28 @@ test('the porter always answers with the next thing the player needs', () => {
   const radio = radioEntry.device
   const save = freshSave()
   save.roomsPowered = ['office']
-  assert.deepEqual(radioHintFor(radio, save, MUSEUM), ['radio.hint.notebook'])
+  // Each at its first height: where the thing is.
+  assert.deepEqual(radioHintFor(radio, save, MUSEUM), ['radio.hint.notebook.where'])
   save.documentsRead = ['doc-welcome']
-  assert.deepEqual(radioHintFor(radio, save, MUSEUM), ['radio.hint.atrium'])
+  assert.deepEqual(radioHintFor(radio, save, MUSEUM), ['radio.hint.atrium.where'])
   save.roomsPowered = ['office', 'atrium']
-  assert.deepEqual(radioHintFor(radio, save, MUSEUM), ['radio.hint.holyoke'])
+  assert.deepEqual(radioHintFor(radio, save, MUSEUM), ['radio.hint.holyoke.where'])
   save.roomsPowered = ['office', 'atrium', 'holyoke']
-  assert.deepEqual(radioHintFor(radio, save, MUSEUM), ['radio.hint.drawer'])
+  assert.deepEqual(radioHintFor(radio, save, MUSEUM), ['radio.hint.drawer.where'])
   save.locksOpened = ['office-drawer']
-  assert.deepEqual(radioHintFor(radio, save, MUSEUM), ['radio.hint.vault'])
+  assert.deepEqual(radioHintFor(radio, save, MUSEUM), ['radio.hint.rest'])
+  // And the heights of one of them, for a player who asks again.
+  save.locksOpened = []
+  assert.deepEqual(
+    [0, 1, 2, 3].map((height) => radioHintFor(radio, save, MUSEUM, height)[0]),
+    ['radio.hint.drawer.where', 'radio.hint.drawer.what', 'radio.hint.drawer.how', 'radio.hint.drawer.how'],
+  )
+  // The drawer's hint says where the year is and how it shows. It never
+  // says the year: the one numeral in it is the wing's own.
+  for (const key of ['radio.hint.drawer.where', 'radio.hint.drawer.what', 'radio.hint.drawer.how', 'radio.hint.drawer.curt'] as const) {
+    assert.doesNotMatch(ptBR[key], /\d{2}/, key)
+    assert.doesNotMatch(en[key], /\d{2}/, key)
+  }
 })
 
 test('a transmission plays its lines in order and then falls silent', () => {
@@ -584,6 +609,139 @@ test('a mains clock resumes from where it stopped and wraps at midnight', () => 
     minutes: 0,
     seconds: 0,
   })
+})
+
+test('the clock is put right once, with the lamp on, and from then on shows the hour of the night (L3)', () => {
+  const clock = office.devices?.find((device) => device.kind === 'clock')
+  assert.ok(clock && clock.kind === 'clock')
+  const night = MUSEUM.nightClock
+  assert.ok(night, 'the museum has a night clock')
+  assert.equal(clock.setFlag, 'clock-set')
+  assert.equal(ptBR['device.office-clock.title'], 'Relógio do escritório')
+  assert.equal(en['device.office-clock.title'], 'Office clock')
+
+  // Until it is set it is the clock it always was: stopped at the storm's
+  // minute, and running from there with the room's power.
+  for (const elapsed of [0, 90, 4000]) {
+    assert.deepEqual(clockFaceAngles(clock.stoppedAt, elapsed, null), clockHandAngles(clockTimeAfter(clock.stoppedAt, elapsed)), `${elapsed} s`)
+  }
+
+  // What E does to it: nothing without its mains, set it with them, nothing once set.
+  const input = (powered: boolean, set: boolean) => ({ powered, carried: false, speaking: false, set })
+  assert.deepEqual(deviceIntent(clock, input(false, false)), { kind: 'none' }, 'a mains clock is not put right in the dark')
+  assert.deepEqual(deviceIntent(clock, input(true, false)), { kind: 'clock', intent: 'set' })
+  assert.deepEqual(deviceIntent(clock, input(true, true)), { kind: 'none' }, 'it is set once')
+  assert.equal(deviceLive({ kind: 'clock', intent: 'set' }), true)
+  const { setFlag: _, ...plain } = clock
+  assert.deepEqual(deviceIntent(plain, input(true, false)), { kind: 'none' }, 'a clock with no flag to set only runs')
+  assert.deepEqual(clockGrant(plain), {})
+  // Read off the save as the game reads it.
+  const asked = (roomsPowered: string[], flags?: unknown) =>
+    deviceIntent(clock, deviceInputOf(clock, { progress: { roomsPowered, flags: flags as string[] }, radio: null }, roomById)).kind
+  assert.equal(asked([]), 'none')
+  assert.equal(asked(['office']), 'clock')
+  assert.equal(asked(['office'], []), 'clock')
+  assert.equal(asked(['office'], ['clock-set']), 'none')
+  assert.equal(asked(['atrium'], []), 'none', 'its own room, not any room')
+  assert.equal(asked(['office'], 'clock-set'), 'clock', 'a list that is not one holds nothing')
+  // What setting it records, and how its prompt reads.
+  assert.deepEqual(clockGrant(clock), { flags: ['clock-set'] })
+  assert.deepEqual(devicePrompt(clock, { kind: 'clock', intent: 'set' }), {
+    form: 'action',
+    key: true,
+    labelKey: 'prompt.clock.set',
+    titleKey: 'device.office-clock.title',
+  })
+  assert.equal(devicePrompt(clock, { kind: 'none' }), null)
+  assert.equal(ptBR['prompt.clock.set'], 'Acertar o relógio')
+  assert.equal(en['prompt.clock.set'], 'Set the clock')
+
+  // The hour of the night: ten past seven at the first point, half an hour a point.
+  assert.equal(nightTime(night, 0), null, 'nothing has happened yet')
+  assert.deepEqual(nightTime(night, 1), { hours: 19, minutes: 10 })
+  assert.deepEqual(nightTime(night, 2), { hours: 19, minutes: 40 })
+  assert.deepEqual(nightTime(night, 3), { hours: 20, minutes: 10 })
+  assert.deepEqual(nightTime(night, night.milestones.length), { hours: 22, minutes: 40 })
+  assert.deepEqual(nightTime({ ...night, startsAt: { hours: 23, minutes: 50 } }, 2), { hours: 0, minutes: 20 }, 'past midnight it wraps')
+
+  // A point for each milestone met, in whatever order they were met.
+  const points = (patch: Partial<Save> & { flags?: string[] }) => nightPoints(night, { ...freshSave(), ...patch }, MUSEUM)
+  const pieces = MUSEUM.exhibits.map((exhibit) => exhibit.id)
+  assert.equal(night.milestones.length, 8)
+  assert.equal(points({}), 0)
+  assert.equal(points({ roomsPowered: ['office'] }), 1)
+  assert.equal(points({ roomsPowered: ['holyoke', 'office'] }), 2, 'Wing 1 before the hall is two points all the same')
+  assert.equal(points({ roomsPowered: ['office', 'atrium', 'holyoke'] }), 3)
+  assert.equal(points({ roomsPowered: ['office'], locksOpened: ['office-drawer'] }), 2)
+  assert.deepEqual(
+    [0, 2, 3, 5, 6, 8, 9, 11, 12].map((count) => points({ catalogued: pieces.slice(0, count) })),
+    [0, 0, 1, 1, 2, 2, 3, 3, 4],
+    'the collection, by threes',
+  )
+  assert.equal(points({ catalogued: ['a-piece-of-another-wing', 'and-another', 'and-a-third'] }), 0, 'three pieces that are not of the house')
+  assert.equal(points({ roomsPowered: ['office', 'atrium', 'holyoke'], locksOpened: ['office-drawer'], catalogued: pieces }), 8)
+  // Setting the clock is not a milestone: it shows the night, it does not move it.
+  assert.equal(points({ roomsPowered: ['office'], flags: ['clock-set'] }), 1)
+
+  // The clock on the wall. Unset, it shows no hour of the night at all.
+  const shows = (patch: Partial<Save> & { flags?: string[] }) => setClockMinutes(night, clock.setFlag, { ...freshSave(), ...patch }, MUSEUM)
+  assert.equal(shows({ roomsPowered: ['office', 'atrium'] }), null)
+  assert.equal(shows({ roomsPowered: ['office'], flags: ['clock-set'] }), 19 * 60 + 10, 'set with one point, it shows 19h10')
+  assert.equal(shows({ roomsPowered: ['office', 'atrium'], flags: ['clock-set'] }), 19 * 60 + 40)
+  assert.equal(shows({ roomsPowered: ['office', 'atrium', 'holyoke'], flags: ['clock-set'] }), 20 * 60 + 10)
+  assert.equal(setClockMinutes(undefined, clock.setFlag, { ...freshSave(), roomsPowered: ['office'], flags: ['clock-set'] }, MUSEUM), null)
+  assert.equal(setClockMinutes(night, undefined, { ...freshSave(), roomsPowered: ['office'], flags: ['clock-set'] }, MUSEUM), null)
+  // Its hands: the hour and the minute of the night, and the seconds of the count.
+  const degrees = (radians: number) => Math.round(((radians * 180) / Math.PI) * 10) / 10
+  const face = clockFaceAngles(clock.stoppedAt, 75, { hours: 19, minutes: 10 })
+  assert.deepEqual([degrees(face.hour), degrees(face.minute), degrees(face.second)], [215, 60, 90])
+  // The night does not creep: the minute hand stands still until the night moves.
+  assert.equal(clockFaceAngles(clock.stoppedAt, 20, { hours: 19, minutes: 10 }).minute, face.minute)
+  assert.notEqual(clockFaceAngles(clock.stoppedAt, 20, null).minute, clockFaceAngles(clock.stoppedAt, 75, null).minute)
+
+  // What the porter would say of each hour, and that it is that hour.
+  assert.equal(nightPhraseKey(night, 0), null)
+  assert.deepEqual(
+    [1, 2, 3, 4, 5, 6, 7, 8].map((count) => ptBR[nightPhraseKey(night, count) as 'night.hour.1']),
+    ['Passa das sete', 'Quase oito', 'Passa das oito', 'Quase nove', 'Passa das nove', 'Quase dez', 'Passa das dez', 'Quase onze'],
+  )
+  assert.equal(nightPhraseKey(night, 99), 'night.hour.8', 'past the last milestone it is the last hour')
+  const HOURS: Record<number, readonly [string, string]> = { 19: ['sete', 'seven'], 20: ['oito', 'eight'], 21: ['nove', 'nine'], 22: ['dez', 'ten'], 23: ['onze', 'eleven'] }
+  for (let count = 1; count <= night.milestones.length; count += 1) {
+    const time = nightTime(night, count)
+    const key = nightPhraseKey(night, count) as 'night.hour.1'
+    assert.ok(time && key)
+    // Rounded as a person rounds: just past the hour, or nearly the next.
+    const [past, nearly] = time.minutes < 30 ? [HOURS[time.hours], null] : [null, HOURS[time.hours + 1]]
+    assert.equal(ptBR[key], past ? `Passa das ${past[0]}` : `Quase ${nearly?.[0]}`, `${key} at ${time.hours}h${time.minutes}`)
+    assert.equal(en[key], past ? `Gone ${past[1]}` : `Nearly ${nearly?.[1]}`, key)
+    assert.doesNotMatch(ptBR[key] + en[key], /\d/, 'an hour said aloud is spelt out')
+  }
+  // The token a spoken line carries, filled; a line without it is left alone.
+  assert.equal(fillHour('O acervo é seu, curador. {hora}.', 'Passa das nove'), 'O acervo é seu, curador. Passa das nove.')
+  assert.equal(fillHour('Câmbio.', 'Passa das nove'), 'Câmbio.')
+  assert.equal(fillHour('O acervo é seu, curador. {hora}.', null), 'O acervo é seu, curador.', 'with no hour to say, the token never reaches the screen')
+
+  // The toast: when a clock's own flag arrives, and not on the load that brings it.
+  const flags = new Set(['clock-set'])
+  assert.equal(clockJustSet(0, ['clock-set'], flags), true)
+  assert.equal(clockJustSet(1, ['clock-set'], flags), false, 'a clock set on another night is not announced on Continue')
+  assert.equal(clockJustSet(0, ['some-other-flag'], flags), false, 'another flag is not about the hour')
+  assert.equal(clockJustSet(1, ['some-other-flag', 'clock-set'], flags), true)
+  assert.equal(clockJustSet(2, [], flags), false, 'a new game empties the list')
+  assert.equal(`${ptBR['clock.set']} — ${ptBR['night.hour.1']}`, 'Relógio acertado — Passa das sete')
+  assert.equal(`${en['clock.set']} — ${en['night.hour.1']}`, 'Clock set — Gone seven')
+
+  // On the store: the grant is the flag, once, and the clock then answers nothing.
+  useMuseum.getState().resetProgress()
+  useMuseum.getState().powerRoom('office')
+  useMuseum.getState().grant(clockGrant(clock))
+  assert.deepEqual(useMuseum.getState().progress.flags, ['clock-set'])
+  const once = useMuseum.getState().progress
+  useMuseum.getState().grant(clockGrant(clock))
+  assert.equal(useMuseum.getState().progress, once, 'set twice wrote twice')
+  assert.equal(deviceIntent(clock, deviceInputOf(clock, useMuseum.getState(), roomById)).kind, 'none')
+  useMuseum.getState().resetProgress()
 })
 
 // ---------------------------------------------------------------------------
@@ -882,7 +1040,7 @@ function sidedHintProblems(
         })
 
       for (const locale of ['pt-BR', 'en'] as const) {
-        for (const key of [...hint.lineKeys, ...(hint.curtLineKeys ?? [])]) {
+        for (const key of [...hint.heightKeys, ...(hint.curtLineKeys ?? [])]) {
           const line = dictionaries[locale][key] ?? ''
           for (const [pattern, said] of SIDE_WORDS[locale]) {
             const word = pattern.exec(line)?.[0]
@@ -905,16 +1063,18 @@ test('a hint to a dark room names a side only if it is that side from every door
   assert.deepEqual(sidedHintProblems(MUSEUM, { 'pt-BR': ptBR, en }), [])
 
   // The lines as they were while the wing had one way in: wrong by the shortcut, in both languages.
+  // (Then one line; since L3 the hint is said a height at a time, and the
+  // side was in what is now its first.)
   const asItWas = {
     'pt-BR': {
       ...ptBR,
-      'radio.hint.holyoke':
+      'radio.hint.holyoke.where':
         'A Ala 1 tem quadro próprio, na parede do outro lado da sala, à esquerda de quem entra. Atravessa no escuro: a lanterna dá conta.',
       'radio.hint.holyoke.curt': 'Ala 1. Quadro na parede do fundo, à esquerda. Luzinha vermelha. Vai.',
     },
     en: {
       ...en,
-      'radio.hint.holyoke': 'Wing 1 has its own breaker, on the far wall, to your left as you walk in. Cross it in the dark — the torch will do.',
+      'radio.hint.holyoke.where': 'Wing 1 has its own breaker, on the far wall, to your left as you walk in. Cross it in the dark — the torch will do.',
       'radio.hint.holyoke.curt': 'Wing 1. Breaker on the far wall, to the left. Little red light. Go.',
     },
   }
@@ -923,11 +1083,12 @@ test('a hint to a dark room names a side only if it is that side from every door
   for (const line of accusedLines) assert.match(line, /by "holyoke-shortcut" holyoke-breaker is 2\d\.\d° to the right/)
   assert.deepEqual(
     accusedLines.map((line) => line.split(' says ')[0]).sort(),
-    ['radio.hint.holyoke (en)', 'radio.hint.holyoke (pt-BR)', 'radio.hint.holyoke.curt (en)', 'radio.hint.holyoke.curt (pt-BR)'],
+    ['radio.hint.holyoke.curt (en)', 'radio.hint.holyoke.curt (pt-BR)', 'radio.hint.holyoke.where (en)', 'radio.hint.holyoke.where (pt-BR)'],
   )
   // The right side for the main door and the wrong one for the shortcut: said the other way round, it is the main door that is accused.
-  const mirrored = { ...asItWas, 'pt-BR': { ...ptBR, 'radio.hint.holyoke': 'O quadro fica à direita de quem entra, no escuro.' } }
-  assert.ok(sidedHintProblems(MUSEUM, mirrored).some((line) => /radio\.hint\.holyoke \(pt-BR\).*by "holyoke-to-atrium".*to the left/.test(line)))
+  // At any height: here, the third.
+  const mirrored = { ...asItWas, 'pt-BR': { ...ptBR, 'radio.hint.holyoke.how': 'O quadro fica à direita de quem entra, no escuro.' } }
+  assert.ok(sidedHintProblems(MUSEUM, mirrored).some((line) => /radio\.hint\.holyoke\.how \(pt-BR\).*by "holyoke-to-atrium".*to the left/.test(line)))
 
   // With one way in, the same lines are true, and pass: this is the wing before the shortcut stayed open.
   const oneDoor: MuseumContent = {
@@ -942,8 +1103,17 @@ test('a hint to a dark room names a side only if it is that side from every door
   assert.deepEqual(side('Helena left you a notebook. All right?'), [])
   assert.deepEqual(side('a little to your right as you leave'), ['right'])
   assert.deepEqual(side('on the left-hand wall'), ['left'])
-  // The atrium's hint says "right beside the door" and is measured from three doorways without complaint.
-  assert.match(en['radio.hint.atrium'], /right beside the door/)
+  // The call that gives the hall's breaker does name a side, and is not a
+  // hint: it is said once, in the office, of the door it counts from.
+  assert.deepEqual(side(en['radio.call.first.1']), ['right'])
+  assert.match(ptBR['radio.call.first.1'], /à direita de quem sai daí/)
+  // No hint of the house names one, at any height or curt.
+  for (const hint of radioEntry.device.hints) {
+    for (const key of [...hint.heightKeys, ...(hint.curtLineKeys ?? [])]) {
+      assert.deepEqual(side((en as Record<string, string>)[key]), [], key)
+      assert.doesNotMatch((ptBR as Record<string, string>)[key], /\besquerd[ao]\b|\bdireita\b/i, key)
+    }
+  }
 })
 
 // ---------------------------------------------------------------------------
@@ -1203,7 +1373,7 @@ test('each validator the gate lacked fails a museum broken on purpose', () => {
     'i18n-key-unused',
   )
   if (!unusedKeys.includes('ui.nobody.reads.this')) quiet.push('i18n-key-unused does not accuse "ui.nobody.reads.this"')
-  for (const key of ['ui.title', 'exhibit.ball-spalding.title', 'radio.hint.vault.curt', 'prompt.examine']) {
+  for (const key of ['ui.title', 'exhibit.ball-spalding.title', 'radio.hint.rest.curt', 'night.hour.8', 'prompt.clock.set', 'clock.set', 'prompt.examine']) {
     if (unusedKeys.includes(key)) noisy.push(`i18n-key-unused accuses "${key}", which the game shows`)
   }
 
@@ -1501,6 +1671,253 @@ test('a condition, an effect or a trigger that points at nothing fails the gate 
   for (const code of NEW_CODES) {
     if (accused(sound, code).length > 0) noisy.push(`${code} accuses a sound museum: ${accused(sound, code).join(', ')}`)
   }
+
+  assert.deepEqual(quiet, [], 'every broken museum is caught')
+  assert.deepEqual(noisy, [], 'and a sound one is not accused of what it does not do')
+})
+
+test('the porter by milestone and the hour of the night: each rule of the gate, on a museum broken for it (L3)', () => {
+  // Every one of these compiles and plays, and is wrong in a way nobody
+  // sees in a new game: a call renamed under the migration that silences it
+  // for old saves, a hint that points at a thing the house does not have, a
+  // porter with nothing to say while there is still a term to sign, a night
+  // that goes back, a line too long to read, an hour in digits.
+  const authored = gate(MUSEUM)
+  const quiet: string[] = []
+  const noisy: string[] = []
+  const CODES = [
+    'legacy-save-call',
+    'legacy-save-milestone',
+    'radio-lapse-not-positive',
+    'hint-points-to-nothing',
+    'radio-hint-coverage',
+    'night-clock-phrases',
+    'night-milestone-not-positive',
+    'night-milestone-count',
+    'night-milestone-duplicate',
+    'clock-without-title',
+    'speech-line-too-long',
+    'speech-hour-in-digits',
+    'speech-token-unknown',
+    'speech-mentions-missing',
+    'speech-director-unintroduced',
+  ]
+  const proves = (code: string, id: string, broken: readonly ValidationIssue[]) => {
+    assert.ok(CODES.includes(code) || code.startsWith('condition-'), code)
+    if (!accused(broken, code).includes(id)) quiet.push(`${code} does not accuse "${id}"`)
+  }
+  const spares = (code: string, what: string, sound: readonly ValidationIssue[]) => {
+    if (accused(sound, code).length > 0) noisy.push(`${code} accuses ${what}: ${accused(sound, code).join(', ')}`)
+  }
+  for (const code of CODES) spares(code, 'the authored museum', authored)
+
+  type Radio = Extract<NonNullable<RoomData['devices']>[number], { readonly kind: 'radio' }>
+  const withRadio = (patch: (radio: Radio) => Partial<Radio>): MuseumContent =>
+    withRoom('office', (room) => ({
+      devices: (room.devices ?? []).map((device) => (device.kind === 'radio' ? { ...device, ...patch(device) } : device)),
+    }))
+  const withCall = (id: string, patch: (call: Radio['calls'][number]) => Radio['calls'][number]) =>
+    withRadio((radio) => ({ calls: radio.calls.map((call) => (call.id === id ? patch(call) : call)) }))
+  const withHint = (index: number, patch: (hint: Radio['hints'][number]) => Radio['hints'][number]) =>
+    withRadio((radio) => ({ hints: radio.hints.map((hint, position) => (position === index ? patch(hint) : hint)) }))
+
+  // --- saves from before the Posse ---------------------------------------------
+  // A call of the migration renamed in the content: old saves would hear it.
+  proves('legacy-save-call', 'porter-hello', gate(withCall('porter-hello', (call) => ({ ...call, id: 'porter-greeting' }))))
+  proves('legacy-save-call', 'porter-shortcut', gate(withCall('porter-shortcut', (call) => ({ ...call, id: 'porter-service-door' }))))
+  // The door of the shortcut renamed: no save would be recognised as having used it.
+  const SHORTCUT = 'atrium-from-holyoke-shortcut'
+  proves(
+    'legacy-save-milestone',
+    SHORTCUT,
+    gate(withRoom('atrium', (room) => ({ portals: room.portals.map((portal) => (portal.id === SHORTCUT ? { ...portal, id: 'atrium-service-door' } : portal)) }))),
+  )
+
+  // --- calls that lapse -----------------------------------------------------------
+  proves(
+    'radio-lapse-not-positive',
+    'porter-atrium-service',
+    gate(withCall('porter-atrium-service', (call) => ({ ...call, lapsesWhen: { unpowered: ['office'] } }))),
+  )
+  proves(
+    'radio-lapse-not-positive',
+    'porter-holyoke-lit',
+    gate(withCall('porter-holyoke-lit', (call) => ({ ...call, lapsesWhen: { allCatalogued: true } }))),
+  )
+  // What ends a call, what an answer looks at and what a hint is not for are conditions like any other.
+  proves('condition-room-missing', 'paris', gate(withCall('porter-atrium-service', (call) => ({ ...call, lapsesWhen: { powered: ['paris'] } }))))
+  proves('condition-room-missing', 'vault', gate(withHint(0, (hint) => ({ ...hint, when: { roomsUnvisited: ['vault'] } }))))
+  proves(
+    'condition-room-missing',
+    'tokyo',
+    gate(
+      withRadio((radio) => ({
+        patience: radio.patience && {
+          ...radio.patience,
+          deadAir: radio.patience.deadAir.map((air) => (air.id === 'porter-air-rain' ? { ...air, when: { unpowered: ['tokyo'] } } : air)),
+        },
+      })),
+    ),
+  )
+
+  // --- hints that point -------------------------------------------------------------
+  proves('hint-points-to-nothing', 'atrium-braker', gate(withHint(1, (hint) => ({ ...hint, targetId: 'atrium-braker' }))))
+  // A room is somewhere to be, not something to walk up to.
+  proves('hint-points-to-nothing', 'holyoke', gate(withHint(2, (hint) => ({ ...hint, targetId: 'holyoke' }))))
+  proves('hint-points-to-nothing', 'office-radio:hint-2', gate(withHint(1, ({ targetId: _, ...hint }) => hint)))
+  // Each kind of thing a hint may point at, in the museum as it is.
+  assert.deepEqual(
+    radioEntry.device.hints.map((hint) => hint.targetId ?? null),
+    ['office-notebook', 'atrium-breaker', 'holyoke-breaker', 'portrait-morgan', null],
+  )
+  spares('hint-points-to-nothing', 'a hint that points at a device, and one at a door', gate(withHint(0, (hint) => ({ ...hint, targetId: 'atrium-podium' }))))
+  spares('hint-points-to-nothing', 'a hint that points at a door', gate(withHint(0, (hint) => ({ ...hint, targetId: SHORTCUT }))))
+
+  // --- a porter with nothing left to say, and a term still to sign ---------------------
+  // No term exists in the house until the lectern signs one; the rule is
+  // asked of a house given one for the purpose. With the three rooms lit and
+  // the drawer open, the porter's last hint is in force.
+  const term = {
+    id: 'termo-de-teste',
+    titleKey: 'notebook.todo.heading',
+    bodyKey: 'notebook.todo.heading',
+    presentedWhen: {},
+    when: { powered: ['office', 'atrium', 'holyoke'] },
+    grants: 'teste-assinado',
+    mentions: ['atrium-podium'],
+  } as const
+  const withTerm = (content: MuseumContent, patch: object = {}): MuseumContent => ({ ...content, terms: [{ ...term, ...patch }] })
+  const uncovered = gate(withTerm(MUSEUM))
+  proves('radio-hint-coverage', 'office-radio', uncovered)
+  assert.match(
+    uncovered.find((issue) => issue.code === 'radio-hint-coverage')?.message ?? '',
+    /runs out of hints with "termo-de-teste" still to sign: in a save with .*power:holyoke.*lock:office-drawer/,
+  )
+  // A hint that holds until the term is signed, above the last: he has something to point at.
+  const covered = withRadio((radio) => ({
+    hints: [
+      ...radio.hints.slice(0, -1),
+      { when: { flagsUnset: ['teste-assinado'] }, targetId: 'atrium-podium', heightKeys: ['radio.hint.rest'], mentions: ['atrium-podium'] },
+      ...radio.hints.slice(-1),
+    ],
+  }))
+  spares('radio-hint-coverage', 'a radio with a hint for the term', gate(withTerm(covered)))
+  // Signed (here by a trigger, as the lectern will), the night has nothing left: the last hint is the right one.
+  const signed: MuseumContent = {
+    ...withTerm(MUSEUM),
+    triggers: [{ id: 'signed-for-the-test', when: term.when, effects: [{ kind: 'set-flag', flag: 'teste-assinado' }] }],
+  }
+  spares('radio-hint-coverage', 'a house whose term is signed', gate(signed))
+  // A term nobody can sign in this build is owed no hint (it is another accusation's to make).
+  spares('radio-hint-coverage', 'a term that cannot be signed', gate(withTerm(MUSEUM, { when: { catalogued: ['net-1897'] } })))
+  // And what a term asks is checked like any other condition.
+  proves('condition-room-missing', 'rewrite', gate(withTerm(MUSEUM, { when: { powered: ['rewrite'] } })))
+  proves('speech-mentions-missing', 'atrium-lectern', gate(withTerm(MUSEUM, { mentions: ['atrium-lectern'] })))
+
+  // --- the hour of the night ---------------------------------------------------------
+  const night = MUSEUM.nightClock
+  assert.ok(night)
+  const withNight = (patch: Partial<typeof night>): MuseumContent => ({ ...MUSEUM, nightClock: { ...night, ...patch } })
+  const withMilestone = (id: string, milestone: object): MuseumContent =>
+    withNight({ milestones: night.milestones.map((candidate) => (candidate.id === id ? ({ id, ...milestone } as typeof candidate) : candidate)) })
+  proves('night-clock-phrases', 'nightClock', gate(withNight({ phraseKeys: night.phraseKeys.slice(1) })))
+  proves('night-clock-phrases', 'nightClock', gate(withNight({ phraseKeys: [...night.phraseKeys, 'night.hour.8'] })))
+  // A milestone that holds until something is done: the night would go back.
+  proves('night-milestone-not-positive', 'atrium', gate(withMilestone('atrium', { when: { unpowered: ['atrium'] } })))
+  proves('night-milestone-not-positive', 'drawer', gate(withMilestone('drawer', { when: { locksClosed: ['office-drawer'] } })))
+  // "Every room": the day a wing opens, a point is taken back.
+  proves('night-milestone-not-positive', 'holyoke', gate(withMilestone('holyoke', { when: { allRoomsPowered: true } })))
+  proves('night-milestone-count', 'catalogue-12', gate(withMilestone('catalogue-12', { cataloguedAtLeast: 13, of: MUSEUM.exhibits.map((exhibit) => exhibit.id) })))
+  proves('night-milestone-count', 'catalogue-3', gate(withMilestone('catalogue-3', { cataloguedAtLeast: 0, of: ['ball-spalding'] })))
+  proves('condition-exhibit-missing', 'no-such-piece', gate(withMilestone('catalogue-3', { cataloguedAtLeast: 1, of: ['no-such-piece'] })))
+  proves('condition-lock-missing', 'no-such-lock', gate(withMilestone('drawer', { when: { locksOpened: ['no-such-lock'] } })))
+  proves('night-milestone-duplicate', 'lamp', gate(withNight({ milestones: [...night.milestones.slice(0, -1), night.milestones[0]] })))
+  // A clock that can be set and has no name: its prompt would have nothing to call it.
+  proves(
+    'clock-without-title',
+    'office-clock',
+    gate(
+      withRoom('office', (room) => ({
+        devices: (room.devices ?? []).map((device) => {
+          if (device.kind !== 'clock') return device
+          const { titleKey: _, ...untitled } = device
+          return untitled
+        }),
+      })),
+    ),
+  )
+  // The flag a clock sets is set, and read by the clock: neither loose end is raised.
+  spares('flag-never-read', 'the flag the clock sets', authored)
+  // One flag is waited for and set by nothing: the pump's, whose absence the
+  // rain in the dead air asks for. Nothing sets it before the vault's lot,
+  // and the debt table dates it there.
+  assert.deepEqual(accused(authored, 'flag-never-set'), ['basement-drained'])
+  assert.deepEqual(
+    debtOf('validate:content').filter((line) => line.code === 'flag-never-set').map((line) => `${line.id} L${line.untilLot}`),
+    ['basement-drained L12'],
+  )
+  // The same flag waited for by its presence is the same loose end.
+  proves('condition-room-missing', 'iron-sand', gate(withHint(0, (hint) => ({ ...hint, when: { unpowered: ['iron-sand'] } }))))
+  assert.ok(
+    accused(gate(withHint(0, (hint) => ({ ...hint, when: { flagsUnset: ['never-set-by-anything'] } }))), 'flag-never-set').includes('never-set-by-anything'),
+    'a hint that waits for the absence of a flag nothing sets',
+  )
+
+  // --- what is said --------------------------------------------------------------------
+  const said = (locale: 'pt-BR' | 'en', key: string, text: string) => ({ dictionaries: { ...DICTIONARIES, [locale]: { ...DICTIONARIES[locale], [key]: text } } })
+  const long = (length: number) => 'x'.repeat(length)
+  // A call and a height of a hint fit in 130; an answer of his patience and a curt hint in 110.
+  proves('speech-line-too-long', 'radio.call.hello.2', gate(MUSEUM, said('pt-BR', 'radio.call.hello.2', long(131))))
+  proves('speech-line-too-long', 'radio.hint.drawer.how', gate(MUSEUM, said('en', 'radio.hint.drawer.how', long(131))))
+  proves('speech-line-too-long', 'radio.patience.t1.ready', gate(MUSEUM, said('pt-BR', 'radio.patience.t1.ready', long(111))))
+  proves('speech-line-too-long', 'radio.patience.t3.torch.close', gate(MUSEUM, said('en', 'radio.patience.t3.torch.close', long(111))))
+  proves('speech-line-too-long', 'radio.hint.atrium.curt', gate(MUSEUM, said('pt-BR', 'radio.hint.atrium.curt', long(111))))
+  proves('speech-line-too-long', 'radio.deadAir.rain', gate(MUSEUM, said('en', 'radio.deadAir.rain', long(111))))
+  spares('speech-line-too-long', 'a call of 130 characters', gate(MUSEUM, said('pt-BR', 'radio.call.hello.2', long(130))))
+  spares('speech-line-too-long', 'a height of a hint of 130 characters', gate(MUSEUM, said('pt-BR', 'radio.hint.drawer.how', long(130))))
+  spares('speech-line-too-long', 'an answer of 110 characters', gate(MUSEUM, said('pt-BR', 'radio.patience.t1.ready', long(110))))
+  spares('speech-line-too-long', 'a wall label, which is not said', gate(MUSEUM, said('pt-BR', 'exhibit.photo-gym.label', long(400))))
+  // The longest lines of the house, for the record: all under their measure.
+  const longest = (keys: readonly string[]) => Math.max(...keys.flatMap((key) => [ptBR, en].map((dictionary) => (dictionary as Record<string, string>)[key].length)))
+  assert.ok(longest(radioEntry.device.calls.flatMap((call) => call.lineKeys)) <= 130)
+  assert.ok(longest(radioEntry.device.hints.flatMap((hint) => hint.heightKeys)) <= 130)
+  assert.ok(longest(radioEntry.device.hints.flatMap((hint) => hint.curtLineKeys ?? [])) <= 110)
+
+  // Nobody says an hour of this night in a fixed line.
+  proves('speech-hour-in-digits', 'radio.call.holyoke.1', gate(MUSEUM, said('pt-BR', 'radio.call.holyoke.1', 'Ala 1 acesa. São 21h40. Câmbio.')))
+  proves('speech-hour-in-digits', 'radio.call.holyoke.1', gate(MUSEUM, said('en', 'radio.call.holyoke.1', "Wing 1 is lit. It's 9:40 pm. Over.")))
+  // The recording says its hours in words, and a wing's number is not an hour.
+  spares('speech-hour-in-digits', 'hours said in words', gate(MUSEUM, said('pt-BR', 'radio.call.holyoke.1', 'Ala 1 acesa. Nosso horário é das nove às seis.')))
+  // The one token a line may carry is the hour, and only in a content that has a night clock.
+  proves('speech-token-unknown', 'radio.call.holyoke.1', gate(MUSEUM, said('pt-BR', 'radio.call.holyoke.1', 'Ala 1 acesa, {nome}. Câmbio.')))
+  spares('speech-token-unknown', 'a line that says {hora}', gate(MUSEUM, said('pt-BR', 'radio.call.holyoke.1', 'Ala 1 acesa. {hora}. Câmbio.')))
+  const { nightClock: _noClock, ...clockless } = MUSEUM
+  proves('speech-token-unknown', 'radio.call.holyoke.1', gate(clockless, said('pt-BR', 'radio.call.holyoke.1', 'Ala 1 acesa. {hora}. Câmbio.')))
+
+  // What a call, a hint or a line of the list sends the player to is in the build.
+  proves('speech-mentions-missing', 'atrium-lectern', gate(withCall('porter-holyoke-lit', (call) => ({ ...call, mentions: ['holyoke', 'atrium-lectern'] }))))
+  proves('speech-mentions-missing', 'office-safe', gate(withHint(3, (hint) => ({ ...hint, mentions: [...hint.mentions, 'office-safe'] }))))
+  // The portal facing a door across its opening is not the door.
+  proves('speech-mentions-missing', 'holyoke-shortcut', gate(withCall('porter-shortcut', (call) => ({ ...call, mentions: ['holyoke-shortcut'] }))))
+  const listing = (mentions: readonly string[]): MuseumContent => ({
+    ...MUSEUM,
+    documents: MUSEUM.documents.map((doc) => ({
+      ...doc,
+      pages: doc.pages?.map((page) => ({ ...page, items: page.items?.map((item) => (item.labelKey === 'notebook.todo.power' ? { ...item, mentions } : item)) })),
+    })),
+  })
+  proves('speech-mentions-missing', 'paris', gate(listing(['office', 'atrium', 'holyoke', 'paris'])))
+  // Every kind of thing that can be mentioned, each by one the house has.
+  spares(
+    'speech-mentions-missing',
+    'a room, a piece, a paper, a lock, a container, a device, a breaker and a door',
+    gate(listing(['holyoke', 'net-1897', 'doc-halstead', 'office-drawer', 'holyoke-cabinet-b', 'atrium-podium', 'office-lamp-switch', SHORTCUT])),
+  )
+
+  // Whoever names Helena says who she is: the line as it was before L3, in each language.
+  proves('speech-director-unintroduced', 'radio.patience.t4.dark.close', gate(MUSEUM, said('pt-BR', 'radio.patience.t4.dark.close', '…Só pra Helena, talvez.')))
+  proves('speech-director-unintroduced', 'radio.patience.t4.dark.close', gate(MUSEUM, said('en', 'radio.patience.t4.dark.close', '…Except Helena, maybe.')))
+  spares('speech-director-unintroduced', 'the notebook, where she signs as the director herself', gate(MUSEUM, said('pt-BR', 'notebook.welcome.postscript', 'Helena mandou um abraço.')))
 
   assert.deepEqual(quiet, [], 'every broken museum is caught')
   assert.deepEqual(noisy, [], 'and a sound one is not accused of what it does not do')

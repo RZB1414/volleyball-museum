@@ -359,7 +359,9 @@ const MAXIMUM = {
     'portrait-morgan:date',
   ],
   credentials: [],
-  flags: [],
+  // The first flag the game sets (L3): the clock on the office wall, put
+  // right. Set by a verb of the device, not by a trigger.
+  flags: ['clock-set'],
   triggersFired: [],
   devicesCarried: ['office-radio'],
 } as const satisfies ProgressGrant
@@ -396,8 +398,9 @@ await test('the furthest the game goes today, atom by atom', () => {
   assert.deepEqual(endOf(played.final), MAXIMUM_END)
   // In the plan's words: three rooms lit and visited, five documents, four
   // facts, nine of twelve pieces, the drawer open and seen, the shortcut
-  // released, no credential.
+  // released, the office clock set, no credential.
   assert.equal(played.final.catalogued.length, 9)
+  assert.deepEqual(played.final.flags, ['clock-set'])
   assert.equal(MUSEUM.exhibits.length, 12)
   assert.deepEqual(
     sorted(MUSEUM.exhibits.map((exhibit) => exhibit.id).filter((id) => !played.final.catalogued.includes(id))),
@@ -416,7 +419,11 @@ await test('the script in levels: the lamp, the atrium, its light and Wing 1, th
   const told = played.levels.map((level) => sorted(level.filter((entry) => !/^(?:detail|seen):/.test(entry))))
   assert.deepEqual(told, [
     sorted(['room:office', 'power:office', 'doc:doc-welcome']),
-    sorted(['room:atrium', 'carried:office-radio']),
+    // What the lamp makes possible, a level after the lamp: the door, the
+    // radio off its charger, the clock put right. (The lot plan filed the
+    // clock under the lamp's own level. A level is what could be done with
+    // what the level before left, and before the lamp the clock has no mains.)
+    sorted(['room:atrium', 'carried:office-radio', 'flag:clock-set']),
     sorted([
       'power:atrium',
       'room:holyoke',
@@ -465,20 +472,25 @@ await test('the script in levels: the lamp, the atrium, its light and Wing 1, th
   const printed = formatScript(played.levels).split('\n')
   assert.equal(printed.length, 5)
   assert.match(printed[0], /^ {2}N0 +room:office · power:office · doc:doc-welcome · \(1 locks touched\)$/)
+  assert.match(printed[1], /^ {2}N1 +room:atrium · flag:clock-set · carried:office-radio$/)
   assert.match(printed[3], /^ {2}N3 .*fact:springfield-renaming.*\(9 details\)$/)
   assert.match(printed[4], /^ {2}N4 +lock:office-drawer · doc:doc-predecessor$/)
 })
 
-await test('she accuses the museum of five things the old walk let through, and they are the five that are dated', () => {
+await test('she accuses the museum of six things, and they are the six that are dated', () => {
   const errors = played.issues.map((issue) => `${issue.severity} ${issue.code} ${issue.id}`)
-  // There were six. The line about the vault was a box nothing ever ticks;
-  // since L3 it is a promise with a date and no box, which is no accusation
-  // (`validateDeferred` holds it to its lot instead).
+  // Five the old walk let through, and one of L3's own. (There were six of
+  // the first kind. The line about the vault was a box nothing ever ticks;
+  // since L3 it is a promise with a date and no box, which is no accusation:
+  // `validateDeferred` holds it to its lot instead.)
   assert.deepEqual(sorted(errors), [
     'error checklist-item-untickable notebook.todo.catalogue',
     'error exhibit-uncataloguable gym-suit',
     'error exhibit-uncataloguable net-1897',
     'error exhibit-uncataloguable photo-gym',
+    // The rain in the dead air waits for the absence of a flag the pump
+    // sets, and the pump is the vault's lot: until then it rains all night.
+    'error flag-never-set basement-drained',
     // The detail nothing waits for. It is offered to nobody, so it is in no
     // action and in no snapshot, and the day the net catalogues its debt
     // goes with nothing left to say that the socket is still dead content.
@@ -486,12 +498,13 @@ await test('she accuses the museum of five things the old walk let through, and 
   ])
   // With the table applied, nothing is left, and nothing in the table is paid.
   const owed = debtOf('validate:content').filter((line) =>
-    ['exhibit-uncataloguable', 'checklist-item-untickable', 'hotspot-unreachable'].includes(line.code),
+    ['exhibit-uncataloguable', 'checklist-item-untickable', 'hotspot-unreachable', 'flag-never-set'].includes(line.code),
   )
-  assert.equal(owed.length, 5)
+  assert.equal(owed.length, 6)
   const settled = settleKnownDebt(played.issues, owed, CONTENT_LOT)
   assert.deepEqual(settled.filter((issue) => issue.severity === 'error'), [])
   assert.deepEqual(sorted(owed.map((line) => `${line.id} L${line.untilLot}`)), [
+    'basement-drained L12',
     'gym-suit L4',
     'net-1897 L4',
     'net-1897:socket L4',
@@ -515,12 +528,25 @@ await test('what the rules answer is offered, and what they ignore is not', () =
   // The first minute, in the dark: the lamp, the notebook, the drawer to
   // touch. The door waits for the lamp and the radio for its charger.
   assert.deepEqual(office(), ['power office', 'open office-cabinet', 'open office-notebook'])
-  // With the lamp on: its switch has nothing left to do, the door opens and
-  // the radio can be taken.
-  assert.deepEqual(office('power:office'), ['door atrium-to-office office>atrium', 'open office-cabinet', 'open office-notebook', 'take office-radio'])
-  // The notebook that was read left the desk with her, and a radio in the
-  // hand is not on its charger.
-  assert.deepEqual(office('power:office', 'doc:doc-welcome', 'carried:office-radio'), ['door atrium-to-office office>atrium', 'open office-cabinet'])
+  // With the lamp on: its switch has nothing left to do, the door opens,
+  // the radio can be taken and the clock, which has its mains back, set.
+  assert.deepEqual(office('power:office'), [
+    'door atrium-to-office office>atrium',
+    'open office-cabinet',
+    'open office-notebook',
+    'set office-clock',
+    'take office-radio',
+  ])
+  // The notebook that was read left the desk with her, a radio in the hand
+  // is not on its charger, and a clock that was put right is not set again.
+  assert.deepEqual(office('power:office', 'doc:doc-welcome', 'carried:office-radio'), [
+    'door atrium-to-office office>atrium',
+    'open office-cabinet',
+    'set office-clock',
+  ])
+  assert.deepEqual(office('power:office', 'doc:doc-welcome', 'carried:office-radio', 'flag:clock-set'), ['door atrium-to-office office>atrium', 'open office-cabinet'])
+  // A flag is not mains: set on another night's save, it still is not offered in the dark.
+  assert.ok(!office().includes('set office-clock') && !office('flag:clock-set').includes('set office-clock'))
 
   // A code is typed at a keypad she has had up, by somebody who knows the
   // fact: neither one without the other, and never once the drawer is open.
@@ -726,9 +752,18 @@ await test('each accusation, on a museum broken for the purpose', () => {
       { id: 'hears-it', when: { flags: ['made-for-the-test'] }, effects: [{ kind: 'power-room', roomId: 'holyoke' }] },
     ),
   )
+  // (The museum these are added to already waits for one flag nothing
+  // sets, the pump's, which is dated; that one is not the test's.)
+  const besidesThePump = (ids: readonly string[]) => ids.filter((id) => id !== 'basement-drained')
   for (const code of ['flag-never-set', 'flag-never-read', 'trigger-never-fires']) {
-    if (accused(wired.issues, code).length > 0) noisy.push(`${code} accuses a flag that is set and read`)
+    if (besidesThePump(accused(wired.issues, code)).length > 0) noisy.push(`${code} accuses a flag that is set and read`)
   }
+  // A flag waited for by its absence is as loose, when nothing sets it: a
+  // hint that holds «until the pump is on» with no pump holds for good.
+  assert.deepEqual(accused(played.issues, 'flag-never-set'), ['basement-drained'])
+  // And one a device sets by a verb of its own (the clock) is set, and read
+  // by the device: neither end is loose.
+  assert.deepEqual(accused(played.issues, 'flag-never-read'), [])
   assert.deepEqual(sorted(wired.final.triggersFired), ['hears-it', 'says-it'])
 
   // A wing whose main door has a side of its own too: both ways back are
@@ -831,9 +866,9 @@ await test('each accusation, on a museum broken for the purpose', () => {
       'no-start-room',
     ]),
   )
-  // And the authored museum of none of them but the two that are dated.
+  // And the authored museum of none of them but the ones that are dated.
   for (const code of raised) {
-    if (!['exhibit-uncataloguable', 'checklist-item-untickable', 'hotspot-unreachable'].includes(code) && accused(played.issues, code).length > 0) {
+    if (!['exhibit-uncataloguable', 'checklist-item-untickable', 'hotspot-unreachable', 'flag-never-set'].includes(code) && accused(played.issues, code).length > 0) {
       noisy.push(`${code} accuses the authored museum: ${accused(played.issues, code).join(', ')}`)
     }
   }
@@ -905,6 +940,10 @@ await test('a museum with its debts paid is accused of nothing, and all twelve p
   // a hand's reach. The line about the vault used to be given something to
   // wait for here as well; it owes nothing now, being a promise with a date
   // and no box (L3), which the play has no accusation to make of.
+  //
+  // And what the vault's lot owes: the pump that dries the basement, here a
+  // trigger that sets its flag once the house is lit, so that the rain in
+  // the dead air waits for something that does happen.
   const paid: MuseumContent = {
     ...MUSEUM,
     exhibits: MUSEUM.exhibits.map((exhibit) =>
@@ -912,9 +951,13 @@ await test('a museum with its debts paid is accused of nothing, and all twelve p
         ? { ...exhibit, scale: 1, hotspots: exhibit.hotspots.map((hotspot) => ({ ...hotspot, localPosition: [0, 0.05, 0.1] })) }
         : exhibit,
     ),
+    triggers: [
+      { id: 'the-pump', when: { powered: ['office', 'atrium', 'holyoke'] }, effects: [{ kind: 'set-flag', flag: 'basement-drained' }] },
+    ],
   }
   const result = simulateProgress(paid)
   assert.deepEqual(result.issues, [])
+  assert.deepEqual(sorted(result.final.flags), ['basement-drained', 'clock-set'])
   // Every line of the list that has a box is ticked at that end, and the one
   // that has none is still the promise it was.
   const list = MUSEUM.documents.flatMap((doc) => doc.pages ?? []).find((page) => page.style === 'checklist')
@@ -938,7 +981,7 @@ function saveHolding(atoms: readonly string[]): Progress {
   }
   return grantProgress(emptyProgress(), grant as ProgressGrant)
 }
-const isPress = (entry: ActionRecord) => /^(?:power|door|hotspot|container|touch|code|take):/.test(entry.id)
+const isPress = (entry: ActionRecord) => /^(?:power|door|hotspot|container|touch|code|take|set-clock):/.test(entry.id)
 const standingIn = (entry: ActionRecord) => (entry.requires.find((asked) => asked.startsWith('room:')) ?? '').slice('room:'.length)
 /** The press that realises this record for a player who holds `atoms`, if the rules offer one. */
 const pressFor = (content: MuseumContent, entry: ActionRecord, atoms: readonly string[]) => {
@@ -956,8 +999,12 @@ await test('what is written down of each action is what the rules do: every guar
   const wrong: string[] = []
   const presses = played.actions.filter(isPress)
   // Three switches, six ways through three doorways, seventeen details, four
-  // containers, the drawer's touch and its code, the radio.
-  assert.ok(presses.length >= 33, `only ${presses.length} presses were met`)
+  // containers, the drawer's touch and its code, the radio, the clock.
+  assert.ok(presses.length >= 34, `only ${presses.length} presses were met`)
+  assert.deepEqual(
+    presses.find((entry) => entry.id === 'set-clock:office-clock'),
+    { id: 'set-clock:office-clock', requires: ['power:office', 'room:office'], grants: ['flag:clock-set'] },
+  )
   for (const entry of presses) {
     const offered = pressFor(MUSEUM, entry, entry.requires)
     if (!offered) {
@@ -1035,7 +1082,7 @@ await test('from a save, she keeps what it holds and reaches the same end', () =
     // What the play does not write is exactly as it was loaded.
     assert.deepEqual(result.final.radioMemory, loaded.radioMemory, name)
     assert.deepEqual(result.final.clockSeconds, loaded.clockSeconds, name)
-    // The same five accusations: a save does not make a piece cataloguable.
+    // The same six accusations: a save does not make a piece cataloguable, nor set the pump's flag.
     assert.deepEqual(sorted(result.issues.map((issue) => `${issue.code} ${issue.id}`)), sorted(played.issues.map((issue) => `${issue.code} ${issue.id}`)), name)
   }
   // And she does not write into what she was handed.
@@ -1207,20 +1254,21 @@ await test('five hundred shuffled orders, with wasted presses and closed tabs, a
 })
 
 await test('the player who skips everything optional ends in the same place, less the steps skipped (V7)', async () => {
-  // Never reads the notebook, never takes the radio, never lights the torch.
+  // Never reads the notebook, never takes the radio, never lights the
+  // torch, never sets the clock.
   const journal = new Set(MUSEUM.rooms.flatMap((room) => (room.containers ?? []).filter((container) => container.carriesJournal).map((container) => container.id)))
   const skipper: RobotProfile = {
     ...ORDINARY,
     noTorch: true,
-    skips: (action) => action.kind === 'take' || (action.kind === 'container' && journal.has(action.containerId)),
+    skips: (action) => action.kind === 'take' || action.kind === 'set-clock' || (action.kind === 'container' && journal.has(action.containerId)),
   }
   assert.deepEqual([...journal], ['office-notebook'])
-  const skipped = ['doc:doc-welcome', 'carried:office-radio']
+  const skipped = ['doc:doc-welcome', 'carried:office-radio', 'flag:clock-set']
   for (const seed of [1, 2, 3, 5, 8, 13, 21, 34]) {
     const night = await playToEnd(await openGame(), MUSEUM, seeded(seed), skipper)
     assert.deepEqual(withoutLuck(endOf(night.page.progress())), MAXIMUM_END.filter((entry) => !skipped.includes(entry)), `seed ${seed}`)
     assert.equal(night.page.state().flashlightUsed, false, 'the torch was lit')
-    assert.ok(!night.log.some((line) => /office-notebook|office-radio/.test(line)), `seed ${seed} touched what it skips`)
+    assert.ok(!night.log.some((line) => /office-notebook|office-radio|office-clock/.test(line)), `seed ${seed} touched what it skips`)
   }
 })
 

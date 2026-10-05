@@ -130,6 +130,8 @@ export type FocusState = Pick<
   readonly progress: {
     readonly roomsPowered: readonly string[]
     readonly devicesCarried?: readonly string[]
+    /** What a device that sets a flag reads: a clock already put right answers nothing. */
+    readonly flags?: readonly string[]
   }
 }
 

@@ -5,7 +5,15 @@
  * `Devices.tsx` only feeds these the save, the clock and the elapsed time.
  */
 
-import type { DeviceData, EraId, MuseumContent, ProgressCondition, RadioCall, RoomData } from '../content/schema'
+import type {
+  DeviceData,
+  EraId,
+  MuseumContent,
+  ProgressCondition,
+  RadioCall,
+  RadioHint,
+  RoomData,
+} from '../content/schema'
 import { isRoomPowered } from './power.ts'
 import { progressConditionMet, type ConditionProgress } from './progressCondition.ts'
 
@@ -85,16 +93,30 @@ export function radioIsLive(
   return room ? room.startsPowered || roomsPowered.includes(room.id) : false
 }
 
-/** Calls whose moment has come and which the player has not heard yet. */
+/**
+ * Whether a call's moment is now: its `when` holds and it has not lapsed.
+ *
+ * Two questions and not one negative folded into `when`: «the hall is lit
+ * and Wing 1 is not» would stop holding for the wrong reason, and what makes
+ * a call old news is a thing done, which stays done.
+ */
+export function radioCallCurrent(
+  call: Pick<RadioCall, 'when' | 'lapsesWhen'>,
+  progress: ConditionProgress,
+  content: Pick<MuseumContent, 'rooms' | 'exhibits'>,
+) {
+  if (!progressConditionMet(call.when, progress, content)) return false
+  return !(call.lapsesWhen && progressConditionMet(call.lapsesWhen, progress, content))
+}
+
+/** Calls whose moment has come, and has not gone, and which the player has not heard yet. */
 export function dueRadioCalls(
   device: RadioDevice,
   progress: ConditionProgress & { readonly radioCalls: readonly string[] },
   content: Pick<MuseumContent, 'rooms' | 'exhibits'>,
 ): readonly RadioCall[] {
   return device.calls.filter(
-    (call) =>
-      !progress.radioCalls.includes(call.id) &&
-      progressConditionMet(call.when, progress, content),
+    (call) => !progress.radioCalls.includes(call.id) && radioCallCurrent(call, progress, content),
   )
 }
 
@@ -170,7 +192,8 @@ export function radioWithinEarshot(
  * for a call the player simply had not read yet and wrong for one the modal
  * answered: the porter asks for the notebook, the player opens it mid-line,
  * and on closing it the same line tells them to take what they now hold. A
- * content call lapses when its own `when` stops holding — its own, not
+ * content call lapses when its own moment is over (`radioCallCurrent`: its
+ * `when` stopped holding, or its `lapsesWhen` began to) — its own, not
  * `radioCallReady`, which also counts content order — and an answer when
  * the hint it carries does. Static and calls no longer in the content never
  * lapse: there is nothing left to ask them.
@@ -185,12 +208,13 @@ export function transmissionLapsed(
   content: Pick<MuseumContent, 'rooms' | 'exhibits'>,
 ): boolean {
   if (!transmission) return false
-  const condition = transmission.callId
-    ? radioDevices(content)
-        .find((entry) => entry.device.id === transmission.deviceId)
-        ?.device.calls.find((call) => call.id === transmission.callId)?.when
-    : transmission.validWhile
-  return condition ? !progressConditionMet(condition, progress, content) : false
+  if (transmission.callId) {
+    const call = radioDevices(content)
+      .find((entry) => entry.device.id === transmission.deviceId)
+      ?.device.calls.find((candidate) => candidate.id === transmission.callId)
+    return call ? !radioCallCurrent(call, progress, content) : false
+  }
+  return transmission.validWhile ? !progressConditionMet(transmission.validWhile, progress, content) : false
 }
 
 /**
@@ -207,13 +231,35 @@ export function radioHintIndex(
   return device.hints.findIndex((hint) => progressConditionMet(hint.when, progress, content))
 }
 
-/** The porter answers with the first thing the player still needs. */
+/**
+ * The height of a hint he says on this call: the next one up when he is
+ * asked again about the same thing, the first when the hint is another.
+ * Never past the last height the hint has, which he goes on repeating.
+ */
+export function radioHintHeight(
+  hint: Pick<RadioHint, 'heightKeys'>,
+  hintIndex: number,
+  memory: { readonly lastHint: number; readonly hintHeight: number },
+) {
+  const top = Math.max(0, hint.heightKeys.length - 1)
+  return hintIndex === memory.lastHint ? Math.min(Math.max(0, memory.hintHeight) + 1, top) : 0
+}
+
+/** The one line a hint says at a height; past its last height, its last. */
+export function radioHintLine(hint: Pick<RadioHint, 'heightKeys'>, height: number): readonly string[] {
+  const key = hint.heightKeys[Math.min(Math.max(0, height), hint.heightKeys.length - 1)]
+  return key === undefined ? [] : [key]
+}
+
+/** The porter answers with the first thing the player still needs: its hint, at a height (where, unless told). */
 export function radioHintFor(
   device: Pick<RadioDevice, 'hints'>,
   progress: ConditionProgress,
   content: Pick<MuseumContent, 'rooms' | 'exhibits'>,
+  height = 0,
 ): readonly string[] {
-  return device.hints[radioHintIndex(device, progress, content)]?.lineKeys ?? []
+  const hint = device.hints[radioHintIndex(device, progress, content)]
+  return hint ? radioHintLine(hint, height) : []
 }
 
 /** The first call due, if any: calls are heard in content order, one at a time. */
@@ -273,6 +319,8 @@ export type DeviceInput = {
   readonly carried: boolean
   /** A transmission is on air. */
   readonly speaking: boolean
+  /** The flag it sets is in the save (a clock already put right); false of a device that sets none. */
+  readonly set: boolean
 }
 
 /** The store, as far as a device's intent reads it. */
@@ -280,8 +328,14 @@ export type DeviceWorld = {
   readonly progress: {
     readonly roomsPowered: readonly string[]
     readonly devicesCarried?: readonly string[]
+    readonly flags?: readonly string[]
   }
   readonly radio: object | null
+}
+
+/** The flag a device sets when worked, if it sets one: today, a clock that can be put right. */
+export function deviceSetFlag(device: DeviceData): string | null {
+  return device.kind === 'clock' ? (device.setFlag ?? null) : null
 }
 
 /** A device's input, read off the save and the air as they are now. */
@@ -292,11 +346,13 @@ export function deviceInputOf(
 ): DeviceInput {
   const supply = devicePowerRoom(device)
   const room = supply === null ? undefined : roomById(supply)
+  const flag = deviceSetFlag(device)
   return {
     // A supply the content does not have feeds nothing.
     powered: supply === null ? true : room !== undefined && isRoomPowered(room, world.progress.roomsPowered),
     carried: world.progress.devicesCarried?.includes(device.id) ?? false,
     speaking: world.radio !== null,
+    set: flag !== null && Array.isArray(world.progress.flags) && world.progress.flags.includes(flag),
   }
 }
 
@@ -316,10 +372,15 @@ export type DeviceIntent =
   /** It says its notice, and never takes the key. */
   | { readonly kind: 'notice' }
   | { readonly kind: 'radio'; readonly intent: DeskRadioIntent }
+  /** A stopped clock that can be put right: E sets it. */
+  | { readonly kind: 'clock'; readonly intent: 'set' }
 
 export function deviceIntent(device: DeviceData, input: DeviceInput): DeviceIntent {
   switch (device.kind) {
     case 'clock':
+      // A mains clock is set with its mains on, and once: put right, it
+      // shows the hour of the night and has nothing more to ask of a hand.
+      return device.setFlag !== undefined && input.powered && !input.set ? { kind: 'clock', intent: 'set' } : { kind: 'none' }
     case 'power-indicator':
       return { kind: 'none' }
     case 'notice':
@@ -330,6 +391,26 @@ export function deviceIntent(device: DeviceData, input: DeviceInput): DeviceInte
         intent: deskRadioIntent(device, { live: input.powered, carried: input.carried, speaking: input.speaking }),
       }
   }
+}
+
+/**
+ * What the hands of a clock show.
+ *
+ * Stopped or only running, the minute the storm stopped it at and the
+ * seconds its room has had power since. Put right, the hour of the night
+ * (`nightClock.ts`), which does not creep: its hour and minute hands stand
+ * where the night stands and move when the night does. The second hand goes
+ * on turning either way, so a clock that has been set still looks alive.
+ */
+export function clockFaceAngles(
+  stoppedAt: { readonly hours: number; readonly minutes: number },
+  elapsedSeconds: number,
+  night: { readonly hours: number; readonly minutes: number } | null,
+) {
+  const running = clockHandAngles(clockTimeAfter(stoppedAt, elapsedSeconds))
+  if (!night) return running
+  const set = clockHandAngles({ hours: night.hours, minutes: night.minutes, seconds: 0 })
+  return { hour: set.hour, minute: set.minute, second: running.second }
 }
 
 /**
@@ -344,6 +425,8 @@ export function deviceLive(intent: DeviceIntent): boolean {
       return false
     case 'radio':
       return intent.intent !== 'dead'
+    case 'clock':
+      return true
   }
 }
 
@@ -357,9 +440,10 @@ export function aimableDevices(
 ): readonly { readonly room: RoomData; readonly device: DeviceData }[] {
   return content.rooms.flatMap((room) =>
     (room.devices ?? []).flatMap((device) =>
-      // Asked of the rule itself, with the house lit: what a kind answers
-      // may change with power, but whether it answers at all does not.
-      deviceIntent(device, { powered: true, carried: false, speaking: false }).kind === 'none'
+      // Asked of the rule itself, with the house lit and nothing done yet:
+      // what a kind answers may change with power and with the save, but
+      // whether it ever answers does not.
+      deviceIntent(device, { powered: true, carried: false, speaking: false, set: false }).kind === 'none'
         ? []
         : [{ room, device }],
     ),

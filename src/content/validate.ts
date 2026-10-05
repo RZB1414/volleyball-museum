@@ -12,14 +12,15 @@
  */
 
 import { devicePowerRoom } from '../engine/deviceRules.ts'
-import { conditionClasses, credentialKey } from '../engine/progressCondition.ts'
+import { HOUR_TOKEN } from '../engine/nightClock.ts'
+import { conditionClass, conditionClasses, credentialKey } from '../engine/progressCondition.ts'
 import { MOUNT_PARTS, mountPartNames, transitionDoorPartNames } from '../engine/runtimePlacedParts.ts'
 import { buildRoomSignageLayout } from '../engine/signageLayout.ts'
 import { compileTriggers } from '../engine/triggers.ts'
 import { doorIdsOf, saveIdsByField, validateAdditive, type GraphSnapshot } from './additive.ts'
 import { validateFactCaptures, type FactCaptureSet } from './factCapture.ts'
 import { settleKnownDebt, type KnownDebt } from './knownDebt.ts'
-import { PRE_OPENING_SAVE, SAVE_ALIASES, type SaveAlias } from './legacySave.ts'
+import { PRE_OPENING_SAVE, PRE_POSSE_SAVE, SAVE_ALIASES, type SaveAlias } from './legacySave.ts'
 import type {
   DeviceData,
   ExhibitMount,
@@ -30,7 +31,7 @@ import type {
   UnlockEffect,
 } from './schema'
 import { simulateProgress } from './simulate.ts'
-import { validateText } from './textLint.ts'
+import { conditionAsks, numeralTokens, validateText } from './textLint.ts'
 
 export type ValidationIssue = {
   /**
@@ -533,6 +534,13 @@ function validateRadioPatience(device: RadioDeviceData, error: Report, warning: 
     }
     if (tier.replies.length === 0) {
       error('radio-patience-silent', `${where} patience tier ${index + 1} has no reply, so it could never help.`)
+    } else if (tier.replies.every((reply) => conditionAsks(reply.when))) {
+      // An answer with a `when` is only said while it holds. A tier made of
+      // those has, on some night, nothing it may say.
+      error(
+        'radio-patience-silent',
+        `${where} patience tier ${index + 1} has no reply that is said in any night: every one waits on a \`when\`.`,
+      )
     }
     const chance = tier.outburstChance ?? 0
     if (!(chance >= 0 && chance < 1)) {
@@ -579,6 +587,11 @@ function validateRadioPatience(device: RadioDeviceData, error: Report, warning: 
   const hangsUp = patience.tiers.some((tier) => (tier.outbursts ?? []).some((outburst) => outburst.hangsUp))
   if (hangsUp && patience.deadAir.length === 0) {
     error('radio-dead-air-missing', `${where} can hang up but has no dead air to answer with meanwhile.`)
+  } else if (hangsUp && patience.deadAir.every((air) => conditionAsks(air.when))) {
+    error(
+      'radio-dead-air-missing',
+      `${where} can hang up, and all its dead air waits on a \`when\`: on some night a call into it gets his answer instead.`,
+    )
   }
 
   const curtTier = patience.tiers.some((tier) => tier.hint === 'curt')
@@ -593,13 +606,12 @@ function validateRadioPatience(device: RadioDeviceData, error: Report, warning: 
     }
   }
 
+  // In full a hint is one line, the height he has reached; curt, all its curt lines.
   const longestHint = (curt: boolean) =>
     Math.max(
       0,
       ...device.hints.map((hint) =>
-        curt && hint.curtLineKeys && hint.curtLineKeys.length > 0
-          ? hint.curtLineKeys.length
-          : hint.lineKeys.length,
+        curt && hint.curtLineKeys && hint.curtLineKeys.length > 0 ? hint.curtLineKeys.length : Math.min(1, hint.heightKeys.length),
       ),
     )
   for (const tier of patience.tiers) {
@@ -693,6 +705,7 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
       ...(condition.powered ?? []),
       ...(condition.unpowered ?? []),
       ...(condition.roomsVisited ?? []),
+      ...(condition.roomsUnvisited ?? []),
     ]) {
       if (!roomIds.has(roomId)) error('condition-room-missing', `${where} names unknown room "${roomId}".`, roomId)
     }
@@ -751,6 +764,10 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
     }
   }
   for (const trigger of content.triggers ?? []) checkCondition(trigger.when, `Trigger "${trigger.id}"`)
+  for (const term of content.terms ?? []) {
+    checkCondition(term.presentedWhen, `Term "${term.id}" (to be presented)`)
+    checkCondition(term.when, `Term "${term.id}"`)
+  }
 
   // --- notebooks -------------------------------------------------------------
   for (const doc of content.documents) {
@@ -802,6 +819,17 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
   // --- devices ---------------------------------------------------------------
   const deviceIds = new Set<string>()
   const callIds = new Set<string>()
+  // What a hint may point at: something that stands in a room, with a place
+  // the player can walk up to.
+  const pointable = new Set<string>([
+    ...content.exhibits.map((exhibit) => exhibit.id),
+    ...content.rooms.flatMap((room) => [
+      ...(room.containers ?? []).map((container) => container.id),
+      ...(room.devices ?? []).map((device) => device.id),
+      ...(room.powerControl ? [room.powerControl.id] : []),
+    ]),
+    ...doorIds,
+  ])
   for (const room of content.rooms) {
     for (const device of room.devices ?? []) {
       if (deviceIds.has(device.id)) error('device-duplicate', `Device id "${device.id}" is used twice.`)
@@ -832,6 +860,14 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
         ) {
           error('clock-time', `Clock "${device.id}" stops at an impossible time.`)
         }
+        // A clock that can be set is aimed at, and a prompt names what it is aimed at.
+        if (device.setFlag !== undefined && !device.titleKey) {
+          error(
+            'clock-without-title',
+            `Clock "${device.id}" can be set (\`setFlag\`) and has no \`titleKey\`: its prompt would have nothing to call it.`,
+            device.id,
+          )
+        }
       }
 
       if (device.kind === 'radio') {
@@ -845,12 +881,49 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
             error('radio-call-delay', `Radio call "${call.id}" needs a non-negative delay.`)
           }
           checkCondition(call.when, `Radio call "${call.id}"`)
+          if (call.lapsesWhen) {
+            checkCondition(call.lapsesWhen, `Radio call "${call.id}" (to lapse)`)
+            // Gone for good: what ends a call's moment has to stay true, or
+            // the call comes back the day it stops holding.
+            if (conditionClass(call.lapsesWhen) !== 'positive') {
+              error(
+                'radio-lapse-not-positive',
+                `Radio call "${call.id}" lapses on something that can stop being true: a lapse is for good, so it has to ask only what stays done.`,
+                call.id,
+              )
+            }
+          }
         }
         for (const [index, hint] of device.hints.entries()) {
-          if (hint.lineKeys.length === 0) {
-            error('radio-hint-silent', `Radio "${device.id}" hint ${index + 1} has no lines.`)
+          const where = `Radio "${device.id}" hint ${index + 1}`
+          if (hint.heightKeys.length === 0) {
+            error('radio-hint-silent', `${where} has no lines.`)
           }
-          checkCondition(hint.when, `Radio "${device.id}" hint ${index + 1}`)
+          checkCondition(hint.when, where)
+          // A hint that points at nothing the house has sends the player
+          // looking for it; and only the last, said when nothing is left to
+          // do, may point at nothing at all.
+          const last = index === device.hints.length - 1
+          if (hint.targetId !== undefined ? !pointable.has(hint.targetId) : !last) {
+            error(
+              'hint-points-to-nothing',
+              hint.targetId !== undefined
+                ? `${where} points at "${hint.targetId}", which is no piece, container, device, breaker or door of the house.`
+                : `${where} has no \`targetId\`: every hint but the last points at something the player can walk up to.`,
+              hint.targetId ?? `${device.id}:hint-${index + 1}`,
+            )
+          }
+        }
+        // An answer that looks at the night asks it like any other condition.
+        const answers = device.patience
+          ? [
+              ...device.patience.tiers.flatMap((tier) => [...tier.replies, ...(tier.outbursts ?? [])]),
+              ...(device.patience.praise ?? []),
+              ...device.patience.deadAir,
+            ]
+          : []
+        for (const answer of answers) {
+          if (answer.when) checkCondition(answer.when, `Radio "${device.id}" answer "${answer.id}"`)
         }
         // A press on a live radio must always get an answer.
         const last = device.hints[device.hints.length - 1]
@@ -893,7 +966,68 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
       `The pre-opening save migration watches unknown room "${PRE_OPENING_SAVE.firstCallOverOncePowered}".`,
     )
   }
+  // --- saves from before the Posse ---------------------------------------------
+  // The same, for the porter's old news: a call renamed here would be told
+  // to every returning player about things done on another night, and a
+  // milestone renamed would stop being recognised as passed.
+  for (const callId of [PRE_POSSE_SAVE.helloCallId, ...PRE_POSSE_SAVE.oldNews.map((news) => news.callId)]) {
+    if (!callIds.has(callId)) {
+      error('legacy-save-call', `The pre-Posse save migration names unknown radio call "${callId}".`, callId)
+    }
+  }
+  const savedIds = saveIdsByField(content)
+  for (const news of PRE_POSSE_SAVE.oldNews) {
+    if (news.id !== null && !savedIds[news.field]?.has(news.id)) {
+      error(
+        'legacy-save-milestone',
+        `The pre-Posse save migration takes "${news.callId}" for old news once \`${news.field}\` holds "${news.id}", which is no id of that list.`,
+        news.id,
+      )
+    }
+  }
   issues.push(...validateSaveAliases(content))
+
+  // --- the hour of the night ---------------------------------------------------
+  const clock = content.nightClock
+  if (clock) {
+    // One phrase for each count of points a save can reach, no more and no
+    // fewer: a count with no phrase leaves the porter with an hour he cannot
+    // say, and a phrase no count reaches is copy nobody hears.
+    if (clock.phraseKeys.length !== clock.milestones.length) {
+      error(
+        'night-clock-phrases',
+        `The night clock has ${clock.milestones.length} milestone(s) and ${clock.phraseKeys.length} phrase(s): one phrase for each count of points, from one up.`,
+        'nightClock',
+      )
+    }
+    const milestoneIds = new Set<string>()
+    for (const milestone of clock.milestones) {
+      const where = `Night milestone "${milestone.id}"`
+      if (milestoneIds.has(milestone.id)) error('night-milestone-duplicate', `${where} is listed twice: it would count for two points.`, milestone.id)
+      milestoneIds.add(milestone.id)
+      if ('when' in milestone) {
+        checkCondition(milestone.when, where)
+        // A point is never taken back: the hour would go backwards, and the
+        // clock on the wall with it.
+        if (conditionClass(milestone.when) !== 'positive') {
+          error(
+            'night-milestone-not-positive',
+            `${where} asks for something that can stop being true, or for "all" of something a later lot adds to: the night would go back.`,
+            milestone.id,
+          )
+        }
+      } else {
+        checkCondition({ catalogued: milestone.of }, where)
+        if (!Number.isInteger(milestone.cataloguedAtLeast) || milestone.cataloguedAtLeast < 1 || milestone.cataloguedAtLeast > milestone.of.length) {
+          error(
+            'night-milestone-count',
+            `${where} waits for ${milestone.cataloguedAtLeast} of ${milestone.of.length} pieces: a whole number from 1 to the length of its list.`,
+            milestone.id,
+          )
+        }
+      }
+    }
+  }
 
   return issues
 }
@@ -964,7 +1098,7 @@ export function validateTriggers(content: MuseumContent): ValidationIssue[] {
       error(
         'gate-uses-negative-condition',
         trigger.id,
-        `Trigger "${trigger.id}" is guarded by something that can stop being true (\`unpowered\`, \`locksClosed\`, \`documentsUnread\`): whether it ever fires would depend on the order the player did things in.`,
+        `Trigger "${trigger.id}" is guarded by something that can stop being true (\`unpowered\`, \`locksClosed\`, \`documentsUnread\`, \`flagsUnset\`, \`roomsUnvisited\`): whether it ever fires would depend on the order the player did things in.`,
       )
     }
     if (classes.has('all')) {
@@ -1964,28 +2098,67 @@ const CARDINAL_WORDS: Record<string, RegExp> = {
   en: /(?<![\p{L}\p{N}])(?:north|south|east|west)(?:-?(?:east|west))?(?:ern|wards?)?(?![\p{L}\p{N}])/iu,
 }
 
-/** Every dictionary key a radio can say: calls, hints in both tempers, the porter's patience, dead air. */
-function spokenKeys(content: MuseumContent): Set<string> {
-  const keys = new Set<string>()
+/**
+ * How long a spoken line may be, in characters.
+ *
+ * A line is a subtitle, read at walking pace and gone in nine seconds at the
+ * most (`radioLineSeconds`). A call or a height of a hint is something the
+ * player stops for; an answer of the porter's patience and a curt hint are
+ * said by someone who is being short, and are held to less.
+ */
+export const SPEECH_LINE_MAX = 130
+export const SPEECH_SHORT_LINE_MAX = 110
+
+/**
+ * Every dictionary key a radio can say, with the length it is held to:
+ * calls, hints at every height and curt, the porter's patience, dead air. A
+ * key said in two places is held to the shorter of its two measures.
+ */
+function spokenKeys(content: MuseumContent): Map<string, number> {
+  const keys = new Map<string, number>()
+  const say = (key: string, limit: number) => keys.set(key, Math.min(limit, keys.get(key) ?? limit))
   for (const room of content.rooms) {
     for (const device of room.devices ?? []) {
       if (device.kind !== 'radio') continue
-      for (const call of device.calls) for (const key of call.lineKeys) keys.add(key)
+      for (const call of device.calls) for (const key of call.lineKeys) say(key, SPEECH_LINE_MAX)
       for (const hint of device.hints) {
-        for (const key of [...hint.lineKeys, ...(hint.curtLineKeys ?? [])]) keys.add(key)
+        for (const key of hint.heightKeys) say(key, SPEECH_LINE_MAX)
+        for (const key of hint.curtLineKeys ?? []) say(key, SPEECH_SHORT_LINE_MAX)
       }
       const patience = device.patience
       if (!patience) continue
       const replies = [...patience.tiers.flatMap((tier) => tier.replies), ...(patience.praise ?? []), ...patience.deadAir]
       for (const reply of replies) {
-        for (const key of [...reply.lineKeys, ...(reply.closingKeys ?? [])]) keys.add(key)
+        for (const key of [...reply.lineKeys, ...(reply.closingKeys ?? [])]) say(key, SPEECH_SHORT_LINE_MAX)
       }
       for (const outburst of patience.tiers.flatMap((tier) => tier.outbursts ?? [])) {
-        for (const key of outburst.lineKeys) keys.add(key)
+        for (const key of outburst.lineKeys) say(key, SPEECH_SHORT_LINE_MAX)
       }
     }
   }
   return keys
+}
+
+/** How each language says who Helena is: the word a line that names her has to carry. */
+const DIRECTOR_WORDS: Record<string, RegExp> = {
+  'pt-BR': /diretora/i,
+  en: /director/i,
+}
+
+/** Every id a `mentions` may name: whatever in the build a player can be sent to. */
+function mentionableIds(content: MuseumContent): Set<string> {
+  return new Set<string>([
+    ...content.rooms.flatMap((room) => [
+      room.id,
+      ...(room.containers ?? []).map((container) => container.id),
+      ...(room.devices ?? []).map((device) => device.id),
+      ...(room.powerControl ? [room.powerControl.id] : []),
+    ]),
+    ...content.exhibits.map((exhibit) => exhibit.id),
+    ...content.documents.map((doc) => doc.id),
+    ...content.locks.map((lock) => lock.id),
+    ...doorIdsOf(content),
+  ])
 }
 
 /**
@@ -1994,26 +2167,95 @@ function spokenKeys(content: MuseumContent): Set<string> {
  * `validateTranslations` proves a line exists; this reads it. A direction
  * given over the radio is the one piece of copy the player acts on at once
  * and in the dark, so it has to be relative to something they can see: a
- * door, a light, the side they came in by.
+ * door, a light, the side they came in by. It has to fit the time a subtitle
+ * stays up. It never says an hour in digits, because the hour of the night
+ * is not a fixed one: a line that needs it says `{hora}`, which is filled
+ * from the night's clock, and no other token means anything. Whoever names
+ * Helena says who she is, every time: a line is heard alone. And whatever a
+ * call, a hint or a line of the list says it sends the player to
+ * (`mentions`) is something the build has.
  */
 export function validateSpeech(content: MuseumContent, dictionaries: Dictionaries): ValidationIssue[] {
   const issues: ValidationIssue[] = []
-  for (const key of spokenKeys(content)) {
+  const error = (code: string, id: string, message: string) => issues.push({ severity: 'error', code, id, message })
+
+  for (const [key, limit] of spokenKeys(content)) {
     for (const [locale, dictionary] of Object.entries(dictionaries)) {
       const text = dictionary[key]
       if (text === undefined) continue // missing-translation reports this
+      const where = `Radio line "${key}" (${locale})`
+
       // A language with no list of its own is read against every list.
       const lists = CARDINAL_WORDS[locale] ? [CARDINAL_WORDS[locale]] : Object.values(CARDINAL_WORDS)
       const bearing = lists.map((list) => list.exec(text)?.[0]).find((word) => word !== undefined)
-      if (bearing === undefined) continue
-      issues.push({
-        severity: 'error',
-        code: 'speech-uses-cardinal',
-        id: key,
-        message:
-          `Radio line "${key}" (${locale}) says "${bearing}". The player has no compass: ` +
-          `say it by a door, a light or the side they came in by.`,
-      })
+      if (bearing !== undefined) {
+        error(
+          'speech-uses-cardinal',
+          key,
+          `${where} says "${bearing}". The player has no compass: say it by a door, a light or the side they came in by.`,
+        )
+      }
+
+      if (text.length > limit) {
+        error(
+          'speech-line-too-long',
+          key,
+          `${where} is ${text.length} characters, and a line said ${limit === SPEECH_LINE_MAX ? 'in a call or a hint' : 'by a porter out of patience'} fits in ${limit}: split it in two, or say less.`,
+        )
+      }
+
+      const hour = numeralTokens(text).find((token) => token.kind === 'clock')
+      if (hour) {
+        error(
+          'speech-hour-in-digits',
+          key,
+          `${where} says "${hour.text}". Nobody says an hour of this night in a fixed line: it is read off the night's clock, with ${HOUR_TOKEN}.`,
+        )
+      }
+
+      for (const [token] of text.matchAll(/\{[^{}]*\}/g)) {
+        if (token !== HOUR_TOKEN) {
+          error('speech-token-unknown', key, `${where} carries "${token}", which nothing fills: the one token a spoken line may carry is ${HOUR_TOKEN}.`)
+        } else if (!content.nightClock) {
+          error('speech-token-unknown', key, `${where} says ${HOUR_TOKEN}, and the content has no night clock to read the hour from.`)
+        }
+      }
+
+      const director = DIRECTOR_WORDS[locale] ? [DIRECTOR_WORDS[locale]] : Object.values(DIRECTOR_WORDS)
+      if (/Helena/.test(text) && !director.some((word) => word.test(text))) {
+        error(
+          'speech-director-unintroduced',
+          key,
+          `${where} names Helena and does not say who she is. A line is heard alone: «a Helena, a diretora», every time.`,
+        )
+      }
+    }
+  }
+
+  // --- what a line sends the player to -----------------------------------------
+  const known = mentionableIds(content)
+  const mentioned: { readonly by: string; readonly ids: readonly string[] }[] = []
+  for (const room of content.rooms) {
+    for (const device of room.devices ?? []) {
+      if (device.kind !== 'radio') continue
+      for (const call of device.calls) mentioned.push({ by: `Radio call "${call.id}"`, ids: call.mentions })
+      device.hints.forEach((hint, index) => mentioned.push({ by: `Radio "${device.id}" hint ${index + 1}`, ids: hint.mentions }))
+    }
+  }
+  for (const doc of content.documents) {
+    for (const page of doc.pages ?? []) {
+      for (const item of page.items ?? []) mentioned.push({ by: `Checklist item "${item.labelKey}"`, ids: item.mentions ?? [] })
+    }
+  }
+  for (const term of content.terms ?? []) mentioned.push({ by: `Term "${term.id}"`, ids: term.mentions })
+  for (const { by, ids } of mentioned) {
+    for (const id of ids) {
+      if (known.has(id)) continue
+      error(
+        'speech-mentions-missing',
+        id,
+        `${by} sends the player to "${id}", which is no room, piece, paper, lock, container, device, breaker or door of this build.`,
+      )
     }
   }
   return issues

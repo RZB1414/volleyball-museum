@@ -753,7 +753,9 @@ ouvi-la nunca conhece o Jorge); `deviceRules.ts:88-98` (`dueRadioCalls`); `pt-BR
 
 3. `legacySave.ts`, `saveMigrations.ts`: `PRE_POSSE_SAVE` (sem `drawer`) e `prePosse` (3.2).
    `validateOpening` (`validate.ts:864-891`): `legacy-save-call` para cada `callId` de
-   `oldNews` e para `helloCallId`.
+   `oldNews` e para `helloCallId`; `legacy-save-milestone` para cada `id` de `oldNews` que não
+   é id daquela lista do save; `radio-lapse-not-positive` para um `lapsesWhen` que pode deixar de
+   valer (caducar é para sempre).
 4. Textos de §6.2. Saem `radio.call.first.3` e `.4`.
 
 **Teste.** `test:radio`:
@@ -803,7 +805,10 @@ lido, em qualquer sala: bloqueia as outras, S25); `deviceRules.ts:201-216`;
 
 4. `simulate.ts`: `radio-hint-coverage`: em todo passo da jogadora exaustiva em que algum termo do
    build está por assinar e ainda é assinável, a dica que vale não é a última. (Em F2 não há termo:
-   a regra é provada com uma casa feita para o teste, e vale no museu de verdade em F5.)
+   a regra é provada com uma casa feita para o teste, e vale no museu de verdade em F5. Para a
+   regra ter o que ler, o tipo `Term` de 3.10 e `MuseumContent.terms?` entram no `schema.ts` já
+   em F2; «assinado», até F4 trazer `termsSigned`, é a flag `grants` do termo no save.)
+   `validateOpening` (em `validate.ts`: é uma pergunta sobre ids, que não precisa jogar):
    `hint-points-to-nothing`: `targetId` que não é peça, container, dispositivo, quadro nem porta do
    build, ou dica sem `targetId` que não é a última.
 5. Textos de §6.2; `radio.hint.vault` e `.curt` passam a se chamar `radio.hint.rest` e `.curt`.
@@ -859,13 +864,17 @@ as três chaves deixam de ser acusadas, e uma resposta nova com «chuva» e sem 
    `setFlag: 'clock-set'` e `titleKey: 'device.office-clock.title'`.
 6. `simulate.ts`: ação `set-clock`; uma flag posta por verbo de dispositivo conta em `flagsSet`, e
    a do relógio conta como lida pelo próprio relógio. `validateOpening`: `night-clock-phrases`
-   (frases ≠ marcos), `night-milestone-not-positive`, ids das condições por `checkCondition`.
+   (frases ≠ marcos), `night-milestone-not-positive`, `night-milestone-duplicate` (um marco
+   listado duas vezes valeria dois pontos), `night-milestone-count` (`cataloguedAtLeast` fora de 1
+   a n da própria lista), `clock-without-title` (relógio com `setFlag` e sem `titleKey`: o prompt
+   não teria como chamá-lo), ids das condições por `checkCondition`.
 7. `scripts/lib/playthrough.ts`: a mão `set-clock`; `storeActions.ts` não muda (não há função nova).
 
 **Teste.** `test:opening` (junto de `:389-420`): antes de acertar, o relógio anda de 16h47; depois,
 mostra 19h10 com um ponto e 30 min a mais por ponto; sem energia não se acerta. `test:speech-
 coherence` (T9): a contagem de pontos nunca diminui em 500 ordens. `test:playthrough`: `flag:clock-
-set` entra em `MAXIMUM` e no nível `N0` (`:391-467`).
+set` entra em `MAXIMUM` e no nível `N1` (`:391-467`): o relógio pede a luz do escritório, que é
+de N0, e uma passada da simulação não vê o que ela mesma acabou de fazer.
 
 **Vermelho hoje.** `nightTime` não existe; o caso «acertado mostra 19h10» não tem o que chamar.
 
@@ -886,7 +895,9 @@ apresentação da Helena em duas chaves. Nenhuma suíte ouve o que toca.
 2. `scripts/lib/playthrough.ts`: `playToEnd` aceita um **ouvinte**: depois de cada tecla, pergunta
    a `nextRadioCall` e a `dueSequence` o que tocaria, anota (chamada, linhas, o save no instante) e
    marca como ouvido pelo store, como o diretor faz; a cada tantas teclas chama o Jorge
-   (`placeRadioCall` com relógio e dado fixos) e anota a resposta.
+   (`placeRadioCallOn(store, content, …)`: a função de `placeRadioCall`, com o store e o conteúdo
+   dados por quem chama, relógio e dado fixos) e anota a resposta. O ouvinte é `radioEar`, em
+   `playthrough.ts`.
 3. `scripts/test-speech-coherence.ts` (novo; `test:speech-coherence` no `package.json` e no
    `check`, depois de `test:playthrough`), sobre as mesmas 500 sementes:
    - nenhuma chamada tocada tinha `lapsesWhen` valendo;
@@ -1092,8 +1103,9 @@ fiação do gesto está nos dois caminhos.
 `dueSequence` devolve uma e nada toca: `startSequence`, que cala o rádio), cartão centrado e
 legenda com quem fala, botão «Pular» por passo; fica retida sob modal e com a aba oculta, pela
 regra `radioHeld`. `Devices.tsx:486-491`: `onAir` passa a contar a sequência. `radioCallBlocked`
-(`radioPatience.ts:232`): `R` durante uma sequência avança o passo e não chama. `Hud.tsx:232-282`:
-as legendas preenchem `{hora}` por `fillHour`. `validate.ts`: `sequence-not-positive`,
+(`radioPatience.ts:232`): `R` durante uma sequência avança o passo e não chama. A legenda do
+cartão preenche `{hora}` por `fillHour`, como a do rádio já faz desde F2 (`RadioSubtitles`, pelo
+gancho `useNightPhraseKey`; §15.2). `validate.ts`: `sequence-not-positive`,
 `sequence-empty`; `simulate.ts`: `sequence-never-plays`.
 
 **Teste.** `test:ending` (T17).
@@ -1572,11 +1584,17 @@ Sem dependência nova: tudo é `node --experimental-strip-types`.
 | `scripts/test-locks.ts:60`, `scripts/test-power.ts:106, 116` | ids `olympic` e `breaker-handle` | `lineage` e `crate-dolly`; o sentido não muda | F1 |
 | `scripts/test-opening-flow.ts:1284-1330` | a última dica e a quarta linha da primeira chamada sem «medalha», «cofre», «não desce» | nenhuma fala antes da Posse promete o que L11 e L12 trazem; a primeira chamada tem duas linhas; o limite de 130 passa ao validador | F2, F5 |
 | `scripts/test-radio.ts:879-926` | «`radio.call.first.4` manda pegar o rádio»; a Helena apresentada em duas chaves | `porter-hello` não manda pegar o que talvez já esteja no bolso; a Helena apresentada em **toda** chave que a cita | F2 |
-| `scripts/test-radio.ts:928-960` (`HINT_TARGETS`) | a dica curta com os substantivos da cheia | com os da altura «o quê» | F2 |
+| `scripts/test-radio.ts:928-960` (`HINT_TARGETS`) | a dica curta com os substantivos da cheia | com os das duas primeiras alturas («onde» e «o quê») | F2 |
 | `scripts/test-playthrough.ts:391-467` | o fim de hoje, átomo por átomo, e cinco níveis | o fim de cada fatia; sete níveis em F5 | F2, F5 |
 | `scripts/test-save.ts:233-238` (`UNKNOWN`) | `termsSigned` como campo que este build não conhece | outro nome; `termsSigned` vira amostra de `SAMPLES` | F4 |
 | `scripts/test-qa-save.ts:289-331` | todo id de um fixture é id do conteúdo | ou tem alias para um | F5 |
 | `scripts/test-kit-runtime.ts:267-302` | 56 e 53 lotes de kit | os mesmos, e ao lado a conta por dado (59, 33, 79) | F1, F5 |
+| `scripts/test-save.ts` («this build reads a save of production exactly as L1 read it») | o build lê um save de produção igual a L1, campo por campo | igual a L1 **mais** as notícias velhas que `prePosse` marca; `hintHeight` fica fora da comparação (L1 não conhece) | F2 |
+| `scripts/test-save.ts` (`agreed()`, nas corridas entre abas) | aba e disco iguais ao fim | iguais «como uma carga os lê»: os dois lados passam pela migração antes de comparar, porque a aba que lê marca notícias velhas que o disco ainda não tem | F2 |
+| `scripts/test-qa-save.ts` («a save the lot in the tree wrote loads as itself») | um fixture carimbado com o lote da árvore carrega idêntico | idêntico mais as notícias velhas, enquanto houver migração de lote maior que `CONTENT_LOT`; volta a ser «idêntico» quando `CONTENT_LOT` virar 3 | F2, F5 |
+| `scripts/test-triggers.ts` (a recarga da casa de teste) | recarregar não muda nada do que a primeira sessão deixou | não muda nada além das chamadas que são notícia velha (`PRE_POSSE_SAVE`) | F2 |
+| `scripts/test-opening-flow.ts` («a player who skipped the notebook is sent back for it first») | a dica do caderno vale em qualquer sala | só enquanto o jogador não saiu do escritório (S25) | F2 |
+| `scripts/test-playthrough.ts` («she accuses the museum of five things…») | cinco acusações datadas | seis: entra `flag-never-set` de `basement-drained`, até L12 | F2 |
 
 `scripts/test-opening.ts:422` (a lanterna nunca alcança o teto do átrio) e
 `scripts/test-navigation.ts` (`reciprocalPairs.size === 3`) não mudam.
@@ -1590,11 +1608,11 @@ título: toda fatia que escreve texto sobe esse teto.
 | Caminho | O que entra | Previsto | Fatia |
 |---|---|---|---|
 | título | 12 chaves e a carta maior | +0,4 kB | F1 |
-| título | cerca de 45 chaves de fala; `hintHeight`; `prePosse` | +1,6 kB | F2 |
+| título | cerca de 45 chaves de fala; `hintHeight`; `prePosse` | +1,6 kB; **[medido em F2: 35 chaves novas, 8 a menos, 5 reescritas; +1.165 bytes, 31.478; teto 31.630]** | F2 |
 | título | 8 chaves | +0,2 kB | F3 |
 | título | 9 chaves; `termsSigned`, `sequencesSeen` | +0,3 kB | F4 |
 | título | cerca de 60 chaves (dois documentos longos, o recado, falas) ; o alias | +2,4 kB | F5 |
-| jogo | `checklist.ts`, dispositivos miráveis, `nightClock.ts`, `readingQueue.ts`, `voiceDevice.ts`, `containerNodes.ts`, `termRules.ts`, `holdAction.ts`, `sequenceRules.ts`, `SequenceOverlay.tsx`, o conteúdo novo | +6 a +9 kB no lote | F1 a F5 |
+| jogo | `checklist.ts`, dispositivos miráveis, `nightClock.ts`, `readingQueue.ts`, `voiceDevice.ts`, `containerNodes.ts`, `termRules.ts`, `holdAction.ts`, `sequenceRules.ts`, `SequenceOverlay.tsx`, o conteúdo novo | +6 a +9 kB no lote; **[medido: F1 +1.151 (392.146), F2 +1.649 (393.795); teto 395.760 desde F2]** | F1 a F5 |
 
 Tudo [previsto]. Cada teto sobe **no commit da fatia que precisa**, para o medido mais meio por
 cento, com o motivo em `BUNDLE_PATH_CEILINGS`. Os dois orçamentos do papel ficam longe: 93 kB antes
@@ -1836,3 +1854,123 @@ há, e ele abre o teclado. Console sem erro nem aviso novo.
   que agora é a primeira aba. É verdade (as três estão lá), e §6.1 não muda essa chave.
 - `interactionWinner` responde «dispositivo, morto» para um id de foco que o conteúdo não tem. Não
   acontece no jogo (a varredura só mira o que `aimableDevices` lista), e ficou como estava.
+
+### 15.2 F2 — O Jorge por marco e a hora da noite (2026-10-05)
+
+T5 a T9 feitas. `npm run check` (34 passos: entrou `test:speech-coherence`, depois de
+`test:playthrough`) e `npm run build` verdes. `CONTENT_LOT` continua 2; `docs/releases/L2.graph.json`
+não foi tocado e `validateAdditive` contra ele não acusa nada («graph: held to L2's snapshot»).
+`porter-first-call` e `PRE_OPENING_SAVE` continuam com os ids de sempre. Nenhuma fala de F2 cita
+secretária, chave, cofre de ferro, Livro, púlpito ou Posse: quem confere é a lista `notYet` de
+`test:opening-flow`, sobre toda linha falada nas duas línguas (**F5 tira dela as palavras que
+passar a dizer**).
+
+**Vermelho visto antes do conserto** (as suítes escritas primeiro, rodadas contra a fonte de
+`e9f9803`):
+
+| Suíte | Como reprovou |
+|---|---|
+| `test:speech-coherence` | «`radio.patience.t5.soap.2` (pt-BR) says "acabou a luz" with every room lit» (semente 7); «`radio.patience.t4.dark` (pt-BR) says "escuro" with every room lit» (semente 11); `porter-hello` nunca é ouvida |
+| `test:radio` | das oito chamadas faltam cinco; saguão aceso: `[]` contra `['porter-atrium-service']`; ÁT-A6 (c): `undefined` contra `porter-hello` (o Jorge nunca se apresenta); os saves do corpus ouvem `[]` em vez de `['porter-hello']`; S25: no saguão escuro, sem o caderno, «Primeiro o caderno, curador: a diretora, a Helena, deixou um pra você na mesa do escritório…»; em mil sorteios com tudo aceso sai «medo do escuro»; `heightKeys` é `undefined`; um nível de paciência só com respostas condicionais passa pelo portão |
+| `test:opening`, `test:save` | erro de importação: `src/engine/nightClock.ts` e `PRE_POSSE_SAVE` não existem |
+| `test:opening-flow` | (o caso da legenda, escrito antes do conserto dela) «`ui/Hud.tsx` no longer has `fillHour(…)`: a line of the radio that says the hour would show the token as it was typed» |
+
+**Mutações que provam que as asserções mordem.**
+
+- `test:speech-coherence`, sobre o museu de verdade com uma coisa trocada: `porter-atrium-service`
+  sem `lapsesWhen` («sends the player to "holyoke-breaker" with holyoke already lit»);
+  `porter-t4-dark` sem `when` («says "escuro" with every room lit»); um marco da noite por condição
+  negativa («the night went back from N milestone(s) to M»). As três reprovam.
+- `deviceWiringProblems` ganhou sete refatorações do relógio em memória, todas pegas: `E` que toma
+  a tecla e não grava; ponteiros que continuam no minuto da tempestade; relógio que lê a hora de
+  um save próprio; aviso para qualquer flag; hora própria do HUD; aviso que não diz para que hora;
+  legenda que imprime a ficha `{hora}`.
+- `test:opening`, um museu quebrado para cada código do portão de F2: `hint-points-to-nothing`,
+  `radio-hint-coverage` (com um termo de teste), `radio-lapse-not-positive`, `legacy-save-call`,
+  `legacy-save-milestone`, `clock-without-title`, `night-clock-phrases`,
+  `night-milestone-duplicate`, `night-milestone-not-positive`, `night-milestone-count`,
+  `speech-line-too-long`, `speech-hour-in-digits`, `speech-token-unknown`,
+  `speech-director-unintroduced`, `speech-mentions-missing`; e `radio-patience-silent` e
+  `radio-dead-air-missing` para um nível, ou um silêncio, em que toda resposta é condicional.
+
+**O que saiu diferente do plano** (o texto acima já está corrigido onde se diz).
+
+1. **`flag:clock-set` cai no nível N1, não no N0** (T8, corrigido): o relógio pede a luz do
+   escritório, e uma passada não vê o que ela mesma fez.
+2. **`hint-points-to-nothing` mora em `validateOpening`**, e **o tipo `Term` já está no
+   `schema.ts`** (T6, corrigido), com `MuseumContent.terms?`: `radio-hint-coverage` precisa dele
+   para ser provada. Até F4, «assinado» é a flag `grants` do termo no save; **F4 decide se a regra
+   passa a ler `termsSigned`**.
+3. **Códigos a mais no portão** (T5 e T8, corrigidos): `radio-lapse-not-positive`,
+   `legacy-save-milestone`, `night-milestone-duplicate`, `night-milestone-count`,
+   `clock-without-title`.
+4. **A altura da dica.** `radioHintHeight(hint, hintIndex, memory)` é a conta de T6; a explosão de
+   raiva não sobe a altura (ele não deu dica), e a dica curta conta como um degrau (ele disse
+   tudo). `radioHintFor(device, progress, content, height = 0)`.
+5. **`prePosse` roda em toda leitura do disco**, a da carga e a da junção entre abas. A aba que lê
+   pode ter notícias velhas que o disco não tem, e não grava por causa disso; por isso `agreed()`,
+   em `test:save`, compara os dois lados «como uma carga os lê» (9.2). O caso com abas vivas (uma
+   aba que grava como L2 e a deste build) prova que as duas se calam.
+6. **A legenda do rádio já preenche `{hora}`** (T16 dava isso a F4, corrigido). O portão de F2
+   deixa uma fala levar a ficha onde há relógio da noite; sem o preenchimento, uma fala assim
+   passaria e sairia crua na tela. `RadioSubtitles` e o aviso do relógio leem a mesma frase
+   (`useNightPhraseKey`). Nenhuma fala de F2 usa a ficha: a primeira é `sequence.posse.1`.
+7. **`test:speech-coherence` ganhou uma regra que o plano não listava**: nenhuma chamada tocada
+   manda o jogador a um quadro cuja sala já está acesa (pelos `mentions`). É ela que pega a
+   mutação do `lapsesWhen`.
+8. **Formas que o plano deixou em aberto.** `DeviceInput.set` e `deviceSetFlag(device)`;
+   `deviceLive` responde pelo relógio; `aimableDevices` pergunta com `set: false`;
+   `clockFaceAngles(stoppedAt, elapsedSeconds, night)`; `setClockMinutes(clock, setFlag, progress,
+   content)`; `clockJustSet` em `promptRules.ts`; `placeRadioCallOn(store, content, deviceId, now,
+   random)` (a `placeRadioCall` do jogo é ela com `useMuseum` e `MUSEUM`); `deadAirFor(patience,
+   progress, content, random, lastId)`; `play()` devolve `steps`; `RobotProfile.prefers`; o
+   ouvinte `radioEar(content, { random, promptness, callChance })`. Os limites de comprimento são
+   `SPEECH_LINE_MAX = 130` e `SPEECH_SHORT_LINE_MAX = 110`. `saveIdsByField.flags`
+   (`additive.ts`) passou a incluir a flag posta por dispositivo.
+9. **`test()` de `test:radio` anota a falha e segue** (o código de saída continua 1): com oito
+   casos novos, um vermelho escondia os outros sete.
+10. **O dicionário cresceu 27 chaves, não 45**: 35 novas, 8 a menos, 5 reescritas (259 para 286).
+11. **Mais testes mudaram de sentido do que 9.2 previa**: as seis linhas novas da tabela.
+
+**Medido.**
+
+- Bundle (gzip, pelo próprio portão): documento 63.232 (teto 63.600), título 31.478 (era 30.313;
+  teto de 30.460 para 31.630), jogo 393.795 (era 392.146; teto de 392.700 para 395.760, a primeira
+  subida dele em L3). Os dois tetos são o medido mais meio por cento, com o motivo em
+  `BUNDLE_PATH_CEILINGS`. Antes do clique 94,71 kB; no jogo 488,50 kB.
+- Suítes: `test:radio` 35 (eram 27), `test:opening` 37 (35), `test:save` 60 (57),
+  `test:speech-coherence` 6 (nova, 500 noites), `test:opening-flow` 48, `test:playthrough` 36,
+  `test:qa-save` 27, `test:triggers` 30, `test:lints` 21.
+- A dívida `flag-never-set` de `basement-drained` aparece na tabela do portão até L12; as três de
+  `speech-night-state-unconditional` saíram. `text-ages` de `document.predecessor.body` continua
+  até L3: **F5 paga**.
+
+**Navegador** (servidor reiniciado; aba oculta, jogo andado por `__museumStep`, legendas lidas do
+DOM e do store; pt-BR e inglês, 1280 × 720).
+
+- Jogo novo, pt-BR. Relógio no escuro: sem prompt, `E` não faz nada. Luminária: `porter-hello` com
+  as cinco linhas de §6.2, depois `porter-first-call` e `porter-notebook-reminder`. Relógio:
+  «E · Acertar o relógio · Relógio do escritório»; `E` grava `clock-set`, aviso «✓ Relógio
+  acertado — Passa das sete», ponteiros em 19h10; o segundo `E` não faz nada. Rádio no bolso:
+  `porter-radio-taken`. `R` quatro vezes: o caderno em onde, o quê, como, como. No saguão escuro,
+  sem o caderno: «O quadro fica do outro lado do saguão.» e depois «Luzinha vermelha, perto da
+  porta com placa.» (S25). Saguão, Ala 1, primeira peça e atalho: cada chamada uma vez, com o
+  texto de §6.2. Com três pontos o relógio mostra 20h10. Gaveta, com tudo aceso: onde, o quê e a
+  curta. Recarregar: nada toca de novo; a altura (2) e a hora ficam.
+- Inglês, jogo novo: *Set the clock — Office clock*; *Clock set — Gone seven*; a apresentação e as
+  três alturas do caderno em inglês.
+- 844 × 390, pelos botões: relógio no escuro **sem botão de Ação**; aceso, «Ação» com «Acertar o
+  relógio»; o toque grava a flag e o botão some. A legenda fica entre os dois direcionais, sem
+  rolagem horizontal.
+- `?qaSave=l2-shortcut-released` e `?qaSave=production-drawer-open`: só `porter-hello` é devida, e
+  nenhum aviso aparece. No segundo, acertar o relógio diz «Passa das dez» (sete pontos, 22h10 na
+  parede), e `R` responde `radio.hint.rest`.
+- Console sem erro nem aviso novo (só o `THREE.Clock` de sempre).
+
+**Visto de passagem, sem conserto nesta fatia.**
+
+- Num jogo novo a primeira coisa que o Jorge diz é «É o Jorge **de novo**». O texto é o de §6.2
+  (DL3-2 o justifica para quem já o conhecia de L2); fica para o dono dizer se a noite começa com
+  um encontro na portaria que o jogador não viu.
+- Acertar o relógio enquanto o Jorge se apresenta mostra o aviso e a legenda juntos. Não se
+  cobrem (um no topo, a outra embaixo), em 1280 × 720 e em 844 × 390.

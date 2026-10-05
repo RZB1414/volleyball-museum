@@ -377,7 +377,18 @@ export type ProgressCondition = {
   readonly hotspotsSeen?: readonly string[]
   readonly credentials?: readonly Credential[]
   readonly flags?: readonly string[]
+  /**
+   * None of these flags is set. A question for whoever is asked again each
+   * time (a line said, a hint given): what is guarded by it for good would
+   * depend on the order things were done in, and the gate refuses that.
+   */
+  readonly flagsUnset?: readonly string[]
   readonly roomsVisited?: readonly EraId[]
+  /**
+   * The player has not been in any of these rooms. How the porter tells a
+   * player still at the desk from one who walked out without the notebook.
+   */
+  readonly roomsUnvisited?: readonly EraId[]
   /** Ids of physical doors: the portal that declares the leaf. */
   readonly doorsReleased?: readonly string[]
   /**
@@ -766,17 +777,41 @@ export type RadioCall = {
   readonly id: string
   /** Fires once, the first time this holds while the radio has power. */
   readonly when: ProgressCondition
+  /**
+   * Once this holds the call is gone for good, heard or not: what it had to
+   * say is no longer news («the breaker of Wing 1 is over there», with Wing 1
+   * lit). Something that stays true once it is, or the call would come back.
+   */
+  readonly lapsesWhen?: ProgressCondition
   /** Seconds between the condition becoming true and the call arriving. */
   readonly delaySeconds: number
   readonly lineKeys: readonly string[]
+  /**
+   * Ids of the build this call sends the player to: a room, a piece, a
+   * paper, a lock, a container, a device, a breaker, a door. The gate holds
+   * each one to something the house has. What is only scenery in the telling
+   * (the bus, the road, the roller door) is not an id and is not listed.
+   */
+  readonly mentions: readonly string[]
 }
 
 /** What the porter says when called; the first entry whose condition holds wins. */
 export type RadioHint = {
   readonly when: ProgressCondition
-  readonly lineKeys: readonly string[]
-  /** The same help, said by someone who has run out of patience. */
+  /**
+   * What the hint points at: something the player can walk up to. Omitted
+   * only by the last hint, which is said when nothing is left to point at.
+   */
+  readonly targetId?: string
+  /**
+   * One key per height, said one to a call: where it is, what it looks like,
+   * how it is worked. One to three; asked again past the last, he repeats it.
+   */
+  readonly heightKeys: readonly string[]
+  /** The same help, said by someone who has run out of patience. It has no heights. */
   readonly curtLineKeys?: readonly string[]
+  /** Ids of the build this hint sends the player to, as in a call. */
+  readonly mentions: readonly string[]
 }
 
 /**
@@ -789,6 +824,11 @@ export type RadioReply = {
   readonly id: string
   readonly lineKeys: readonly string[]
   readonly closingKeys?: readonly string[]
+  /**
+   * Only said while this holds: a joke about the dark is for a night that
+   * still has a dark room in it. Omitted: said in any night.
+   */
+  readonly when?: ProgressCondition
 }
 
 /** He loses his temper: the whole answer, with no hint in it. */
@@ -797,6 +837,8 @@ export type RadioOutburst = {
   readonly lineKeys: readonly string[]
   /** He hangs up: the radio gives only static for `hangUpSeconds`. */
   readonly hangsUp: boolean
+  /** Only thrown while this holds. Omitted: in any night. */
+  readonly when?: ProgressCondition
 }
 
 export type RadioPatienceTier = {
@@ -807,7 +849,10 @@ export type RadioPatienceTier = {
   readonly fromCall: number
   /** Whether the hint is said in full or curtly. It is always said. */
   readonly hint: 'full' | 'curt'
-  /** Never empty: there is always an answer that helps. */
+  /**
+   * Never empty, and never all of them waiting on the night (`when`): there
+   * is always an answer that helps, whatever the night is doing.
+   */
   readonly replies: readonly RadioReply[]
   readonly outbursts?: readonly RadioOutburst[]
   /**
@@ -835,6 +880,7 @@ export type RadioPatience = {
   readonly hangUpSeconds: number
   /** Who "speaks" the static after he hangs up: the radio, not him. */
   readonly deadAirSpeakerKey: string
+  /** As with a tier's replies: one of them, at least, asks nothing of the night. */
   readonly deadAir: readonly RadioReply[]
 }
 
@@ -867,6 +913,15 @@ export type DeviceData =
       readonly stoppedAt: { readonly hours: number; readonly minutes: number }
       /** A mains clock: it starts running, from where it stopped, with this room. */
       readonly runsWithPowerOf: EraId
+      /** What the prompt calls it while it can be set. Needed with `setFlag`. */
+      readonly titleKey?: string
+      /**
+       * E on it, with power, sets this flag: the clock has been put right.
+       * From then on its hands show the hour of the night (`NightClock`),
+       * which goes forward by what the player has done and never by the
+       * minutes they took. Omitted: a clock that only runs.
+       */
+      readonly setFlag?: string
     })
   | (DevicePlacement & {
       readonly kind: 'power-indicator'
@@ -907,6 +962,59 @@ export type DeviceData =
       /** The lot that gives it its use. The gate fails once that lot has come. */
       readonly deferredUntilLot: number
     })
+
+/**
+ * One thing done that moves the night on. Either a condition that stays true
+ * once it is, or so many catalogued of a named list of pieces.
+ */
+export type NightMilestone =
+  | { readonly id: string; readonly when: ProgressCondition }
+  | { readonly id: string; readonly cataloguedAtLeast: number; readonly of: readonly string[] }
+
+/**
+ * The hour of the night, as the game tells it.
+ *
+ * No clock in the building counts the player's minutes: a player who takes
+ * three hours over one room and one who runs through three are in the same
+ * night. The hour goes forward by what has been done. Each milestone met is a
+ * point, in whatever order, and a point is never taken back; the first point
+ * is `startsAt`, and each one after it `stepMinutes` later.
+ *
+ * Read by the clock on the office wall once it has been set, and by whoever
+ * says the hour aloud: `{hora}` in a spoken line is filled with the phrase of
+ * the count, spelt out and rounded, never with digits.
+ */
+export type NightClock = {
+  /** What the clock shows at the first point, 24-hour. */
+  readonly startsAt: { readonly hours: number; readonly minutes: number }
+  readonly stepMinutes: number
+  /** A closed list: every one met is a point. */
+  readonly milestones: readonly NightMilestone[]
+  /** What is said at each count of points, from one up: as many as there are milestones. */
+  readonly phraseKeys: readonly string[]
+}
+
+/**
+ * Something the curator signs: the deed of office, and later the reopening.
+ *
+ * The lectern that signs it arrives with the lot's later slices. It is in
+ * the schema from this one because a rule already speaks of it: while a term
+ * can be signed and has not been, the porter has something left to point at,
+ * and the gate holds his hints to that (`radio-hint-coverage`).
+ */
+export type Term = {
+  readonly id: string
+  readonly titleKey: string
+  readonly bodyKey: string
+  /** From here on the signing desk names it. Positive. */
+  readonly presentedWhen: ProgressCondition
+  /** What signing asks. Positive, with every id named. Asks everything `presentedWhen` asks. */
+  readonly when: ProgressCondition
+  /** The flag the signature sets. */
+  readonly grants: string
+  /** Ids of the build the term sends the player to. */
+  readonly mentions: readonly string[]
+}
 
 export type AudioEmitter = {
   readonly id: string
@@ -993,4 +1101,8 @@ export type MuseumContent = {
    * (`engine/triggers.ts`).
    */
   readonly triggers?: readonly Trigger[]
+  /** The hour of the night, by what has been done. Without it no line may say `{hora}`. */
+  readonly nightClock?: NightClock
+  /** What the curator signs, oldest first. None until the lectern is a signing desk. */
+  readonly terms?: readonly Term[]
 }

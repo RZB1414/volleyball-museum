@@ -31,13 +31,21 @@
  * (`test:facts` checks).
  */
 
-import { deskRadioIntent, radioIsLive } from '../engine/deviceRules.ts'
+import {
+  deskRadioIntent,
+  deviceInputOf,
+  deviceIntent,
+  deviceSetFlag,
+  radioDevices,
+  radioHintIndex,
+  radioIsLive,
+} from '../engine/deviceRules.ts'
 import { EXAMINE_MIN_CONE_DEGREES, examineReach } from '../engine/examineReach.ts'
 import { attemptLock, lockCredentialKeys } from '../engine/lockRules.ts'
 import { isContainerTaken } from '../engine/notebook.ts'
 import { isRoomPowered } from '../engine/power.ts'
 import { conditionClass, credentialKey, progressConditionMet } from '../engine/progressCondition.ts'
-import { containerGrant, doorGrant, hotspotGrant } from '../engine/progressGrants.ts'
+import { clockGrant, containerGrant, doorGrant, hotspotGrant } from '../engine/progressGrants.ts'
 import {
   buildTransitionDoorSpecs,
   transitionDoorBlock,
@@ -125,6 +133,8 @@ export type PlayerAction =
   | { readonly kind: 'container'; readonly containerId: string }
   | { readonly kind: 'code'; readonly lockId: string; readonly entry: string }
   | { readonly kind: 'take'; readonly deviceId: string }
+  /** A stopped clock put right: E on it, with its mains on. */
+  | { readonly kind: 'set-clock'; readonly deviceId: string }
 
 /** What an action asks of the save and gives to it, as atoms. */
 export type ActionRecord = {
@@ -257,7 +267,8 @@ function containerBehind(content: MuseumContent, lockId: string): ContainerData 
  * comes up, or the lock buzzes) and record that the lock was touched. A press
  * the rules ignore is not: a door barred from this side, a switch whose room
  * already has power, a detail already seen, a detail no hand can turn to the
- * camera, a notebook that has left its desk, a radio without charge.
+ * camera, a notebook that has left its desk, a radio without charge, a clock
+ * with no mains or already put right.
  *
  * A code is in the list only for a player who has had the keypad in front of
  * her and knows the fact it asks for. The keypad itself compares digits and
@@ -308,6 +319,12 @@ export function availableActions(content: MuseumContent, progress: Progress, roo
   }
 
   for (const device of here.devices ?? []) {
+    if (device.kind === 'clock') {
+      // Asked of the device's own rule, as the prompt and the key ask it.
+      const intent = deviceIntent(device, deviceInputOf(device, { progress, radio: null }, (id) => topology.rooms.get(id)))
+      if (intent.kind === 'clock' && intent.intent === 'set') actions.push({ kind: 'set-clock', deviceId: device.id })
+      continue
+    }
     if (device.kind !== 'radio') continue
     const intent = deskRadioIntent(device, {
       live: radioIsLive(content, device.id, progress.roomsPowered),
@@ -318,6 +335,16 @@ export function availableActions(content: MuseumContent, progress: Progress, roo
   }
 
   return actions
+}
+
+/** The clock an action is aimed at, wherever it hangs. */
+function clockOf(content: MuseumContent, deviceId: string) {
+  for (const room of content.rooms) {
+    for (const device of room.devices ?? []) {
+      if (device.id === deviceId && device.kind === 'clock') return device
+    }
+  }
+  return undefined
 }
 
 /** The action, as the grant the runtime's own verbs give it in this save. */
@@ -357,6 +384,10 @@ export function actionGrant(content: MuseumContent, progress: Progress, action: 
     }
     case 'take':
       return { devicesCarried: [action.deviceId] }
+    case 'set-clock': {
+      const clock = clockOf(content, action.deviceId)
+      return clock ? clockGrant(clock) : {}
+    }
   }
 }
 
@@ -404,7 +435,9 @@ const CONDITION_ATOMS: {
   hotspotsSeen: (details) => details.map((key) => atom('hotspots', key)),
   credentials: (credentials) => credentials.map((credential) => atom('credentials', credentialKey(credential))),
   flags: (flags) => flags.map((id) => atom('flags', id)),
+  flagsUnset: (flags) => flags.map((id) => `not(${atom('flags', id)})`),
   roomsVisited: (rooms) => rooms.map((id) => atom('roomsVisited', id)),
+  roomsUnvisited: (rooms) => rooms.map((id) => `not(${atom('roomsVisited', id)})`),
   doorsReleased: (doors) => doors.map((id) => atom('doorsReleased', id)),
   anyOf: (branches, content) => [
     `any(${branches
@@ -550,6 +583,15 @@ function takeRecord(topology: Topology, room: RoomData, device: Extract<DeviceDa
   )
 }
 
+/** A clock put right, which its mains have to be on for; what it gives is the flag it sets. */
+function setClockRecord(topology: Topology, room: RoomData, device: Extract<DeviceData, { readonly kind: 'clock' }>) {
+  return record(
+    `set-clock:${device.id}`,
+    [atom('roomsVisited', room.id), ...powerRequired(topology, device.runsWithPowerOf)],
+    grantAtoms(clockGrant(device)),
+  )
+}
+
 function triggerRecord(content: MuseumContent, trigger: Trigger): ActionRecord {
   return record(`trigger:${trigger.id}`, conditionAtoms(trigger.when, content), [
     atom('triggersFired', trigger.id),
@@ -581,6 +623,7 @@ export function contentActions(content: MuseumContent): readonly ActionRecord[] 
     for (const container of room.containers ?? []) records.push(containerRecord(topology, content, room, container))
     for (const device of room.devices ?? []) {
       if (device.kind === 'radio' && device.carriedOnUse) records.push(takeRecord(topology, room, device))
+      if (device.kind === 'clock' && device.setFlag !== undefined) records.push(setClockRecord(topology, room, device))
     }
   }
   for (const host of topology.hosts) {
@@ -647,6 +690,10 @@ export function actionRecord(
       const device = (room.devices ?? []).find((candidate) => candidate.id === action.deviceId)
       return device?.kind === 'radio' ? takeRecord(topology, room, device) : null
     }
+    case 'set-clock': {
+      const device = (room.devices ?? []).find((candidate) => candidate.id === action.deviceId)
+      return device?.kind === 'clock' && device.setFlag !== undefined ? setClockRecord(topology, room, device) : null
+    }
   }
 }
 
@@ -665,6 +712,8 @@ type ReturnProblem = { readonly roomId: string; readonly code: 'no-return-path' 
 
 type Play = {
   readonly progress: Progress
+  /** The save after every action she took, in order, from the one she began with. */
+  readonly steps: readonly Progress[]
   readonly reachable: ReadonlySet<string>
   readonly levels: readonly (readonly string[])[]
   readonly met: readonly ActionRecord[]
@@ -738,6 +787,7 @@ function play(content: MuseumContent, topology: Topology, from: Progress): Play 
   // Entering is the store's `start`, and a save may be owed something as it loads.
   let progress = settle(grantProgress(from, { roomsVisited: [home] }))
   meetConsequences(from, progress)
+  const steps: Progress[] = [progress]
 
   const reachable = new Set([home])
   const returnProblems: ReturnProblem[] = []
@@ -759,6 +809,7 @@ function play(content: MuseumContent, topology: Topology, from: Progress): Play 
         const before = progress
         progress = settle(grantProgress(progress, actionGrant(content, progress, action)))
         meetConsequences(before, progress)
+        if (progress !== before) steps.push(progress)
 
         if (action.kind !== 'door' || reachable.has(action.to) || entered.includes(action.to)) continue
         entered.push(action.to)
@@ -780,7 +831,7 @@ function play(content: MuseumContent, topology: Topology, from: Progress): Play 
     levels.push(gained)
   }
 
-  return { progress, reachable, levels, met: [...met.values()], returnProblems, converged }
+  return { progress, steps, reachable, levels, met: [...met.values()], returnProblems, converged }
 }
 
 // ---------------------------------------------------------------------------
@@ -803,8 +854,22 @@ function conditionsOf(content: MuseumContent, topology: Topology): readonly Prog
     for (const device of room.devices ?? []) {
       if (device.kind !== 'radio') continue
       conditions.push(...device.calls.map((call) => call.when), ...device.hints.map((hint) => hint.when))
+      // What ends a call's moment, and what an answer looks at before it is said.
+      conditions.push(...device.calls.flatMap((call) => (call.lapsesWhen ? [call.lapsesWhen] : [])))
+      const patience = device.patience
+      if (!patience) continue
+      const answers = [
+        ...patience.tiers.flatMap((tier) => [...tier.replies, ...(tier.outbursts ?? [])]),
+        ...(patience.praise ?? []),
+        ...patience.deadAir,
+      ]
+      conditions.push(...answers.flatMap((answer) => (answer.when ? [answer.when] : [])))
     }
   }
+  for (const milestone of content.nightClock?.milestones ?? []) {
+    if ('when' in milestone) conditions.push(milestone.when)
+  }
+  for (const term of content.terms ?? []) conditions.push(term.presentedWhen, term.when)
   // A branch asks like any other condition.
   const withBranches = (condition: ProgressCondition): ProgressCondition[] => [
     condition,
@@ -850,7 +915,7 @@ export function simulateProgress(content: MuseumContent, from: Progress = emptyP
     )
   }
 
-  const { progress: final, reachable, levels, met, returnProblems, converged } = play(content, topology, from)
+  const { progress: final, steps, reachable, levels, met, returnProblems, converged } = play(content, topology, from)
 
   if (!converged) {
     error(
@@ -951,13 +1016,59 @@ export function simulateProgress(content: MuseumContent, from: Progress = emptyP
       error('trigger-never-fires', trigger.id, `Trigger "${trigger.id}" never fires: no play ever meets its condition.`)
     }
   }
-  const flagsSet = new Set(effects.flatMap((effect) => (effect.kind === 'set-flag' ? [effect.flag] : [])))
-  const flagsRead = new Set(conditions.flatMap((condition) => condition.flags ?? []))
+  // A flag is set by an effect, or by a verb of a device (a clock put right).
+  // The device that sets one reads it too: a set clock shows another hour.
+  const deviceFlags = content.rooms.flatMap((room) =>
+    (room.devices ?? []).flatMap((device) => {
+      const flag = deviceSetFlag(device)
+      return flag === null ? [] : [flag]
+    }),
+  )
+  const flagsSet = new Set([
+    ...effects.flatMap((effect) => (effect.kind === 'set-flag' ? [effect.flag] : [])),
+    ...deviceFlags,
+  ])
+  // Waiting for a flag and waiting for its absence are both waiting on
+  // something to set it: one that nothing sets is loose wiring either way
+  // («while it rains» with nothing that ever stops the rain).
+  const flagsRead = new Set([
+    ...conditions.flatMap((condition) => [...(condition.flags ?? []), ...(condition.flagsUnset ?? [])]),
+    ...deviceFlags,
+  ])
   for (const flag of flagsRead) {
-    if (!flagsSet.has(flag)) error('flag-never-set', flag, `A condition waits for flag "${flag}", and no effect sets it.`)
+    if (!flagsSet.has(flag)) {
+      error('flag-never-set', flag, `A condition waits for flag "${flag}" (or for its absence), and nothing sets it.`)
+    }
   }
   for (const flag of flagsSet) {
     if (!flagsRead.has(flag)) error('flag-never-read', flag, `An effect sets flag "${flag}", and no condition ever asks for it.`)
+  }
+
+  // --- the porter still has something to point at ------------------------------
+  // While a term can be signed and has not been, the night is not over, and
+  // the last hint («nothing left but checking») would be a lie: at every
+  // step of the play, some hint above it has to hold. A term is signable when
+  // its `when` is met at the fixed point, and signed when the flag its
+  // signature sets is in the save.
+  const signable = (content.terms ?? []).filter((term) => progressConditionMet(term.when, final, content))
+  if (signable.length > 0) {
+    for (const { device } of radioDevices(content)) {
+      if (device.hints.length === 0) continue
+      const uncovered = steps.find((step) => {
+        const owed = signable.some((term) => !step.flags.includes(term.grants))
+        const index = radioHintIndex(device, step, content)
+        return owed && (index < 0 || index === device.hints.length - 1)
+      })
+      if (!uncovered) continue
+      const owed = signable.filter((term) => !uncovered.flags.includes(term.grants)).map((term) => `"${term.id}"`)
+      error(
+        'radio-hint-coverage',
+        device.id,
+        `Radio "${device.id}" runs out of hints with ${owed.join(' and ')} still to sign: in a save with ` +
+          `${atomsOf(uncovered).filter((entry) => /^(?:power|lock|doc|cred|flag):/.test(entry)).join(', ') || 'nothing done'} ` +
+          `the hint in force is the last, which is for a night with nothing left to do.`,
+      )
+    }
   }
 
   // --- the way back (V5) -----------------------------------------------------

@@ -55,6 +55,12 @@ export type RadioMemory = {
   readonly lastCallAt: number
   /** The hint he gave last time, -1 for none: a different one is progress. */
   readonly lastHint: number
+  /**
+   * How far up that hint he has gone: 0 where it is, 1 what it looks like,
+   * 2 how it is worked. Asked again about the same thing he says the next
+   * height, and a different hint starts from where.
+   */
+  readonly hintHeight: number
   /** The last opener or outburst, so no joke is told twice in a row. */
   readonly lastReplyId: string | null
   /** The last outburst, so the next one is a different tantrum. */
@@ -66,6 +72,7 @@ export const FRESH_RADIO_MEMORY: RadioMemory = {
   temper: 0,
   lastCallAt: 0,
   lastHint: -1,
+  hintHeight: 0,
   lastReplyId: null,
   lastOutburstId: null,
 }
@@ -191,6 +198,11 @@ export function sanitiseRadioMemory(raw: unknown): Record<string, RadioMemory> {
         temper,
         lastCallAt,
         lastHint,
+        // Absent in every save from before the hint had heights, and junk in
+        // a damaged one: either way he starts the hint from where. Not one
+        // of the numbers that cost the entry, or a porter three lots old
+        // would forget his temper the day this field arrived.
+        hintHeight: wholeAtLeast(saved.hintHeight, 0) ?? 0,
         lastReplyId: idOrNull(saved.lastReplyId),
         lastOutburstId: idOrNull(saved.lastOutburstId),
       }

@@ -58,6 +58,16 @@ function holdsAll(list: readonly string[] | undefined, ids: readonly string[] | 
   return ids.every((id) => Array.isArray(list) && list.includes(id))
 }
 
+/**
+ * Whether the save's list holds none of these: the same question, turned
+ * round. A list the asker does not hold, or one of another shape, holds none
+ * of them: the save in which none of it happened.
+ */
+function holdsNone(list: readonly string[] | undefined, ids: readonly string[] | undefined) {
+  if (!ids || !Array.isArray(list)) return true
+  return !ids.some((id) => list.includes(id))
+}
+
 export function progressConditionMet(
   condition: ProgressCondition,
   progress: ConditionProgress,
@@ -105,7 +115,9 @@ export function progressConditionMet(
   if (!holdsAll(progress.hotspots, condition.hotspotsSeen)) return false
   if (!holdsAll(progress.credentials, condition.credentials?.map(credentialKey))) return false
   if (!holdsAll(progress.flags, condition.flags)) return false
+  if (!holdsNone(progress.flags, condition.flagsUnset)) return false
   if (!holdsAll(progress.roomsVisited, condition.roomsVisited)) return false
+  if (!holdsNone(progress.roomsVisited, condition.roomsUnvisited)) return false
   if (!holdsAll(progress.doorsReleased, condition.doorsReleased)) return false
   // `some` of nothing is false, which is the rule: with no branch to take,
   // there is no way through.
@@ -144,7 +156,9 @@ export const CONDITION_FIELD_CLASS = {
   hotspotsSeen: 'positive',
   credentials: 'positive',
   flags: 'positive',
+  flagsUnset: 'negative',
   roomsVisited: 'positive',
+  roomsUnvisited: 'negative',
   doorsReleased: 'positive',
   // By itself: what it is worth is what its branches are, read below.
   anyOf: 'positive',

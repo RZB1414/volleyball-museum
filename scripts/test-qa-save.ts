@@ -46,7 +46,7 @@ const browserStorage = {
 Object.assign(globalThis, { localStorage: browserStorage })
 
 const { CONTENT_LOT } = await import('../src/content/contentLot.ts')
-const { PRE_OPENING_SAVE } = await import('../src/content/legacySave.ts')
+const { PRE_OPENING_SAVE, PRE_POSSE_SAVE } = await import('../src/content/legacySave.ts')
 const { MUSEUM } = await import('../src/content/museum.ts')
 const { fixtureLot, SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
 const { applyQaSave, QA_SAVE_PARAM, QA_SAVE_STORAGE_KEY, qaSaveRequest } = await import(
@@ -57,6 +57,7 @@ const { pendingLocks } = await import('../src/engine/lockRules.ts')
 const { journalUnlocked } = await import('../src/engine/notebook.ts')
 const { progressConditionMet } = await import('../src/engine/progressCondition.ts')
 const { buildTransitionDoorSpecs, canOpenTransitionDoor } = await import('../src/engine/transitionDoorTopology.ts')
+const { SAVE_MIGRATIONS } = await import('../src/state/saveMigrations.ts')
 const { lastLotDone } = await import('./lib/planLots.ts')
 const { QA_SAVE_BOOT_MODULE, qaSavePlugin } = await import('./vite-plugin-qa-save.mjs')
 
@@ -224,14 +225,24 @@ for (const id of fixtureIds) {
     // Everything the record holds is still there. Loading may add (a notebook
     // granted, a field that did not exist yet); it may not take away. A lot
     // that renames an id carries the record's id through its alias here.
-    for (const [field, value] of Object.entries(raw)) {
-      const kept = (progress as Record<string, unknown>)[field]
+    // Inside a record as in the save itself: what the record holds is there
+    // as it was, and the load may add beside it (the height of the porter's
+    // last hint, in an entry written before a hint had heights).
+    const holds = (kept: unknown, value: unknown, where: string) => {
       if (Array.isArray(value)) {
-        assert.ok(Array.isArray(kept), `${field} is gone`)
-        for (const item of value) assert.ok(kept.includes(item), `${field} lost "${item}"`)
+        assert.ok(Array.isArray(kept), `${where} is gone`)
+        for (const item of value) assert.ok(kept.includes(item), `${where} lost "${item}"`)
+      } else if (value && typeof value === 'object') {
+        assert.ok(kept && typeof kept === 'object' && !Array.isArray(kept), `${where} is gone`)
+        for (const [key, inner] of Object.entries(value)) holds((kept as Record<string, unknown>)[key], inner, `${where}.${key}`)
       } else {
-        assert.deepEqual(kept, value, `${field} changed`)
+        assert.deepEqual(kept, value, `${where} changed`)
       }
+    }
+    for (const [field, value] of Object.entries(raw)) holds((progress as Record<string, unknown>)[field], value, field)
+    // And the one thing the load is known to add inside a record, by name.
+    for (const [radioId, memory] of Object.entries((raw.radioMemory as Record<string, object> | undefined) ?? {})) {
+      assert.deepEqual(progress.radioMemory[radioId], { ...memory, hintHeight: 0 }, `${radioId}: the porter's memory`)
     }
     assert.deepEqual(
       state.settings,
@@ -602,14 +613,45 @@ test('a save the lot in the tree wrote loads as itself', () => {
   // own writing: read back, it has to be the same text, field for field and
   // in the same order. A field mistyped, left out or put in another place
   // while copying the record out of the browser shows here.
+  //
+  // One thing may differ, and only while the next lot is being written in
+  // slices: the tree is then ahead of its own stamp (`CONTENT_LOT` moves
+  // with the last slice), and carries a migration of a lot the stamp has not
+  // reached. A record with the tree's stamp was written by the lot before,
+  // and that migration runs on it. What it adds is said here by name (the
+  // porter's old news, in `radioCalls`) and nothing else may move.
+  const ahead = SAVE_MIGRATIONS.filter((migration) => migration.lot > CONTENT_LOT).map((migration) => migration.lot)
+  assert.ok(ahead.every((lot) => lot === CONTENT_LOT + 1), `a migration more than one lot ahead of the tree: ${ahead.join(', ')}`)
+  const oldNews = (progress: RawProgress): string[] =>
+    PRE_POSSE_SAVE.oldNews
+      .filter((news) => {
+        const list = (progress[news.field] as readonly string[] | undefined) ?? []
+        return news.id === null ? list.length > 0 : list.includes(news.id)
+      })
+      .map((news) => news.callId)
+  const asThisBuildReads = (save: (typeof SAVE_FIXTURES)[FixtureId]['save']) =>
+    ahead.includes(3)
+      ? { ...save, progress: { ...save.progress, radioCalls: [...(save.progress.radioCalls as readonly string[]), ...oldNews(save.progress)] } }
+      : save
   const own = fixtureIds.filter((id) => fixtureLot(SAVE_FIXTURES[id]) === CONTENT_LOT)
   for (const id of own) {
     const { state } = loaded.get(id)!
     assert.equal(
       JSON.stringify({ settings: state.settings, progress: state.progress }),
-      JSON.stringify(SAVE_FIXTURES[id].save),
+      JSON.stringify(asThisBuildReads(SAVE_FIXTURES[id].save)),
       `${id}: this build reads its own save as something else`,
     )
+  }
+  if (ahead.includes(3)) {
+    // By name, for the two records of L2: what each had passed before the
+    // porter had a call for it.
+    assert.deepEqual(oldNews(rawProgress('l2-shortcut-released')), [
+      'porter-atrium-service',
+      'porter-holyoke-lit',
+      'porter-shortcut',
+      'porter-first-catalogued',
+    ])
+    assert.deepEqual(oldNews(rawProgress('l2-new-game-drawer-touched')), ['porter-atrium-service'])
   }
   // While a lot is open the corpus has no save of it yet, and this holds of
   // nothing; the lot closes by adding one (the check on the plan, above).

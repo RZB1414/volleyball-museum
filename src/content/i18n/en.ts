@@ -65,6 +65,7 @@ export const en = {
   'prompt.radio.call': 'Call the porter',
   'prompt.radio.dead': 'Not charging',
   'prompt.radio.take': 'Take the radio',
+  'prompt.clock.set': 'Set the clock',
   'power.restored': 'Power restored',
   'door.released': 'Shortcut unlocked',
   'radio.skip': 'Skip',
@@ -156,27 +157,57 @@ export const en = {
   'notebook.todo.vault.note': 'not tonight: the basement flooded',
   'notebook.counter': '{done} of {total}',
   'device.office-radio.title': "Porter's radio",
+  'device.office-clock.title': 'Office clock',
+  'clock.set': 'Clock set',
+  'night.hour.1': 'Gone seven',
+  'night.hour.2': 'Nearly eight',
+  'night.hour.3': 'Gone eight',
+  'night.hour.4': 'Nearly nine',
+  'night.hour.5': 'Gone nine',
+  'night.hour.6': 'Nearly ten',
+  'night.hour.7': 'Gone ten',
+  'night.hour.8': 'Nearly eleven',
   'device.atrium-podium.title': "The Founder's plinth",
   'device.atrium-podium.notice': 'Closed off: the floor is being relaid.',
   'radio.speaker.porter': 'Jorge · porter',
-  'radio.call.first.1': "Curator? It's Jorge, at the front desk. Over.",
-  'radio.call.first.2':
+  // His introduction, owed to every save. "Again": he let the curator in at
+  // the start of the night. He calls his post the front desk, and the room
+  // the signs call the atrium, the hall.
+  'radio.call.hello.1': "Curator? It's Jorge again, at the front desk. Over.",
+  'radio.call.hello.2':
     'The panel here says the office lights are back. The storm tripped every breaker in the building.',
-  'radio.call.first.3':
-    'The atrium breaker is across the hall, a little to your right as you leave, by the Wing 1 entrance. Look for the little red light.',
-  'radio.call.first.4':
-    'The basement flooded; nobody goes down there tonight. Anything at all, take the radio off the desk and call me. Over and out.',
+  'radio.call.hello.3': 'Otávio retired today. He caught the bus before the road closed and left it all to you.',
+  'radio.call.hello.4':
+    "I've got the alarm panel here: every case, drawer and door in this building lights a little lamp for me.",
+  'radio.call.hello.5':
+    'The clock there stopped with the power: set it. Basement flooded; nobody goes down tonight. Call me on the radio. Over and out.',
+  'radio.call.first.1':
+    'The hall breaker is across from you, a little to your right as you leave, by the Wing 1 entrance. Look for the little red light.',
+  'radio.call.first.2': 'The hall, the atrium: same place. The sign says atrium; I say the hall. Over.',
   'radio.call.notebook.1':
     'Oh, and Helena, the director, left you a notebook there on the desk. Take it before you go — it explains everything. Over.',
-  'radio.hint.notebook':
-    'Notebook first, curator: Helena, the director, left you one on the office desk. It explains everything.',
-  'radio.hint.atrium':
-    'The atrium breaker is on the same wall as the Wing 1 entrance, right beside the door. The little red light shows you where.',
-  'radio.hint.holyoke':
-    'Wing 1 has its own breaker, on the wall facing the doors. Cross it in the dark to the little red light — the torch will do.',
-  'radio.hint.drawer':
-    "That locked drawer in your office? Otávio used dates you can find on the labels. Have a look at Morgan's portrait in Wing 1.",
-  'radio.hint.vault':
+  'radio.call.atrium.1':
+    "The hall's on my panel! Wing 1 is the door with the sign, by the breaker. Its own breaker is on the wall facing its doors. Over.",
+  'radio.call.holyoke.1': 'Wing 1 is lit. Now it gets checked, piece by piece. Over.',
+  'radio.call.catalogued.1':
+    'A case just opened and shut on my panel. First one checked? That leaves… well, plenty. Over.',
+  'radio.call.shortcut.1':
+    "The service door opened from the inside. It stays unlocked both ways now. It's on my panel. Over.",
+  // One height to a call: where, what, how.
+  'radio.hint.notebook.where': 'Notebook first: the director, Helena, left one on the desk.',
+  'radio.hint.notebook.what': 'Red cover, next to the lamp.',
+  'radio.hint.notebook.how': 'Pick it up and read it to the last page.',
+  'radio.hint.atrium.where': "The breaker's on the far side of the hall.",
+  'radio.hint.atrium.what': 'A little red light, by the door with the sign.',
+  'radio.hint.atrium.how': 'A grey box on the wall, with a lever. Just throw it.',
+  'radio.hint.holyoke.where': 'Wing 1 has its own breaker, on the wall facing the doors.',
+  'radio.hint.holyoke.what': 'A little red light, across the room.',
+  'radio.hint.holyoke.how': 'Cross in the dark to the little red light. The torch will do.',
+  'radio.hint.drawer.where': "Otávio's drawer opens with a year. The year is in Wing 1.",
+  'radio.hint.drawer.what': "The year is in Wing 1, on Morgan's portrait.",
+  'radio.hint.drawer.how':
+    "Pick the frame up and tilt it: it's on the bottom edge. Or in the provenance archive, by the wing entrance.",
+  'radio.hint.rest':
     "The basement flooded; nobody goes down there tonight. Lights are done; beyond that, it's just checking the collection. Over.",
 
   'radio.speaker.static': 'Radio',
@@ -185,11 +216,11 @@ export const en = {
   'radio.call.taken.2':
     'Just press the side button and call me. Just not every five minutes, eh? Over.',
   'radio.hint.notebook.curt': 'Notebook. On the desk. Pick it up and read it. Over.',
-  'radio.hint.atrium.curt': 'Atrium. Beside the Wing 1 door. Little red light. Over.',
+  'radio.hint.atrium.curt': 'The hall. Beside the Wing 1 door. Little red light. Over.',
   'radio.hint.holyoke.curt': 'Wing 1. Breaker on the far wall. Little red light. Go.',
   'radio.hint.drawer.curt':
     "Otávio's drawer: a date. Morgan's portrait, Wing 1. Pick the frame up and tilt it: it's on the bottom edge.",
-  'radio.hint.vault.curt': "Basement's flooded: nobody goes down tonight. Lights are done; the rest is just checking.",
+  'radio.hint.rest.curt': "Basement's flooded: nobody goes down tonight. Lights are done; the rest is just checking.",
   'radio.patience.t1.ready': 'Front desk, go ahead.',
   'radio.patience.t1.listening': "Go on, curator. I'm listening.",
   'radio.patience.t1.jorge': 'Jorge here. Over.',
@@ -204,6 +235,7 @@ export const en = {
   'radio.patience.t3.otavio':
     'Otávio worked here thirty years and called me twice. Once was a wrong number.',
   'radio.patience.t3.torch': 'Want me to come over and hold the torch for you too?',
+  'radio.patience.t3.torch.close': 'Kidding. The roller door has no motor, and a post is a post.',
   'radio.patience.t3.crossword':
     "I'd nearly finished the crossword. Just missing “pest”, five letters. Go on.",
   'radio.patience.t3.announcer':
@@ -212,7 +244,7 @@ export const en = {
   'radio.patience.t4.meter': "If this radio had a meter running, you'd owe me the building by now.",
   'radio.patience.t4.slow': "I'll say it nice and slow. Must be the static:",
   'radio.patience.t4.dark': "Scared of the dark, is that it? You can tell me. I won't tell a soul.",
-  'radio.patience.t4.dark.close': '…Except Helena, maybe.',
+  'radio.patience.t4.dark.close': '…Except Helena, the director, maybe.',
   'radio.patience.t4.static.1': "Kssshh… curator… kssh… you're breaking up…",
   'radio.patience.t4.static.2': "…kssh… battery's going… kssshh… over and out.",
   'radio.patience.t4.penalty.1': "Hang on, there's a penalty on the transistor radio.",
@@ -242,7 +274,7 @@ export const en = {
   'radio.patience.praise.needless': "See? You didn't need me that much. But since you called:",
   'radio.deadAir.noAnswer': '(Static. No answer from the front desk.)',
   'radio.deadAir.reallyOff': '(Just static. Jorge really did hang up.)',
-  'radio.deadAir.rain': '(Nothing. Only the rain against the windows.)',
+  'radio.deadAir.rain': '(Nothing. Only the rain.)',
 
   // ---------------------------------------------------------------------
   // Wall lettering

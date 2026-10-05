@@ -31,6 +31,7 @@ import { STORE_ACTIONS } from './lib/storeActions.ts'
 import { deepFreeze, openGame, saveOf, seeded, shrunk, shuffled, suite, throughJson } from './lib/storePage.ts'
 import { readText } from './lib/readText.ts'
 
+const { PRE_POSSE_SAVE } = await import('../src/content/legacySave.ts')
 const { MUSEUM } = await import('../src/content/museum.ts')
 const { SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
 const { CONDITION_FIELD_CLASS, conditionClass, progressConditionMet } = await import('../src/engine/progressCondition.ts')
@@ -189,7 +190,9 @@ const FIELD_CASES: Record<string, { ask: Condition; empty: boolean; turnedBy: Ra
   hotspotsSeen: { ask: { hotspotsSeen: ['key-hook:tag'] }, empty: false, turnedBy: { hotspots: ['key-hook:tag'] } },
   credentials: { ask: { credentials: [KEY] }, empty: false, turnedBy: { credentials: ['tool:service-key'] } },
   flags: { ask: { flags: ['hatch-open'] }, empty: false, turnedBy: { flags: ['hatch-open'] } },
+  flagsUnset: { ask: { flagsUnset: ['hatch-open'] }, empty: true, turnedBy: { flags: ['hatch-open'] } },
   roomsVisited: { ask: { roomsVisited: ['attic'] }, empty: false, turnedBy: { roomsVisited: ['attic'] } },
+  roomsUnvisited: { ask: { roomsUnvisited: ['attic'] }, empty: true, turnedBy: { roomsVisited: ['attic'] } },
   doorsReleased: { ask: { doorsReleased: ['hall-to-cellar'] }, empty: false, turnedBy: { doorsReleased: ['hall-to-cellar'] } },
   anyOf: { ask: { anyOf: [{ flags: ['a'] }, { flags: ['b'] }] }, empty: false, turnedBy: { flags: ['b'] } },
 }
@@ -266,6 +269,15 @@ await test('a list the asker does not hold answers no, and never throws', () => 
     assert.equal(ask({ flags: ['hatch-open'] }, { ...bare, flags: junk }), false, JSON.stringify(junk))
     assert.equal(ask({ doorsReleased: ['hall-to-cellar'] }, { ...bare, doorsReleased: junk }), false, JSON.stringify(junk))
   }
+  // The same save, asked whether none of it happened, answers yes: a list
+  // that is not there, or is not a list, holds nothing. One of several is enough to say no.
+  for (const field of ['flagsUnset', 'roomsUnvisited']) assert.equal(ask(FIELD_CASES[field].ask, bare), true, field)
+  for (const junk of ['hatch-open', 5, { 0: 'hatch-open' }, null]) {
+    assert.equal(ask({ flagsUnset: ['hatch-open'] }, { ...bare, flags: junk }), true, JSON.stringify(junk))
+  }
+  assert.equal(ask({ flagsUnset: ['a', 'hatch-open'] }, { ...bare, flags: ['hatch-open'] }), false)
+  assert.equal(ask({ roomsUnvisited: ['attic', 'cellar'] }, { ...bare, roomsVisited: ['hall', 'cellar'] }), false)
+  assert.equal(ask({ roomsUnvisited: ['attic', 'cellar'] }, { ...bare, roomsVisited: ['hall'] }), true)
 })
 
 await test('anyOf holds with one of its branches, never with none, and beside the rest', () => {
@@ -712,8 +724,21 @@ await test('a reload in the middle changes nothing: serialise, load, go on, and 
     first.leave()
     const written = first.savedProgress()!
     const second = await openGame(first.savedText()!)
-    // Everything except where the player stands, which a session always resets.
-    assert.deepEqual(atomsOf(second.progress()), atomsOf(written), 'the load changed what the first session left')
+    // Everything except where the player stands, which a session always
+    // resets; and but for one thing the load itself adds. The loader is the
+    // game's own, and takes a save that never heard the porter's
+    // introduction (every save of this house: it has no porter) for one
+    // from before he had a call for each milestone, so the calls for what
+    // it has already done count as heard (`PRE_POSSE_SAVE`). Nothing else moves.
+    const loadedLists = atomsOf(second.progress())
+    const writtenLists = atomsOf(written)
+    const oldNews = loadedLists.radioCalls.filter((id) => !writtenLists.radioCalls.includes(id))
+    assert.deepEqual({ ...loadedLists, radioCalls: writtenLists.radioCalls }, writtenLists, 'the load changed what the first session left')
+    assert.deepEqual(
+      oldNews.filter((id) => !PRE_POSSE_SAVE.oldNews.some((news) => news.callId === id)),
+      [],
+      'the load added a call that is not old news',
+    )
     for (const name of order.slice(cut)) PLAY[name](second.state())
     assert.deepEqual(atomsReached(second.progress()), EVERYTHING, `cut at ${cut} of ${order.join(' → ')}`)
   }

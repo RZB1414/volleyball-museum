@@ -76,6 +76,7 @@ export const ptBR = {
   'prompt.radio.call': 'Chamar a portaria',
   'prompt.radio.dead': 'Sem carga',
   'prompt.radio.take': 'Pegar o rádio',
+  'prompt.clock.set': 'Acertar o relógio',
   'power.restored': 'Energia restaurada',
   // Followed by the room the door opens into: «Atalho destrancado — Ala 1 · Holyoke».
   'door.released': 'Atalho destrancado',
@@ -185,42 +186,88 @@ export const ptBR = {
   // A count beside a line: «2 de 3», «Átrio 0 de 4».
   'notebook.counter': '{done} de {total}',
   'device.office-radio.title': 'Rádio da portaria',
+  // The clock on the office wall stopped with the storm. Set, it shows the
+  // hour of the night, which goes forward by what has been done.
+  'device.office-clock.title': 'Relógio do escritório',
+  'clock.set': 'Relógio acertado',
+  // The hour as the porter would say it, one phrase for each milestone of
+  // the night met: spelt out and rounded, never in digits.
+  'night.hour.1': 'Passa das sete',
+  'night.hour.2': 'Quase oito',
+  'night.hour.3': 'Passa das oito',
+  'night.hour.4': 'Quase nove',
+  'night.hour.5': 'Passa das nove',
+  'night.hour.6': 'Quase dez',
+  'night.hour.7': 'Passa das dez',
+  'night.hour.8': 'Quase onze',
   // The plinth in the middle of the hall: named, and roped off until the
   // lot that gives it its medals (a dated promise, shown as «title — notice»).
   'device.atrium-podium.title': 'Plinto do Fundador',
   'device.atrium-podium.notice': 'Interditado: obra do piso.',
   'radio.speaker.porter': 'Jorge · portaria',
-  'radio.call.first.1': 'Curador? Aqui é o Jorge, da portaria. Câmbio.',
-  'radio.call.first.2':
+  // His introduction, owed to every save (L3). «De novo»: he raised the
+  // roller door to let the curator in as the night began. It gives the
+  // night's premises and no direction; where the hall's breaker is is the
+  // call after this one, which is only said while the hall is dark. He does
+  // not say «pega o rádio»: this is heard with the radio on its charger and
+  // with it in the pocket, and «me chama no rádio» is true of both.
+  'radio.call.hello.1': 'Curador? É o Jorge de novo, da portaria. Câmbio.',
+  'radio.call.hello.2':
     'Vi no painel que a luz do escritório voltou. A tempestade desarmou os quadros do prédio inteiro.',
+  'radio.call.hello.3':
+    'O Otávio se aposentou hoje. Pegou o ônibus antes de a estrada fechar e deixou tudo com você.',
+  'radio.call.hello.4':
+    'Aqui eu tenho o painel do alarme: toda vitrine, gaveta e porta desse prédio acende uma luzinha pra mim.',
+  // The porter forbids nothing that cannot be done: there is no way down yet.
+  'radio.call.hello.5':
+    'O relógio aí parou com a luz: acerta. O subsolo alagou; hoje ninguém desce. Qualquer coisa, me chama no rádio. Câmbio, desligo.',
   // Directions are given from where the player stands and by what they can
-  // see: there is no compass in the game (`speech-uses-cardinal`). And the
-  // porter forbids nothing that cannot be done: there is no way down yet.
-  'radio.call.first.3':
-    'O quadro do átrio fica do outro lado, um pouco à direita de quem sai daí, junto da entrada da Ala 1. Procure a luzinha vermelha.',
-  'radio.call.first.4':
-    'O subsolo alagou; hoje ninguém desce. Qualquer coisa, pega o rádio aí na mesa e me chama. Câmbio, desligo.',
+  // see: there is no compass in the game (`speech-uses-cardinal`). The
+  // porter calls «saguão» the room every sign calls «átrio», and says so
+  // once, here, before he uses the word for the rest of the night.
+  'radio.call.first.1':
+    'O quadro do saguão fica do outro lado, um pouco à direita de quem sai daí, junto da entrada da Ala 1. Procura a luzinha vermelha.',
+  'radio.call.first.2': 'Saguão, átrio: é o mesmo lugar. A placa diz átrio; eu digo saguão. Câmbio.',
   'radio.call.notebook.1':
     'Ah, e a Helena, a diretora, deixou um caderno pra você aí na mesa. Pega antes de sair, que tá tudo explicado lá. Câmbio.',
-  'radio.hint.notebook':
-    'Primeiro o caderno, curador: a diretora, a Helena, deixou um pra você na mesa do escritório. Tá tudo explicado lá.',
-  'radio.hint.atrium':
-    'O quadro do átrio fica na mesma parede da entrada da Ala 1, do lado da porta. A luzinha vermelha mostra onde.',
+  // One call for each milestone of the night, said once. What he knows of
+  // it is what the alarm panel at the front desk shows him, and no more.
+  'radio.call.atrium.1':
+    'Saguão no painel! A Ala 1 é a porta com placa, perto do quadro. O quadro dela fica na parede de frente pras portas. Câmbio.',
+  'radio.call.holyoke.1': 'Ala 1 acesa. Agora é conferir, peça por peça. Câmbio.',
+  'radio.call.catalogued.1':
+    'Uma vitrine abriu e fechou aqui no painel. Primeira conferida? Faltam… bom, faltam bastante. Câmbio.',
+  'radio.call.shortcut.1':
+    'A porta de serviço abriu por dentro. Agora fica destrancada dos dois lados. Tá no meu painel. Câmbio.',
+  // A hint is said one height to a call: where the thing is, what it looks
+  // like, how it is worked. Asked again about the same thing he says the
+  // next one, and goes on repeating the last.
+  'radio.hint.notebook.where': 'Primeiro o caderno: a diretora, a Helena, deixou um na mesa.',
+  'radio.hint.notebook.what': 'Capa vermelha, do lado da luminária.',
+  'radio.hint.notebook.how': 'Pega e lê até a última página.',
+  'radio.hint.atrium.where': 'O quadro fica do outro lado do saguão.',
+  'radio.hint.atrium.what': 'Luzinha vermelha, perto da porta com placa.',
+  'radio.hint.atrium.how': 'Caixa cinza na parede, com alavanca. É só acionar.',
   // No side is named. The wing has two ways in once the shortcut stays
   // open, and what is to the left of one is to the right of the other: the
   // wall facing the doors and the red light are true from both
   // (`test:opening` measures every hint that names a side).
-  'radio.hint.holyoke':
-    'A Ala 1 tem quadro próprio, na parede de frente para as portas. Atravessa no escuro até a luzinha vermelha: a lanterna dá conta.',
-  'radio.hint.drawer':
-    'Aquela gaveta trancada do escritório? O Otávio usava datas que estão nas placas. Dá uma olhada no retrato do Morgan, na Ala 1.',
+  'radio.hint.holyoke.where': 'A Ala 1 tem quadro próprio, na parede de frente pras portas.',
+  'radio.hint.holyoke.what': 'Luzinha vermelha, do outro lado da sala.',
+  'radio.hint.holyoke.how': 'Atravessa no escuro até a luzinha vermelha. A lanterna dá conta.',
+  // Where the year is, never the year. The second way to it is the archive
+  // of the wing, some metres from the portrait: «perto da entrada», not
+  // «ao lado».
+  'radio.hint.drawer.where': 'A gaveta do Otávio abre com um ano. O ano tá na Ala 1.',
+  'radio.hint.drawer.what': 'O ano tá na Ala 1, no retrato do Morgan.',
+  'radio.hint.drawer.how':
+    'Pega a moldura e inclina: tá na borda de baixo. Ou no arquivo de proveniência, perto da entrada da ala.',
   // The last hint, when nothing is left to point at. Until the night has an
   // ending it says what can be done tonight; it used to send the player to
   // three medals and a vault that do not exist. It is only heard once every
   // room is lit (each dark room has a hint above it), so it gives the light
-  // as done and never as work still to do. The key keeps its name: it is an
-  // id the tests and the content cite.
-  'radio.hint.vault':
+  // as done and never as work still to do.
+  'radio.hint.rest':
     'O subsolo alagou; hoje ninguém desce. A luz tá feita; fora isso, hoje é só conferência. Câmbio.',
 
   // The radio in the player's pocket, and the porter's patience with it.
@@ -232,14 +279,14 @@ export const ptBR = {
     'É só apertar o botão do lado e me chamar. Só não vai me chamar toda hora, hein? Câmbio.',
   'radio.hint.notebook.curt': 'Caderno. Na mesa. Pega e lê. Câmbio.',
   // Curt is short, never vaguer: each keeps the address the full hint gives.
-  'radio.hint.atrium.curt': 'Átrio. Do lado da porta da Ala 1. Luzinha vermelha. Câmbio.',
+  'radio.hint.atrium.curt': 'Saguão. Do lado da porta da Ala 1. Luzinha vermelha. Câmbio.',
   'radio.hint.holyoke.curt': 'Ala 1. Quadro na parede do fundo. Luzinha vermelha. Vai.',
   // The year shows when the frame is picked up and tilted. The hint gives the
   // gesture, not a "plaque": none is modelled on the frame, and the one text
   // at its foot is the photograph's credit, which carries another year.
   'radio.hint.drawer.curt':
     'Gaveta do Otávio: uma data. Retrato do Morgan, Ala 1. Pega a moldura e inclina: tá na borda de baixo.',
-  'radio.hint.vault.curt': 'Subsolo alagado: hoje ninguém desce. Luz feita; fora isso, só conferência.',
+  'radio.hint.rest.curt': 'Subsolo alagado: hoje ninguém desce. Luz feita; fora isso, só conferência.',
   'radio.patience.t1.ready': 'Portaria, pode falar.',
   'radio.patience.t1.listening': 'Fala, curador. Tô na escuta.',
   'radio.patience.t1.jorge': 'Jorge na escuta. Câmbio.',
@@ -254,6 +301,9 @@ export const ptBR = {
   'radio.patience.t3.otavio':
     'O Otávio trabalhou aqui trinta anos e me chamou duas vezes. Uma foi engano.',
   'radio.patience.t3.torch': 'Quer que eu vá aí segurar a lanterna também?',
+  // Why the porter never comes: the door he raised by hand to let the
+  // curator in has no motor until the mains are back, and he keeps his post.
+  'radio.patience.t3.torch.close': 'Brincadeira. A porta de enrolar tá sem motor, e posto é posto.',
   'radio.patience.t3.crossword':
     'Eu tava quase fechando as palavras cruzadas. Faltava “chato”, cinco letras. Fala.',
   'radio.patience.t3.announcer':
@@ -262,7 +312,7 @@ export const ptBR = {
   'radio.patience.t4.meter': 'Se esse rádio tivesse taxímetro, você já tava devendo o prédio.',
   'radio.patience.t4.slow': 'Vou falar bem devagarinho, que deve ser o chiado:',
   'radio.patience.t4.dark': 'É medo do escuro, é? Pode falar, eu não conto pra ninguém.',
-  'radio.patience.t4.dark.close': '…Só pra Helena, talvez.',
+  'radio.patience.t4.dark.close': '…Só pra Helena, a diretora, talvez.',
   'radio.patience.t4.static.1': 'Chhhh… curador… chhh… tá cortando…',
   'radio.patience.t4.static.2': '…chhh… acabando a bateria… chhhh… câmbio, desligo.',
   'radio.patience.t4.penalty.1': 'Peraí, que vai sair pênalti no radinho de pilha.',
@@ -295,7 +345,9 @@ export const ptBR = {
   'radio.patience.praise.needless': 'Viu? Nem precisava tanto de mim. Mas, já que chamou:',
   'radio.deadAir.noAnswer': '(Chiado. Ninguém responde na portaria.)',
   'radio.deadAir.reallyOff': '(Só chiado. O Jorge desligou mesmo.)',
-  'radio.deadAir.rain': '(Nada. Só a chuva batendo nas janelas.)',
+  // Only the rain: the house has no window for it to beat on until the
+  // skylight is in the shell. Said while it rains (`flagsUnset`).
+  'radio.deadAir.rain': '(Nada. Só a chuva.)',
 
   // ---------------------------------------------------------------------
   // Wall lettering. Vinyl on plaster, so it has to survive being read at a

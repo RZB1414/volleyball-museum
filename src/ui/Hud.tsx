@@ -16,13 +16,14 @@ import { MUSEUM } from '../content/museum'
 import type { ExhibitData } from '../content/schema'
 import type { TranslationKey } from '../content/i18n/pt-BR'
 import { museumAudio } from '../engine/audio'
-import { aimableDevices, deviceInputOf, deviceIntent, radioLineSeconds } from '../engine/deviceRules'
+import { aimableDevices, deviceInputOf, deviceIntent, deviceSetFlag, radioLineSeconds } from '../engine/deviceRules'
 import {
   interactionWinnerKey,
   parseInteractionWinnerKey,
   type InteractionKind,
 } from '../engine/interactionTarget'
 import { lockStatus } from '../engine/lockRules'
+import { fillHour, nightPhraseKey, nightPoints } from '../engine/nightClock'
 import { containerById, isNotebook, journalUnlocked } from '../engine/notebook'
 import { isRoomPowered } from '../engine/power'
 import { placeRadioCall, releaseHeldRadio } from '../engine/radioCall'
@@ -44,13 +45,22 @@ import {
 import { LockPanel } from './LockPanel'
 import { MobileControls } from './MobileControls'
 import { NotebookPanel } from './Notebook'
-import { containerPrompt, devicePrompt } from './promptRules'
+import { clockJustSet, containerPrompt, devicePrompt } from './promptRules'
 import { useCoarsePointer } from './useCoarsePointer'
 import { useDocumentHidden } from './useDocumentHidden'
 import { isModalOpen, useMuseum } from '../state/store'
 
 /** Every device the crosshair may rest on, by id: the ones a prompt is drawn for. */
 const devicesById = new Map(aimableDevices(MUSEUM).map((entry) => [entry.device.id, entry.device]))
+/** The flag each clock that can be set leaves in the save: what the clock's toast waits for. */
+const clockFlags: ReadonlySet<string> = new Set(
+  MUSEUM.rooms.flatMap((room) =>
+    (room.devices ?? []).flatMap((device) => {
+      const flag = deviceSetFlag(device)
+      return flag === null ? [] : [flag]
+    }),
+  ),
+)
 const roomOf = (roomId: string) => MUSEUM.rooms.find((room) => room.id === roomId)
 /**
  * The room each one-way door opens from, by the door's id (the portal that
@@ -241,6 +251,17 @@ function DevicePrompt() {
 }
 
 /**
+ * What the porter calls the hour as the save stands: the key of the phrase,
+ * or null before the night has one. One reading for the subtitle and for the
+ * toast of the clock, so the two cannot name two hours.
+ */
+function useNightPhraseKey() {
+  return useMuseum((state) =>
+    MUSEUM.nightClock ? nightPhraseKey(MUSEUM.nightClock, nightPoints(MUSEUM.nightClock, state.progress, MUSEUM)) : null,
+  )
+}
+
+/**
  * What the radio is saying, one line at a time.
  *
  * There is no recorded voice, so the subtitle IS the transmission and is shown
@@ -249,6 +270,10 @@ function DevicePrompt() {
  * Under any modal, and while the tab is hidden, the line is held and hidden —
  * the same holds the director waits for — and starts its full time again when
  * the hold ends, unless what it says has lapsed meanwhile.
+ *
+ * A line may say the hour (`{hora}`): it is filled here with the phrase the
+ * night stands at, so the porter never reads a number somebody typed into a
+ * sentence, and the token never reaches the screen.
  */
 function RadioSubtitles() {
   const radio = useMuseum((state) => state.radio)
@@ -256,8 +281,9 @@ function RadioSubtitles() {
   const hidden = useDocumentHidden()
   const held = radioHeld({ modal, hidden })
   const advance = useMuseum((state) => state.advanceRadio)
+  const hourKey = useNightPhraseKey()
   const t = useTranslate()
-  const line = radio ? t(radio.lineKeys[radio.index] as never) : ''
+  const line = radio ? fillHour(t(radio.lineKeys[radio.index] as never), hourKey ? t(hourKey as never) : null) : ''
   const crackledRef = useRef<string | null>(null)
   const heldRef = useRef(held)
 
@@ -531,6 +557,52 @@ function DoorReleasedToast() {
       <span className="toast-mark">✓</span>
       <span>
         {t('door.released')} — {t(room.titleKey as never)}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * A clock has just been put right: said once, with the hour it now shows,
+ * in the words the porter would use for it («Relógio acertado — Passa das
+ * sete»). The hands are on the far wall and move a quarter turn; without a
+ * word the press would seem to have done nothing.
+ */
+function ClockToast() {
+  const flags = useMuseum((state) => state.progress.flags)
+  const phraseKey = useNightPhraseKey()
+  // The save arrives whole on the first render: a clock set on another night
+  // was announced then.
+  const seenLength = useRef(flags.length)
+  const [shown, setShown] = useState(false)
+  const t = useTranslate()
+
+  useEffect(() => {
+    const set = clockJustSet(seenLength.current, flags, clockFlags)
+    // A new game empties the list; a toast still up belongs to the old one.
+    const emptied = flags.length < seenLength.current
+    seenLength.current = flags.length
+    if (set) {
+      setShown(true)
+      museumAudio.chime()
+    } else if (emptied) setShown(false)
+  }, [flags])
+
+  // Its own effect, keyed only on `shown`: another flag set during these
+  // few seconds must not cancel the timer and leave the toast up for good.
+  useEffect(() => {
+    if (!shown) return undefined
+    const timer = window.setTimeout(() => setShown(false), 3200)
+    return () => window.clearTimeout(timer)
+  }, [shown])
+
+  if (!shown) return null
+  return (
+    <div className="toast" role="status">
+      <span className="toast-mark">✓</span>
+      <span>
+        {t('clock.set')}
+        {phraseKey ? ` — ${t(phraseKey as never)}` : ''}
       </span>
     </div>
   )
@@ -813,6 +885,7 @@ export function Hud() {
       <div className="toast-stack">
         <CatalogueToast />
         <PowerToast />
+        <ClockToast />
         <DoorReleasedToast />
         <JournalTakenToast />
         <RadioTakenToast />

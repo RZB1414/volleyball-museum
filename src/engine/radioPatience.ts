@@ -15,9 +15,9 @@
 
 import type { MuseumContent, ProgressCondition, RadioPatience, RadioReply } from '../content/schema'
 import { isModalOpen, type MuseumStore, type RadioMemory } from '../state/store.ts'
-import { radioDevices, radioHintIndex, type RadioDevice } from './deviceRules.ts'
+import { radioDevices, radioHintHeight, radioHintIndex, radioHintLine, type RadioDevice } from './deviceRules.ts'
 import { isTextEntryTarget } from './flashlightRig.ts'
-import type { ConditionProgress } from './progressCondition.ts'
+import { progressConditionMet, type ConditionProgress } from './progressCondition.ts'
 
 /**
  * How many calls he still holds against the player.
@@ -80,6 +80,24 @@ function pickFresh<T extends { readonly id: string }>(
   return list[index]
 }
 
+/**
+ * The answers that may be said in this night: the ones that ask nothing, and
+ * the ones whose `when` holds.
+ *
+ * A joke about the dark used to be told with every light on. Each answer
+ * that speaks of the night now looks first, and one that would be false is
+ * simply not among the ones drawn from. The gate holds every tier, and the
+ * dead air, to at least one answer that asks nothing, so this is never empty
+ * where the content says there is something to say.
+ */
+function sayable<T extends { readonly when?: ProgressCondition }>(
+  list: readonly T[],
+  progress: ConditionProgress,
+  content: Pick<MuseumContent, 'rooms' | 'exhibits'>,
+): readonly T[] {
+  return list.filter((answer) => !answer.when || progressConditionMet(answer.when, progress, content))
+}
+
 export type PorterAnswer = {
   readonly lineKeys: readonly string[]
   /** The opener or outburst chosen, or null for a bare hint. */
@@ -107,7 +125,14 @@ export type PorterAnswer = {
  * picks the outburst, or the opener (praise after progress, a reply
  * otherwise). An outburst replaces the whole answer and is never followed by
  * another; every other answer is opener, hint (curt in the impatient tiers)
- * and an optional closing line.
+ * and an optional closing line. Openers and outbursts are drawn only from
+ * the ones that may be said in this night (`sayable`).
+ *
+ * The hint is said one height to a call: where the thing is, what it looks
+ * like, how it is worked. Asked again about the same thing he says the next
+ * height, and repeats the last; a different hint starts from where. The curt
+ * form has no heights, and still counts as the call it was. A tantrum gives
+ * no hint, so it climbs nothing.
  */
 export function porterAnswer(
   device: Pick<RadioDevice, 'hints' | 'patience'>,
@@ -120,16 +145,17 @@ export function porterAnswer(
   const hintIndex = radioHintIndex(device, progress, content)
   const hint = hintIndex >= 0 ? device.hints[hintIndex] : undefined
   const patience = device.patience
+  const height = hint ? radioHintHeight(hint, hintIndex, memory) : 0
 
   if (!patience || patience.tiers.length === 0) {
     return {
-      lineKeys: hint?.lineKeys ?? [],
+      lineKeys: hint ? radioHintLine(hint, height) : [],
       replyId: null,
       tier: 0,
       outburst: false,
       hangUpSeconds: 0,
       hintWhen: hint?.when ?? null,
-      memory: { ...memory, calls: memory.calls + 1, lastCallAt: now, lastHint: hintIndex },
+      memory: { ...memory, calls: memory.calls + 1, lastCallAt: now, lastHint: hintIndex, hintHeight: height },
     }
   }
 
@@ -137,18 +163,19 @@ export function porterAnswer(
   const progressed = memory.lastHint >= 0 && memory.lastHint !== hintIndex
   const tierIndex = patienceTierFor(patience, temper + 1)
   const tier = patience.tiers[tierIndex]
-  const remember = (replyId: string | null, outburstId: string | null): RadioMemory => ({
+  const remember = (replyId: string | null, outburstId: string | null, hintHeight: number): RadioMemory => ({
     // As the branch above does: whatever else the entry carries stays in it.
     ...memory,
     calls: memory.calls + 1,
     temper: Math.min(temper + 1, temperCeiling(patience)),
     lastCallAt: now,
     lastHint: hintIndex,
+    hintHeight,
     lastReplyId: replyId,
     lastOutburstId: outburstId ?? memory.lastOutburstId,
   })
 
-  const outbursts = tier.outbursts ?? []
+  const outbursts = sayable(tier.outbursts ?? [], progress, content)
   const mayLoseIt =
     !progressed &&
     outbursts.length > 0 &&
@@ -164,37 +191,49 @@ export function porterAnswer(
       outburst: true,
       hangUpSeconds: outburst.hangsUp ? patience.hangUpSeconds : 0,
       hintWhen: null,
-      memory: remember(outburst.id, outburst.id),
+      // No hint was given: he is no further up it than he was. (A tantrum
+      // only happens on a call about the same hint as the last.)
+      memory: remember(outburst.id, outburst.id, hintIndex === memory.lastHint ? memory.hintHeight : 0),
     }
   }
 
-  const praise = patience.praise ?? []
-  const opener: RadioReply =
-    progressed && praise.length > 0
-      ? pickFresh(praise, random, memory.lastReplyId)
-      : pickFresh(tier.replies, random, memory.lastReplyId)
+  const praise = sayable(patience.praise ?? [], progress, content)
+  const replies = sayable(tier.replies, progress, content)
+  // A tier with nothing sayable is a content the gate refuses; answering
+  // with the bare hint is still better than throwing mid-frame.
+  const openers = progressed && praise.length > 0 ? praise : replies
+  const opener: RadioReply | null = openers.length > 0 ? pickFresh(openers, random, memory.lastReplyId) : null
   const help =
     tier.hint === 'curt' && hint?.curtLineKeys && hint.curtLineKeys.length > 0
       ? hint.curtLineKeys
-      : (hint?.lineKeys ?? [])
+      : hint
+        ? radioHintLine(hint, height)
+        : []
   return {
-    lineKeys: [...opener.lineKeys, ...help, ...(opener.closingKeys ?? [])],
-    replyId: opener.id,
+    lineKeys: [...(opener?.lineKeys ?? []), ...help, ...(opener?.closingKeys ?? [])],
+    replyId: opener?.id ?? null,
     tier: tierIndex,
     outburst: false,
     hangUpSeconds: 0,
     hintWhen: hint?.when ?? null,
-    memory: remember(opener.id, null),
+    memory: remember(opener?.id ?? null, null, height),
   }
 }
 
-/** The static that answers while he is off the air, never the same twice running. */
+/**
+ * The static that answers while he is off the air, never the same twice
+ * running, and only what is true of the night: the rain is heard while it
+ * rains.
+ */
 export function deadAirFor(
   patience: Pick<RadioPatience, 'deadAir'>,
+  progress: ConditionProgress,
+  content: Pick<MuseumContent, 'rooms' | 'exhibits'>,
   random: () => number,
   lastId: string | null,
 ): RadioReply | null {
-  return patience.deadAir.length > 0 ? pickFresh(patience.deadAir, random, lastId) : null
+  const air = sayable(patience.deadAir, progress, content)
+  return air.length > 0 ? pickFresh(air, random, lastId) : null
 }
 
 /**

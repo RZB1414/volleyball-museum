@@ -155,10 +155,9 @@ export const KNOWN_DEBT: readonly KnownDebt[] = [
   // written before there was a rule. The predecessor's note counts the
   // museum's age from today; it is a document, so it is held to the rule for
   // collection text, and it leaves with the lot that replaces it by the
-  // handover sheet. And three of the porter's answers speak of the dark, the
-  // blackout and the rain with no `when` to ask whether the night still
-  // looks like that: an answer of his patience cannot carry one until the
-  // radio's replies do (M9, `RadioReply.when`).
+  // handover sheet. (The other was three answers of the porter's that spoke
+  // of the dark, the blackout and the rain whatever the night was doing: an
+  // answer has a `when` since L3, and they look first.)
   {
     gate: 'validate:content',
     code: 'text-ages',
@@ -166,21 +165,19 @@ export const KNOWN_DEBT: readonly KnownDebt[] = [
     untilLot: 3,
     note: 'H-23: «existe há cento e trinta anos»; the note gives way to `doc-otavio-handover`',
   },
-  ...(
-    [
-      ['radio.patience.t4.dark', '«medo do escuro», said with every light on as well'],
-      ['radio.patience.t5.soap.2', '«acabou a luz», said after the power is back'],
-      ['radio.deadAir.rain', '«só a chuva batendo nas janelas», whatever the weather has done since'],
-    ] as const
-  ).map(
-    ([id, note]): KnownDebt => ({
-      gate: 'validate:content',
-      code: 'speech-night-state-unconditional',
-      id,
-      untilLot: 3,
-      note: `${note}: an answer has no \`when\` until M9`,
-    }),
-  ),
+  // The rain in the dead air is said while it rains, which is until the pump
+  // has dried the basement (`flagsUnset: ['basement-drained']`). The pump is
+  // the vault's lot. Until then nothing sets the flag and it rains all
+  // night, which is the truth of this build; the condition is already the
+  // one L12 needs, and a `when` that asked something else would be there
+  // only to quieten the lint.
+  {
+    gate: 'validate:content',
+    code: 'flag-never-set',
+    id: 'basement-drained',
+    untilLot: 12,
+    note: 'DL3-14: «(Nada. Só a chuva.)» waits for the absence of a flag the pump sets (L12); until then it rains all night',
+  },
 
   // Moving the Holyoke breaker to the far wall made it a lighthouse, and put
   // the interpretation kiosk square across the straight line to it: a player

@@ -16,6 +16,7 @@
 import type { TranslationKey } from '../content/i18n/pt-BR'
 import type { ContainerData, DeviceData, Lock } from '../content/schema'
 import type { DeskRadioIntent, DeviceIntent } from '../engine/deviceRules'
+import { listGrew } from './hudRules.ts'
 
 /** How a container's prompt is worded: as a shut lock, or as something to read. */
 export type ContainerPromptView =
@@ -47,6 +48,23 @@ const DESK_RADIO_LABEL = {
   call: 'prompt.radio.call',
 } as const satisfies Record<DeskRadioIntent, TranslationKey>
 
+/**
+ * Whether what a save has just gained says a clock was put right: the moment
+ * its toast is for.
+ *
+ * By the rule every toast follows (`listGrew`): the save arrives whole on
+ * the first render, and a clock set on another night is not announced on
+ * Continue. And only for a clock's own flag: the list is every story flag
+ * there is, and the next one to be set is not about the hour.
+ */
+export function clockJustSet(seenLength: number, flags: readonly string[], clockFlags: ReadonlySet<string>) {
+  return listGrew(seenLength, flags.length) && flags.slice(seenLength).some((flag) => clockFlags.has(flag))
+}
+
+const CLOCK_LABEL = {
+  set: 'prompt.clock.set',
+} as const satisfies Record<Extract<DeviceIntent, { readonly kind: 'clock' }>['intent'], TranslationKey>
+
 /** How a device's prompt is worded. */
 export type DevicePromptView =
   /** «[E] label title»: a thing E works, or (with no key) one that says why it will not. */
@@ -77,6 +95,13 @@ export function devicePrompt(device: DeviceData, intent: DeviceIntent): DevicePr
             labelKey: DESK_RADIO_LABEL[intent.intent],
             titleKey: device.titleKey,
           }
+        : null
+    case 'clock':
+      // «[E] Acertar o relógio · Relógio do escritório». A clock with no
+      // name has nothing to be called in a prompt, and the gate refuses one
+      // that can be set and has none.
+      return device.kind === 'clock' && device.titleKey !== undefined
+        ? { form: 'action', key: true, labelKey: CLOCK_LABEL[intent.intent], titleKey: device.titleKey }
         : null
   }
 }

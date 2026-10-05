@@ -28,6 +28,8 @@ import type {
   Fact,
   Lock,
   MuseumContent,
+  NightClock,
+  ProgressCondition,
   RadioPatience,
   RoomData,
 } from './schema'
@@ -759,7 +761,17 @@ const OFFICE_CONTAINERS = [
  * real minutes per call), progress forgives one call and earns a word of
  * praise instead, and the call after a tantrum always helps. The numbers are
  * playtest dials, not rules: the rules live in `radioPatience.ts`.
+ *
+ * An answer that speaks of the night looks at it first (`when`): the joke
+ * about the dark and the soap opera lost to the blackout are for a night
+ * that still has a dark room in it, and the rain is heard in the dead air
+ * for as long as it rains. They used to be said whatever the night was
+ * doing, with every light on.
  */
+const SOME_ROOM_STILL_DARK = {
+  anyOf: [{ unpowered: ['atrium'] }, { unpowered: ['holyoke'] }],
+} as const satisfies ProgressCondition
+
 const PORTER_PATIENCE = {
   calmSecondsPerCall: 300,
   progressForgives: 1,
@@ -799,7 +811,12 @@ const PORTER_PATIENCE = {
           closingKeys: ['radio.patience.t3.hotline.close'],
         },
         { id: 'porter-t3-otavio', lineKeys: ['radio.patience.t3.otavio'] },
-        { id: 'porter-t3-torch', lineKeys: ['radio.patience.t3.torch'] },
+        {
+          id: 'porter-t3-torch',
+          lineKeys: ['radio.patience.t3.torch'],
+          // Why he does not come: said after the hint, as the joke's own end.
+          closingKeys: ['radio.patience.t3.torch.close'],
+        },
         { id: 'porter-t3-crossword', lineKeys: ['radio.patience.t3.crossword'] },
         { id: 'porter-t3-announcer', lineKeys: ['radio.patience.t3.announcer'] },
       ],
@@ -817,6 +834,7 @@ const PORTER_PATIENCE = {
           id: 'porter-t4-dark',
           lineKeys: ['radio.patience.t4.dark'],
           closingKeys: ['radio.patience.t4.dark.close'],
+          when: SOME_ROOM_STILL_DARK,
         },
       ],
       outbursts: [
@@ -864,6 +882,7 @@ const PORTER_PATIENCE = {
           id: 'porter-t5-soap',
           lineKeys: ['radio.patience.t5.soap.1', 'radio.patience.t5.soap.2'],
           hangsUp: true,
+          when: SOME_ROOM_STILL_DARK,
         },
         {
           id: 'porter-t5-song',
@@ -881,9 +900,48 @@ const PORTER_PATIENCE = {
   deadAir: [
     { id: 'porter-air-no-answer', lineKeys: ['radio.deadAir.noAnswer'] },
     { id: 'porter-air-really-off', lineKeys: ['radio.deadAir.reallyOff'] },
-    { id: 'porter-air-rain', lineKeys: ['radio.deadAir.rain'] },
+    // It rains until the pump has dried the basement, which is the lot of
+    // the vault (L12): nothing sets the flag before then, and the gate
+    // carries that as a dated debt rather than let the line go unasked.
+    { id: 'porter-air-rain', lineKeys: ['radio.deadAir.rain'], when: { flagsUnset: ['basement-drained'] } },
   ],
 } as const satisfies RadioPatience
+
+/**
+ * The hour of the night, which goes forward by what has been done.
+ *
+ * Eight milestones in this slice of the house: the three rooms lit, the
+ * drawer opened, and the collection checked by threes. Each is a point, in
+ * any order; the first is ten past seven, each one after it half an hour
+ * later, and a point is never taken back. The phrases are what the porter
+ * says of each count, rounded and spelt out: he never says an hour in a line
+ * of his own, he reads this. (The iron safe and the deed of office are the
+ * ninth and tenth, and come with what they are milestones of.)
+ */
+const NIGHT_CLOCK = {
+  startsAt: { hours: 19, minutes: 10 },
+  stepMinutes: 30,
+  milestones: [
+    { id: 'lamp', when: { powered: ['office'] } },
+    { id: 'atrium', when: { powered: ['atrium'] } },
+    { id: 'holyoke', when: { powered: ['holyoke'] } },
+    { id: 'drawer', when: { locksOpened: ['office-drawer'] } },
+    { id: 'catalogue-3', cataloguedAtLeast: 3, of: HOUSE_PIECES },
+    { id: 'catalogue-6', cataloguedAtLeast: 6, of: HOUSE_PIECES },
+    { id: 'catalogue-9', cataloguedAtLeast: 9, of: HOUSE_PIECES },
+    { id: 'catalogue-12', cataloguedAtLeast: 12, of: HOUSE_PIECES },
+  ],
+  phraseKeys: [
+    'night.hour.1',
+    'night.hour.2',
+    'night.hour.3',
+    'night.hour.4',
+    'night.hour.5',
+    'night.hour.6',
+    'night.hour.7',
+    'night.hour.8',
+  ],
+} as const satisfies NightClock
 
 /**
  * The office's working objects: what the room says before the player has read
@@ -901,6 +959,10 @@ const OFFICE_DEVICES = [
     rotationY: -Math.PI / 2,
     stoppedAt: { hours: 16, minutes: 47 },
     runsWithPowerOf: 'office',
+    // It stopped with the storm, and the porter says so. E on it, with the
+    // lamp on, puts it right: from then on it shows the hour of the night.
+    titleKey: 'device.office-clock.title',
+    setFlag: 'clock-set',
   },
   {
     kind: 'power-indicator',
@@ -923,20 +985,42 @@ const OFFICE_DEVICES = [
     poweredBy: 'office',
     // Like the notebook: the first E takes the handset, the charger stays.
     carriedOnUse: true,
+    // Heard in this list's order, one at a time, each once. A call is owed
+    // from the moment its `when` holds until it is heard out or its
+    // `lapsesWhen` holds: what it had to say is then old news, and it is
+    // gone for good. `mentions` are the things of the house each one sends
+    // the player to; the gate holds every one to something that is there.
     calls: [
       {
-        id: 'porter-first-call',
-        // The call sends the player to the atrium's breaker, so it only makes
-        // sense while the atrium is still dark. The normal path cannot light
-        // the atrium first; a save from before the opening can.
-        when: { powered: ['office'], unpowered: ['atrium'] },
+        // Who he is, why the building is dark, what he can see from the
+        // front desk. Owed to every save from the lamp on, and it never
+        // lapses: a player who lit the hall before he had spoken used to
+        // go the whole night without meeting him (the first call below only
+        // held while the hall was dark). A save from before this call hears
+        // it once too, and is told nothing it has already done
+        // (`PRE_POSSE_SAVE`).
+        id: 'porter-hello',
+        when: { powered: ['office'] },
         delaySeconds: 2.4,
         lineKeys: [
-          'radio.call.first.1',
-          'radio.call.first.2',
-          'radio.call.first.3',
-          'radio.call.first.4',
+          'radio.call.hello.1',
+          'radio.call.hello.2',
+          'radio.call.hello.3',
+          'radio.call.hello.4',
+          'radio.call.hello.5',
         ],
+        mentions: ['office-clock', 'office-radio'],
+      },
+      {
+        // The id every save knows, and what it always was for: where the
+        // hall's breaker is. It keeps the id and the moment, and lost the
+        // introduction to the call above. Only said while the hall is dark.
+        id: 'porter-first-call',
+        when: { powered: ['office'], unpowered: ['atrium'] },
+        lapsesWhen: { powered: ['atrium'] },
+        delaySeconds: 1.2,
+        lineKeys: ['radio.call.first.1', 'radio.call.first.2'],
+        mentions: ['atrium-breaker', 'atrium', 'holyoke'],
       },
       {
         // Reading stays optional, so nothing locks the lamp behind the
@@ -945,47 +1029,101 @@ const OFFICE_DEVICES = [
         // and it is dropped if the notebook is taken while it waits.
         id: 'porter-notebook-reminder',
         when: { powered: ['office'], documentsUnread: ['doc-welcome'] },
+        lapsesWhen: { documentsRead: ['doc-welcome'] },
         delaySeconds: 4,
         lineKeys: ['radio.call.notebook.1'],
+        mentions: ['office-notebook'],
       },
       {
-        // He hears his radio leave the charger. Last in the list, so it waits
-        // for his introduction even when the player grabs the radio mid-call.
+        // He hears his radio leave the charger. After his introduction in
+        // the list, so it waits for it even when the player grabs the radio
+        // mid-call.
         id: 'porter-radio-taken',
         when: { carried: ['office-radio'] },
         delaySeconds: 0.8,
         lineKeys: ['radio.call.taken.1', 'radio.call.taken.2'],
+        mentions: ['office-radio'],
+      },
+      {
+        // The hall lit: the next room, and where its own breaker is. Old
+        // news once Wing 1 is lit too.
+        id: 'porter-atrium-service',
+        when: { powered: ['atrium'] },
+        lapsesWhen: { powered: ['holyoke'] },
+        delaySeconds: 1.5,
+        lineKeys: ['radio.call.atrium.1'],
+        mentions: ['atrium-to-holyoke', 'holyoke-breaker'],
+      },
+      {
+        id: 'porter-holyoke-lit',
+        when: { powered: ['holyoke'] },
+        lapsesWhen: { catalogued: WING_PIECES },
+        delaySeconds: 1.5,
+        lineKeys: ['radio.call.holyoke.1'],
+        mentions: ['holyoke'],
+      },
+      {
+        // The first piece checked, whichever of the twelve it is: a case
+        // opens and shuts on his panel.
+        id: 'porter-first-catalogued',
+        when: { anyOf: HOUSE_PIECES.map((id) => ({ catalogued: [id] })) },
+        lapsesWhen: { catalogued: HOUSE_PIECES },
+        delaySeconds: 3,
+        lineKeys: ['radio.call.catalogued.1'],
+        mentions: [],
+      },
+      {
+        // The id the save records is the door's own, the portal that
+        // declares the leaf, and not the one facing it from the wing.
+        id: 'porter-shortcut',
+        when: { doorsReleased: ['atrium-from-holyoke-shortcut'] },
+        delaySeconds: 2,
+        lineKeys: ['radio.call.shortcut.1'],
+        mentions: ['atrium-from-holyoke-shortcut'],
       },
     ],
-    // Ordered: the porter answers with the first thing the player still needs.
-    // The curt lines are the same help, from a porter called once too often.
+    // Ordered: the porter answers with the first thing the player still
+    // needs, and says it one height to a call (where, what, how). The curt
+    // lines are the same help, from a porter called once too often. Each
+    // hint but the last points at something the player can walk up to.
     hints: [
       {
-        when: { documentsUnread: ['doc-welcome'] },
-        lineKeys: ['radio.hint.notebook'],
+        // For a player still in the office. The notebook is optional: out
+        // in the dark hall without it, what is needed is the breaker, and
+        // this hint used to stand in front of every other.
+        when: { documentsUnread: ['doc-welcome'], roomsUnvisited: ['atrium'] },
+        targetId: 'office-notebook',
+        heightKeys: ['radio.hint.notebook.where', 'radio.hint.notebook.what', 'radio.hint.notebook.how'],
         curtLineKeys: ['radio.hint.notebook.curt'],
+        mentions: ['office-notebook'],
       },
       {
         when: { unpowered: ['atrium'] },
-        lineKeys: ['radio.hint.atrium'],
+        targetId: 'atrium-breaker',
+        heightKeys: ['radio.hint.atrium.where', 'radio.hint.atrium.what', 'radio.hint.atrium.how'],
         curtLineKeys: ['radio.hint.atrium.curt'],
+        mentions: ['atrium-breaker', 'atrium'],
       },
       {
         when: { unpowered: ['holyoke'] },
-        lineKeys: ['radio.hint.holyoke'],
+        targetId: 'holyoke-breaker',
+        heightKeys: ['radio.hint.holyoke.where', 'radio.hint.holyoke.what', 'radio.hint.holyoke.how'],
         curtLineKeys: ['radio.hint.holyoke.curt'],
+        mentions: ['holyoke-breaker', 'holyoke'],
       },
       {
+        // Where the year is, and how it shows; never the year.
         when: { locksClosed: ['office-drawer'] },
-        lineKeys: ['radio.hint.drawer'],
+        targetId: 'portrait-morgan',
+        heightKeys: ['radio.hint.drawer.where', 'radio.hint.drawer.what', 'radio.hint.drawer.how'],
         curtLineKeys: ['radio.hint.drawer.curt'],
+        mentions: ['office-cabinet', 'portrait-morgan', 'holyoke-cabinet-a', 'holyoke'],
       },
-      // The fallback, once nothing is left to point at. Its keys still say
-      // "vault" because they are ids the tests cite; the line itself no
-      // longer does. Until the night has an ending (the Posse, L3) it tells
-      // the player what can be done tonight, and sends them to nothing that
-      // is not in the building.
-      { when: {}, lineKeys: ['radio.hint.vault'], curtLineKeys: ['radio.hint.vault.curt'] },
+      // The fallback, once nothing is left to point at. Until the night has
+      // an ending (the Posse, later in this lot) it tells the player what
+      // can be done tonight, and sends them to nothing that is not in the
+      // building.
+      { when: {}, heightKeys: ['radio.hint.rest'], curtLineKeys: ['radio.hint.rest.curt'], mentions: [] },
     ],
     patience: PORTER_PATIENCE,
   },
@@ -1619,4 +1757,5 @@ export const MUSEUM: MuseumContent = {
   locks: LOCKS,
   facts: FACTS,
   media: [...GENERATED_MEDIA, ...AUTHORED_MEDIA],
+  nightClock: NIGHT_CLOCK,
 }

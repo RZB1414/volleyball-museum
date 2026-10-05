@@ -16,7 +16,7 @@
  * Types only: nothing here runs anything but itself.
  */
 
-import type { ExhibitData, MuseumContent } from '../content/schema'
+import type { DeviceData, ExhibitData, MuseumContent } from '../content/schema'
 import type { ProgressGrant } from '../state/progressFields.ts'
 import type { TransitionDoorSpec } from './transitionDoorTopology.ts'
 
@@ -70,4 +70,16 @@ export function containerGrant(content: Pick<MuseumContent, 'documents'>, contai
 export function doorGrant(door: TransitionDoorSpec, currentRoom: string, released: readonly string[]): ProgressGrant | null {
   if (door.opensFrom === null || door.opensFrom !== currentRoom || released.includes(door.id)) return null
   return { doorsReleased: [door.id] }
+}
+
+/**
+ * A clock, put right: the flag it sets. From then on its hands show the
+ * hour of the night (`nightClock.ts`).
+ *
+ * Whether it may be set now (its mains on, not set already) is the device's
+ * intent to say (`deviceRules.ts`); this is only what setting it records.
+ * A clock with no flag to set records nothing.
+ */
+export function clockGrant(device: Extract<DeviceData, { readonly kind: 'clock' }>): ProgressGrant {
+  return device.setFlag === undefined ? {} : { flags: [device.setFlag] }
 }

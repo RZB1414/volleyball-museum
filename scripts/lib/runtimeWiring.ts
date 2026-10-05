@@ -935,6 +935,48 @@ export function deviceWiringProblems(read: SourceReader): string[] {
     "(winner.kind === 'door' ? doorCanAct : winner.live)",
     'the touch button shows for a thing E does nothing to',
   )
+
+  // A clock put right (L3). The robot's hand that sets it is a copy of these
+  // lines, and proves the copy: here the component is held to recording the
+  // verb's own grant on E, to showing the hour the rule gives, and to
+  // announcing it by the rule that knows a clock's flag from any other.
+  need(
+    'engine/Devices.tsx',
+    "case 'clock': if (entry.device.kind !== 'clock') return false useMuseum.getState().grant(clockGrant(entry.device)) return true",
+    'E on a clock no longer records what the verb says: the press is taken and the clock stays wrong',
+  )
+  need(
+    'engine/Devices.tsx',
+    'const nightMinutes = useMuseum((state) => setClockMinutes(MUSEUM.nightClock, device.setFlag, state.progress, MUSEUM))',
+    'a clock that was set no longer reads the hour of the night off the save',
+  )
+  need(
+    'engine/Devices.tsx',
+    'const angles = clockFaceAngles(device.stoppedAt, count.advance(delta), night)',
+    'the hands are no longer turned to the hour of the night once the clock is set',
+  )
+  need(
+    'ui/Hud.tsx',
+    'const set = clockJustSet(seenLength.current, flags, clockFlags)',
+    'the toast of the clock is no longer decided by the rule: it would greet a Continue, or any flag at all',
+  )
+  need(
+    'ui/Hud.tsx',
+    'MUSEUM.nightClock ? nightPhraseKey(MUSEUM.nightClock, nightPoints(MUSEUM.nightClock, state.progress, MUSEUM)) : null',
+    'the hour the HUD says is no longer the one the night stands at',
+  )
+  need(
+    'ui/Hud.tsx',
+    "{phraseKey ? ` — ${t(phraseKey as never)}` : ''}",
+    'the toast of the clock no longer says the hour it was set to',
+  )
+  // The gate lets a spoken line carry `{hora}` (`speech-token-unknown` spares
+  // it wherever there is a night clock), so the subtitle has to fill it.
+  need(
+    'ui/Hud.tsx',
+    'fillHour(t(radio.lineKeys[radio.index] as never), hourKey ? t(hourKey as never) : null)',
+    'a line of the radio that says the hour would show the token as it was typed',
+  )
   return problems
 }
 
@@ -973,7 +1015,7 @@ export function clockWiringProblems(read: SourceReader): string[] {
     'the count is not run while the room has power and stopped when it has none, as the suites run it',
   )
   need(
-    'useFrame((_, delta) => { const angles = clockHandAngles(clockTimeAfter(device.stoppedAt, count.advance(delta)))',
+    'useFrame((_, delta) => { const angles = clockFaceAngles(device.stoppedAt, count.advance(delta), night)',
     'the hands are not turned by the count, advanced once a frame',
   )
   if (/\brecordClockSeconds\b/.test(devices) || /\bcontributeToSave\(/.test(devices)) {

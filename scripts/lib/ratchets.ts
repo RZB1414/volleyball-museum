@@ -309,11 +309,33 @@ export const BUNDLE_BUDGETS = {
  *     asks, so it has a module of its own. The game grew 1,151 bytes
  *     (392,146, inside its ceiling: the list as rules, devices that answer
  *     by one intent, the plinth as one) and the document none (63,237).
+ *   - `title` +1,170 bytes, on 31,478 measured (it was 30,460 on 30,313).
+ *     The second slice is the porter's, and what he says ships with the
+ *     title: thirty-five new keys in each language, eight gone and five
+ *     rewritten. Five calls that did not exist (he introduces himself, and
+ *     each milestone of the night is said once), every hint in three heights
+ *     where it was one sentence, the eight phrases of the hour, the clock's
+ *     name, prompt and toast. The store is on the title too: a height per
+ *     radio in its memory (`hintHeight`, with its sanitiser and its join) and
+ *     the migration that keeps a save from before the lot from hearing old
+ *     news (`prePosse`, `PRE_POSSE_SAVE`). 1,165 bytes, against the 1.6 kB
+ *     the plan foresaw.
+ *   - `game` +3,060 bytes, on 393,795 measured (it was 392,700 on 392,146;
+ *     the first time L3 raises it). 1,649 bytes: the night's clock
+ *     (`nightClock.ts`: points, hour, phrase, and the token of the hour that
+ *     the radio's subtitle fills), the clock as a device that is set once and
+ *     the hands that follow the hour, its toast; a call that lapses, a hint
+ *     said one height per call and pointed at a thing, answers that look at
+ *     the night before they speak (`sayable`), the two negative conditions;
+ *     and the content itself, eight calls, five hints and the milestones. The
+ *     ceiling is the measure plus half a per cent, as the plan sets it for
+ *     every path; the title's was already. The document did not move
+ *     (63,232).
  */
 export const BUNDLE_PATH_CEILINGS = {
   document: 63_600,
-  title: 30_460,
-  game: 392_700,
+  title: 31_630,
+  game: 395_760,
 } as const
 
 /** Strings that only the content set and the bake manifest contain. */

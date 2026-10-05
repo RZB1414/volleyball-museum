@@ -14,7 +14,7 @@
  */
 
 import { CONTENT_LOT } from '../content/contentLot.ts'
-import { PRE_OPENING_SAVE, SAVE_ALIASES, type SaveAlias } from '../content/legacySave.ts'
+import { PRE_OPENING_SAVE, PRE_POSSE_SAVE, SAVE_ALIASES, type SaveAlias } from '../content/legacySave.ts'
 import {
   emptyProgress,
   grantProgress,
@@ -96,10 +96,33 @@ function locksSeenFromOpened(progress: Progress): Progress {
   return grantProgress(progress, { locksSeen: progress.locksOpened })
 }
 
+/**
+ * The Posse (L3): the porter's old news.
+ *
+ * A save that has not heard his new introduction, and has already passed a
+ * milestone he now has a call for, counts that call as heard: it would tell
+ * the player, today, about something done on another night. By what the
+ * save holds and never by its stamp (`savedLot` is not read): a lot ships
+ * in slices, and a save an earlier slice wrote carries this lot's number
+ * already. So it also runs, with the same result, on what a tab of the build
+ * before leaves on the disk while this one is open.
+ *
+ * Once the introduction is in the save this does nothing: from then on a
+ * milestone is passed with him listening, and its call is owed.
+ */
+function prePosse(progress: Progress): Progress {
+  if (progress.radioCalls.includes(PRE_POSSE_SAVE.helloCallId)) return progress
+  const oldNews = PRE_POSSE_SAVE.oldNews.filter((news) =>
+    news.id === null ? progress[news.field].length > 0 : progress[news.field].includes(news.id),
+  )
+  return grantProgress(progress, { radioCalls: oldNews.map((news) => news.callId) })
+}
+
 /** In the order of the lots, which is the order they run in. */
 export const SAVE_MIGRATIONS: readonly SaveMigration[] = [
   { lot: 1, migrate: preOpening },
   { lot: 2, migrate: locksSeenFromOpened },
+  { lot: 3, migrate: prePosse },
 ]
 
 /** What a build brings to a load. A parameter so that the rules can be proved on lists made for the purpose. */

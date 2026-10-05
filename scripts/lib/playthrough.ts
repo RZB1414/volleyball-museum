@@ -43,12 +43,24 @@ import {
   availableActions,
   type PlayerAction,
 } from '../../src/content/simulate.ts'
-import { deskRadioIntent, radioIsLive } from '../../src/engine/deviceRules.ts'
+import {
+  deskRadioIntent,
+  deviceInputOf,
+  deviceIntent,
+  deviceLive,
+  nextRadioCall,
+  radioCallReady,
+  radioDeliveryStep,
+  radioDevices,
+  radioIsLive,
+  radioWithinEarshot,
+} from '../../src/engine/deviceRules.ts'
 import { examineReach } from '../../src/engine/examineReach.ts'
 import { attemptLock } from '../../src/engine/lockRules.ts'
 import { isContainerTaken } from '../../src/engine/notebook.ts'
 import { isRoomPowered } from '../../src/engine/power.ts'
-import { containerGrant, doorGrant, hotspotGrant } from '../../src/engine/progressGrants.ts'
+import { clockGrant, containerGrant, doorGrant, hotspotGrant } from '../../src/engine/progressGrants.ts'
+import { placeRadioCallOn } from '../../src/engine/radioCall.ts'
 import {
   buildTransitionDoorSpecs,
   canOpenTransitionDoor,
@@ -80,6 +92,8 @@ export function describe(action: PlayerAction): string {
       return `type ${action.entry} at ${action.lockId}`
     case 'take':
       return `take ${action.deviceId}`
+    case 'set-clock':
+      return `set ${action.deviceId}`
   }
 }
 
@@ -250,6 +264,20 @@ export function press(page: GamePage, world: MuseumContent, action: PlayerAction
       if (intent === 'take') state.carryDevice(device.id)
       return
     }
+
+    // `Devices.tsx`, `operateDevice`: the device's own intent decides
+    // whether E does anything, and a clock that may be set records its flag.
+    case 'set-clock': {
+      const device = (room.devices ?? []).find((candidate) => candidate.id === action.deviceId)
+      if (!device || device.kind !== 'clock') return
+      const intent = deviceIntent(
+        device,
+        deviceInputOf(device, state, (roomId) => world.rooms.find((candidate) => candidate.id === roomId)),
+      )
+      if (!deviceLive(intent) || intent.kind !== 'clock') return
+      state.grant(clockGrant(device))
+      return
+    }
   }
 }
 
@@ -298,6 +326,7 @@ export function everyPress(
   }
   for (const device of room.devices ?? []) {
     if (device.kind === 'radio' && device.carriedOnUse) presses.push({ kind: 'take', deviceId: device.id })
+    if (device.kind === 'clock' && device.setFlag !== undefined) presses.push({ kind: 'set-clock', deviceId: device.id })
   }
   return presses
 }
@@ -380,6 +409,12 @@ export type RobotProfile = {
   readonly guessesCodes?: boolean
   /** Never switches the torch on. */
   readonly noTorch?: boolean
+  /**
+   * A press this player makes as soon as it is worth making, before any
+   * other: the radio taken off its charger before she leaves the office.
+   * Without it nothing is drawn from the dice that was not drawn before.
+   */
+  readonly prefers?: (action: PlayerAction) => boolean
 }
 
 export const ORDINARY: RobotProfile = { reloadChance: 0.05, uselessChance: 0.25 }
@@ -418,6 +453,13 @@ export async function reload(page: GamePage): Promise<GamePage> {
  *
  * `world` is the museum the hands are in. It is the one the mind was told
  * about, except in the one test that shows what happens when it is not.
+ *
+ * `listen` is somebody along for the night (`radioEar`): called with the tab
+ * as the night begins, after every press and after every reload. It takes
+ * nothing from `random`, so the same seed is the same night with or without
+ * it. What it does to the store is not a press: nothing it writes is an atom
+ * of the graph, and the check between the hands and the mind is made before
+ * it is called.
  */
 export async function playToEnd(
   start: GamePage,
@@ -425,9 +467,11 @@ export async function playToEnd(
   random: () => number,
   profile: RobotProfile = ORDINARY,
   world: MuseumContent = content,
+  listen: (page: GamePage) => void = () => {},
 ): Promise<Playthrough> {
   let page = start
   if (!page.state().started) page.state().start()
+  listen(page)
   const log: string[] = []
   let presses = 0
   let reloads = 0
@@ -458,6 +502,7 @@ export async function playToEnd(
     // finds. Allowed, and held to what the rules give for them.
     const problem = pressProblem(content, room, action, before, after, guessed || luckyDetail(world, action))
     if (problem) throw new Error(problem)
+    listen(page)
   }
 
   /** What is worth doing in a room: offered, not skipped, and adding to the save. */
@@ -502,6 +547,7 @@ export async function playToEnd(
         page = await reload(page)
         reloads += 1
         log.push('— the tab is closed and opened again —')
+        listen(page)
         continue
       }
 
@@ -530,7 +576,8 @@ export async function playToEnd(
       }
 
       const useful = worthDoing(progress, room)
-      const next = useful.length > 0 ? pick(useful) : towardsWork(progress, room)
+      const eager = profile.prefers ? useful.filter(profile.prefers) : []
+      const next = eager.length > 0 ? eager[0] : useful.length > 0 ? pick(useful) : towardsWork(progress, room)
       if (!next) return { page, log, presses, reloads, wasted }
       make(next, useful.length > 0 ? 'do:  ' : 'walk:')
     }
@@ -540,6 +587,117 @@ export async function playToEnd(
     // that led to the stop, and an error alone does not carry them.
     throw Object.assign(error instanceof Error ? error : new Error(String(error)), { log })
   }
+}
+
+// ---------------------------------------------------------------------------
+// The ear
+// ---------------------------------------------------------------------------
+
+/** One thing the radio said during a night, with the save as it stood when the first line began. */
+export type Heard = {
+  /** A content call, the porter answering a call of the player's, or the dead air after he hung up. */
+  readonly kind: 'call' | 'answer' | 'static'
+  /** The content call it was, when it was one. */
+  readonly callId: string | null
+  readonly lineKeys: readonly string[]
+  readonly progress: Progress
+  /** The room the player stood in. */
+  readonly room: string
+}
+
+export type EarOptions = {
+  /**
+   * Its own dice, never the robot's: who listens must not change the night
+   * that is listened to.
+   */
+  readonly random: () => number
+  /**
+   * The chance that a call that is due is heard before the next press. The
+   * game delivers a call seconds after its moment, and a player moves on in
+   * those seconds; under 1, some calls wait, and some of those lapse.
+   */
+  readonly promptness: number
+  /** The chance, after each press, that the player calls the porter. */
+  readonly callChance: number
+}
+
+/** A wall clock for the calls to the porter: a fixed instant, and five seconds between calls. */
+const EAR_BEGAN = 1_800_000_000_000
+const EAR_CALL_EVERY = 5_000
+
+/**
+ * Somebody who hears the radio through a night the robot plays (`playToEnd`).
+ *
+ * The robot presses and the save grows; nothing in that says what was SAID to
+ * the player on the way, and a line that the state contradicts (a porter who
+ * asks about the dark with every light on) breaks no rule of progress. This
+ * hears the night the way the game delivers it, with the game's own rules:
+ *
+ *   - what the director would deliver (`Devices.tsx`, `RadioDirector`): the
+ *     first call due, with the radio live and within earshot, said to its
+ *     last line by the store, which is what records it as heard;
+ *   - what the porter answers when called (`placeRadioCallOn`, the press R
+ *     makes), with a clock that never calms him and a dice of its own; and,
+ *     when he hangs up, one press into the dead air before the line returns.
+ *
+ * Everything said is written down with the save as it stood at that moment.
+ */
+export function radioEar(content: MuseumContent, options: EarOptions) {
+  const heard: Heard[] = []
+  let calls = 0
+
+  /** Writes down what is on the air and lets it be said to its last line. */
+  const hearOut = (page: GamePage, deadAirSpeaker: string | undefined) => {
+    const state = page.state()
+    const on = state.radio
+    if (!on) return
+    heard.push({
+      kind: on.callId ? 'call' : on.speakerKey === deadAirSpeaker ? 'static' : 'answer',
+      callId: on.callId ?? null,
+      lineKeys: on.lineKeys,
+      progress: state.progress,
+      room: state.currentRoom,
+    })
+    for (let line = 0; line <= on.lineKeys.length && page.state().radio; line += 1) page.state().advanceRadio()
+  }
+
+  const listen = (page: GamePage) => {
+    for (const { device, room } of radioDevices(content)) {
+      const deadAirSpeaker = device.patience?.deadAirSpeakerKey
+
+      // The director: one call at a time, in content order.
+      for (;;) {
+        const state = page.state()
+        if (!radioIsLive(content, device.id, state.progress.roomsPowered)) break
+        const call = nextRadioCall(device, state.progress, content)
+        if (!call) break
+        const step = radioDeliveryStep(radioCallReady(device, call.id, state.progress, content), {
+          onAir: state.radio !== null,
+          // The robot shuts every panel it opens within the press.
+          modal: false,
+          hidden: false,
+          away: !radioWithinEarshot(device, room.id, state.progress.devicesCarried, state.currentRoom),
+        })
+        if (step !== 'play' || options.random() >= options.promptness) break
+        state.startRadio({ deviceId: device.id, speakerKey: device.speakerKey, lineKeys: call.lineKeys, callId: call.id })
+        hearOut(page, deadAirSpeaker)
+      }
+
+      // The player: R, with the handset in hand, from wherever she stands.
+      if (!page.state().progress.devicesCarried.includes(device.id) || options.random() >= options.callChance) continue
+      calls += 1
+      if (!placeRadioCallOn(page.store.useMuseum, content, device.id, EAR_BEGAN + calls * EAR_CALL_EVERY, options.random)) continue
+      hearOut(page, deadAirSpeaker)
+      // He hung up: one press while the line is dead, and then it comes back
+      // (the handset's own timer clears it in the game).
+      const until = page.state().radioHungUpUntil
+      if (until === null) continue
+      if (placeRadioCallOn(page.store.useMuseum, content, device.id, until - 1, options.random)) hearOut(page, deadAirSpeaker)
+      page.state().clearRadioHangUp()
+    }
+  }
+
+  return { listen, heard: heard as readonly Heard[] }
 }
 
 /**

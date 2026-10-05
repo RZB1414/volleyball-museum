@@ -34,8 +34,7 @@ import { clockCount, type ClockStore } from './clockCount'
 import type { CollisionWorld } from './collision'
 import {
   aimableDevices,
-  clockHandAngles,
-  clockTimeAfter,
+  clockFaceAngles,
   deviceInputOf,
   deviceIntent,
   deviceLive,
@@ -58,9 +57,11 @@ import { PROXY_MATERIAL_PROPS, paddedProxy } from './interactionProxy'
 import { deviceProxyMinimum, INTERACTION_REACH, interactionWinnerOf } from './interactionTarget'
 import { cloneKitPart, disposeKitPart, registerKitColliders } from './kitPart'
 import type { MaterialLibrary } from './materials'
+import { setClockMinutes } from './nightClock'
 import { isRoomPowered } from './power'
 import { playerPosition } from './playerPosition'
 import { isUnclaimedInteractKey, subscribePrimaryAction } from './primaryAction'
+import { clockGrant } from './progressGrants'
 import { placeRadioCall, takeDeskRadio } from './radioCall'
 import { hangUpDelayMs, hangUpStarted, heldRadioId, isRadioCallKey } from './radioPatience'
 
@@ -184,6 +185,14 @@ function ClockDevice({
   // outside React (`clockCount.ts`): this component says when the room has
   // power and turns the hands, and records nothing by itself.
   const count = useMemo(() => clockCount(device.id, CLOCK_STORE), [device.id])
+  // Put right, it shows the hour of the night, which moves when something is
+  // done and not as the minutes pass. One number out of the selector, so the
+  // component is told only when a hand has to move.
+  const nightMinutes = useMuseum((state) => setClockMinutes(MUSEUM.nightClock, device.setFlag, state.progress, MUSEUM))
+  const night = useMemo(
+    () => (nightMinutes === null ? null : { hours: Math.floor(nightMinutes / 60), minutes: nightMinutes % 60 }),
+    [nightMinutes],
+  )
 
   useEffect(() => {
     if (powered) return count.run()
@@ -192,7 +201,7 @@ function ClockDevice({
   }, [count, powered])
 
   useFrame((_, delta) => {
-    const angles = clockHandAngles(clockTimeAfter(device.stoppedAt, count.advance(delta)))
+    const angles = clockFaceAngles(device.stoppedAt, count.advance(delta), night)
     // The dial faces local +Z, so clockwise as the visitor sees it is -Z.
     if (pivots.hour) pivots.hour.rotation.z = -angles.hour
     if (pivots.minute) pivots.minute.rotation.z = -angles.minute
@@ -411,8 +420,10 @@ export function DeviceLayer({
  *
  * A radio on its desk is picked up if it is one the player carries away,
  * otherwise the same press as the call button — skip a line, or call him. A
- * notice has said all it has to say in the prompt: it declines the press,
- * and the key goes to whatever else is waiting for it.
+ * stopped clock is put right, which records its flag (`clockGrant`) and no
+ * more: what it shows from then on follows from the save. A notice has said
+ * all it has to say in the prompt: it declines the press, and the key goes
+ * to whatever else is waiting for it.
  */
 function operateDevice(deviceId: string) {
   const entry = AIMABLE_BY_ID.get(deviceId)
@@ -423,6 +434,10 @@ function operateDevice(deviceId: string) {
     case 'radio':
       if (intent.intent === 'take') return takeDeskRadio(deviceId)
       return placeRadioCall(deviceId)
+    case 'clock':
+      if (entry.device.kind !== 'clock') return false
+      useMuseum.getState().grant(clockGrant(entry.device))
+      return true
     case 'notice':
     case 'none':
       return false

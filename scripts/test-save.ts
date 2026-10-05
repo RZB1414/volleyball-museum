@@ -62,14 +62,18 @@ Object.assign(globalThis, {
 })
 
 const { CONTENT_LOT } = await import('../src/content/contentLot.ts')
-const { PRE_OPENING_SAVE, SAVE_ALIASES } = await import('../src/content/legacySave.ts')
+const { PRE_OPENING_SAVE, PRE_POSSE_SAVE, SAVE_ALIASES } = await import('../src/content/legacySave.ts')
 const { MUSEUM } = await import('../src/content/museum.ts')
 const { fixtureLot, SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
 const { SPAWN } = await import('../src/content/spawn.ts')
 const { validateOpening, validateSaveAliases } = await import('../src/content/validate.ts')
 const { clockCount } = await import('../src/engine/clockCount.ts')
-const { CLOCK_MAX_STEP_SECONDS, CLOCK_SAVE_INTERVAL_SECONDS } = await import('../src/engine/deviceRules.ts')
+const { CLOCK_MAX_STEP_SECONDS, CLOCK_SAVE_INTERVAL_SECONDS, nextRadioCall, radioDevices } = await import('../src/engine/deviceRules.ts')
 const { isRoomPowered } = await import('../src/engine/power.ts')
+// The press R makes, against a store handed in: every tab of this suite has
+// its own. (The module also evaluates the game's own store, under its plain
+// name, with whatever is under the key now: nothing. No case here reads it.)
+const { placeRadioCallOn } = await import('../src/engine/radioCall.ts')
 const {
   emptyProgress,
   EMPTY_PROGRESS,
@@ -210,7 +214,10 @@ const SAMPLES = {
   doorsReleased: ['atrium-from-holyoke-shortcut', 'vault-hatch'],
   flags: ['posse-signed', 'reopening-declared'],
   triggersFired: ['exhibit:ball-spalding:catalogued', 'lock:office-drawer:opened'],
-  radioCalls: ['porter-first-call', 'porter-radio-taken'],
+  // A save that has met the porter of this lot: his introduction is the
+  // evidence the Posse's migration reads (`PRE_POSSE_SAVE`), and with it
+  // nothing here is taken for old news.
+  radioCalls: ['porter-hello', 'porter-radio-taken'],
   clockSeconds: { 'office-clock': 612, 'atrium-clock': 0.5 },
   hintsShown: ['journal-taken', 'radio-taken'],
   devicesCarried: ['office-radio', 'pocket-torch'],
@@ -220,6 +227,9 @@ const SAMPLES = {
       temper: 1,
       lastCallAt: 1791075900000,
       lastHint: 2,
+      // Two heights up the hint he gave last: not the default, so that a
+      // load that forgot it would show.
+      hintHeight: 2,
       lastReplyId: 'porter-praise-knack',
       lastOutburstId: null,
     },
@@ -368,8 +378,35 @@ await test('what is valid inside a damaged field is kept, in order', () => {
     empty: null,
   })
   assert.deepEqual(memory, {
-    'office-radio': { calls: 3, temper: 2, lastCallAt: 5, lastHint: -1, lastReplyId: null, lastOutburstId: null },
+    'office-radio': { calls: 3, temper: 2, lastCallAt: 5, lastHint: -1, hintHeight: 0, lastReplyId: null, lastOutburstId: null },
   })
+
+  // The height of his last hint (L3) is not one of the numbers that cost the
+  // entry: absent, as in every save from before it, or junk, it is zero, and
+  // the porter keeps his temper and his count of calls.
+  const entry = { calls: 7, temper: 3, lastCallAt: 9, lastHint: 2, lastReplyId: 'porter-t2-again', lastOutburstId: null }
+  const heights: readonly (readonly [unknown, number])[] = [
+    [undefined, 0],
+    [null, 0],
+    [-2, 0],
+    ['2', 0],
+    [Number.NaN, 0],
+    [Number.POSITIVE_INFINITY, 0],
+    [{ height: 2 }, 0],
+    [0, 0],
+    [1, 1],
+    [2, 2],
+    [1.9, 1],
+  ]
+  for (const [saved, read] of heights) {
+    const raw = saved === undefined ? entry : { ...entry, hintHeight: saved }
+    assert.deepEqual(sanitiseRadioMemory({ 'office-radio': raw }), { 'office-radio': { ...entry, hintHeight: read } }, `hintHeight = ${JSON.stringify(saved)}`)
+  }
+  assert.deepEqual(
+    migrateProgress({ version: 1, radioCalls: ['porter-hello'], radioMemory: { x: { ...entry, hintHeight: -2 } } }).radioMemory,
+    { x: { ...entry, hintHeight: 0 } },
+    'the lot plan\'s case I',
+  )
 })
 
 await test('a grant only adds, in order, and hands back the same save when it adds nothing', () => {
@@ -392,6 +429,7 @@ await test('a radio memory keeps what a later build wrote inside a valid entry',
       temper: 1,
       lastCallAt: 9,
       lastHint: 0,
+      hintHeight: 1,
       lastReplyId: 'porter-t1-listening',
       lastOutburstId: null,
       mood: 'sour',
@@ -434,32 +472,28 @@ await test('a call to the porter keeps what a later build wrote inside his memor
   page.state().rememberRadioCall('vault-radio', { ...later, calls: 1 } as never)
   assert.equal(page.progress().radioMemory['vault-radio'].calls, 1)
 
-  // And by a real press: the porter's own answer, through `placeRadioCall`.
-  // That module holds the store under its plain name, so the save has to be
-  // under the key before either is first evaluated.
+  // And by a real press: the porter's own answer, through the press R makes
+  // (`placeRadioCallOn`, which is all `placeRadioCall` is), on a store of
+  // this suite's.
   const night = SAVE_FIXTURES['production-drawer-open'].save
-  storage.clear()
-  storage.set(STORAGE_KEY, JSON.stringify({ ...night, progress: { ...night.progress, radioMemory: { 'office-radio': later } } }))
-  const window = Object.assign(new EventTarget(), { setTimeout: () => 1, clearTimeout: () => undefined })
-  Object.assign(globalThis, { window, document: Object.assign(new EventTarget(), { visibilityState: 'visible' }) })
-  const { placeRadioCall } = await import('../src/engine/radioCall.ts')
-  const { useMuseum } = await import('../src/state/store.ts')
-  const remembered = () => useMuseum.getState().progress.radioMemory['office-radio'] as unknown as Raw
-  kept(remembered(), 'on load (was the store evaluated before this test put the save there?)')
+  const real = await openGame({ ...night, progress: { ...night.progress, radioMemory: { 'office-radio': later } } })
+  const remembered = () => real.progress().radioMemory['office-radio'] as unknown as Raw
+  kept(remembered(), 'on load')
   // "Continue": nobody answers a radio from the title screen.
-  useMuseum.getState().start()
+  real.state().start()
 
   // An hour after his last call, with a dice that never loses its temper.
-  // The press that reaches him may come after a call he still owed.
+  // The press that reaches him comes after the call he still owed (his
+  // introduction, to a save from before it), skipped line by line.
   const now = later.lastCallAt + 3_600_000
   for (let presses = 0; presses < 40 && remembered().calls === later.calls; presses += 1) {
-    assert.ok(placeRadioCall('office-radio', now, () => 0.99), 'the radio did not answer')
+    assert.ok(placeRadioCallOn(real.store.useMuseum, MUSEUM, 'office-radio', now, () => 0.99), 'the radio did not answer')
   }
   assert.equal(remembered().calls, later.calls + 1, 'the porter never answered a call of the player\'s')
   assert.equal(remembered().lastCallAt, now)
   kept(remembered(), 'after a real call')
-  window.dispatchEvent(new Event('pagehide'))
-  kept(((savedWhole().progress ?? {}).radioMemory as Record<string, Raw>)['office-radio'], 'in the storage, after a real call')
+  real.leave()
+  kept((real.savedProgress()!.radioMemory as Record<string, Raw>)['office-radio'], 'in the storage, after a real call')
 })
 
 // ---------------------------------------------------------------------------
@@ -684,12 +718,49 @@ await test('the store and what it imports statically never reach the content', (
 // ---------------------------------------------------------------------------
 
 const L1_FIELDS = Object.keys(frozenL1.migrateProgress(null))
+/**
+ * What L1 knows inside one entry of the porter's memory. Its loader rebuilds
+ * an entry from these six and drops whatever else is in it: a field a later
+ * lot keeps there (the height of his last hint, since L3) is not L1's to
+ * lose, any more than a field of the save L1 has no name for.
+ */
+const L1_MEMORY_FIELDS = ['calls', 'temper', 'lastCallAt', 'lastHint', 'lastReplyId', 'lastOutburstId']
+/** A save's field, as far as L1 knows it. */
+const asL1Knows = (field: string, value: unknown): unknown =>
+  field === 'radioMemory' && value && typeof value === 'object'
+    ? Object.fromEntries(
+        Object.entries(value as Record<string, Raw>).map(([radio, entry]) => [radio, Object.fromEntries(L1_MEMORY_FIELDS.map((key) => [key, entry[key]]))]),
+      )
+    : value
 
 /** The fields L1 knows that come out of L1's own loader different from what was written. */
 function lostReadingAsL1(written: Raw): string[] {
   const readByL1 = frozenL1.migrateProgress(throughJson(written)) as unknown as Raw
-  return L1_FIELDS.filter((field) => !isDeepStrictEqual(readByL1[field], written[field]))
+  return L1_FIELDS.filter((field) => !isDeepStrictEqual(readByL1[field], asL1Knows(field, written[field])))
 }
+
+/**
+ * What the Posse's migration takes for old news in a save (`PRE_POSSE_SAVE`):
+ * the porter's call for each milestone the save has passed without having
+ * heard his introduction. Written out here, apart from the migration, so
+ * that the cases below say what they expect instead of asking the code.
+ */
+function oldNewsOf(progress: Raw): string[] {
+  if (((progress.radioCalls as string[] | undefined) ?? []).includes('porter-hello')) return []
+  const has = (field: string, id: string | null) => {
+    const list = (progress[field] as string[] | undefined) ?? []
+    return id === null ? list.length > 0 : list.includes(id)
+  }
+  return [
+    ...(has('roomsPowered', 'atrium') ? ['porter-atrium-service'] : []),
+    ...(has('roomsPowered', 'holyoke') ? ['porter-holyoke-lit'] : []),
+    ...(has('doorsReleased', 'atrium-from-holyoke-shortcut') ? ['porter-shortcut'] : []),
+    ...(has('catalogued', null) ? ['porter-first-catalogued'] : []),
+  ]
+}
+/** A porter's memory from before the hint had heights, as this build loads it. */
+const withHeights = (memory: unknown) =>
+  Object.fromEntries(Object.entries((memory ?? {}) as Record<string, Raw>).map(([radio, entry]) => [radio, { ...entry, hintHeight: entry.hintHeight ?? 0 }]))
 
 await test('the frozen code of L1 is the code of L1', () => {
   const text = read('scripts/lib/frozen/sanitiseProgress.L1.ts').replaceAll('\r\n', '\n')
@@ -701,12 +772,20 @@ await test('the frozen code of L1 is the code of L1', () => {
   // The fields production's saves have, and nothing this lot added.
   assert.deepEqual([...L1_FIELDS].sort(), Object.keys(rawFixture('production-drawer-open')).sort())
   assert.ok(!L1_FIELDS.includes('contentLot'))
+  // And what it knows inside an entry of the porter's memory.
+  const entry = { calls: 1, temper: 1, lastCallAt: 1, lastHint: 0, hintHeight: 2, lastReplyId: null, lastOutburstId: null, mood: 'sour' }
+  assert.deepEqual(Object.keys(frozenL1.sanitiseRadioMemory({ x: entry }).x), L1_MEMORY_FIELDS)
 })
 
-await test('this build reads a save of production exactly as L1 read it', () => {
+await test('this build reads a save of production as L1 read it, plus what the Posse says of it', () => {
   // The loader moved to another file and into a table; for a save production
   // could have written, that must not show. Every field L1 knows comes out of
   // this build's load as it came out of L1's, the opening migration included.
+  //
+  // But for two things, each by name (it was "exactly as L1 read it" until
+  // L3). The porter's calls for milestones the save had already passed are
+  // counted as heard, after the calls L1 read, in the order of the list. And
+  // each entry of his memory gains the height of his last hint, at zero.
   const saves: [string, Raw][] = [
     ...fixtureIds.map((id): [string, Raw] => [id, rawFixture(id)]),
     ['a save with only a version', { version: 1 }],
@@ -719,11 +798,21 @@ await test('this build reads a save of production exactly as L1 read it', () => 
     ['a list that is a string', { version: 1, radioCalls: 'porter-first-call', catalogued: ['ok', 3, null] }],
     ['a save of another version', { version: 99, catalogued: ['x'] }],
   ]
+  let withOldNews = 0
   for (const [name, raw] of saves) {
     const then = frozenL1.migrateProgress(throughJson(raw)) as unknown as Raw
     const now = migrateProgress(throughJson(raw)) as Progress & Raw
-    for (const field of L1_FIELDS) assert.deepEqual(now[field], then[field], `${name}: ${field}`)
+    // The milestones are read off the whole save: one of them (the shortcut)
+    // is in a field L1 has no name for.
+    const news = oldNewsOf({ ...raw, ...then })
+    const expected: Raw = { ...then, radioCalls: [...(then.radioCalls as string[]), ...news], radioMemory: withHeights(then.radioMemory) }
+    for (const field of L1_FIELDS) assert.deepEqual(now[field], expected[field], `${name}: ${field}`)
+    if (news.length > 0) withOldNews += 1
+    // Nothing L1 read is gone or moved: what the Posse adds comes after it.
+    assert.deepEqual(now.radioCalls.slice(0, (then.radioCalls as string[]).length), then.radioCalls, `${name}: the calls L1 read`)
+    assert.deepEqual(asL1Knows('radioMemory', now.radioMemory), then.radioMemory, `${name}: the porter's memory, as L1 knows it`)
   }
+  assert.ok(withOldNews >= 8, `only ${withOldNews} of these saves had passed a milestone: the case no longer shows what the Posse adds`)
 })
 
 await test('a save of this lot read by the code of L1 loses nothing L1 knows', async () => {
@@ -1016,7 +1105,18 @@ await test('an alias that points at an id the content does not have fails the co
 // before it writes, and what it finds there that it did not write is joined
 // with what it holds.
 
-const OLD_TAB = SAVE_FIXTURES['l2-new-game-drawer-touched'].save
+/**
+ * The save L2 left of a new game, with the porter's introduction heard: what
+ * any tab of this build holds a few seconds after its lamp is on. Without
+ * it, each load and each read of the disk takes the milestones the save has
+ * passed for old news (`PRE_POSSE_SAVE`), which has cases of its own further
+ * down; these are about what two tabs do to each other's writes.
+ */
+const OLD_TAB_FIXTURE = SAVE_FIXTURES['l2-new-game-drawer-touched'].save
+const OLD_TAB = {
+  ...OLD_TAB_FIXTURE,
+  progress: { ...OLD_TAB_FIXTURE.progress, radioCalls: ['porter-hello', ...OLD_TAB_FIXTURE.progress.radioCalls] },
+}
 const OLD_TAB_PROGRESS: Raw = OLD_TAB.progress
 
 /**
@@ -1170,30 +1270,41 @@ await test("a porter's memory is the later call's, radio by radio, with what a l
     temper: 1,
     lastCallAt,
     lastHint: 2,
+    hintHeight: 0,
     lastReplyId: null,
     lastOutburstId: null,
     ...more,
   })
   const withMemory = (entry: Raw) => saveOf({ ...OLD_TAB_PROGRESS, radioMemory: { 'office-radio': entry } })
 
-  // The other tab called him later than this one did: its entry stands.
+  // The other tab called him later than this one did: its entry stands,
+  // with the height of the hint he gave there.
   const earlier = await openGame(withMemory(memory(4, 100)))
-  anotherTabWrites(withMemory(memory(6, 300, { mood: 'sour' })))
-  earlier.state().rememberRadioCall('office-radio', memory(5, 200))
+  anotherTabWrites(withMemory(memory(6, 300, { mood: 'sour', hintHeight: 2 })))
+  earlier.state().rememberRadioCall('office-radio', memory(5, 200, { hintHeight: 1 }))
   earlier.leave()
-  assert.deepEqual(earlier.savedProgress()!.radioMemory, { 'office-radio': memory(6, 300, { mood: 'sour' }) })
+  assert.deepEqual(earlier.savedProgress()!.radioMemory, { 'office-radio': memory(6, 300, { mood: 'sour', hintHeight: 2 }) })
 
-  // This tab called him last: its call, and still what it never knew about.
-  const latest = await openGame(withMemory(memory(4, 100)))
+  // This tab called him last: its call and its height, and still what it never knew about.
+  const latest = await openGame(withMemory(memory(4, 100, { hintHeight: 2 })))
   anotherTabWrites(
-    saveOf({ ...OLD_TAB_PROGRESS, radioMemory: { 'office-radio': memory(6, 300, { mood: 'sour' }), 'vault-radio': memory(1, 50) } }),
+    saveOf({ ...OLD_TAB_PROGRESS, radioMemory: { 'office-radio': memory(6, 300, { mood: 'sour', hintHeight: 2 }), 'vault-radio': memory(1, 50) } }),
   )
-  latest.state().rememberRadioCall('office-radio', memory(5, 400))
+  latest.state().rememberRadioCall('office-radio', memory(5, 400, { hintHeight: 1 }))
   latest.leave()
   assert.deepEqual(latest.savedProgress()!.radioMemory, {
-    'office-radio': memory(5, 400, { mood: 'sour' }),
+    'office-radio': memory(5, 400, { mood: 'sour', hintHeight: 1 }),
     'vault-radio': memory(1, 50),
   })
+  // A tab of the build before the hint had heights writes an entry without
+  // one: the later call still wins, and its height is zero, not whatever
+  // this tab had reached on the call before.
+  const beforeHeights = await openGame(withMemory(memory(4, 100, { hintHeight: 2 })))
+  const { hintHeight: _, ...l2Entry } = memory(6, 300)
+  anotherTabWrites(withMemory(l2Entry))
+  beforeHeights.state().recordHint('torch-used')
+  beforeHeights.leave()
+  assert.deepEqual(beforeHeights.savedProgress()!.radioMemory, { 'office-radio': memory(6, 300, { hintHeight: 0 }) })
 })
 
 await test('"New game" still erases everything, and a tab holding the erased game does not bring it back', async () => {
@@ -1319,9 +1430,12 @@ await test('joining two copies of a save only adds, field by field, and joining 
   assert.equal(joined.contentLot, CONTENT_LOT + 5, 'the lot of a save is the highest any copy says')
   // A list is the disk's, then what the tab has that it lacks: nothing twice.
   assert.deepEqual(joined.catalogued, ['portrait-morgan', 'ball-spalding'])
-  assert.deepEqual(joined.radioCalls, ['porter-first-call', 'porter-late-call', 'porter-radio-taken'])
+  assert.deepEqual(joined.radioCalls, ['porter-first-call', 'porter-late-call', 'porter-hello', 'porter-radio-taken'])
   assert.deepEqual(joined.clockSeconds, { 'office-clock': 612, 'vault-clock': 77, 'atrium-clock': 0.5 })
   assert.equal(joined.radioMemory['office-radio'].calls, 4, 'the later call is the one remembered')
+  // With how far up his hint he had gone on that call, and not on the disk's.
+  assert.equal(theirs.radioMemory['office-radio'].hintHeight, 0)
+  assert.equal(joined.radioMemory['office-radio'].hintHeight, 2, "the height is the later call's")
   assert.equal(joined.lastRoom, 'atrium', "where the tab stopped is the tab's to say")
   // What this build does not know: the disk's copy, and the tab's only where the disk has none.
   assert.equal(joined.nightsWorked, 4)
@@ -1403,10 +1517,19 @@ function leftAlone(browser: LiveBrowser, when: string): number[] {
 function agreed(browser: LiveBrowser, when: string) {
   const disk = browser.disk()
   assert.ok(disk?.progress && disk.settings, `${when}: there is no save on the disk`)
+  // One save, as a load reads it. A tab that takes another tab's write off
+  // the disk reads it as a load does, and since L3 a load can add something
+  // by itself: the porter's calls for milestones passed before his
+  // introduction was heard (`PRE_POSSE_SAVE`). The tab that passed the
+  // milestone a moment ago holds no such thing, and neither does the disk it
+  // wrote. That is not a write anybody owes: read by the same rule, the
+  // three are the same save, and that is what is asked. (The case of the two
+  // builds, further down, says by name what a reading tab holds meanwhile.)
+  const asLoaded = (progress: unknown) => throughJson(migrateProgress(throughJson(progress))) as Raw
   for (const tab of browser.tabs) {
     assert.deepEqual(
-      butEachTabsOwn(throughJson(tab.progress())),
-      butEachTabsOwn(disk.progress),
+      butEachTabsOwn(asLoaded(tab.progress())),
+      butEachTabsOwn(asLoaded(disk.progress)),
       `${when}: "${tab.name}" and the disk hold different saves`,
     )
     assert.deepEqual(throughJson(tab.state().settings), disk.settings, `${when}: "${tab.name}" and the disk hold different settings`)
@@ -1965,7 +2088,7 @@ await test('the clock in the scene is the count these cases run, and records not
   const refactors: readonly (readonly [string, SourceReader])[] = [
     [
       'the component recording the clock at a moment of its own',
-      changed('engine/Devices.tsx', 'const angles = clockHandAngles(', 'useMuseum.getState().recordClockSeconds(device.id, 0)\n    const angles = clockHandAngles('),
+      changed('engine/Devices.tsx', 'const angles = clockFaceAngles(', 'useMuseum.getState().recordClockSeconds(device.id, 0)\n    const angles = clockFaceAngles('),
     ],
     [
       'the component contributing to the forced save by itself',
@@ -2048,6 +2171,271 @@ await test('nor does a call that was in the air in the erased game count as hear
     other.act((state) => state.resetProgress())
     leftAlone(browser, '"New game" again, mid-call')
     assert.equal(playing.state().radio, null, 'a call was kept in the air because the two games looked alike')
+  } finally {
+    browser.close()
+  }
+})
+
+// ---------------------------------------------------------------------------
+// The Posse (L3): the porter's old news, and how far up his hint he has gone
+// ---------------------------------------------------------------------------
+
+await test("the Posse's old news, save by save: what each had passed counts as heard, his introduction is owed, and a second load adds nothing (L3)", () => {
+  // The lot plan's cases A to E (docs/lotes/L3-plano.md, §5), by value. A
+  // save written from L3 on has met the porter and has no line here but [].
+  const HALL = 'porter-atrium-service'
+  const WING = 'porter-holyoke-lit'
+  const DOOR = 'porter-shortcut'
+  const PIECE = 'porter-first-catalogued'
+  const NEWS: Record<string, readonly string[]> = {
+    'production-drawer-open': [HALL, WING, PIECE],
+    'production-drawer-closed': [HALL, WING, PIECE],
+    'production-catalogued-unturned': [HALL, WING, PIECE],
+    'production-pre-opening': [HALL, WING, PIECE],
+    'production-radio-on-desk': [HALL],
+    'l1-route-end': [HALL, WING, PIECE],
+    'l2-shortcut-released': [HALL, WING, DOOR, PIECE],
+    'l2-new-game-drawer-touched': [HALL],
+  }
+  for (const id of fixtureIds) {
+    const expected = NEWS[id] ?? (fixtureLot(SAVE_FIXTURES[id]) >= 3 ? [] : undefined)
+    assert.ok(expected, `${id}: a save of the corpus from before L3 has no line in this case`)
+    const raw = rawFixture(id)
+    // The same save as the pipeline brought it forward before this lot.
+    const before = migrateProgressWith(throughJson(raw), {
+      migrations: SAVE_MIGRATIONS.filter((migration) => migration.lot < 3),
+      aliases: SAVE_ALIASES,
+      contentLot: CONTENT_LOT,
+    })
+    const loaded = migrateProgress(throughJson(raw))
+    assert.deepEqual(loaded.radioCalls, [...before.radioCalls, ...expected], id)
+    // Only that: every other field is as the lots before left it.
+    assert.deepEqual({ ...loaded, radioCalls: before.radioCalls }, before, `${id}: the migration moved something besides the calls`)
+    assert.deepEqual(shrunk(before as Raw, loaded as Raw), [], id)
+    // His introduction is owed, and is the first thing this save hears.
+    assert.ok(!loaded.radioCalls.includes(PRE_POSSE_SAVE.helloCallId), `${id}: the introduction was taken as heard`)
+    // Idempotent, through the disk and back as often as it goes.
+    assert.deepEqual(migrateProgress(throughJson(loaded)), loaded, `${id}: a second load`)
+    assert.deepEqual(migrateProgress(throughJson(migrateProgress(throughJson(loaded)))), loaded, `${id}: a third`)
+    assert.deepEqual(oldNewsOf(before as Raw), expected, `${id}: this suite's own account of the rule`)
+  }
+  assert.deepEqual(SAVE_MIGRATIONS.map((migration) => migration.lot), [1, 2, 3], 'the migrations run in the order of their lots')
+
+  // By what the save holds, never by its stamp (DL3-3): the lot ships in
+  // slices and its number moves with the last, so a save an earlier slice
+  // wrote carries this lot's stamp, or the one before, and is read the same.
+  const passed = { version: 1, radioCalls: [], roomsPowered: ['office', 'atrium'] }
+  for (const contentLot of [undefined, 1, 2, 3]) {
+    const save = migrateProgress({ ...passed, ...(contentLot === undefined ? {} : { contentLot }) })
+    assert.deepEqual(save.radioCalls, [HALL], `stamped ${contentLot}`)
+  }
+  // A save of a lot after this one is that lot's to read.
+  assert.deepEqual(migrateProgress({ ...passed, contentLot: 4 }).radioCalls, [])
+  // Once he has introduced himself nothing is old news, whatever the save has passed.
+  const met = migrateProgress({
+    version: 1,
+    radioCalls: [PRE_POSSE_SAVE.helloCallId],
+    roomsPowered: ['office', 'atrium', 'holyoke'],
+    catalogued: ['portrait-morgan'],
+    doorsReleased: ['atrium-from-holyoke-shortcut'],
+  })
+  assert.deepEqual(met.radioCalls, [PRE_POSSE_SAVE.helloCallId])
+  // The office alone is no milestone of his: the lamp is what his introduction waits for.
+  assert.deepEqual(migrateProgress({ version: 1, radioCalls: [], roomsPowered: ['office'] }).radioCalls, [])
+  // A call already in the save is not put there twice, and junk is no list.
+  assert.deepEqual(migrateProgress({ ...passed, radioCalls: [HALL, 'porter-first-call'] }).radioCalls, [HALL, 'porter-first-call'])
+  assert.deepEqual(migrateProgress({ version: 1, radioCalls: [], catalogued: 'portrait-morgan', doorsReleased: { 0: 'atrium-from-holyoke-shortcut' } }).radioCalls, [])
+  // The ids the migration names are ids the content has (the gate holds it to that).
+  assert.deepEqual(
+    validateOpening(MUSEUM).filter((issue) => issue.code.startsWith('legacy-save')),
+    [],
+  )
+})
+
+await test('a tab of the build before the Posse writes a save the porter has not met: this build counts the old news as it reads, writes nothing in answer, and the two fall silent (L3)', async () => {
+  // After a deploy, a page of L2 is still open beside one of this build. It
+  // plays, and writes as L2 writes: no introduction heard (it has none to
+  // play) and no call for anything it does. This build reads each of those
+  // writes as a load reads a save, by the evidence in it. What a tab cannot
+  // do is answer: a write for every write of the other is how two tabs
+  // never stop.
+  const [{ device: radio }] = radioDevices(MUSEUM)
+  const SHORTCUT = 'atrium-from-holyoke-shortcut'
+  const fixture = SAVE_FIXTURES['l2-new-game-drawer-touched'].save
+  const HALL = 'porter-atrium-service'
+
+  const browser = openBrowser(fixture)
+  try {
+    const here = await browser.open('this build')
+    // Loaded: the hall was lit before the porter had a call for it.
+    assert.deepEqual(here.progress().radioCalls, [...fixture.progress.radioCalls, HALL])
+    assert.deepEqual(leftAlone(browser, 'a tab of this build that only loaded a save of L2'), [], 'what a load adds by itself was written, with nobody having done anything')
+    assert.equal(browser.writes.length, 0)
+
+    // The tab of L2 lights Wing 1, checks a piece and leaves by the shortcut.
+    const l2 = {
+      ...fixture,
+      progress: {
+        ...fixture.progress,
+        catalogued: ['portrait-morgan'],
+        hotspots: ['portrait-morgan:date'],
+        factsKnown: ['springfield-renaming'],
+        roomsVisited: ['office', 'atrium', 'holyoke'],
+        roomsPowered: ['office', 'atrium', 'holyoke'],
+        doorsReleased: [SHORTCUT],
+      },
+    }
+    browser.anotherBuildWrites(l2)
+    leftAlone(browser, 'the tab of L2 wrote')
+    assert.equal(browser.writes.length, 0, 'this build answered a write of L2 with one of its own')
+    assert.deepEqual(browser.disk(), throughJson(l2), 'the disk is not as the tab of L2 left it')
+    // What this build holds: all of it, and each milestone as old news.
+    assert.deepEqual(shrunk(l2.progress, here.progress()), [])
+    assert.deepEqual(here.progress().radioCalls, [...fixture.progress.radioCalls, HALL, 'porter-holyoke-lit', 'porter-shortcut', 'porter-first-catalogued'])
+    // Which is, to the letter, what a load of that disk gives: nothing of its own to write.
+    assert.deepEqual(
+      butEachTabsOwn(throughJson(here.progress())),
+      butEachTabsOwn(throughJson(migrateProgress(throughJson(l2.progress)))),
+    )
+    agreed(browser, 'a tab of this build beside one of L2')
+    assert.equal(browser.writes.length, 0, 'made to write, the tab wrote what the load had added')
+
+    // "Continue" in this build: its own write, and the old news goes with it.
+    here.act((state) => state.start())
+    leftAlone(browser, '"Continue" in this build')
+    assert.deepEqual(writersSince(browser, 0), [here.name])
+    assert.ok((browser.disk()!.progress!.radioCalls as string[]).includes('porter-shortcut'))
+    // All the porter owes this player is his introduction; none of it is news.
+    assert.equal(nextRadioCall(radio, here.progress(), MUSEUM)?.id, 'porter-hello')
+    here.act((state) => state.recordRadioCall('porter-hello'))
+    leftAlone(browser, 'the introduction, heard')
+    assert.equal(nextRadioCall(radio, here.progress(), MUSEUM), null, 'a milestone of another tab\'s night is told as news')
+
+    // The tab of L2 takes that in (a list is a list to it: it keeps the ids it
+    // has no name for) and writes again, with a lesson of its own shown. This
+    // build has nothing to add to that either.
+    const taken = browser.disk()!
+    const written = browser.writes.length
+    browser.anotherBuildWrites({ ...taken, progress: { ...taken.progress, hintsShown: [...(taken.progress!.hintsShown as string[]), 'a-lesson-shown-in-l2'] } })
+    leftAlone(browser, 'the tab of L2 wrote again')
+    assert.equal(browser.writes.length, written, 'this build answered the second write of L2')
+    assert.ok(here.progress().hintsShown.includes('a-lesson-shown-in-l2'))
+    agreed(browser, 'after the second write of L2')
+  } finally {
+    browser.close()
+  }
+
+  // And once the introduction has been heard here, what the tab of L2 does
+  // next IS news: its writes carry his introduction, and the migration
+  // stands down. Wing 1 lit over there is the porter's call over here.
+  const later = openBrowser(fixture)
+  try {
+    const here = await later.open('this build')
+    here.act((state) => state.start())
+    here.act((state) => state.recordRadioCall('porter-hello'))
+    leftAlone(later, 'the introduction, heard before the other tab does anything')
+    const heard = later.disk()!
+    const written = later.writes.length
+    later.anotherBuildWrites({
+      ...heard,
+      progress: { ...heard.progress, roomsVisited: ['office', 'atrium', 'holyoke'], roomsPowered: ['office', 'atrium', 'holyoke'], lastRoom: 'holyoke' },
+    })
+    leftAlone(later, 'the tab of L2 lit Wing 1')
+    assert.equal(later.writes.length, written)
+    assert.ok(!here.progress().radioCalls.includes('porter-holyoke-lit'), 'a milestone passed with the porter listening was taken for old news')
+    assert.equal(nextRadioCall(radio, here.progress(), MUSEUM)?.id, 'porter-holyoke-lit')
+    agreed(later, 'after Wing 1 was lit in the tab of L2')
+  } finally {
+    later.close()
+  }
+})
+
+await test("the height of the porter's hint travels between two live tabs: each call takes it up from the last, whichever tab placed it (L3)", async () => {
+  const [{ device: radio }] = radioDevices(MUSEUM)
+  const fixture = SAVE_FIXTURES['l2-new-game-drawer-touched'].save
+  // Office and hall lit, the radio in the pocket, and every call he owed
+  // heard: a press of R is answered, and the answer is the hint for Wing 1.
+  const save = {
+    ...fixture,
+    progress: { ...fixture.progress, radioCalls: ['porter-hello', ...fixture.progress.radioCalls, 'porter-atrium-service'] },
+  }
+  const browser = openBrowser(save)
+  try {
+    const first = await browser.open('first')
+    const second = await browser.open('second', 'idle')
+    for (const tab of [first, second]) tab.act((state) => state.start())
+    leftAlone(browser, 'two tabs in the game')
+    assert.equal(nextRadioCall(radio, first.progress(), MUSEUM), null, 'the case needs a save with no call owed')
+    assert.deepEqual(first.progress().radioMemory, {}, 'and a porter never called')
+
+    let now = 1_800_000_000_000
+    /** One press of R in a tab, by the press the game makes, heard to its last line: the hint in it. */
+    const press = (tab: LiveTab) => {
+      now += 5_000
+      return tab.act(() => {
+        assert.equal(placeRadioCallOn(tab.store.useMuseum, MUSEUM, radio.id, now, () => 0.99), true, `"${tab.name}": the radio did not answer`)
+        const lines = tab.state().radio?.lineKeys ?? []
+        assert.equal(tab.state().radio?.callId, undefined, 'a call he owed came instead of an answer')
+        for (let line = 0; line < 12 && tab.state().radio; line += 1) tab.state().advanceRadio()
+        return lines.find((key) => key.startsWith('radio.hint.')) ?? null
+      })
+    }
+    const call = (tab: LiveTab) => {
+      const said = press(tab)
+      leftAlone(browser, `a call placed in "${tab.name}"`)
+      return said
+    }
+    // Four calls, turn and turn about: where, what, how, and how again.
+    assert.deepEqual(
+      [call(first), call(second), call(first), call(second)],
+      ['radio.hint.holyoke.where', 'radio.hint.holyoke.what', 'radio.hint.holyoke.how', 'radio.hint.holyoke.how'],
+      'the height did not travel with the save',
+    )
+    const memoryOf = (progress: Raw) => (progress.radioMemory as Record<string, Raw>)[radio.id]
+    for (const tab of browser.tabs) assert.equal(memoryOf(tab.progress()).hintHeight, 2, tab.name)
+    assert.equal(memoryOf(browser.disk()!.progress!).hintHeight, 2)
+    assert.equal(memoryOf(browser.disk()!.progress!).calls, 4)
+    agreed(browser, 'after four calls from two tabs')
+
+    // Wing 1 is lit (and the call for it heard): the hint is another, and starts from where.
+    first.act((state) => state.powerRoom('holyoke'))
+    first.act((state) => state.recordRadioCall('porter-holyoke-lit'))
+    leftAlone(browser, 'Wing 1 lit in one tab')
+    // Two calls that cross: each tab calls before it has heard of the other's.
+    assert.equal(press(first), 'radio.hint.drawer.where')
+    assert.equal(press(second), 'radio.hint.drawer.where', 'a tab that had not heard of the other call took its height from it')
+    leftAlone(browser, 'two calls that crossed')
+    // The later one is the one remembered, whole: its instant, its height.
+    for (const tab of browser.tabs) {
+      assert.equal(memoryOf(tab.progress()).lastCallAt, now, `"${tab.name}" does not remember the later call`)
+      assert.equal(memoryOf(tab.progress()).hintHeight, 0, tab.name)
+    }
+    agreed(browser, 'after two calls that crossed')
+    // And the next call, in whichever tab, goes on from there.
+    assert.equal(call(first), 'radio.hint.drawer.what')
+    assert.equal(call(second), 'radio.hint.drawer.how')
+    agreed(browser, 'after the hint was climbed across two tabs')
+
+    // A later call written by another build, with junk for a height: the
+    // entry stands, his count and his temper with it (calmed down there, so
+    // that he answers in full here), and the height is zero.
+    const disk = browser.disk()!
+    const entry = memoryOf(disk.progress!)
+    const written = browser.writes.length
+    now += 60_000
+    browser.anotherBuildWrites({
+      ...disk,
+      progress: { ...disk.progress, radioMemory: { [radio.id]: { ...entry, calls: 40, temper: 0, lastCallAt: now, hintHeight: 'the top' } } },
+    })
+    leftAlone(browser, 'another build wrote a height that is not one')
+    assert.equal(browser.writes.length, written, 'a height read as zero was written back as an answer')
+    for (const tab of browser.tabs) {
+      assert.equal(memoryOf(tab.progress()).calls, 40, `"${tab.name}": the entry was dropped for its height`)
+      assert.equal(memoryOf(tab.progress()).temper, 0, tab.name)
+      assert.equal(memoryOf(tab.progress()).hintHeight, 0, tab.name)
+    }
+    assert.equal(call(first), 'radio.hint.drawer.what', 'from zero, the next call about the same hint is the second height')
+    agreed(browser, 'after a height that was junk')
   } finally {
     browser.close()
   }
@@ -2147,6 +2535,9 @@ await test('a seeded run of tabs that play, hide, close and start over in any or
             temper: Math.floor(random() * 4),
             lastCallAt: time,
             lastHint: -1,
+            // Derived from the instant, not drawn: the dice of these nights
+            // falls as it did before the field existed.
+            hintHeight: time % 3,
             lastReplyId: pick([null, 'a-reply', 'another']),
             lastOutburstId: null,
           })
@@ -2206,6 +2597,7 @@ await test('a seeded run of tabs that play, hide, close and start over in any or
         }
         for (const [radio, at] of Object.entries(calls)) {
           assert.equal((disk.radioMemory as Record<string, Raw>)[radio].lastCallAt, at, say(`${radio}: the later call is not the one remembered`))
+          assert.equal((disk.radioMemory as Record<string, Raw>)[radio].hintHeight, at % 3, say(`${radio}: the height is not the later call's`))
         }
       } else {
         // Somebody did: nothing from before the last "New game" is back,
@@ -2213,6 +2605,11 @@ await test('a seeded run of tabs that play, hide, close and start over in any or
         nightsStartedOver += 1
         for (const field of listFields) {
           for (const id of disk[field] as string[]) {
+            // Not something anybody did, before or after: what a tab that
+            // read the new game off the disk took for the porter's old news
+            // (a piece catalogued, a room lit, with his introduction unheard),
+            // and wrote with the next thing it did.
+            if (field === 'radioCalls' && PRE_POSSE_SAVE.oldNews.some((news) => news.callId === id)) continue
             const at = /^step-(\d+)$/.exec(id)
             assert.ok(at && Number(at[1]) > startedOverAt, say(`${field} holds "${id}", from before the game was started over at step ${startedOverAt}`))
           }
@@ -2593,12 +2990,21 @@ const addedByTheLot = (raw: Raw) => ({
   flags: [],
   triggersFired: [],
 })
+/**
+ * And what L3 adds to it, in fields the save already had (docs/lotes/
+ * L3-plano.md, §5): the porter's old news after the calls it had heard, and
+ * the height of his last hint, at zero, in each entry of his memory.
+ */
+const addedByThePosse = (loadedByL2: Raw) => ({
+  radioCalls: [...(loadedByL2.radioCalls as string[]), ...oldNewsOf(loadedByL2)],
+  radioMemory: withHeights(loadedByL2.radioMemory),
+})
 
 await test('case A and B: production saves come out as they went in, plus the lot', async () => {
   for (const id of ['production-drawer-open', 'production-drawer-closed', 'production-catalogued-unturned', 'production-radio-on-desk'] as const) {
     const raw = rawFixture(id)
     const page = await openGame(SAVE_FIXTURES[id].save)
-    assert.deepEqual(page.progress(), { ...raw, ...addedByTheLot(raw) }, id)
+    assert.deepEqual(page.progress(), { ...raw, ...addedByTheLot(raw), ...addedByThePosse(raw) }, id)
   }
   // By value, so that the helper above cannot agree with a mistake: the open
   // drawer is on the plan's list of touched locks, the shut one is not yet.
@@ -2676,7 +3082,10 @@ await test('case C: the pre-opening save is brought forward as before, plus the 
   assert.deepEqual(page.progress(), {
     ...raw,
     documentsRead: [...(raw.documentsRead as string[]), PRE_OPENING_SAVE.journalDocumentId],
-    radioCalls: [PRE_OPENING_SAVE.firstCallId],
+    // The opening's migration, and then the Posse's over what it left (the
+    // lot plan of L3, case E): the hall and Wing 1 were lit and a piece
+    // checked before the porter had a word for any of it.
+    radioCalls: [PRE_OPENING_SAVE.firstCallId, 'porter-atrium-service', 'porter-holyoke-lit', 'porter-first-catalogued'],
     clockSeconds: {},
     hintsShown: [PRE_OPENING_SAVE.journalHintId],
     devicesCarried: [],
@@ -2731,7 +3140,13 @@ await test('case E: back from L1, the save is production\'s again and nothing L1
   assert.equal(back.progress().contentLot, CONTENT_LOT)
   assert.notEqual(back.progress().contentLot, SAMPLES.contentLot)
   for (const field of Object.keys(UNKNOWN)) assert.ok(!(field in back.progress()), `${field} came back from a build that never wrote it`)
-  for (const field of L1_FIELDS) assert.deepEqual(back.progress()[field], written[field], `${field} did not survive the round trip`)
+  for (const field of L1_FIELDS) {
+    assert.deepEqual(asL1Knows(field, back.progress()[field]), asL1Knows(field, written[field]), `${field} did not survive the round trip`)
+  }
+  // Inside the porter's memory too, what L1 has no name for is gone: he
+  // remembers the hint he gave and starts it from where again.
+  assert.equal((written.radioMemory as Record<string, Raw>)['office-radio'].hintHeight, 2, 'the save that went to L1 had no height to lose')
+  assert.equal(back.progress().radioMemory['office-radio'].hintHeight, 0)
   // What the rollback costs, by name. The touched locks are rebuilt from the
   // opened ones, which L1 kept; the released door is in no field L1 knows,
   // and nothing infers it (DL2-3): the shortcut asks for one more exit.
