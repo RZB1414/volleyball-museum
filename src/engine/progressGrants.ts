@@ -18,6 +18,7 @@
 
 import type { ExhibitData, MuseumContent } from '../content/schema'
 import type { ProgressGrant } from '../state/progressFields.ts'
+import type { TransitionDoorSpec } from './transitionDoorTopology.ts'
 
 /**
  * A detail of a piece, seen: the detail, the fact it reveals and, once every
@@ -54,4 +55,19 @@ export function containerGrant(content: Pick<MuseumContent, 'documents'>, contai
     documentsRead: inside.map((doc) => doc.id),
     factsKnown: inside.flatMap((doc) => (doc.revealsFactId ? [doc.revealsFactId] : [])),
   }
+}
+
+/**
+ * A one-way door, opened from its own side: it stays unlatched.
+ *
+ * Granted on the press, not on the crossing: whoever pushes the bar and walks
+ * away has unlatched the door all the same, and a reload in the middle of the
+ * opening must not put the bar back. Null when there is nothing to record: a
+ * door with no side of its own, a press from the wrong side (which the door
+ * refuses), or a door released already. Null and not an empty grant, so the
+ * caller does not wake the store for nothing.
+ */
+export function doorGrant(door: TransitionDoorSpec, currentRoom: string, released: readonly string[]): ProgressGrant | null {
+  if (door.opensFrom === null || door.opensFrom !== currentRoom || released.includes(door.id)) return null
+  return { doorsReleased: [door.id] }
 }

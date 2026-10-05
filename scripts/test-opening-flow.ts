@@ -671,6 +671,12 @@ test('a list from the save is never announced, only its growth', () => {
   assert.equal(listGrew(3, 3), false, 'the save, on mount')
   assert.equal(listGrew(3, 4), true)
   assert.equal(listGrew(4, 0), false, 'a new game empties it')
+  // The toast of a released door asks this rule of the save's own list: a
+  // shortcut opened on another night is not announced again on Continue.
+  // (`test:transition-door` holds the rest of that toast's wiring.)
+  const hud = source('ui/Hud.tsx')
+  assert.ok(hud.includes('useMuseum((state) => state.progress.doorsReleased)'), 'the door toast reads doorsReleased')
+  assert.ok(hud.includes('listGrew(seenLength.current, released.length)'), 'and announces only its growth')
 })
 
 test('the journal lesson is shown once ever, after the notebook closes', () => {

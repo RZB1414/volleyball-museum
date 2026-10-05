@@ -1093,64 +1093,131 @@
 
 /* --- map ------------------------------------------------------------------ */
 
-.map svg {
+/* The plan and its legend on one page of the notebook, whatever the screen: a
+   map that has to be scrolled is a map nobody sees whole. The second figure
+   is the notebook's panel (88vh) less its tabs, its padding and the legend's
+   line; on a phone held sideways it is the one that binds. */
+.map > svg {
   width: 100%;
-  max-height: 26rem;
+  max-height: min(26rem, calc(88vh - 8.25rem));
   display: block;
 }
 
+/* A room's fill, outline and dashes come from its state (`MAP_STATE_STYLE`),
+   as attributes; only what every room shares is here. */
+.map-room {
+  stroke-width: 1.2;
+}
+
+/* The room the player stands in: a brighter, heavier outline over whatever
+   pattern its state gives it. A rule beats an attribute, so this wins. */
+.map-room.is-current {
+  stroke: #e9d9b8;
+  stroke-width: 2;
+}
+
+/* A dark edge round the letters: a name has to read over hatching and over a
+   solid fill as it did over the bare ground. */
 .map-room-name {
-  fill: #b8ae9a;
+  fill: #d8cfbc;
   font-family: Georgia, serif;
   font-size: 11px;
+  paint-order: stroke;
+  stroke: #14140f;
+  stroke-width: 2.6px;
+  stroke-linejoin: round;
 }
 
 .map-pip {
-  fill: #d9a441;
+  fill: #e8b24a;
+  stroke: #14140f;
+  stroke-width: 1;
 }
 
 /* A doorway is an opening, not a mark: the gap is painted in the journal's
-   own ground, wide enough to cut through the current room's 2-unit outline,
-   and the jambs close it at both ends. */
-.map-portal-gap {
+   own ground, as deep as the model says (one wall line, or both rooms'), and
+   the jambs close it at both ends. */
+.map-door-gap {
   stroke: #14140f;
-  stroke-width: 4;
   stroke-linecap: butt;
 }
 
-.map-portal-jamb {
+.map-door-jamb {
   stroke: #6d6455;
   stroke-width: 1.6;
   stroke-linecap: butt;
 }
 
-/* A one-way shortcut keeps its dashed green line, drawn inside the gap. */
-.map-portal-oneway {
-  stroke: #8fb98a;
-  stroke-width: 1.6;
-  stroke-dasharray: 2 2;
+/* The room beyond a door nobody has been through: a short line out of the
+   doorway and a question mark. Dotted, because it is not a wall. */
+.map-stub line {
+  stroke: #8a8070;
+  stroke-width: 1.4;
+  stroke-dasharray: 1.5 2.5;
+  stroke-linecap: round;
 }
 
-.map-portal.is-oneway .map-portal-jamb {
-  stroke: #8fb98a;
+.map-stub text {
+  fill: #b8ae9a;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
 }
 
-.map-player circle {
+/* The player: an arrowhead, turned by the model to where the camera looks. */
+.map-player path {
   fill: #f2ead9;
   stroke: #14140f;
   stroke-width: 1.5;
+  stroke-linejoin: round;
 }
 
-.map-legend,
+.map-north path {
+  fill: #8a8070;
+}
+
+.map-north text {
+  fill: #8a8070;
+  font-family: Georgia, serif;
+  font-size: 10px;
+  text-anchor: middle;
+}
+
+.map-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.1rem;
+  margin: 1rem 0 0;
+  font-size: 0.8rem;
+  color: #8a8070;
+}
+
+.map-legend h3 {
+  margin: 0;
+  font-family: Georgia, serif;
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a89e8b;
+}
+
+.map-legend ul,
 .map-locks {
   display: flex;
   flex-wrap: wrap;
-  gap: 1.1rem;
-  margin: 1rem 0 0;
+  gap: 0.5rem 1.1rem;
+  margin: 0;
   padding: 0;
   list-style: none;
+}
+
+.map-locks {
+  margin-top: 1rem;
   font-size: 0.8rem;
-  color: #8a8070;
 }
 
 .map-legend li,
@@ -1160,30 +1227,12 @@
   gap: 0.45rem;
 }
 
-.map-legend .swatch {
-  width: 0.85rem;
-  height: 0.85rem;
-  border: 1px solid;
-}
-
-.swatch.is-unvisited {
-  background: #1b1c20;
-  border-color: #2a2c32;
-}
-
-.swatch.is-unpowered {
-  background: #1b1c20;
-  border-color: #6f5742;
-}
-
-.swatch.is-partial {
-  background: #4a3a1e;
-  border-color: #a98a52;
-}
-
-.swatch.is-complete {
-  background: #1e3040;
-  border-color: #5d87a8;
+/* The same rectangle the plan draws for a room, small: dashed, hatched or
+   solid, so the three read apart with no colour at all. */
+.map-swatch {
+  flex: none;
+  width: 1.5rem;
+  height: 0.95rem;
 }
 
 .map-locks {

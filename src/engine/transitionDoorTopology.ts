@@ -178,14 +178,34 @@ export function transitionDoorEndpointMap(
   return endpoints
 }
 
-/** Whether this side may release a shortcut that has not opened before. */
+/**
+ * Whether the bar of a one-way door still holds it from this side.
+ *
+ * A door with a side of its own opens from that side only, until it has been
+ * opened from there once; the save remembers that (`progress.doorsReleased`),
+ * and from then on the door has no wrong side. It used to be a question of
+ * topology alone, so a player who left the wing by its shortcut and turned
+ * round read "opens from the other side" for the rest of the game.
+ */
+function latchedAgainst(door: TransitionDoorSpec, currentRoom: string, released: readonly string[]) {
+  return door.opensFrom !== null && door.opensFrom !== currentRoom && !released.includes(door.id)
+}
+
+/**
+ * Whether this side may operate the door: its own side always, the other once
+ * released.
+ *
+ * `released` is the save's list and has no default on purpose, here and in
+ * `transitionDoorBlock`: a default would hand the old behaviour back to any
+ * caller that forgot it, and the compiler would say nothing.
+ */
 export function canOpenTransitionDoor(
   door: TransitionDoorSpec,
   currentRoom: string,
+  released: readonly string[],
 ) {
   return Boolean(
-    transitionDoorTarget(door, currentRoom) &&
-      (!door.opensFrom || door.opensFrom === currentRoom),
+    transitionDoorTarget(door, currentRoom) && !latchedAgainst(door, currentRoom, released),
   )
 }
 
@@ -196,13 +216,17 @@ export function canOpenTransitionDoor(
  * side ever operate the door", which also decides whether the far room starts
  * warming; an unpowered lock must not stop the warm-up, or the first press
  * after the lamp comes on would wait on a cold gallery instead of opening.
+ *
+ * A release lifts the bar and nothing else: an electric lock still waits for
+ * its room's power.
  */
 export function transitionDoorBlock(
   door: TransitionDoorSpec,
   currentRoom: string,
   isPowered: (roomId: string) => boolean,
+  released: readonly string[],
 ): 'other-side' | 'unpowered' | null {
-  if (door.opensFrom && door.opensFrom !== currentRoom) return 'other-side'
+  if (latchedAgainst(door, currentRoom, released)) return 'other-side'
   if (door.requiresPower && !isPowered(door.requiresPower)) return 'unpowered'
   return null
 }

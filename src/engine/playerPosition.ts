@@ -13,6 +13,16 @@ import { Vector3 } from 'three'
  */
 export const playerPosition = new Vector3()
 
+/**
+ * Which way the player faces: the camera's yaw, in radians. 0 looks down -Z,
+ * which is north on the plan, and a positive yaw turns left.
+ *
+ * Outside the store for the same reason as the position: it changes with
+ * every movement of the mouse, and the one reader, the plan in the notebook,
+ * samples it when it is opened.
+ */
+export const playerHeading = { yaw: 0 }
+
 /** Shared physical dimensions for movement and transition-door clearance. */
 export const PLAYER_CAPSULE = Object.freeze({ radius: 0.3, height: 1.75 })
 

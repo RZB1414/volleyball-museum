@@ -363,6 +363,19 @@ const CROSSINGS = [
     to: 'atrium',
     after: [[-7, 3], [-2, 3]],
   },
+  // The same opening the other way: once the shortcut has been opened from
+  // the wing it stays unlatched (`doorsReleased`), and the atrium side is a
+  // way in. This world has no leaf, so the crossing was always walkable here;
+  // what the route holds is that nobody furnishes the arrival, on the wing's
+  // side, of a door that used to be an exit only.
+  {
+    name: 'atrium → Holyoke (shortcut)',
+    from: 'atrium',
+    before: [[-2, 3], [-7, 3]],
+    via: ['atrium', 'atrium-from-holyoke-shortcut'],
+    to: 'holyoke',
+    after: [[4.6, 5.4], [4.6, -2.5], [0, -2.5]],
+  },
 ] as const
 
 console.log('Navigation:')

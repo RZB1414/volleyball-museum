@@ -86,6 +86,12 @@ export type Progress = {
    * opened lock is in here too.
    */
   locksSeen: string[]
+  /**
+   * Doors that opened from one side only and have been opened from it: from
+   * then on they open from both. The id is the physical door's, which is the
+   * portal that declares the leaf, not the portal facing it.
+   */
+  doorsReleased: string[]
   /** Story flags, set by triggers and by migrations. */
   flags: string[]
   /**
@@ -221,6 +227,9 @@ export const PROGRESS_FIELDS = {
   roomsPowered: { ...idList, counts: true },
   locksOpened: { ...idList, counts: true },
   locksSeen: { ...idList, counts: true },
+  // No migration fills this in: no save from before it proves the player left
+  // by a shortcut, so every one of them loads with the bar still on.
+  doorsReleased: { ...idList, counts: true },
   flags: { ...idList, counts: true },
   // The bookkeeping of what already happened, not something that happened.
   triggersFired: { ...idList, counts: false },

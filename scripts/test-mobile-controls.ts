@@ -21,6 +21,7 @@ import {
   type MobileImmersivePlatform,
   type MobileImmersiveState,
 } from '../src/engine/mobileImmersive.ts'
+import { doorActionAvailable } from '../src/ui/hudRules.ts'
 
 let passed = 0
 
@@ -187,6 +188,33 @@ await test('an action with no eligible target is harmless', () => {
   const unsubscribe = subscribePrimaryAction(() => false, 500)
   assert.equal(triggerPrimaryAction(), false)
   unsubscribe()
+})
+
+await test('the Action button shows before every door that answers a press', () => {
+  const door = (status: 'blocked' | 'loading' | 'ready' | 'opening', armed = false, blockedBy?: 'other-side' | 'unpowered') => ({
+    id: 'atrium-from-holyoke-shortcut',
+    targetRoom: 'holyoke',
+    status,
+    armed,
+    ...(blockedBy ? { blockedBy } : {}),
+  })
+  // The five things the prompt can say about a door.
+  assert.equal(doorActionAvailable(door('ready')), true, '"Abrir porta"')
+  assert.equal(doorActionAvailable(door('loading')), true, '"Preparando a próxima sala…": the press arms it')
+  assert.equal(doorActionAvailable(door('blocked', false, 'unpowered')), true, '"Fechadura sem energia": the press gets the buzz')
+  // The defect: from the wrong side of the shortcut the button was gone, so
+  // a touch player had nothing to press and the door had nothing to answer.
+  assert.equal(
+    doorActionAvailable(door('blocked', false, 'other-side')),
+    true,
+    '"Abre pelo outro lado": on touch the door has no button to answer with',
+  )
+  assert.equal(doorActionAvailable(door('opening')), false, '"Abrindo…": nothing left to press')
+  // Armed already, whatever it says: a second press would do nothing.
+  for (const status of ['loading', 'ready', 'blocked'] as const) {
+    assert.equal(doorActionAvailable(door(status, true)), false, `${status}, armed`)
+  }
+  assert.equal(doorActionAvailable(null), false, 'no door in the sights')
 })
 
 console.log(`\n${passed}/${passed} mobile-control checks passed.\n`)

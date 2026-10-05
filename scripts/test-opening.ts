@@ -250,19 +250,32 @@ test('the office door is held by the office power', () => {
   assert.ok(officeDoor)
   assert.equal(officeDoor.requiresPower, 'office')
   const save = freshSave()
-  assert.equal(transitionDoorBlock(officeDoor, 'office', poweredBy(save)), 'unpowered')
-  assert.equal(transitionDoorBlock(officeDoor, 'atrium', poweredBy(save)), 'unpowered')
+  // A released shortcut is no key to an electric lock: with every door of
+  // the house released, this one still waits for the lamp.
+  const everyDoor = buildTransitionDoorSpecs(MUSEUM.rooms).map((door) => door.id)
+  for (const released of [[], everyDoor]) {
+    assert.equal(transitionDoorBlock(officeDoor, 'office', poweredBy(save), released), 'unpowered')
+    assert.equal(transitionDoorBlock(officeDoor, 'atrium', poweredBy(save), released), 'unpowered')
+  }
   save.roomsPowered = ['office']
-  assert.equal(transitionDoorBlock(officeDoor, 'office', poweredBy(save)), null)
-  assert.equal(transitionDoorBlock(officeDoor, 'atrium', poweredBy(save)), null)
+  for (const released of [[], everyDoor]) {
+    assert.equal(transitionDoorBlock(officeDoor, 'office', poweredBy(save), released), null)
+    assert.equal(transitionDoorBlock(officeDoor, 'atrium', poweredBy(save), released), null)
+  }
 })
 
-test('the one-way shortcut keeps its own rule', () => {
+test('the one-way shortcut keeps its own rule, latched and released', () => {
   const shortcut = buildTransitionDoorSpecs(MUSEUM.rooms).find((door) => door.opensFrom !== null)
   assert.ok(shortcut)
   const everything = (_roomId: string) => true
-  assert.equal(transitionDoorBlock(shortcut, 'atrium', everything), 'other-side')
-  assert.equal(transitionDoorBlock(shortcut, 'holyoke', everything), null)
+  // Latched, as every night begins: the wing's side only.
+  assert.equal(transitionDoorBlock(shortcut, 'atrium', everything, []), 'other-side')
+  assert.equal(transitionDoorBlock(shortcut, 'holyoke', everything, []), null)
+  // Released by the first exit, as the save records it: both sides, for good.
+  assert.equal(transitionDoorBlock(shortcut, 'atrium', everything, [shortcut.id]), null)
+  assert.equal(transitionDoorBlock(shortcut, 'holyoke', everything, [shortcut.id]), null)
+  // The opening night never needs it: the office door is not a shortcut.
+  assert.equal(officeDoor?.opensFrom, null)
 })
 
 test('a door powered from beyond itself is a soft-lock the gate catches', () => {

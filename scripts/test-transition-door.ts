@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
 import { PerspectiveCamera, Vector3 } from 'three'
 
 import { MUSEUM } from '../src/content/museum.ts'
+import { SAVE_FIXTURES } from '../src/content/saveFixtures.ts'
+import { doorGrant } from '../src/engine/progressGrants.ts'
 import {
   DEFAULT_TRANSITION_DOOR_CONFIG,
   createTransitionDoorConfig,
@@ -15,6 +18,7 @@ import { advanceDoorRevealBarrier } from '../src/engine/transitionDoorReveal.ts'
 import {
   buildTransitionDoorSpecs,
   canOpenTransitionDoor,
+  transitionDoorBlock,
   transitionDoorEndpointMap,
   transitionDoorLeafPlacements,
   transitionDoorTarget,
@@ -32,11 +36,22 @@ import {
 import { CollisionWorld } from '../src/engine/collision.ts'
 import { registerTransitionDoorGate } from '../src/engine/transitionDoorCollision.ts'
 import { buildCells, computeVisibleRooms } from '../src/engine/portals.ts'
+import { doorReleaseWiringProblems, type SourceReader } from './lib/runtimeWiring.ts'
+// Puts a storage on `globalThis`; the store itself is only loaded by
+// `openGame`, one fresh evaluation per page, as a browser would.
+import { openGame } from './lib/storePage.ts'
 
 let passed = 0
 
 function test(name: string, run: () => void) {
   run()
+  passed += 1
+  console.log(`  pass  ${name}`)
+}
+
+/** A check that loads the real store and so has to wait for it. */
+async function testWithStore(name: string, run: () => Promise<void>) {
+  await run()
   passed += 1
   console.log(`  pass  ${name}`)
 }
@@ -417,33 +432,220 @@ test('content authors two streaming entrances and the one-way shortcut gate', ()
   )
   const shortcut = doors.find((door) => door.id === 'atrium-from-holyoke-shortcut')
   assert.equal(shortcut?.opensFrom, 'holyoke')
-  assert.equal(shortcut ? canOpenTransitionDoor(shortcut, 'atrium') : true, false)
-  assert.equal(shortcut ? canOpenTransitionDoor(shortcut, 'holyoke') : false, true)
+  assert.equal(shortcut ? canOpenTransitionDoor(shortcut, 'atrium', []) : true, false)
+  assert.equal(shortcut ? canOpenTransitionDoor(shortcut, 'holyoke', []) : false, true)
   assert.equal(shortcut ? transitionDoorSwingSign(shortcut, 'holyoke') : 1, -1)
   assert.equal(doors.filter((door) => door.opensFrom === null).length, 2)
 })
 
-test('a completed shortcut cycle does not make its one-way authorisation permanent', () => {
-  const shortcut = buildTransitionDoorSpecs(MUSEUM.rooms).find(
-    (door) => door.id === 'atrium-from-holyoke-shortcut',
-  )
-  assert.ok(shortcut)
+// ---------------------------------------------------------------------------
+// The shortcut that stays open (ÁT-G1, H-29)
+// ---------------------------------------------------------------------------
 
+const DOORS = buildTransitionDoorSpecs(MUSEUM.rooms)
+const SHORTCUT_ID = 'atrium-from-holyoke-shortcut'
+const SHORTCUT = DOORS.find((door) => door.id === SHORTCUT_ID)
+assert.ok(SHORTCUT, 'the museum has its service shortcut')
+/** The save of a player who has left the wing by it once. */
+const RELEASED: readonly string[] = [SHORTCUT_ID]
+const everythingLit = (_roomId: string) => true
+const nothingLit = (_roomId: string) => false
+
+test('before it is released, the shortcut opens from the wing and answers "other side" in the atrium', () => {
+  assert.equal(canOpenTransitionDoor(SHORTCUT, 'atrium', []), false)
+  assert.equal(canOpenTransitionDoor(SHORTCUT, 'holyoke', []), true)
+  assert.equal(transitionDoorBlock(SHORTCUT, 'atrium', everythingLit, []), 'other-side')
+  assert.equal(transitionDoorBlock(SHORTCUT, 'holyoke', everythingLit, []), null)
+
+  // Another door's release is not this one's, and neither is the id of the
+  // portal facing it across the opening: the save names the physical door.
+  const others = [...DOORS.filter((door) => door.id !== SHORTCUT_ID).map((door) => door.id), SHORTCUT.reciprocalPortalId]
+  assert.ok(others.includes('holyoke-shortcut'))
+  assert.equal(canOpenTransitionDoor(SHORTCUT, 'atrium', others), false)
+  assert.equal(transitionDoorBlock(SHORTCUT, 'atrium', everythingLit, others), 'other-side')
+})
+
+test('once released, the atrium side opens it too', () => {
+  // The defect: who may operate a door was a question of topology alone, so
+  // a player who left by the shortcut and turned round read "opens from the
+  // other side" for ever.
+  assert.equal(
+    transitionDoorBlock(SHORTCUT, 'atrium', everythingLit, RELEASED),
+    null,
+    'the rule ignores what the save says was released',
+  )
+  assert.equal(canOpenTransitionDoor(SHORTCUT, 'atrium', RELEASED), true)
+  // Its own side goes on working, and a room the door does not touch never does.
+  assert.equal(canOpenTransitionDoor(SHORTCUT, 'holyoke', RELEASED), true)
+  assert.equal(transitionDoorBlock(SHORTCUT, 'holyoke', everythingLit, RELEASED), null)
+  assert.equal(canOpenTransitionDoor(SHORTCUT, 'office', RELEASED), false)
+  // The two answers agree on every side and in both states.
+  for (const room of ['atrium', 'holyoke']) {
+    for (const released of [[], RELEASED]) {
+      assert.equal(
+        canOpenTransitionDoor(SHORTCUT, room, released),
+        transitionDoorBlock(SHORTCUT, room, everythingLit, released) !== 'other-side',
+        `${room}, ${released.length ? 'released' : 'latched'}`,
+      )
+    }
+  }
+})
+
+test('a release unlatches the bar and nothing else: an electric lock still wants its power', () => {
+  const officeDoor = DOORS.find((door) => door.requiresPower !== null)
+  assert.ok(officeDoor)
+  for (const room of [officeDoor.ownerRoomId, officeDoor.otherRoomId]) {
+    assert.equal(transitionDoorBlock(officeDoor, room, nothingLit, [officeDoor.id, SHORTCUT_ID]), 'unpowered')
+    assert.equal(transitionDoorBlock(officeDoor, room, everythingLit, []), null)
+    // A door with no side of its own was never latched: it opens with nothing released.
+    assert.equal(canOpenTransitionDoor(officeDoor, room, []), true)
+  }
+  // The side comes first: a dark wing does not turn "other side" into "no power".
+  const both = { ...SHORTCUT, requiresPower: 'holyoke' as const }
+  assert.equal(transitionDoorBlock(both, 'atrium', nothingLit, []), 'other-side')
+  assert.equal(transitionDoorBlock(both, 'atrium', nothingLit, RELEASED), 'unpowered')
+  assert.equal(transitionDoorBlock(both, 'atrium', everythingLit, RELEASED), null)
+})
+
+test('releasing is done from the door\'s own side, once: doorGrant', () => {
+  assert.deepEqual(doorGrant(SHORTCUT, 'holyoke', []), { doorsReleased: [SHORTCUT_ID] })
+  // From the atrium there is nothing to push, before or after.
+  assert.equal(doorGrant(SHORTCUT, 'atrium', []), null)
+  assert.equal(doorGrant(SHORTCUT, 'atrium', RELEASED), null)
+  assert.equal(doorGrant(SHORTCUT, 'office', []), null)
+  // Already released: nothing to record, so the store is not even called.
+  assert.equal(doorGrant(SHORTCUT, 'holyoke', RELEASED), null)
+  assert.deepEqual(doorGrant(SHORTCUT, 'holyoke', ['some-other-door']), { doorsReleased: [SHORTCUT_ID] })
+})
+
+test('a door with no side of its own never enters doorsReleased', () => {
+  const twoWay = DOORS.filter((door) => door.opensFrom === null)
+  assert.equal(twoWay.length, 2)
+  for (const door of twoWay) {
+    for (const room of [door.ownerRoomId, door.otherRoomId, 'missing-room']) {
+      assert.equal(doorGrant(door, room, []), null, `${door.id} pressed from ${room}`)
+    }
+  }
+})
+
+test('the leaf\'s state machine keeps nothing of a cycle; what is kept is in the save', () => {
+  // This case used to hold the defect in place: "a completed shortcut cycle
+  // does not make its one-way authorisation permanent". The half of it that
+  // is still true is about the machine: a full cycle leaves it exactly as new,
+  // with no memory of a side or of an unlock.
   let cycle = startClosing(fullyOpenDoor())
   cycle = transitionDoor(cycle, {
     type: 'advance',
     deltaSeconds: DEFAULT_TRANSITION_DOOR_CONFIG.closeDurationSeconds,
   })
-  assert.equal(cycle.phase, 'closed')
-  assert.equal(cycle.interactionArmed, false)
+  assert.deepEqual(cycle, createTransitionDoorState(), 'a completed cycle left something behind in the leaf')
+  // So the machine alone still says no from the atrium…
+  assert.equal(canOpenTransitionDoor(SHORTCUT, 'atrium', []), false)
+  // …and the press that started that cycle, from the wing, is what the save
+  // was handed: with it, the same closed leaf opens from the atrium.
+  const release = doorGrant(SHORTCUT, 'holyoke', [])
+  assert.ok(release?.doorsReleased)
+  assert.equal(canOpenTransitionDoor(SHORTCUT, 'atrium', release.doorsReleased), true)
+  assert.equal(transitionDoorBlock(SHORTCUT, 'atrium', everythingLit, release.doorsReleased), null)
 
-  // Authorisation remains a topology decision on every interaction. Nothing
-  // in the state machine records a previously successful side or unlock.
-  assert.equal(canOpenTransitionDoor(shortcut, 'atrium'), false)
-  assert.equal(canOpenTransitionDoor(shortcut, 'holyoke'), true)
   cycle = transitionDoor(cycle, { type: 'preload-ready' })
   assert.equal(cycle.phase, 'ready')
-  assert.equal(transitionDoor(cycle, { type: 'advance', deltaSeconds: 1 }), cycle)
+  assert.equal(transitionDoor(cycle, { type: 'advance', deltaSeconds: 1 }), cycle, 'a released door still waits for E')
+})
+
+await testWithStore('a save from before the field loads with no door released (DL2-3)', async () => {
+  // No migration infers a release. `l1-route-end` is a player who left by the
+  // shortcut twice, and the save cannot tell that apart from one who never
+  // found it: inventing the atom would be inventing what the player did.
+  for (const [id, fixture] of Object.entries(SAVE_FIXTURES)) {
+    assert.ok(!('doorsReleased' in fixture.save.progress), `${id} is a record of a build that had no doorsReleased`)
+    const page = await openGame(fixture.save)
+    assert.deepEqual(page.progress().doorsReleased, [], id)
+    assert.equal(canOpenTransitionDoor(SHORTCUT, 'atrium', page.progress().doorsReleased), false, id)
+  }
+})
+
+await testWithStore('the release is written on the press and survives the disk', async () => {
+  const page = await openGame(SAVE_FIXTURES['l1-route-end'].save)
+  const release = doorGrant(SHORTCUT, 'holyoke', page.progress().doorsReleased)
+  assert.ok(release)
+  // One write, and it is the whole of what the press records.
+  const before = page.progress()
+  assert.equal(page.notifications(() => page.state().grant(release)), 1)
+  assert.deepEqual(page.progress(), { ...before, doorsReleased: [SHORTCUT_ID] })
+  // Pressing again, from either side, records nothing and wakes nobody.
+  assert.equal(doorGrant(SHORTCUT, 'holyoke', page.progress().doorsReleased), null)
+  assert.equal(page.notifications(() => page.state().grant({ doorsReleased: [SHORTCUT_ID] })), 0)
+
+  page.leave()
+  assert.deepEqual(page.savedProgress()?.doorsReleased, [SHORTCUT_ID], 'the release never reached the storage')
+  const back = await openGame(page.savedText()!)
+  assert.deepEqual(back.progress().doorsReleased, [SHORTCUT_ID], 'the release did not survive the load')
+  assert.equal(transitionDoorBlock(SHORTCUT, 'atrium', everythingLit, back.progress().doorsReleased), null)
+  assert.equal(canOpenTransitionDoor(SHORTCUT, 'atrium', back.progress().doorsReleased), true)
+
+  // "New game" latches it again.
+  back.state().resetProgress()
+  assert.deepEqual(back.progress().doorsReleased, [])
+  assert.equal(canOpenTransitionDoor(SHORTCUT, 'atrium', back.progress().doorsReleased), false)
+})
+
+const readSource: SourceReader = (path) => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8')
+
+test('the door, the touch button and the toast ask what this suite proves', () => {
+  assert.deepEqual(doorReleaseWiringProblems(readSource), [])
+
+  // Each of these is a refactor the check exists to catch, applied to the
+  // real source in memory.
+  const changed =
+    (path: string, from: string | RegExp, to: string): SourceReader =>
+    (asked) => {
+      if (asked !== path) return readSource(asked)
+      const source = readSource(asked)
+      const next = source.replace(from, to)
+      assert.notEqual(next, source, `the refactor of ${path} found nothing to change`)
+      return next
+    }
+  const doors = 'engine/TransitionDoors.tsx'
+  const refactors: readonly (readonly [string, SourceReader])[] = [
+    [
+      'the press asking with nothing released',
+      changed(doors, /(!canOpenTransitionDoor\(runtime\.spec, museum\.currentRoom, )museum\.progress\.doorsReleased/, '$1[]'),
+    ],
+    [
+      'the warm-up asking with nothing released',
+      changed(doors, /(const canOperate = canOpenTransitionDoor\(runtime\.spec, currentRoom, )museum\.progress\.doorsReleased/, '$1[]'),
+    ],
+    [
+      'the prompt asking with another list',
+      changed(doors, /(poweredGiven\(museum\.progress\.roomsPowered\),\s*)museum\.progress\.doorsReleased(,?\s*\)\s*: null)/, '$1museum.progress.locksOpened$2'),
+    ],
+    ['the press recording nothing', changed(doors, 'if (release) museum.grant(release)', 'void release')],
+    [
+      'the release recorded only once the leaf has moved',
+      changed(
+        doors,
+        /(const release = doorGrant\([^)]*\)\s*if \(release\) museum\.grant\(release\)\s*)([\s\S]*?)(\n\s*if \(runtime\.state\.phase === 'preloading'\) requestWarmRoom)/,
+        '$2\n      $1$3',
+      ),
+    ],
+    [
+      'the wrong side answering with silence again',
+      changed(doors, /(if \(focused\.status === 'blocked'\) \{[\s\S]*?)museumAudio\.lockDenied\(\)\s*return true/, "$1if (focused.blockedBy !== 'unpowered') return false\n        museumAudio.lockDenied()\n        return true"),
+    ],
+    [
+      'the touch button deciding by itself',
+      changed('ui/MobileControls.tsx', 'doorActionAvailable(focusedDoor)', "Boolean(focusedDoor && focusedDoor.status !== 'blocked')"),
+    ],
+    ['the toast watching another list', changed('ui/Hud.tsx', '(state) => state.progress.doorsReleased', '(state) => state.progress.roomsPowered')],
+    ['the toast announcing the save on mount', changed('ui/Hud.tsx', 'listGrew(seenLength.current, released.length)', 'released.length > 0')],
+    ['the toast without the latch', changed('ui/Hud.tsx', /museumAudio\.lockRelease\(\)/, 'museumAudio.chime()')],
+    ['the toast left out of the stack', changed('ui/Hud.tsx', /\s*<DoorReleasedToast \/>/, '')],
+  ]
+  const uncaught = refactors
+    .filter(([, reader]) => doorReleaseWiringProblems(reader).length === 0)
+    .map(([name]) => name)
+  assert.deepEqual(uncaught, [], 'a refactor this check exists to catch went through')
 })
 
 test('one physical door resolves its destination from either reciprocal room', () => {

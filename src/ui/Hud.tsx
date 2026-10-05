@@ -48,6 +48,19 @@ import { useDocumentHidden } from './useDocumentHidden'
 import { isModalOpen, useMuseum } from '../state/store'
 
 const radiosById = new Map(radioDevices(MUSEUM).map((entry) => [entry.device.id, entry.device]))
+/**
+ * The room each one-way door opens from, by the door's id (the portal that
+ * declares the leaf): the room its toast names. Read off the content rather
+ * than off `buildTransitionDoorSpecs`, which the canvas chunk owns: importing
+ * it here made the topology a chunk of its own for one lookup.
+ */
+const doorSides = new Map(
+  MUSEUM.rooms.flatMap((room) =>
+    room.portals.flatMap((portal) =>
+      portal.transitionDoor?.opensFrom ? [[portal.id, portal.transitionDoor.opensFrom] as const] : [],
+    ),
+  ),
+)
 
 /**
  * The id the E key would act on right now, if it is of this kind.
@@ -459,6 +472,49 @@ function PowerToast() {
   )
 }
 
+/**
+ * A one-way door has just been opened from its own side, and from now on it
+ * opens from both: said once, when it happens, with the sound of the latch
+ * letting go. Without a word the player finds out by accident, or never.
+ */
+function DoorReleasedToast() {
+  const released = useMuseum((state) => state.progress.doorsReleased)
+  // The save arrives whole on the first render: a door released on another
+  // night was announced then.
+  const seenLength = useRef(released.length)
+  const [shown, setShown] = useState<string | null>(null)
+  const t = useTranslate()
+
+  useEffect(() => {
+    const grew = listGrew(seenLength.current, released.length)
+    seenLength.current = released.length
+    if (!grew) {
+      // A new game empties the list; a toast still up belongs to the old one.
+      setShown(null)
+      return undefined
+    }
+    setShown(released[released.length - 1])
+    museumAudio.lockRelease()
+    const timer = window.setTimeout(() => setShown(null), 3200)
+    return () => window.clearTimeout(timer)
+  }, [released])
+
+  if (!shown) return null
+  // Named by the room it opened from: that is the room it now leads into.
+  const side = doorSides.get(shown)
+  const room = MUSEUM.rooms.find((candidate) => candidate.id === side)
+  if (!room) return null
+
+  return (
+    <div className="toast" role="status">
+      <span className="toast-mark">✓</span>
+      <span>
+        {t('door.released')} — {t(room.titleKey as never)}
+      </span>
+    </div>
+  )
+}
+
 /** Whether the player holds the notebook, derived from the stable read list. */
 function useJournalUnlocked() {
   const documentsRead = useMuseum((state) => state.progress.documentsRead)
@@ -736,6 +792,7 @@ export function Hud() {
       <div className="toast-stack">
         <CatalogueToast />
         <PowerToast />
+        <DoorReleasedToast />
         <JournalTakenToast />
         <RadioTakenToast />
       </div>

@@ -169,8 +169,10 @@ export function progressWiringProblems(read: SourceReader, components: readonly 
       )
     }
   }
-  if (!source('ui/MuseumMap.tsx').includes('pendingLocks(MUSEUM.locks, progress)')) {
-    problems.push('ui/MuseumMap.tsx no longer lists pendingLocks: the plan names locks the player never touched')
+  // The plan is a model now (`planWiringProblems` holds the component to
+  // drawing it), and its list of locks is decided where the rest of it is.
+  if (!source('ui/mapModel.ts').includes('pendingLocks(content.locks, progress)')) {
+    problems.push('ui/mapModel.ts no longer lists pendingLocks: the plan names locks the player never touched')
   }
   if (!source('ui/Hud.tsx').includes('lockStatus(')) {
     problems.push('ui/Hud.tsx no longer asks lockStatus whether a container is locked')
@@ -189,6 +191,150 @@ export function progressWiringProblems(read: SourceReader, components: readonly 
       problems.push(
         `${path} opens the lock panel outside the \`ask\` outcome: a lock with no panel would open a modal with nothing in it (S1)`,
       )
+    }
+  }
+  return problems
+}
+
+/**
+ * The text between the parentheses of every call of `name` in a squeezed
+ * source. By counting parentheses, so that an argument which is itself a
+ * call (`poweredGiven(…)`) does not end the one being read.
+ */
+export function callArguments(source: string, name: string): string[] {
+  const found: string[] = []
+  for (const match of source.matchAll(new RegExp(`(?<![\\w.])${name}\\(`, 'g'))) {
+    const start = (match.index ?? 0) + match[0].length
+    let depth = 1
+    let end = start
+    while (end < source.length && depth > 0) {
+      if (source[end] === '(') depth += 1
+      else if (source[end] === ')') depth -= 1
+      end += 1
+    }
+    found.push(source.slice(start, end - 1).trim().replace(/,$/, '').trim())
+  }
+  return found
+}
+
+/**
+ * The shortcut that stays open (ÁT-G1, H-29): who may operate a door is a
+ * question the save answers too, and the save only learns of a release if
+ * the component hands over the grant.
+ *
+ * The two rules take the released doors as a parameter with no default, so a
+ * call that forgot it does not compile. What the compiler cannot see is a
+ * call that passes something else (an empty list, another field): a door that
+ * opens once and locks behind the player again.
+ */
+export function doorReleaseWiringProblems(read: SourceReader): string[] {
+  const problems: string[] = []
+  const doors = squeezed(read('engine/TransitionDoors.tsx'))
+
+  for (const rule of ['canOpenTransitionDoor', 'transitionDoorBlock']) {
+    const calls = callArguments(doors, rule)
+    if (calls.length === 0) problems.push(`engine/TransitionDoors.tsx no longer asks ${rule}`)
+    for (const call of calls) {
+      if (!/\.progress\.doorsReleased$/.test(call)) {
+        problems.push(
+          `engine/TransitionDoors.tsx calls ${rule}(${call}) without the save's doorsReleased: a shortcut opened from its own side locks again behind the player`,
+        )
+      }
+    }
+  }
+
+  const grant = 'const release = doorGrant(runtime.spec, museum.currentRoom, museum.progress.doorsReleased)'
+  const pressed = "transitionDoor(runtime.state, { type: 'interact' }"
+  if (!doors.includes(grant) || !doors.includes('if (release) museum.grant(release)')) {
+    problems.push(
+      'engine/TransitionDoors.tsx no longer records the release with `grant(doorGrant(…))`: the shortcut is forgotten the moment its leaves close',
+    )
+  } else if (!doors.includes(pressed) || doors.indexOf(grant) > doors.indexOf(pressed)) {
+    // Pushed is released (DL2-2): the grant is written before the leaf moves,
+    // so a reload in the middle of the opening does not undo it.
+    problems.push('engine/TransitionDoors.tsx records the release after the leaf has started to move, or not on the press at all')
+  }
+  if (!/if \(focused\.status === 'blocked'\) \{ museumAudio\.lockDenied\(\) return true \}/.test(doors)) {
+    problems.push(
+      'engine/TransitionDoors.tsx: a door that will not open no longer answers every press with a sound and takes the key: from the wrong side, E does nothing at all',
+    )
+  }
+
+  const controls = squeezed(read('ui/MobileControls.tsx'))
+  if (!controls.includes('doorActionAvailable(focusedDoor)') || controls.includes('blockedBy')) {
+    problems.push(
+      'ui/MobileControls.tsx no longer asks doorActionAvailable whether the Action button shows before a door: on touch, a blocked door has no button to answer with',
+    )
+  }
+
+  const hud = squeezed(read('ui/Hud.tsx'))
+  const from = hud.indexOf('function DoorReleasedToast(')
+  const next = hud.indexOf(' function ', from + 1)
+  const toast = from < 0 ? '' : hud.slice(from, next < 0 ? undefined : next)
+  if (
+    !toast.includes('useMuseum((state) => state.progress.doorsReleased)') ||
+    !toast.includes('listGrew(seenLength.current, released.length)') ||
+    !toast.includes('museumAudio.lockRelease()')
+  ) {
+    problems.push(
+      "ui/Hud.tsx: the toast of a released door no longer announces the growth of doorsReleased with the latch's sound",
+    )
+  }
+  if (!/<div className="toast-stack">(?:(?!<\/div>).)*<DoorReleasedToast \/>/.test(hud)) {
+    problems.push('ui/Hud.tsx no longer mounts DoorReleasedToast in the stack of toasts: the shortcut unlocks without a word')
+  }
+  return problems
+}
+
+/**
+ * The plan without spoilers (ÁT-I1): what the plan shows is decided by
+ * `mapModel`, which `test:map` proves; the component only draws it. A room,
+ * a door or a lock the component draws from the content by itself is one the
+ * rules never saw.
+ */
+export function planWiringProblems(read: SourceReader): string[] {
+  const problems: string[] = []
+  const map = squeezed(read('ui/MuseumMap.tsx'))
+
+  if (!map.includes('mapModel(MUSEUM, progress, {')) {
+    problems.push('ui/MuseumMap.tsx no longer draws mapModel(MUSEUM, progress, …): what the plan shows is decided in the component again')
+  }
+  // The museum goes to the model whole and is read nowhere else; so does the save.
+  for (const reading of new Set(map.match(/\bMUSEUM\.\w+(?:\.\w+)?\(?/g) ?? [])) {
+    problems.push(
+      `ui/MuseumMap.tsx reads \`${reading}\` by itself: a room, a door or a lock drawn outside the model shows what the player has not found`,
+    )
+  }
+  for (const reading of new Set(map.match(/\bprogress\.\w+/g) ?? [])) {
+    problems.push(`ui/MuseumMap.tsx reads \`${reading}\` by itself: what the save allows on the plan is the model's to say`)
+  }
+  if (map.includes('portal.oneWay')) {
+    problems.push('ui/MuseumMap.tsx reads `portal.oneWay`: the one-way shortcut is drawn before the player has opened it')
+  }
+  if (!map.includes('yaw: playerHeading.yaw')) {
+    problems.push("ui/MuseumMap.tsx no longer hands the camera's yaw to the model: the marker points north whatever the player faces")
+  }
+  if (!map.includes('rotate(${model.player.headingDegrees})')) {
+    problems.push("ui/MuseumMap.tsx no longer turns the marker by the model's heading")
+  }
+  if (!map.includes("t('map.legend')")) {
+    problems.push('ui/MuseumMap.tsx no longer titles the legend: `map.legend` is copy nobody shows again')
+  }
+
+  // In the frame loop, as its last line: the dev harness's teleport publishes
+  // the yaw too, and that one alone would leave a player's marker where the
+  // spawn pointed it.
+  const controller = squeezed(read('engine/PlayerController.tsx'))
+  if (!controller.includes('playerHeading.yaw = camera.rotation.y }) return null')) {
+    problems.push("engine/PlayerController.tsx no longer publishes the camera's yaw every frame: the marker on the plan never turns")
+  }
+
+  // Pure: the content and the save are parameters, so Node can ask it. Not
+  // squeezed: the reader of imports works on the source as written.
+  const model = read('ui/mapModel.ts')
+  for (const specifier of [...staticSpecifiers(model), ...dynamicSpecifiers(model)]) {
+    if (/content\/museum|state\/store|^react|^three|^zustand/.test(specifier)) {
+      problems.push(`ui/mapModel.ts imports "${specifier}": the model is a function of what it is handed, or no suite can ask it`)
     }
   }
   return problems

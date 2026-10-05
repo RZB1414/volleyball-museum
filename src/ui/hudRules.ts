@@ -9,6 +9,7 @@
 // Type imports only: the title screen imports this module, and a runtime
 // import here would pull its dependencies into the title screen's bundle.
 import type { TranslationKey } from '../content/i18n/pt-BR'
+import type { TransitionDoorPrompt } from '../state/store'
 
 /**
  * Where a document just read is said to be kept.
@@ -136,6 +137,20 @@ export function radioToolState(input: {
     modifiers: input.calls === 0 ? ['is-hinting'] : [],
     labelKey: 'prompt.radio.call',
   }
+}
+
+/**
+ * Whether the touch Action button shows before the door in the sights.
+ *
+ * Before every door that answers a press, and a door that will not open
+ * answers too, with its buzz: the button used to vanish in front of the
+ * shortcut seen from its wrong side, which left a touch player with nothing
+ * to press and the door with nothing to say. It is gone only while a press
+ * would do nothing at all: the leaves already moving, or the press already
+ * taken and waiting for the next room.
+ */
+export function doorActionAvailable(focused: Pick<TransitionDoorPrompt, 'status' | 'armed'> | null) {
+  return focused !== null && focused.status !== 'opening' && !focused.armed
 }
 
 export type LockKeyIntent =

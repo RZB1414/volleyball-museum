@@ -161,6 +161,11 @@ export type Arrival = {
  * Breadth first over the portals in authored order, and a door that only
  * opens from the far side is not walked through: the atrium is reached from
  * the office, the Holyoke wing by its main door and never by its shortcut.
+ *
+ * That holds with `doorsReleased` too, which is why this asks the door's
+ * authored side and not the save: a shortcut is released from inside the
+ * room it leads out of, so by the time it opens from the atrium the wing has
+ * already been reached, and the FIRST arrival is still by the main door.
  */
 export function arrivals(content: MuseumContent = MUSEUM): ReadonlyMap<string, Arrival> {
   const doors = buildTransitionDoorSpecs(content.rooms)

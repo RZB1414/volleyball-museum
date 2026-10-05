@@ -77,6 +77,7 @@ export const STORE_ACTIONS: Record<string, (state: StoreState) => void> = {
       credentials: ['badge:archive'],
       locksOpened: ['effect-lock'],
       locksSeen: ['effect-lock', 'touched-lock'],
+      doorsReleased: ['pushed-door'],
       roomsPowered: ['effect-room'],
       documentsRead: ['effect-document'],
       flags: ['effect-flag'],
@@ -97,6 +98,7 @@ export const STORE_ACTIONS_LEAVE = {
   locksOpened: ['atrium-plinth', 'effect-lock'],
   // A lock that is open was touched, by whichever door it was opened.
   locksSeen: ['atrium-plinth', 'effect-lock', 'touched-lock'],
+  doorsReleased: ['pushed-door'],
   flags: ['effect-flag'],
   devicesCarried: ['spare-radio'],
   hintsShown: ['torch-used'],

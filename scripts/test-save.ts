@@ -171,6 +171,7 @@ const SAMPLES = {
   roomsPowered: ['office', 'atrium'],
   locksOpened: ['office-drawer', 'holyoke-hero-seal'],
   locksSeen: ['office-drawer', 'holyoke-hero-seal', 'atrium-plinth'],
+  doorsReleased: ['atrium-from-holyoke-shortcut', 'vault-hatch'],
   flags: ['posse-signed', 'reopening-declared'],
   triggersFired: ['exhibit:ball-spalding:catalogued', 'lock:office-drawer:opened'],
   radioCalls: ['porter-first-call', 'porter-radio-taken'],
@@ -482,6 +483,7 @@ await test('"New game" is offered by the table: every field that counts is enoug
       'credentials',
       'devicesCarried',
       'documentsRead',
+      'doorsReleased',
       'factsKnown',
       'flags',
       'hotspots',
@@ -846,6 +848,7 @@ await test('an alias that points at an id the content does not have fails the co
     { sinceLot: 3, field: 'roomsPowered', from: 'old', to: 'atrium' },
     { sinceLot: 3, field: 'locksOpened', from: 'old', to: 'office-drawer' },
     { sinceLot: 3, field: 'locksSeen', from: 'old', to: 'office-drawer' },
+    { sinceLot: 3, field: 'doorsReleased', from: 'old', to: 'atrium-from-holyoke-shortcut' },
     { sinceLot: 3, field: 'radioCalls', from: 'old', to: 'porter-first-call' },
     { sinceLot: 3, field: 'devicesCarried', from: 'old', to: 'office-radio' },
   ]
@@ -853,7 +856,7 @@ await test('an alias that points at an id the content does not have fails the co
   // The same ids, each in a field that holds another kind: the right id in the wrong list carries nothing.
   const misplaced = good.map((alias, index) => ({ ...alias, to: good[(index + 1) % good.length].to }))
   // Two pairs of neighbours share a kind (the two lists of rooms, the two of
-  // locks), so two of the ten are still right.
+  // locks), so two of the eleven are still right.
   const sameKindAsNext = ['roomsVisited', 'locksOpened']
   assert.deepEqual(
     codes(misplaced),
@@ -894,6 +897,11 @@ await test('an alias that points at an id the content does not have fails the co
   assert.deepEqual(codes([{ sinceLot: 3, field: 'hotspots', from: 'old', to: 'portrait-morgan:nothing' }]), [
     'legacy-save-alias hotspots:old',
   ])
+  // A door is the portal that declares the leaf. The portal facing it across
+  // the same opening has an id too, and the save never holds that one.
+  assert.deepEqual(codes([{ sinceLot: 3, field: 'doorsReleased', from: 'old', to: 'holyoke-shortcut' }]), [
+    'legacy-save-alias doorsReleased:old',
+  ])
   for (const issue of validateSaveAliases(MUSEUM, misplaced)) assert.equal(issue.severity, 'error')
 })
 
@@ -906,11 +914,14 @@ await test('an alias that points at an id the content does not have fails the co
  * fields here.
  *
  * A lock that is open was touched (DL2-4): that is all a save from before
- * `locksSeen` proves. No flag is inferred and no trigger is taken as fired.
+ * `locksSeen` proves. No flag is inferred, no trigger is taken as fired and
+ * no door is taken as released (DL2-3): a save cannot tell a player who left
+ * by the shortcut from one who never found it.
  */
 const addedByTheLot = (raw: Raw) => ({
   contentLot: CONTENT_LOT,
   locksSeen: raw.locksOpened,
+  doorsReleased: [],
   flags: [],
   triggersFired: [],
 })
@@ -925,6 +936,11 @@ await test('case A and B: production saves come out as they went in, plus the lo
   // drawer is on the plan's list of touched locks, the shut one is not yet.
   assert.deepEqual((await openGame(SAVE_FIXTURES['production-drawer-open'].save)).progress().locksSeen, ['office-drawer'])
   assert.deepEqual((await openGame(SAVE_FIXTURES['production-drawer-closed'].save)).progress().locksSeen, [])
+  // Nor is a door released for anybody: not even for the save of L1's own
+  // route, whose player left the wing by the shortcut twice.
+  for (const id of fixtureIds) {
+    assert.deepEqual((await openGame(SAVE_FIXTURES[id].save)).progress().doorsReleased, [], id)
+  }
 })
 
 await test('a save that says what it touched keeps it, and still gains every lock it opened', () => {
@@ -933,10 +949,13 @@ await test('a save that says what it touched keeps it, and still gains every loc
     radioCalls: [],
     locksOpened: ['office-drawer', 'atrium-plinth'],
     locksSeen: ['holyoke-hero-seal', 'office-drawer'],
+    doorsReleased: ['atrium-from-holyoke-shortcut', 'vault-hatch'],
     flags: ['posse-signed'],
     triggersFired: ['a-trigger-this-build-never-had'],
   })
   assert.deepEqual(said.locksSeen, ['holyoke-hero-seal', 'office-drawer', 'atrium-plinth'])
+  // A door this build has, and one only a later build's content has: both stay.
+  assert.deepEqual(said.doorsReleased, ['atrium-from-holyoke-shortcut', 'vault-hatch'])
   assert.deepEqual(said.flags, ['posse-signed'])
   // Another build's record of what already happened: this one has no trigger
   // of that name and no business forgetting that it fired.
@@ -972,6 +991,8 @@ await test('case D: a save from a later lot keeps its lot and every field this b
     socketsFilled: ['curator'],
     // A lock this build has never heard of, in a list it may or may not know yet.
     locksSeen: ['office-drawer', 'holyoke-hero-seal'],
+    // And a door: the shortcut, and one of a wing that is not built yet.
+    doorsReleased: ['atrium-from-holyoke-shortcut', 'ala-4-dock'],
   }
   const page = await openGame(saveOf(later))
   const kept = (progress: Raw, when: string) => {
@@ -979,6 +1000,9 @@ await test('case D: a save from a later lot keeps its lot and every field this b
     assert.deepEqual(progress.termsSigned, ['termo-posse'], when)
     assert.deepEqual(progress.socketsFilled, ['curator'], when)
     for (const lock of later.locksSeen) assert.ok((progress.locksSeen as string[]).includes(lock), `${when}: locksSeen lost ${lock}`)
+    for (const door of later.doorsReleased) {
+      assert.ok((progress.doorsReleased as string[]).includes(door), `${when}: doorsReleased lost ${door}`)
+    }
   }
   kept(page.progress(), 'on load')
   for (const act of Object.values(ACTIONS)) act(page.state())
@@ -1004,6 +1028,14 @@ await test('case E: back from L1, the save is production\'s again and nothing L1
   assert.notEqual(back.progress().contentLot, SAMPLES.contentLot)
   for (const field of Object.keys(UNKNOWN)) assert.ok(!(field in back.progress()), `${field} came back from a build that never wrote it`)
   for (const field of L1_FIELDS) assert.deepEqual(back.progress()[field], written[field], `${field} did not survive the round trip`)
+  // What the rollback costs, by name. The touched locks are rebuilt from the
+  // opened ones, which L1 kept; the released door is in no field L1 knows,
+  // and nothing infers it (DL2-3): the shortcut asks for one more exit.
+  assert.deepEqual(written.doorsReleased, SAMPLES.doorsReleased, 'the save that went to L1 had no door released: this case would prove nothing')
+  assert.deepEqual(back.progress().doorsReleased, [])
+  assert.deepEqual(back.progress().locksSeen, SAMPLES.locksOpened)
+  assert.deepEqual(back.progress().flags, [])
+  assert.deepEqual(back.progress().triggersFired, [])
 })
 
 await test('case F: junk in a field is that field\'s default, and the rest of the save stands', () => {
@@ -1014,6 +1046,7 @@ await test('case F: junk in a field is that field\'s default, and the rest of th
     catalogued: 'abc',
     locksOpened: [1, 'office-drawer', null],
     locksSeen: [1, 'holyoke-hero-seal', null],
+    doorsReleased: 'abc',
     flags: 'abc',
     triggersFired: { 'lock:office-drawer:opened': true },
     clockSeconds: [12],
@@ -1024,6 +1057,8 @@ await test('case F: junk in a field is that field\'s default, and the rest of th
   assert.deepEqual(junk.locksOpened, ['office-drawer'])
   // What was valid in the list, then the lock the save proves was touched.
   assert.deepEqual(junk.locksSeen, ['holyoke-hero-seal', 'office-drawer'])
+  // A string is not a list: no door is released by it, letter by letter or whole.
+  assert.deepEqual(junk.doorsReleased, [])
   assert.deepEqual(junk.flags, [])
   assert.deepEqual(junk.triggersFired, [])
   assert.deepEqual(junk.clockSeconds, {})

@@ -19,6 +19,7 @@ import type { CollisionWorld } from './collision'
 import { cloneKitPart } from './kitPart'
 import type { MaterialLibrary } from './materials'
 import { isUnclaimedInteractKey, subscribePrimaryAction } from './primaryAction'
+import { doorGrant } from './progressGrants'
 import { TRANSITION_DOOR_LEAVES } from './runtimePlacedParts'
 import { registerTransitionDoorGate } from './transitionDoorCollision'
 import {
@@ -357,27 +358,35 @@ export function TransitionDoorLayer({
       // a keypad opening under it.
       if (!focused || isModalOpen(museum)) return false
       if (focused.status === 'blocked') {
-        // A powerless electric lock answers the press with a dead buzz: the
-        // door is not broken, it is waiting for the room's electricity.
-        if (focused.blockedBy === 'unpowered') {
-          museumAudio.lockDenied()
-          return true
-        }
-        return false
+        // Whatever holds the door, the press is answered and taken. A
+        // powerless electric lock buzzes: it is not broken, it is waiting for
+        // the room's electricity. A shortcut seen from its wrong side used to
+        // say nothing at all, and a door that says nothing to E reads as a
+        // door that is not one. The buzz is the sound there is until the bar
+        // gets a latch of its own (L16).
+        museumAudio.lockDenied()
+        return true
       }
       const runtime = runtimes.get(focused.id)
       if (
         !runtime ||
-        !canOpenTransitionDoor(runtime.spec, museum.currentRoom) ||
+        !canOpenTransitionDoor(runtime.spec, museum.currentRoom, museum.progress.doorsReleased) ||
         transitionDoorBlock(
           runtime.spec,
           museum.currentRoom,
           poweredGiven(museum.progress.roomsPowered),
+          museum.progress.doorsReleased,
         ) !== null ||
         !canTargetDoor(runtime.state.phase)
       ) {
         return false
       }
+
+      // Pushed is released: recorded on the press and before the leaf moves,
+      // so walking away from the open door, or reloading half way through
+      // it, does not put the bar back.
+      const release = doorGrant(runtime.spec, museum.currentRoom, museum.progress.doorsReleased)
+      if (release) museum.grant(release)
 
       const previous = runtime.state
       if (runtime.state.phase === 'ready' && !isRoomReady(focused.targetRoom)) {
@@ -430,7 +439,7 @@ export function TransitionDoorLayer({
 
     for (const runtime of runtimes.values()) {
       const targetRoom = transitionDoorTarget(runtime.spec, currentRoom)
-      const canOperate = canOpenTransitionDoor(runtime.spec, currentRoom)
+      const canOperate = canOpenTransitionDoor(runtime.spec, currentRoom, museum.progress.doorsReleased)
       const dx = playerPosition.x - runtime.spec.position[0]
       const dz = playerPosition.z - runtime.spec.position[2]
       const distanceSquared = dx * dx + dz * dz
@@ -595,6 +604,7 @@ export function TransitionDoorLayer({
           focusedRuntime.spec,
           currentRoom,
           poweredGiven(museum.progress.roomsPowered),
+          museum.progress.doorsReleased,
         )
       : null
     const focusKey = focusedRuntime

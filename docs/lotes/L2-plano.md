@@ -402,8 +402,11 @@ export type MapModel = {
   }[]
   /** One per physical opening with a visited side; a one-way door only once released. */
   readonly doors: readonly {
+    /** For React only (`door:<n>`): a portal's id would name the room beyond. */
     readonly key: string
     readonly gap: MapSegment
+    /** How deep the gap is painted: one wall line, or both rooms'. (F3) */
+    readonly depth: number
     readonly jambs: readonly [MapSegment, MapSegment]
     /** The neighbour has not been visited: a short stub outwards, marked "?". */
     readonly stub: { readonly line: MapSegment; readonly x: number; readonly y: number } | null
@@ -423,7 +426,12 @@ export function mapModel(
 ```
 
 Norte é −Z (`museum.ts:13`) e o SVG tem y = z do mundo, então o norte fica para cima. O yaw 0 olha
-para −Z; `headingDegrees = -yaw × 180 / π` (yaw π/2 olha para −X, oeste: −90°).
+para −Z; `headingDegrees = -yaw × 180 / π` (yaw π/2 olha para −X, oeste: −90°), trazido para
+[−180°, 180°], porque o yaw da câmera nunca é normalizado.
+
+O módulo exporta ainda `mapFrame(rooms)` (a moldura e `toX`/`toY`, que a suíte usa para dizer onde
+cada coisa tem de estar), `headingDegrees(yaw)`, `MAP_STATE_LABEL` (a chave de legenda de cada
+estado) e `MAP_STATES` (a ordem da legenda).
 
 ### 3.8 Fatos e lint (`schema.ts`, F5)
 
@@ -798,9 +806,13 @@ reprova (`Interaction.tsx:395` chama `applyUnlockEffect`).
   toast lê `doorsReleased`.
 
 **Vermelho hoje.** `transitionDoorBlock(shortcut, 'atrium', everything,
-['atrium-from-holyoke-shortcut'])` devolve `'other-side'` (a função ignora o quarto argumento);
-`doorsReleased` não sobrevive à carga. A travessia nova de `test:navigation` nasce verde (o vão é
-o mesmo nos dois sentidos, e o mundo do teste não tem folha): guarda contra mobiliar a chegada.
+['atrium-from-holyoke-shortcut'])` devolve `'other-side'` (a função ignora o quarto argumento).
+Sobre o save, o que este plano dizia («`doorsReleased` não sobrevive à carga») deixou de ser
+verdade com F1: um campo que a tabela não conhece atravessa a carga como veio. O que reprova sem a
+linha da tabela é outra coisa, e é pior: o campo não é saneado (`doorsReleased: 'abc'` continua
+`'abc'`), o save antigo carrega com `undefined` em vez de lista vazia, e conceder a liberação
+lança. A travessia nova de `test:navigation` nasce verde (o vão é o mesmo nos dois sentidos, e o
+mundo do teste não tem folha): guarda contra mobiliar a chegada.
 
 ### T8 — A planta sem spoiler, com seta e norte (ÁT-I1; ÁT-A5; EN-A6) · F3
 
@@ -848,9 +860,9 @@ tem só a posição).
 `validate:content` deixa de acusar `map.legend`; `test:docs` aceita `CONTENT_LOT` um à frente do
 plano.
 
-**Vermelho hoje.** Com a regra de hoje posta no modelo (todas as salas, todas as portas, todas as
-trancas fechadas), reprovam «uma sala e um toco», «o atalho ausente», «nada de sala não visitada»
-e «nunca tocada, ausente».
+**Vermelho hoje.** Com a regra de hoje posta no modelo (todas as salas, todas as portas, um vão por
+portal), reprovam «uma sala e um toco», «o atalho ausente» e «nada de sala não visitada». «Nunca
+tocada, ausente» já passa: F2 pagou essa regra quando a planta passou a listar `pendingLocks`.
 
 ### T9 — `examineReach` (M4a) · F4
 
@@ -1231,9 +1243,9 @@ jogo 388.248 (teto 390.200). **A folga do título é de 147 bytes.**
 |---|---|---|---|
 | título | `progressFields.ts`, `saveMigrations.ts`, `contentLot.ts`, `SAVE_ALIASES` (o store é importado pela tela de título) | +0,5 a +0,8 kB; **[medido em F1: +293 bytes, 28.646; teto 28.800]** | F1 |
 | título | `progressRules.ts` e `commitProgress`; três linhas da tabela | +0,2 kB; **[medido em F2: +0 bytes, 28.646; o teto fica em 28.800]** (o que entrou coube no que saiu: `applyUnlockEffect` e os dez verbos escritos por extenso) | F2 |
-| título | as quatro chaves novas e as duas mudadas de 6, nas duas línguas (os dicionários viajam com o título) | +0,2 kB | F3 |
+| título | as quatro chaves novas e as duas mudadas de 6, nas duas línguas (os dicionários viajam com o título) | +0,2 kB; **[medido em F3: +217 bytes, 28.863; teto 29.000]** (a folha de estilos também viaja com o título, e as regras da planta cresceram) | F3 |
 | jogo | `triggers.ts`, `contentRegistry.ts`, `progressGrants.ts`, `lockRules.ts` | +1,5 a +2 kB; **[medido em F2: +1.250 bytes, 389.477; o teto fica em 390.200, com 723 bytes de folga]** | F2 |
-| jogo | `mapModel.ts`, o toast, `doorGrant` | +1 kB | F3 |
+| jogo | `mapModel.ts`, o toast, `doorGrant` | +1 kB; **[medido em F3: +1.237 bytes, 390.714; teto 392.700]** | F3 |
 | jogo | `examineReach.ts` | +0,2 kB | F4 |
 
 Tudo [previsto]. Cada teto sobe **no commit da fatia que precisa**, para o medido mais meio por
@@ -1539,3 +1551,148 @@ Nenhum teto mudou; a folga do jogo é de 723 bytes. `npm run check` e `npm run b
   commit de F3, com o motivo.
 - `CONTENT_LOT` passa a 2 em F3. O migrador do lote 2 já está na árvore e roda para o save
   carimbado com 2 (DL2-6), e `test:save` prende isso.
+
+### F3 — O atalho que fica aberto e a planta sem spoiler (2026-10-05; commit local, sem push)
+
+T7 e T8 inteiros, com `map.legend` paga e `CONTENT_LOT = 2`. É a fatia que o jogador vê: o atalho
+da Ala 1 abre dos dois lados depois da primeira saída, com o aviso «Atalho destrancado — Ala 1 ·
+Holyoke» e o som do trinco; do saguão, antes disso, o `E` (e o botão de Ação, no toque) responde
+com o zumbido; e a planta só mostra o que o jogador já viu.
+
+**Vermelho primeiro** (§9.1, passo 2). Com as suítes escritas e **as regras desta fatia extraídas
+nos valores de hoje** (as duas regras de porta recebendo a lista e ignorando-a; a tabela sem a
+linha de `doorsReleased`; `doorActionAvailable` com a regra que morava em `MobileControls.tsx`;
+`mapModel` desenhando toda sala, um vão por portal, nenhum toco e o marcador sem direção; os
+componentes e os dicionários intocados):
+
+- `test:transition-door` parou em «once released, the atrium side opens it too»: «the rule ignores
+  what the save says was released», `'other-side'` no lugar de `null`;
+- `test:opening`, 31 de 32: «the one-way shortcut keeps its own rule, latched and released»;
+- `test:mobile-controls`: «"Abre pelo outro lado": on touch the door has no button to answer with»;
+- `test:save`, 20 de 29. O campo sem linha na tabela não tem amostra nem coluna; `doorsReleased:
+  'abc'` continuava `'abc'` (caso F); o save antigo carregava com `undefined` (casos A, B, C e E); e
+  toda ação que concede a liberação lançava «Cannot read properties of undefined (reading
+  'includes')», o que derrubava também os casos do `__proto__` e da aba velha;
+- `test:map`, 4 de 15. «A new game: one room, and one stub where its door leads»: «the plan shows
+  rooms nobody has walked into»; «the atrium walked into…» e «three rooms and the shortcut still
+  latched…» (o atalho desenhado); «nothing of a room that was not visited is in the model» já no
+  primeiro subconjunto; «the marker…»: «the model does not hand on the yaw it was given»; a fiação
+  com dezesseis problemas, o primeiro deles «ui/MuseumMap.tsx no longer draws mapModel(MUSEUM,
+  progress, …)»; e os textos de §6. Passaram os três estados, «no two states share a pattern or a
+  colour», o norte e **«a lock: never touched, absent…»**, que F2 já tinha pago;
+- a travessia `atrium → Holyoke (shortcut)` de `test:navigation` nasceu verde, como previsto.
+
+Com tudo verde, 43 mutações foram aplicadas uma a uma (o arquivo voltava ao original depois de
+cada uma). Quarenta e duas reprovaram pelo menos o caso que as nomeia, entre elas: toda sala na
+planta; o atalho desenhado antes de liberado, ou liberado pelo id do portal de frente; nenhum toco; o toco
+apontando para dentro; o yaw com o sinal trocado ou sem normalizar; o sul para cima; o vão com a
+profundidade de uma parede só; um vão por portal; a porta com o id do portal na chave; a sala
+escura com estado de acesa; «completa» com papel por ler; ponto para peça já catalogada; dois
+estados com a mesma cor, ou com o mesmo padrão; a rosa embaixo; a moldura crescendo com a visita;
+a regra de porta ignorando o save, aceitando qualquer liberação ou o id do portal de frente; «sem
+energia» dito antes de «outro lado»; a liberação abrindo fechadura elétrica; `doorGrant` do lado
+errado, repetido, com o id errado ou para porta de dois lados; um migrador inferindo a liberação
+pela visita (pego por três suítes); o campo fora da tabela ou sem contar como progresso; alias para
+o portal de frente; e as três regras do botão de Ação. A que escapou era um `+ 0` em
+`headingDegrees` que não fazia nada (a subtração já devolve `0`, não `-0`): saiu do código.
+
+**Onde a execução se afastou do plano.**
+
+- **Um vão por abertura, cortado nas duas paredes.** Cada abertura é declarada por dois portais,
+  um em cada linha de parede, a 0,25 m um do outro. O modelo junta os dois (pelo critério de
+  `buildTransitionDoorSpecs`: a menos de 0,35 m e apontando de volta); com as duas salas na planta
+  o vão fica a meio caminho e `depth` diz a largura do corte (as duas linhas); com uma só, fica na
+  parede dessa sala. `portalOpening` ganhou o quinto parâmetro (`between`) e devolve `depth`. São
+  seis portais e três aberturas (o plano não dizia quantos).
+- **A chave de uma porta é `door:<n>`**, não o id do portal: `atrium-to-holyoke` escreveria o nome
+  da Ala 1 na planta de quem ainda não entrou nela. O caso «nada de sala não visitada» procura o
+  id, a chave de título, a de apelido, os ids de peça, de documento e de portal de cada sala fora
+  do conjunto, e os quatro cantos dela entre todos os pontos do modelo, com o resto do save vazio,
+  cheio e com toda porta liberada. A lista de trancas fica fora dessa busca: tranca tocada é do
+  jogador, não de uma sala.
+- **«Jogo novo» é o que o botão do título faz**: o caso carrega o store e chama `start()`, que
+  grava `roomsVisited: ['office']`. Com a lista vazia o modelo não tem sala nenhuma, e é isso que
+  ele deve dizer.
+- **`headingDegrees` normaliza para [−180°, 180°]**: `camera.rotation.y` só soma e subtrai.
+- **A regra de porta de mão única ficou num lugar só** (`latchedAgainst`), lida pelas duas funções.
+  Uma liberação tira a barra e mais nada: a fechadura elétrica continua pedindo a energia, e «outro
+  lado» é dito antes de «sem energia».
+- **`doorActionAvailable(focused)`** some só com a folha em movimento ou com o toque já armado.
+- **O toast lê a sala de `opensFrom` direto do conteúdo** (`doorSides`, em `Hud.tsx`), não de
+  `buildTransitionDoorSpecs`: importá-la no chunk do HUD tirava a topologia do chunk do canvas para
+  um chunk próprio.
+- **O `svg` da planta é `role="group"`**, não `role="img"`: dentro de uma imagem nada tem nome, e
+  o marcador, a rosa e o toco têm os seus.
+- **A planta inteira numa página do caderno.** Em 844 × 390 o `svg` tinha 410 px de altura numa
+  página de 252: a planta já não cabia antes desta fatia, e a legenda ficava abaixo da dobra. O
+  teto de altura passou a `min(26rem, calc(88vh - 8.25rem))`; no desktop nada muda (416 px), e no
+  telefone a planta e a legenda cabem sem rolagem (211 px). Com isso o nome do escritório, que no
+  telefone saía pela borda direita do `svg`, deixa de ser cortado.
+- **O nome de sala ganhou um contorno escuro** (`paint-order: stroke`) e os pontos, uma borda: têm
+  de ler sobre hachura e sobre cheio como liam sobre o fundo.
+- **`__museumTeleport` também publica o yaw** (é a ponte do harness); a fiação pede a linha do
+  laço de quadros, não essa.
+- **Fiação:** `doorReleaseWiringProblems` (provada por onze refactors em memória, em
+  `test:transition-door`) e `planWiringProblems` (onze, em `test:map`). A linha de
+  `progressWiringProblems` sobre `pendingLocks` aponta para `ui/mapModel.ts`.
+- **`saveIdsByField.doorsReleased`** e `condition-door-missing` leem a mesma `doorIdsOf`.
+- **`test:save` não prende `CONTENT_LOT` por valor**: quem obriga a constante a andar é a dívida
+  (`map.legend` vencia em L2, e a linha paga some ou vira `known-debt-stale`).
+
+**Medições.** Título 28.863 bytes de gzip (+217; teto 29.000), jogo 390.714 (+1.237; teto
+392.700), documento 63.234. `npm run check` e `npm run build` verdes. `test:map` tem 15 casos;
+`test:transition-door`, 37 (eram 29); `test:mobile-controls`, 14; `test:navigation`, 70;
+`test:save` continua com 29, com `doorsReleased` na amostra, nos aliases e nos casos A a F.
+`test:qa-save` (21),
+`test:radio` (27), `test:triggers` (30) e `test:ratchets` verdes sem nenhuma edição: o
+`BROWSER_RECORD` é o do lote 1 e os dez pontos não foram medidos de novo, porque nenhuma sala
+desenha nada diferente.
+
+**No navegador, depois do verde** (servidor `museum-dev` reiniciado; o painel é estreito e a
+página aparece reduzida nas capturas, então o que se lê aqui saiu do DOM, e as imagens serviram
+para o desenho). Tudo pelo `E`, pelo `Tab` e pelos botões do jogo; o teleporte do harness só pôs a
+câmera diante de cada alvo dentro da sala em que o jogador já estava, e toda travessia foi andada.
+
+- **A, pt-BR, 1280 × 720** (`production-drawer-open`): planta com três salas, duas portas, nenhuma
+  tranca, legenda «Legenda: Sem energia / Acesa, falta conferir / Completa», «N» no alto, marcador
+  a 90° no escritório (o yaw de partida) e a −90° diante do atalho. No saguão, o atalho diz «Abre
+  pelo outro lado», e o `E` toca os dois zumbidos de 148 Hz e não grava nada. Da Ala 1, o `E`
+  mostra «Atalho destrancado — Ala 1 · Holyoke» com o som do trinco; o save tem
+  `doorsReleased: ['atrium-from-holyoke-shortcut']`. De volta ao saguão: «Abrir porta», e abre, sem
+  aviso. Planta: três portas. Recarregado **sem** o parâmetro: nenhum aviso ao continuar, e do
+  saguão o atalho abre e se atravessa.
+- **A, inglês:** “Opens from the other side”, “Shortcut unlocked — Wing 1 · Holyoke”, “Legend: No
+  power / Lit, something left to check / Complete”, “North”, “You are here”.
+- **B, pt-BR e inglês** (`production-drawer-closed`): nenhuma tranca; gaveta tocada e `Esc`:
+  «Gaveta com segredo — 4 dígitos» (“Combination drawer — 4 digits”); `1896` nas teclas: o bilhete
+  aparece, a tranca sai, e o escritório passa de hachura a cheio.
+- **C, pt-BR** (jogo novo pelo «Novo jogo» do título): luminária, caderno até a última página.
+  Planta: só o escritório, hachurado, e um toco com «?» («Sala ainda não visitada»). No saguão:
+  duas salas, o saguão tracejado com os quatro pontos, a porta do escritório sem toco, o toco na
+  porta da Ala 1, e nada no lugar do atalho. **Em inglês**, sobre o mesmo save: “A room not
+  visited yet”.
+- **D, inglês** (`production-pre-opening`): carrega com tudo o que tinha, mais o carimbo 2 e as
+  listas novas vazias; planta em inglês, sem aviso ao continuar.
+- **E e F, 844 × 390, pelos botões de toque** (`l1-route-end`): o caderno abre pelo botão, a planta
+  e a legenda cabem sem rolagem e a hachura se lê; duas portas (o save de L1 saiu pelo atalho duas
+  vezes, e nada se infere). «Ação» abre a porta do escritório, e o saguão é alcançado pelo
+  direcional. Diante do atalho o botão de Ação **aparece** e dá o zumbido. Da Ala 1, «Ação»
+  libera: o aviso fica no alto (y de 12 a 51) e o prompt embaixo (237 a 267), sem se tocarem nem
+  cobrirem os botões. Do saguão, «Ação» abre; planta com três portas.
+- Console sem erro; o único aviso é o `THREE.Clock` que já havia. Viewport de volta ao preset
+  desktop e `localStorage` da origem de desenvolvimento vazio.
+
+**O que não deu para conferir.** O giro pelo mouse (o painel não dá `pointer lock`): a seta foi
+vista em quatro rumos (90°, −90°, 76° e 180°), postos pelo yaw do harness e publicados pelo laço
+de quadros. O toque de
+verdade (o painel manda cliques de mouse; o direcional foi segurado por eventos de ponteiro
+sintéticos). O som foi conferido pelos osciladores criados, não ouvido. E a legibilidade da
+hachura num aparelho real, no sol, que é o que a regra do padrão existe para resolver.
+
+**Para F4.**
+
+- `simulateProgress` modela `doorsReleased` com `doorGrant` e as duas regras de porta, que agora
+  pedem a lista; `validateSolvability` (`validate.ts`) ainda decide por topologia.
+- O corpus do fecho (`l2-shortcut-released`, §13) sai do fim da rota A: é o primeiro save com
+  `doorsReleased` preenchido.
+- O teto `game` tem 1.986 bytes de folga e o `title`, 137.

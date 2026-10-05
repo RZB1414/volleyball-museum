@@ -91,7 +91,6 @@ export const KNOWN_DEBT: readonly KnownDebt[] = [
     (key) => keyUnused(key, 16, 'the settings screen (M27)'),
   ),
   keyUnused('ui.readingMode', 24, 'reading mode (M29)'),
-  keyUnused('map.legend', 2, 'the plan (mapModel)'),
   ...['lock.opened', 'lock.hint.highlight', 'lock.hint.audio', 'lock.hint.reveal'].map((key) =>
     keyUnused(key, 4, 'the hint ladder (H-19): shown, or deleted'),
   ),

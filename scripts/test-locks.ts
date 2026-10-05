@@ -465,7 +465,7 @@ await test('the cabinet, the breaker, the keypad, the plan and the prompt ask th
     ],
     [
       'the plan listing every shut lock',
-      changed('ui/MuseumMap.tsx', 'pendingLocks(MUSEUM.locks, progress)', 'MUSEUM.locks.filter((lock) => !progress.locksOpened.includes(lock.id))'),
+      changed('ui/mapModel.ts', 'pendingLocks(content.locks, progress)', 'content.locks.filter((lock) => !progress.locksOpened.includes(lock.id))'),
     ],
     ['the prompt reading the save by itself', changed('ui/Hud.tsx', /lockStatus\([^)]*\) === 'closed'/, '!locksOpened.includes(container.lockId)')],
     [

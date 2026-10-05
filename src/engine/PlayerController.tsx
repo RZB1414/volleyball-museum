@@ -28,7 +28,7 @@ import {
   CAMERA_FOV_PUSH_DEGREES,
   cameraVerticalFovDegrees,
 } from './cameraProjection'
-import { PLAYER_CAPSULE, PLAYER_EYE_HEIGHT, playerPosition } from './playerPosition'
+import { PLAYER_CAPSULE, PLAYER_EYE_HEIGHT, playerHeading, playerPosition } from './playerPosition'
 import { dampTouchLookAxis } from './mobileControls'
 
 const CAPSULE = PLAYER_CAPSULE
@@ -272,6 +272,7 @@ export function PlayerController({
       camera.rotation.x = typeof pitch === 'number' ? pitch : 0
       camera.position.set(x, y + EYE_HEIGHT, z)
       playerPosition.copy(positionRef.current)
+      playerHeading.yaw = camera.rotation.y
       awaitingInitialSupportRef.current = false
     }
 
@@ -531,6 +532,8 @@ export function PlayerController({
     // Published for portal culling, audio and the interaction raycast, all of
     // which run inside useFrame and can read it directly.
     playerPosition.copy(positionRef.current)
+    // And the way the player faces, for the marker on the plan.
+    playerHeading.yaw = camera.rotation.y
   })
 
   return null

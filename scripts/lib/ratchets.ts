@@ -243,11 +243,27 @@ export const BUNDLE_BUDGETS = {
  *     (`saveMigrations.ts`). 293 bytes for a save that another tab, a later
  *     lot or a rollback can no longer empty. The other two paths did not
  *     grow (63,230 and 388,227).
+ *   - nothing in the second slice: the one door for progress added 1,250
+ *     bytes to the game (389,477) and none to the title, inside both ceilings.
+ *   - `title` +200 bytes, on 28,863 measured (it was 28,800 on 28,646): the
+ *     dictionaries and the style sheet ship with the title screen. The plan
+ *     gained three keys in each language and two of its three legend texts
+ *     grew («Acesa, falta conferir» has to be true of a room with no piece in
+ *     it), the toast of the shortcut one key; and the plan's rules in the
+ *     style sheet now draw a stub, an arrowhead, a north and three patterned
+ *     samples where there were three coloured squares. 217 bytes.
+ *   - `game` +2,500 bytes, on 390,714 measured (it was 390,200 on 389,477):
+ *     `mapModel.ts` decides what the plan shows (visited rooms only, one
+ *     doorway per opening, the stub, the heading), which the component used
+ *     not to decide at all; `doorGrant` and the released doors in the two
+ *     door rules; the toast. 1,237 bytes for a plan that keeps the building's
+ *     secrets and a shortcut that stays open. The document did not grow
+ *     (63,234).
  */
 export const BUNDLE_PATH_CEILINGS = {
   document: 63_600,
-  title: 28_800,
-  game: 390_200,
+  title: 29_000,
+  game: 392_700,
 } as const
 
 /** Strings that only the content set and the bake manifest contain. */

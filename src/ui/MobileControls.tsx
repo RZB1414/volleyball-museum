@@ -18,6 +18,7 @@ import {
 import { triggerPrimaryAction } from '../engine/primaryAction'
 import { useTranslate } from '../i18n'
 import { useMuseum, type DirectionalInput } from '../state/store'
+import { doorActionAvailable } from './hudRules'
 
 const ZERO_INPUT: DirectionalInput = Object.freeze({ x: 0, y: 0 })
 const THUMB_TRAVEL_PX = 30
@@ -242,13 +243,9 @@ export function MobileControls() {
     if (suspended) resetAllPads()
   }, [resetAllPads, suspended])
 
-  // A powerless lock still answers a press, with its buzz, on touch as well.
-  const doorCanAct = Boolean(
-    focusedDoor &&
-      (focusedDoor.status !== 'blocked' || focusedDoor.blockedBy === 'unpowered') &&
-      focusedDoor.status !== 'opening' &&
-      !focusedDoor.armed,
-  )
+  // A door that will not open still answers a press, with its buzz, on touch
+  // as well; the rule is the HUD's, where a suite can ask it.
+  const doorCanAct = doorActionAvailable(focusedDoor)
   const actionVisible = Boolean(
     !suspended &&
       winner &&

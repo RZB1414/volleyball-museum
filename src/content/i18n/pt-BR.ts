@@ -75,6 +75,8 @@ export const ptBR = {
   'prompt.radio.dead': 'Sem carga',
   'prompt.radio.take': 'Pegar o rádio',
   'power.restored': 'Energia restaurada',
+  // Followed by the room the door opens into: «Atalho destrancado — Ala 1 · Holyoke».
+  'door.released': 'Atalho destrancado',
   'radio.skip': 'Pular',
   'notebook.next': 'Virar a página',
   'notebook.previous': 'Voltar',
@@ -82,9 +84,14 @@ export const ptBR = {
   // Map
   'map.title': 'Planta do museu',
   'map.state.unlit': 'Sem energia',
-  'map.state.partial': 'Peças por catalogar',
-  'map.state.complete': 'Catalogada',
+  // True of a room with no piece in it too: the office is lit with a note
+  // still in its drawer, and «Peças por catalogar» was false of it.
+  'map.state.partial': 'Acesa, falta conferir',
+  'map.state.complete': 'Completa',
   'map.legend': 'Legenda',
+  'map.unknown': 'Sala ainda não visitada',
+  'map.north': 'Norte',
+  'map.you': 'Você está aqui',
 
   // Catalogue
   'catalogue.title': 'Catálogo',

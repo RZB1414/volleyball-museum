@@ -885,11 +885,7 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
   const hotspotKeys = new Set(
     content.exhibits.flatMap((exhibit) => exhibit.hotspots.map((hotspot) => `${exhibit.id}:${hotspot.id}`)),
   )
-  // A door is the portal that declares the leaf. The portal facing it across
-  // the same opening has an id too, and is not a door: the save never holds it.
-  const doorIds = new Set(
-    content.rooms.flatMap((room) => room.portals.flatMap((portal) => (portal.transitionDoor ? [portal.id] : []))),
-  )
+  const doorIds = doorIdsOf(content)
   const triggers = compileTriggers(content)
   // A credential exists for a condition when something hands it out. One that
   // only a lock asks for is that lock's problem, and never becomes true here.
@@ -1218,6 +1214,17 @@ export function validateTriggers(content: MuseumContent): ValidationIssue[] {
 }
 
 /**
+ * The ids of the physical doors: a door is the portal that declares the leaf.
+ * The portal facing it across the same opening has an id too, and is not a
+ * door: no condition may ask for it and the save never holds it.
+ */
+function doorIdsOf(content: Pick<MuseumContent, 'rooms'>): ReadonlySet<string> {
+  return new Set(
+    content.rooms.flatMap((room) => room.portals.flatMap((portal) => (portal.transitionDoor ? [portal.id] : []))),
+  )
+}
+
+/**
  * The ids each list of the save holds, as the content defines them; null for
  * a list whose ids the content does not define.
  *
@@ -1246,6 +1253,7 @@ function saveIdsByField(content: MuseumContent): Record<ListField, ReadonlySet<s
     roomsPowered: rooms,
     locksOpened: locks,
     locksSeen: locks,
+    doorsReleased: doorIdsOf(content),
     // A flag exists by being set: there is no list of them but the effects.
     flags: new Set(effects.flatMap((effect) => (effect.kind === 'set-flag' ? [effect.flag] : []))),
     triggersFired: new Set(triggers.map((trigger) => trigger.id)),
