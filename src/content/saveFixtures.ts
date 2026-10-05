@@ -428,6 +428,152 @@ export const SAVE_FIXTURES = {
       },
     },
   },
+
+  /**
+   * The end of L3's route, begun from the save L2 left: the deed signed.
+   *
+   * Read out of `localStorage` on 2026-10-05, on the dev server over the
+   * lot's last slice (`4c97f47`; the commit that closes the lot changes no
+   * line a save is written by). `?qaSave=l2-shortcut-released`, Continue.
+   * The drawer was open in that save, so the load handed it the key and
+   * marked it (`legacy-pre-L3-drawer`), and the porter said so: his
+   * introduction, the message lamp, «olha de novo a gaveta». Then the clock
+   * put right, the telephone, Otávio's message heard to its last line, the
+   * porter asked once, the iron safe opened and its three pages read, the
+   * office door, and the lectern: E held until the deed was signed, the card
+   * and both lines seen out. The porter was asked once more and gave the
+   * honest close. The player stopped at the lectern.
+   *
+   * A save of L1 carried through two lots, and the order of its fields
+   * shows it: L1's own, then L2's five, then the two of this lot. It holds
+   * the note under both names (`doc-predecessor` beside
+   * `doc-otavio-handover`), a key that is spent and still in the hand, and
+   * every flag the lot can leave in a save. Nothing is owed to this player:
+   * no call, no card. The lot that reads what is written on the pieces
+   * starts from here with the night's first ending behind it.
+   */
+  'l3-posse-signed': {
+    from: 'l3-4c97f47',
+    summary: 'Fim da rota de L3 a partir do save de L2: chave recebida na carga, cofre aberto, termo de posse assinado.',
+    save: {
+      settings: UNTOUCHED_SETTINGS,
+      progress: {
+        version: 1,
+        catalogued: ['portrait-morgan'],
+        hotspots: ['portrait-morgan:date'],
+        documentsRead: [
+          'doc-welcome',
+          'doc-predecessor',
+          'doc-otavio-handover',
+          'doc-otavio-tape',
+          'doc-termos',
+          'doc-label-proof-office',
+        ],
+        factsKnown: ['springfield-renaming'],
+        credentials: ['tool:service-key'],
+        roomsVisited: ['office', 'atrium', 'holyoke'],
+        roomsPowered: ['office', 'atrium', 'holyoke'],
+        locksOpened: ['office-drawer', 'office-safe'],
+        radioCalls: [
+          'porter-first-call',
+          'porter-radio-taken',
+          'porter-atrium-service',
+          'porter-holyoke-lit',
+          'porter-shortcut',
+          'porter-first-catalogued',
+          'porter-hello',
+          'porter-machine-reminder',
+          'porter-legacy-drawer',
+          'porter-safe-open',
+        ],
+        clockSeconds: { 'office-clock': 238 },
+        hintsShown: ['journal-taken', 'radio-taken'],
+        devicesCarried: ['office-radio'],
+        radioMemory: {
+          'office-radio': {
+            calls: 2,
+            temper: 1,
+            // 2026-10-05 18:26, Brasília: the call that got the honest close.
+            lastCallAt: 1791235614063,
+            lastHint: 6,
+            hintHeight: 0,
+            lastReplyId: 'porter-praise-went',
+            lastOutburstId: null,
+          },
+        },
+        lastRoom: 'atrium',
+        contentLot: 3,
+        locksSeen: ['office-drawer', 'office-safe'],
+        doorsReleased: ['atrium-from-holyoke-shortcut'],
+        flags: ['legacy-pre-L3-drawer', 'clock-set', 'posse-signed'],
+        triggersFired: ['lock:office-drawer:opened', 'term:termo-posse:signed'],
+        termsSigned: ['termo-posse'],
+        sequencesSeen: ['seq-posse'],
+      },
+    },
+  },
+
+  /**
+   * A new game of L3, stopped one held press short of the deed.
+   *
+   * Read out of `localStorage` on 2026-10-05, same build, in the touch
+   * viewport and by the touch buttons. "Novo jogo" on the title; the lamp;
+   * the porter heard out on the desk radio, which was never taken; the
+   * notebook; Otávio's message, heard to its last line; the hall's breaker
+   * and the wing's; Morgan's portrait tilted until the date showed; out by
+   * the shortcut; back in the office, the drawer opened with the year, which
+   * handed over the key, and the iron safe opened with it. The player
+   * stopped in the office with the Book of Deeds read.
+   *
+   * What no save before this lot can hold: the deed on the lectern and not
+   * signed, with nothing left in the way (the three rooms are lit). The
+   * radio is on its charger, so whatever closes the night has to reach this
+   * player without it. No flag: the drawer was opened tonight, and nobody
+   * put the clock right. Two calls are absent because their moment passed
+   * out of earshot (`porter-atrium-service`, `porter-machine-reminder`), and
+   * they must stay unsaid. The lot after this one starts its route here to
+   * sign from a save, and from the one above to play on after signing.
+   */
+  'l3-new-game-safe-open': {
+    from: 'l3-4c97f47',
+    summary: 'Jogo novo de L3: tudo aceso, rádio na mesa, gaveta e cofre de ferro abertos, Livro de Termos lido, posse por assinar.',
+    save: {
+      settings: UNTOUCHED_SETTINGS,
+      progress: {
+        version: 1,
+        contentLot: 3,
+        catalogued: ['portrait-morgan'],
+        hotspots: ['portrait-morgan:date'],
+        documentsRead: ['doc-welcome', 'doc-otavio-tape', 'doc-otavio-handover', 'doc-termos', 'doc-label-proof-office'],
+        factsKnown: ['springfield-renaming'],
+        credentials: ['tool:service-key'],
+        roomsVisited: ['office', 'atrium', 'holyoke'],
+        roomsPowered: ['office', 'atrium', 'holyoke'],
+        locksOpened: ['office-drawer', 'office-safe'],
+        locksSeen: ['office-drawer', 'office-safe'],
+        doorsReleased: ['atrium-from-holyoke-shortcut'],
+        flags: [],
+        triggersFired: ['lock:office-drawer:opened'],
+        radioCalls: [
+          'porter-hello',
+          'porter-first-call',
+          'porter-notebook-reminder',
+          'porter-holyoke-lit',
+          'porter-first-catalogued',
+          'porter-shortcut',
+          'porter-drawer-open',
+          'porter-safe-open',
+        ],
+        clockSeconds: { 'office-clock': 188 },
+        hintsShown: ['journal-taken'],
+        devicesCarried: [],
+        radioMemory: {},
+        termsSigned: [],
+        sequencesSeen: [],
+        lastRoom: 'office',
+      },
+    },
+  },
 } as const satisfies Readonly<Record<string, SaveFixture>>
 
 export type SaveFixtureId = keyof typeof SAVE_FIXTURES

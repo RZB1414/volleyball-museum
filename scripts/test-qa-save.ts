@@ -45,6 +45,7 @@ const browserStorage = {
 }
 Object.assign(globalThis, { localStorage: browserStorage })
 
+const { saveIdsByField } = await import('../src/content/additive.ts')
 const { CONTENT_LOT } = await import('../src/content/contentLot.ts')
 const { PRE_OPENING_SAVE, PRE_POSSE_SAVE, SAVE_ALIASES } = await import('../src/content/legacySave.ts')
 const { MUSEUM } = await import('../src/content/museum.ts')
@@ -52,11 +53,15 @@ const { fixtureLot, SAVE_FIXTURES } = await import('../src/content/saveFixtures.
 const { applyQaSave, QA_SAVE_PARAM, QA_SAVE_STORAGE_KEY, qaSaveRequest } = await import(
   '../src/dev/qaSave.ts'
 )
-const { dueRadioCalls, radioDevices } = await import('../src/engine/deviceRules.ts')
-const { pendingLocks } = await import('../src/engine/lockRules.ts')
+const { dueRadioCalls, radioDevices, radioHintIndex } = await import('../src/engine/deviceRules.ts')
+const { pendingLocks, toolSpent } = await import('../src/engine/lockRules.ts')
+const { nightPoints } = await import('../src/engine/nightClock.ts')
 const { journalUnlocked } = await import('../src/engine/notebook.ts')
 const { progressConditionMet } = await import('../src/engine/progressCondition.ts')
+const { dueSequence } = await import('../src/engine/sequenceRules.ts')
+const { signingDeskState } = await import('../src/engine/termRules.ts')
 const { buildTransitionDoorSpecs, canOpenTransitionDoor } = await import('../src/engine/transitionDoorTopology.ts')
+const { compileTriggers, effectGrant } = await import('../src/engine/triggers.ts')
 const { SAVE_MIGRATIONS } = await import('../src/state/saveMigrations.ts')
 const { lastLotDone } = await import('./lib/planLots.ts')
 const { QA_SAVE_BOOT_MODULE, qaSavePlugin } = await import('./vite-plugin-qa-save.mjs')
@@ -173,6 +178,10 @@ test('the corpus holds the production saves the plan lists, and the save each lo
     // Two of L2: the route begun from L1's save, and a new game of its own.
     'l2-shortcut-released': 'l2-90dd9a6',
     'l2-new-game-drawer-touched': 'l2-90dd9a6',
+    // Two of L3, one on each side of the signature: the route begun from L2's
+    // save, with the deed signed, and a new game stopped with the safe open.
+    'l3-posse-signed': 'l3-4c97f47',
+    'l3-new-game-safe-open': 'l3-4c97f47',
   }
   for (const [id, from] of Object.entries(lots)) {
     assert.ok(Object.hasOwn(SAVE_FIXTURES, id), `${id} is gone from the corpus`)
@@ -455,6 +464,70 @@ test('each fixture is a state the game could really have reached', () => {
       assert.deepEqual(said('flags'), [], say('a flag nothing in L2 sets'))
       assert.deepEqual(said('triggersFired'), [], say('a trigger L2 does not have'))
     }
+
+    // What L3's runtime guarantees of a save it wrote, held for the records
+    // written from L3 on. It is the first lot whose saves hold consequences:
+    // a key a drawer hands over, a flag a signature sets. Such a save is
+    // written SETTLED, and a record typed with the trigger and without what
+    // it gave (or the other way round) is a state no write of the store
+    // ever left on a disk.
+    if (fixtureLot(SAVE_FIXTURES[id]) < 3) continue
+    const written = record as unknown as Progress
+    for (const trigger of compileTriggers(MUSEUM)) {
+      const owed = progressConditionMet(trigger.when, written, MUSEUM)
+      assert.equal(said('triggersFired').includes(trigger.id), owed, say(`${trigger.id} and what it waits for disagree`))
+      if (!owed) continue
+      for (const effect of trigger.effects) {
+        for (const [field, ids] of Object.entries(effectGrant(effect, MUSEUM))) {
+          for (const given of ids as readonly string[]) {
+            assert.ok(said(field).includes(given), say(`${trigger.id} fired and ${field} lacks "${given}"`))
+          }
+        }
+      }
+    }
+    for (const fired of said('triggersFired')) {
+      assert.ok(compileTriggers(MUSEUM).some((trigger) => trigger.id === fired), say(`a trigger the content does not have: ${fired}`))
+    }
+    // A flag is one the content sets, or the mark the load leaves on a save
+    // whose drawer was opened before it held a key, and that mark only there.
+    const flagsOfTheContent = saveIdsByField(MUSEUM).flags ?? new Set<string>()
+    for (const flag of said('flags')) {
+      assert.ok(flagsOfTheContent.has(flag) || flag === PRE_POSSE_SAVE.drawer.flag, say(`a flag nothing sets: ${flag}`))
+    }
+    if (said('flags').includes(PRE_POSSE_SAVE.drawer.flag)) {
+      assert.ok(said('locksOpened').includes(PRE_POSSE_SAVE.drawer.lockId), say('marked as an old open drawer with the drawer shut'))
+      assert.ok(said('triggersFired').includes(PRE_POSSE_SAVE.drawer.triggerId), say('marked as an old open drawer and never handed its key'))
+    }
+    // A clock is set with its room lit.
+    for (const device of devices) {
+      if (device.kind !== 'clock' || !device.setFlag || !said('flags').includes(device.setFlag)) continue
+      assert.ok(said('roomsPowered').includes(device.runsWithPowerOf), say(`${device.id} was set without power`))
+    }
+    // A key that was spent is still in the hand: nothing leaves a save (DL3-1).
+    for (const spent of toolSpent(MUSEUM.locks, written)) {
+      assert.ok(said('credentials').includes(spent), say(`${spent} was spent and is gone from the save`))
+    }
+    // A signature is never made short of what the desk asked for it, and the
+    // card that says so is only shown for a deed that was signed.
+    for (const termId of said('termsSigned')) {
+      const term = (MUSEUM.terms ?? []).find((candidate) => candidate.id === termId)
+      assert.ok(term, say(`signed a term the content does not have: ${termId}`))
+      assert.ok(progressConditionMet(term.when, written, MUSEUM), say(`${termId} was signed short of what it asks`))
+    }
+    for (const sequenceId of said('sequencesSeen')) {
+      const sequence = (MUSEUM.sequences ?? []).find((candidate) => candidate.id === sequenceId)
+      assert.ok(sequence, say(`saw a sequence the content does not have: ${sequenceId}`))
+      assert.ok(progressConditionMet(sequence.when, written, MUSEUM), say(`${sequenceId} was shown before it was owed`))
+    }
+    // The porter remembers the height of the last hint he gave, inside the heights that hint has.
+    for (const [radioId, memory] of Object.entries(record.radioMemory as Record<string, { lastHint: number; hintHeight: number }>)) {
+      const hint = radios.find((candidate) => candidate.id === radioId)?.hints[memory.lastHint]
+      assert.ok(hint, say(`${radioId} remembers a hint it does not have`))
+      assert.ok(
+        Number.isInteger(memory.hintHeight) && memory.hintHeight >= 0 && memory.hintHeight < hint.heightKeys.length,
+        say(`${radioId} remembers height ${memory.hintHeight} of a hint with ${hint.heightKeys.length}`),
+      )
+    }
   }
 })
 
@@ -641,6 +714,144 @@ test('the new game L2 left has a lock touched and still shut, and a wing not yet
   assert.deepEqual(list(id, 'radioCalls'), ['porter-first-call', 'porter-notebook-reminder', 'porter-radio-taken'])
   assert.deepEqual(list(id, 'devicesCarried'), ['office-radio'])
   assert.deepEqual(raw.radioMemory, {}, 'carried and never called')
+})
+
+// The desk the deed of office is signed at, and what the night counts by.
+const LECTERN = devices.find((device) => device.kind === 'signing-desk')
+const TERMS = MUSEUM.terms ?? []
+const SEQUENCES = MUSEUM.sequences ?? []
+const KEY = 'tool:service-key'
+
+test("the route L3 walked from L2's save ends with the deed signed, and holds everything L2's save held", () => {
+  const id = 'l3-posse-signed'
+  const raw = rawProgress(id)
+  const before = rawProgress('l2-shortcut-released')
+  // The save of L1 that L2 carried forward, carried forward once more: L1's
+  // fields first, then L2's five, then the two this lot gave the save.
+  assert.deepEqual(Object.keys(raw), [...Object.keys(before), ...ADDED_BY_L3])
+  // A save only grows. Every list L2 left is the head of the same list here,
+  // item for item and in L2's order: what the lot did was added after it.
+  for (const [field, value] of Object.entries(before)) {
+    if (!Array.isArray(value)) continue
+    assert.deepEqual((raw[field] as readonly unknown[]).slice(0, value.length), value, `${field} lost or reordered what the save of L2 held`)
+  }
+  assert.equal(raw.version, before.version)
+  assert.equal(raw.lastRoom, 'atrium', 'signed at the lectern, and stopped in front of it')
+  assert.ok((raw.clockSeconds as Record<string, number>)['office-clock'] > (before.clockSeconds as Record<string, number>)['office-clock'])
+  assert.equal(raw.contentLot, 3)
+
+  // What the load of this lot handed a save whose drawer was open already:
+  // the sheet under its new name beside the old one, the mark, the key, and
+  // the trigger that gave it. Then what the player did with them.
+  assert.deepEqual(list(id, 'documentsRead'), [
+    'doc-welcome',
+    'doc-predecessor',
+    'doc-otavio-handover',
+    'doc-otavio-tape',
+    'doc-termos',
+    'doc-label-proof-office',
+  ])
+  assert.deepEqual(list(id, 'flags'), [PRE_POSSE_SAVE.drawer.flag, 'clock-set', 'posse-signed'])
+  assert.deepEqual(list(id, 'credentials'), [KEY])
+  assert.deepEqual(toolSpent(MUSEUM.locks, raw as unknown as Progress), [KEY], 'the key is in the door of the safe, and still in the save')
+  assert.deepEqual(list(id, 'triggersFired'), [PRE_POSSE_SAVE.drawer.triggerId, 'term:termo-posse:signed'])
+  assert.deepEqual(list(id, 'locksOpened'), [DRAWER, 'office-safe'])
+  assert.deepEqual(list(id, 'termsSigned'), ['termo-posse'])
+  assert.deepEqual(list(id, 'sequencesSeen'), ['seq-posse'], 'the card and the two lines were seen to the last')
+
+  // The calls: L2's two, the news that was old when the save arrived (in the
+  // order the load marks it), and then what the porter did say that night.
+  // He told this player to look in the drawer again, and never asked what
+  // was in a drawer he had seen open on another night.
+  assert.deepEqual(list(id, 'radioCalls'), [
+    ...list('l2-shortcut-released', 'radioCalls'),
+    'porter-atrium-service',
+    'porter-holyoke-lit',
+    'porter-shortcut',
+    'porter-first-catalogued',
+    PRE_POSSE_SAVE.helloCallId,
+    'porter-machine-reminder',
+    'porter-legacy-drawer',
+    'porter-safe-open',
+  ])
+  assert.ok(!list(id, 'radioCalls').includes('porter-drawer-open'))
+
+  // Loaded: the desk stands signed, nothing is owed, and what the porter
+  // answers is the honest close, which is also the last thing he said.
+  const progress = progressOf(id)
+  assert.ok(LECTERN && LECTERN.kind === 'signing-desk', 'the hall has no desk to sign at')
+  assert.equal(signingDeskState(TERMS, LECTERN, progress, MUSEUM).state, 'signed')
+  assert.equal(dueSequence(SEQUENCES, progress, MUSEUM), null, 'the card would be shown a second time')
+  for (const radio of radios) {
+    assert.deepEqual(dueRadioCalls(radio, progress, MUSEUM).map((call) => call.id as string), [], 'a call is still owed after the night closed')
+    assert.equal(radioHintIndex(radio, progress, MUSEUM), radio.hints.length - 1)
+    assert.equal(progress.radioMemory[radio.id]?.lastHint, radio.hints.length - 1)
+    assert.equal(progress.radioMemory[radio.id]?.hintHeight, 0)
+  }
+  // Six of the ten points: the three rooms, the drawer, the safe, the deed.
+  assert.ok(MUSEUM.nightClock)
+  assert.equal(nightPoints(MUSEUM.nightClock, progress, MUSEUM), 6)
+})
+
+test('the new game L3 left stands one held press short of the deed, with the radio on its desk', () => {
+  const id = 'l3-new-game-safe-open'
+  const raw = rawProgress(id)
+  // A new game of this lot, in the order of this build's own table.
+  assert.deepEqual(Object.keys(raw), Object.keys(loaded.get(id)!.store.EMPTY_PROGRESS))
+  assert.equal(raw.contentLot, 3)
+  // The whole chain but its last link: the message heard, the year read off
+  // the portrait, the drawer, its key, the safe, the Book and the proof.
+  assert.deepEqual(list(id, 'roomsPowered'), ['office', 'atrium', 'holyoke'])
+  assert.deepEqual(list(id, 'factsKnown'), ['springfield-renaming'])
+  assert.deepEqual(list(id, 'hotspots'), ['portrait-morgan:date'], 'the year came off the portrait')
+  assert.deepEqual(list(id, 'documentsRead'), ['doc-welcome', 'doc-otavio-tape', 'doc-otavio-handover', 'doc-termos', 'doc-label-proof-office'])
+  assert.ok(!list(id, 'documentsRead').includes('doc-predecessor'), 'a new game of L3 never saw the note the sheet replaced')
+  assert.deepEqual(list(id, 'locksOpened'), [DRAWER, 'office-safe'])
+  assert.deepEqual(list(id, 'credentials'), [KEY])
+  assert.deepEqual(list(id, 'triggersFired'), [PRE_POSSE_SAVE.drawer.triggerId])
+  // No flag at all: the drawer was opened tonight, so the save carries no
+  // mark of an older one, and nobody put the clock right.
+  assert.deepEqual(list(id, 'flags'), [])
+  assert.deepEqual(list(id, 'termsSigned'), [])
+  assert.deepEqual(list(id, 'sequencesSeen'), [])
+  assert.equal(raw.lastRoom, 'office')
+
+  // The radio never left its charger, so every call here was heard in the
+  // office, and he was never called. Two calls are missing because their
+  // moment passed before the player was back in earshot: the wing was lit
+  // before he could say where its breaker was, and the message had been
+  // heard before he could mention its lamp. They are not owed.
+  assert.deepEqual(list(id, 'devicesCarried'), [])
+  assert.deepEqual(raw.radioMemory, {})
+  assert.deepEqual(list(id, 'radioCalls'), [
+    PRE_POSSE_SAVE.helloCallId,
+    PRE_OPENING_SAVE.firstCallId,
+    'porter-notebook-reminder',
+    'porter-holyoke-lit',
+    'porter-first-catalogued',
+    'porter-shortcut',
+    'porter-drawer-open',
+    'porter-safe-open',
+  ])
+  for (const never of ['porter-radio-taken', 'porter-atrium-service', 'porter-machine-reminder', 'porter-legacy-drawer']) {
+    assert.ok(!list(id, 'radioCalls').includes(never), `${never} was heard by a player it was not said to`)
+  }
+
+  // Loaded: the deed is on the desk and nothing stands between the player
+  // and the signature; no card is owed for a deed nobody signed; the desk
+  // radio has nothing waiting; and asked, the porter points at the lectern.
+  const progress = progressOf(id)
+  assert.ok(LECTERN && LECTERN.kind === 'signing-desk', 'the hall has no desk to sign at')
+  const desk = signingDeskState(TERMS, LECTERN, progress, MUSEUM)
+  assert.equal(desk.state, 'ready')
+  assert.equal(desk.state === 'ready' && desk.term.id, 'termo-posse')
+  assert.equal(dueSequence(SEQUENCES, progress, MUSEUM), null)
+  for (const radio of radios) {
+    assert.deepEqual(dueRadioCalls(radio, progress, MUSEUM).map((call) => call.id as string), [])
+    assert.equal(radio.hints[radioHintIndex(radio, progress, MUSEUM)]?.targetId, LECTERN.id)
+  }
+  assert.ok(MUSEUM.nightClock)
+  assert.equal(nightPoints(MUSEUM.nightClock, progress, MUSEUM), 5)
 })
 
 test('a save the lot in the tree wrote loads as itself', () => {

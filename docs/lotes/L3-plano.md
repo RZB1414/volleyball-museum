@@ -1928,6 +1928,10 @@ gatilhos. F1 a F3 têm conteúdo de verdade que se fecha em si; F4 não tem nenh
 - revisor, push, deploy e fumaça (passos 8 a 11), que este plano não autoriza por si; playtest
   (passo 13).
 
+**[Fecho, 2026-10-05:** a rota, o instantâneo com o digest, o corpus, as capturas, o HANDOFF
+§12, o Anexo C e o «Feito em» estão feitos, e §16 diz o que saiu diferente. Ficam a revisão
+adversarial e os passos 8 a 11 e 13.**]**
+
 ## 15. Execução, fatia por fatia
 
 A preencher por cada fatia: o vermelho visto antes do conserto, as mutações, o que saiu diferente
@@ -2844,10 +2848,83 @@ foi lido do DOM e do store.
   mais por menos de um segundo, do escritório, com só o escritório visível (63 por 62; 57 por
   56); R02, medido logo depois, não. Repetiu-se nas três sessões e some sozinho; o número
   gravado é o assentado. A causa não foi procurada: parece a folha de uma porta a fechar, que
-  seria de L1.
+  seria de L1. **[fecho: não é porta. É o ponteiro de segundos do relógio da parede, que entra
+  no quadro de R01 por treze segundos de cada minuto; §16, item 7.]**
 - R03 mede 88 · 70.776 enquanto a porta da Ala 1, do outro lado do saguão, ainda está aberta: é
   um par de salas, como R10, e não o ponto de porta fechada que a tabela pede.
 - Com o painel oculto, entre duas chamadas do harness o jogo fica sem quadros, e o primeiro
   quadro depois da pausa conta até 0,25 s da espera de segurar (F4 já tinha visto): um ensaio que
   não aquece os quadros antes assina com um segundo de tecla. Num navegador de verdade os quadros
   são contínuos; as medidas de tempo acima são com os quadros aquecidos.
+
+## 16. O fecho do lote (2026-10-05; passos 6 e 12 de §9.1)
+
+Feito sobre `4c97f47`, num commit local só de testes, corpus, capturas e documentos. `npm run
+check` (35 passos) e `npm run build` verdes. O registro para quem retoma está em
+`docs/HANDOFF.md` §12; aqui fica o que saiu diferente do que §11 e §14 previam.
+
+**Feito, na ordem de HANDOFF §11.10:** `npm run graph:snapshot` (o rascunho de F5 não mudou um
+byte: 49 ações, 7 linhas, 71 ids, 21 campos; SHA-256 `ff85b1a9…29ed`, fixado em
+`FROZEN_SNAPSHOTS` no mesmo commit do «Feito em»); os dois saves do lote no corpus; os dois
+conjuntos de capturas, congelados com digest e citados quadro a quadro no HANDOFF; o «Feito em
+2026-10-05» na seção L3 do plano mestre, **sem** a palavra «publicado»; o Anexo C com
+`flag-never-set` e as três promessas datadas.
+
+**O que saiu diferente.**
+
+1. **Nenhum conserto de código.** O percurso completo (rotas A a F de §11, do título ao termo,
+   mais os saves do corpus um a um) não mostrou defeito de runtime. `src/` só mudou em
+   `src/content/saveFixtures.ts`, que não vai para o build.
+2. **Os dois saves** são os que §14 previa, com um detalhe: `l3-new-game-safe-open` foi jogado
+   **no toque** (844 × 390, pelos direcionais e pelo botão de Ação), com o caderno pego e o
+   rádio na mesa. Faltam nele duas chamadas (`porter-atrium-service`,
+   `porter-machine-reminder`) cujo momento passou fora do alcance do rádio da mesa: têm de
+   continuar não ditas, e `test:qa-save` prende isso.
+3. **Cinco casos de três suítes reprovaram quando os saves entraram** (`test:save` 63 de 66,
+   `test:locks` 19 de 20, `test:triggers` 30 de 31): cada um afirmava, de todo save do corpus, o
+   que só vale para os anteriores a L3 (os dois campos ausentes, a apresentação do Jorge devida,
+   a marca da gaveta posta na carga, a chave por receber). É a lição de HANDOFF §11.10, que as
+   fatias repetiram com as regras novas. Cada caso passou a perguntar `fixtureLot` e ganhou a
+   outra metade (HANDOFF §12.5).
+4. **`test:qa-save` ganhou uma regra que §9 não previa:** um save do lote é um estado a que o
+   jogo chega. Para registros de L3 em diante, gatilho disparado, flag, relógio acertado, chave
+   gasta, termo assinado, sequência vista e altura da dica são conferidos contra o conteúdo.
+   Vermelho antes dos registros: «l3-posse-signed is gone from the corpus». Cinco mutações dos
+   registros, todas pegas (HANDOFF §12.4).
+5. **`test:ending` ganhou um caso** (23): os dois saves em abas vivas. O de por assinar, em três
+   abas, é assinado numa e está nas outras depois de **uma** escrita; o assinado não deve nem
+   grava nada ao continuar, e o púlpito recusa a pressão.
+6. **Capturas: vinte e quatro, não doze.** §11 pedia oito no desktop e quatro no toque. Entraram
+   também a lista em inglês, o pedido e a hora em inglês (de quem nunca pegou o rádio), o que o
+   Jorge diz ao save de produção com a gaveta aberta, a lâmpada vermelha com a sala que falta, a
+   lista depois da assinatura e, no toque, o leitor, as duas metades da lista e a segunda fala
+   do fecho. Três coisas nos quadros são do harness e estão ditas no manifesto: o anel (animação
+   de CSS, desenhado na meia volta), a lista rolada (o deslocamento aplicado à cópia do DOM) e o
+   quadro da lâmpada vermelha, que é de outra noite (`l2-new-game-drawer-touched`).
+7. **O draw a mais em R01 é o relógio.** O que F5 viu de passagem (§15.5) não é uma folha de
+   porta: é o ponteiro de segundos do relógio da parede, na borda de cima do quadro de R01. Com
+   o ponteiro entre 143° e 218° a malha entra no quadro: um draw e 60 triângulos, por 13,3 s de
+   cada minuto. R02 vê o relógio inteiro e não oscila. Existe desde a rodada da abertura; P0, L1
+   e L2 mediram com o ponteiro fora, sem saber. O `BROWSER_RECORD` não mudou de número e ganhou
+   a nota.
+8. **O estado mais cheio do escritório foi medido** (o item que §15.5 deixou descrito): jogo
+   novo, três salas pelo store, rádio e caderno na mesa, gaveta e cofre abertos: 63 · 36.550 em
+   R01 (64 · 36.610 com o ponteiro) e 71 · 38.370 em R02.
+9. **Os dez pontos, medidos de novo, deram os números de F5**, em duas sessões de três passadas
+   (jogo novo e `?qaSave=l3-posse-signed`), com 35 programas.
+10. **A lâmpada do púlpito não se vê de onde se assina**: fica sob a aba do tampo, e a 1,25 m,
+    de frente, o tampo a cobre. De dois metros ela aparece. O prompt diz o mesmo que ela; fica
+    registrado para quem mexer no púlpito (L9).
+11. **A lista rola também em 1280 × 720 depois da assinatura** (652 px em 587): «Termos
+    assinados» entra embaixo dela. No toque já rolava (§15.5).
+12. **Rotas C e F, que F5 não tinha visto.** C: o ano digitado antes de sair do escritório e o
+    cofre aberto antes de qualquer quadro; no saguão escuro o púlpito nomeia as duas salas, e
+    com a Ala 1 acesa antes do saguão nomeia só o saguão. F: duas abas de verdade; a que não
+    assinou, oculta, recebe o termo, a flag, o gatilho e a sequência e não grava nada.
+13. **Segurar leva mais de 1,2 s de relógio com quadros longos**, e é o desenho (DL3-10): cada
+    quadro conta no máximo 0,25 s. Com o painel oculto e a GPU aquecendo, 2,3 a 2,6 s; com
+    quadros aquecidos, 1,20 a 1,21 s.
+
+**O que o fecho não fez:** os passos 5 (revisão adversarial), 8 a 11 (revisor, push, deploy,
+fumaça) e 13 (playtest). Se a revisão mudar o grafo, `npm run graph:snapshot -- --reopen` e o
+digest novo no mesmo commit; se mudar o que uma sala desenha, medir de novo.

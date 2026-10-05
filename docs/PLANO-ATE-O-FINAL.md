@@ -2743,6 +2743,28 @@ dono e continua pendente. Não trava L1; trava o livro-caixa de L6.
   `test:radio`, `test:opening`, `test:opening-flow`.
 - **Risco.** Médio (o gesto novo toca o caminho de todo `E`). Teto temporário de ÁT-K1 (o Livro).
 - **Passagem.** Dívida: catalogar ainda falha em três peças (L4). Promessa datada: a caixa-forte.
+- **Feito em 2026-10-05**, ainda não publicado, em commits locais na `main`: o plano do lote
+  (`6cd9b7d`), as cinco fatias dele (de `e9f9803` a `4c97f47`; `docs/lotes/L3-plano.md`, §15) e
+  o fecho (§16 do mesmo arquivo). `npm run check` (35 passos) e `npm run build` verdes. O
+  percurso completo foi feito no navegador de desenvolvimento, do título ao termo de posse
+  assinado: um jogo novo na ordem canônica; a ordem de quem pula tudo (sem caderno, sem rádio,
+  sem lanterna), em inglês, com o cofre aberto antes de qualquer quadro e a Ala 1 acesa antes do
+  saguão; e a partir dos saves do corpus (os de produção com a gaveta aberta e fechada, o de L1
+  e os dois de L2); em pt-BR e em inglês, em 1280 × 720 e em 844 × 390 pelos direcionais e pelo
+  botão de Ação (segurar assina, soltar antes cancela, um toque pergunta «Assinar / Cancelar»);
+  e com duas abas de verdade, uma assinando. Nenhum defeito que pedisse conserto de código. O
+  passo 12 está feito: `docs/releases/L3.graph.json` (49 ações, 7 linhas da lista, 71 ids, com o
+  termo e a sequência entre eles, 21 campos do save; digest fixado), dois saves do lote no
+  corpus (`l3-posse-signed`, `l3-new-game-safe-open`), vinte e quatro quadros congelados em dois
+  conjuntos e o registro em `docs/HANDOFF.md` §12, com o que um rollback perde. `CONTENT_LOT` é
+  3 desde a fatia F5, que pagou a última dívida com a data do lote. Os dez pontos de referência
+  foram medidos de novo no fecho e deram os números que F5 gravou (`BROWSER_RECORD`, lote 3); o
+  ponto de leitura do escritório conta um draw a mais durante treze segundos de cada minuto,
+  que é o ponteiro de segundos do relógio da parede (HANDOFF, §12.3).
+  **Faltam** os passos 5 (revisão adversarial por quem não implementou), 8 a 11 (revisor, push,
+  deploy e fumaça em produção, com a versão Cloudflare anotada no HANDOFF e esta linha passando
+  a dizer que o lote foi publicado) e 13 (playtest: o aceite manual pede que uma pessoa nova
+  chegue à Posse, 8.10); e o aparelho real, que continua com o dono.
 
 ### L4 — O verbo: examinar, virar, catalogar
 
@@ -3420,7 +3442,7 @@ gaveta.)
 | P0 | manifesto de capturas (`test:captures`); teste de documentação, todo ID resolve (`test:docs`); saves de produção pelo caminho real de carga (`test:qa-save`); fontes lidas e registradas (`test:facts`) | `validate:content` (`fact-code-uncaptured`, `fact-source-uncaptured`, `fact-source-drift`, `fact-capture-malformed`) |
 | L1 | catracas (tamanho do `kit.glb`, bytes por caminho, programas, textura residente) | `validate:content` (M0, `fact-code-uncaptured`), `test:kit` (peça × `layout`), `test:power`, `test:navigation`, `test:opening`, `test:opening-flow`, `test:gpu-warmup` |
 | L2 | `test:save`, `test:triggers`, `test:locks`, `test:playthrough`, `test:map`, `test:lints`; `validateAdditive` contra `docs/releases/L2.graph.json` | `validate:content` (`simulateProgress`; lint de texto: `numeral-exclusivity`, `numeral-printed-in-missing`, `fact-code-without-printed-in`, `fact-exception-without-patterns`, `counted-pattern`, `text-ages`, `speech-night-state-unconditional`), `test:transition-door`, `test:mobile-controls`, `test:navigation` (inundação: `no-standing-point`, `standing-point-inside-target`), `test:opening`, `test:qa-save` (um save por lote fechado), `test:captures`, `test:facts` |
-| L3 | `test:ending`, `test:speech-coherence` | `test:mobile-controls` (segurar), `test:radio`, `test:opening`, `test:opening-flow` |
+| L3 | `test:ending`, `test:speech-coherence` | `validate:content` (fala: `speech-mentions-missing`, `speech-line-too-long`, `speech-hour-in-digits`; dica: `hint-points-to-nothing`, `radio-hint-coverage`; promessa datada: `deferred-without-notice`, `deferred-overdue`; `flag-never-set`; `legacy-save-drawer`; `consumable-multi-consumer`, `credential-unobtainable`; `device-node-missing`, `container-node-missing`, `device-part-not-baked`), `test:mobile-controls` (segurar), `test:radio`, `test:opening`, `test:opening-flow`, `test:save` (abas vivas), `test:triggers`, `test:locks`, `test:playthrough` (sete níveis), `test:navigation`, `test:desk-top`, `test:kit` (peça × `layout`), `test:kit-runtime`, `test:map`, `test:qa-save` (um save do lote é um estado a que o jogo chega), `test:captures` |
 | L4 | `test:examine` | `validate:content` (detalhes), `test:locks` (escada), `test:room-runtime` |
 | L5 | `test:shell-finishes`, `test:room-placement`; estimador (M14) | bake (portões de 4.10), `test:materials`, `test:kit-runtime` (tetos por dado) |
 | L6 | — | `test:kit-runtime`, `test:room-lod`, `test:kit`, `test:desk-top`, `test:bookshelf` (manifesto fundido) |
@@ -3438,16 +3460,17 @@ gaveta.)
 | L23 | — | `test:navigation` (cota), `test:room-lod` (tier distante), `test:collision` |
 | L24 | modo `--final` | modo leitura × dicionário |
 
-**Dívidas datadas (`knownDebt`) abertas em L1 e L2**, com o lote que fecha cada uma:
+**Dívidas datadas (`knownDebt`) abertas em L1, L2 e L3**, com o lote que fecha cada uma (as três
+com data de L3 foram pagas nele: a linha da caixa-forte, `text-ages` e as três falas sem `when`):
 
 | Código | O que acusa hoje | Fecha em |
 |---|---|---|
 | `exhibit-uncataloguable` | `net-1897`, `gym-suit`, `photo-gym` | L4 |
 | `hotspot-unreachable` | `net-1897:socket`: detalhe opcional a 2,4 m da origem que a vista segura a 0,42 m (H-01); a vista das peças grandes o traz, ou ele vira detalhe do modelo (B.11) | L4 |
-| `checklist-item-untickable` | «Catalogar o acervo» (até L4); «Caixa-forte» (até L3, que a transforma em promessa datada sem caixa de riscar, `deferredUntilLot` 12; a promessa é paga em L12) | L4, L3 |
+| `checklist-item-untickable` | «Catalogar o acervo» (até L4); «Caixa-forte» (até L3, que a transforma em promessa datada sem caixa de riscar, `deferredUntilLot` 12; a promessa é paga em L12). **A da caixa-forte foi paga em L3** | L4, L3 |
 | `standing-point-inside-target` | `net-1897`: sem colisor, quem anda até a rede fica com o olho dentro da caixa dela (H-31) | L14 |
-| `text-ages` | `document.predecessor.body` («há cento e trinta anos», H-23); o bilhete dá lugar a `doc-otavio-handover` | L3 |
-| `speech-night-state-unconditional` | `radio.patience.t4.dark`, `radio.patience.t5.soap.2`, `radio.deadAir.rain`: resposta do Jorge sem `when` até M9 | L3 |
+| `text-ages` | `document.predecessor.body` («há cento e trinta anos», H-23); o bilhete dá lugar a `doc-otavio-handover`. **Paga em L3** | L3 |
+| `speech-night-state-unconditional` | `radio.patience.t4.dark`, `radio.patience.t5.soap.2`, `radio.deadAir.rain`: resposta do Jorge sem `when` até M9. **Pagas em L3** | L3 |
 | `kit-part-unused` | 16% do kit sem uso | L5 |
 | catraca de programas | 34–35 medidos contra 25 do papel | L6 (o teto passa a ser o medido) |
 | catraca do `kit.glb` | 2.189 KB contra 800 do papel | L6 |
@@ -3457,7 +3480,18 @@ gaveta.)
 | `placement-without-role` | recepção, gaveteiro, gavetas do console, torre, lounge, biombos, caixa de doação, instalação aérea, pódio | L9 (o pódio, L11) |
 | detalhe opcional × `anchors` | carimbo da Spalding sobre o bico; plaqueta do retrato | L14 |
 | tetos temporários do átrio | 58 lotes, 102 draws | L6 |
+| `flag-never-set` | `basement-drained`: «(Nada. Só a chuva.)» espera a ausência de uma flag que só a bomba põe; até lá chove a noite inteira (aberta em L3, DL3-14 do plano do lote) | L12 |
 | `deferred` (promessas datadas) | pódio (L11); plataforma (L12); tapumes (L18 a L22); grade do mezanino (L23); entrada (L24) | no lote de cada uma |
+
+**Promessas datadas no jogo desde L3** (impressas por `validate:content`, cada uma dita ao jogador
+pela chave ao lado; `deferred-without-notice` se a nota faltar, `deferred-overdue` se a data chegar
+sem pagamento):
+
+| Promessa | O que o jogador lê | Chave | Paga em |
+|---|---|---|---|
+| `atrium-podium` | «Plinto do Fundador — Interditado: obra do piso.» | `device.atrium-podium.notice` | L11 |
+| `notebook.todo.vault` | «hoje não: o subsolo alagou» | `notebook.todo.vault.note` | L12 |
+| `notebook.todo.proof` | «hoje não: fica para a reabertura» | `notebook.todo.proof.note` | L12 |
 
 Um validador novo que acuse algo fora desta tabela reprova o lote: ou o conteúdo é consertado, ou a
 linha entra aqui, com data, no plano do lote.

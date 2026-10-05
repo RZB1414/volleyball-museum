@@ -223,6 +223,77 @@ export const CAPTURE_SETS = {
     frozen: true,
     digest: '9afc6c6c1dfa8dd22420142b62d6caa4eecb651f2929d34edeb091be59f3cdb7',
   },
+  /**
+   * The browser route of L3 (docs/HANDOFF.md, §12): what the Posse gave the
+   * player. In the office, the list that keeps count with its two pencilled
+   * notes (`o05` is the same list in English), Otávio's message in the
+   * subtitle, the iron safe open on its hinge with the proof on the shelf,
+   * the deed of office in the reader before it is signed, and what the
+   * porter tells a save of production whose drawer was open before it held a
+   * key (`o06`, from `?qaSave=production-drawer-open`). In the hall,
+   * the plinth that says why it is closed, and the lectern in each of its
+   * answers: the room without light named under a red lamp, the press asked
+   * for under a green one, the ring half-way round the key, the card, the
+   * loudspeaker's line with the hour in it, the Book left open, and the list
+   * afterwards. `a09` and `a10` are the press asked for and the hour said in
+   * English, by a player who never took the radio.
+   *
+   * Composed like the frames of `l2`: the WebGL frame with the DOM layer over
+   * it. Two things in them are the harness's and not the game's. The ring of
+   * `a03` is a CSS animation, which a copy of the DOM starts again from
+   * nothing: it is drawn at the half turn the press had been held for. The
+   * list of `a07` scrolls by 65 pixels once the signed deeds are under it:
+   * the frame is of the list scrolled to its end, the offset applied to the
+   * copy, so the scroll bar (the embedding browser's) still stands at the
+   * top. And one frame is of another night than the rest: `a08` is the new
+   * game L2 left, with the wing unlit, which is the only way to see a lit
+   * hall refuse.
+   *
+   * `commit` is the lot's last slice, whose tree these frames show. The two
+   * saves some of them start from (`l3-new-game-safe-open`,
+   * `l3-posse-signed`) enter the corpus with the commit that closes the lot;
+   * both were read out of this tree's own game.
+   */
+  l3: {
+    capturedAt: '2026-10-05',
+    commit: '4c97f47',
+    report: 'docs/HANDOFF.md',
+    filePrefix: 'l3',
+    viewport: { cssWidth: 1280, cssHeight: 720, pixelRatio: 1.2, quality: 'medium' },
+    frame: { width: 1536, height: 864 },
+    groups: {
+      o: { room: 'office', powered: true },
+      a: { room: 'atrium', powered: true },
+    },
+    frozen: true,
+    digest: 'b2422f2fa92d6a7029f1b548f55395449dfc50b7386620baa8740acd13dc78ec',
+  },
+  /**
+   * The same lot at 844 x 390, where the held press has no key. The deed in
+   * the reader and the list (which scrolls on a phone: `o02` is its top and
+   * `o03` its end, the offset applied to the copy as in `l3-a07`), and the
+   * Action button at the lectern: asked for, counted (the ring of `a02`
+   * drawn at the half turn, as in `l3-a03`), and split by a tap into Assinar
+   * and Cancelar, the second where the finger already is. Then the card
+   * clear of the prompt, and the loudspeaker's second line.
+   *
+   * Composed at two device pixels from a game that draws at 1.6 (the phone
+   * tier): the canvas is 1350 x 624 and is scaled up into the frame.
+   */
+  'l3-touch': {
+    capturedAt: '2026-10-05',
+    commit: '4c97f47',
+    report: 'docs/HANDOFF.md',
+    filePrefix: 'l3t',
+    viewport: { cssWidth: 844, cssHeight: 390, pixelRatio: 2, quality: 'medium' },
+    frame: { width: 1688, height: 780 },
+    groups: {
+      o: { room: 'office', powered: true },
+      a: { room: 'atrium', powered: true },
+    },
+    frozen: true,
+    digest: 'd95a6059d5043b7b3688a8bb43bb3e44c5c793e08573c6cb440ce716204b5152',
+  },
 }
 
 /** How a file name ends, and the light it says the frame was taken in. */

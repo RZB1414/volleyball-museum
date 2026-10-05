@@ -1317,6 +1317,123 @@ await test('a drawer that opens now hands its key over in the same write, with n
   assert.equal(nextRadioCall(radio, { ...safeOpen, flags: ['posse-signed'] }, MUSEUM), null)
 })
 
+await test("the saves the lot left, in live tabs: the deed signed in one tab is in every tab after one write; a night already signed owes nothing and writes nothing", async () => {
+  // The two records the lot closed with (`saveFixtures.ts`), each opened as a
+  // browser opens it, in more than one tab at once: what the walk through
+  // the game did with two real tabs, kept where the gate runs it.
+  const desk = deskOf(MUSEUM)
+  const radio = radioDevices(MUSEUM)[0].device
+  const settled = (browser: ReturnType<typeof openBrowser>, when: string) => {
+    const { quiet, rounds } = browser.settle()
+    assert.ok(quiet, `${when}: the tabs were still writing the save at each other (writes per round: ${rounds.join(', ')})`)
+  }
+
+  // One held press short of the deed: the Book read, the house lit, the radio on its desk.
+  const short = openBrowser(SAVE_FIXTURES['l3-new-game-safe-open'].save)
+  try {
+    const atTheLectern = await short.open('the tab at the lectern')
+    const inTheOffice = await short.open('a tab left in the office', 'idle')
+    const onTheTitle = await short.open('a tab left on the title screen')
+    for (const tab of [atTheLectern, inTheOffice]) {
+      tab.act((state) => state.start())
+      tab.registerRules(MUSEUM_RULES)
+    }
+    atTheLectern.act((state) => state.setCurrentRoom('atrium'))
+    settled(short, 'two tabs in the game and one on the title')
+    for (const tab of short.tabs) {
+      // The content arrived and owed this save nothing: it was written settled.
+      assert.deepEqual(
+        [tab.progress().credentials, tab.progress().triggersFired, tab.progress().flags, tab.progress().termsSigned],
+        [[KEY], [KEY_TRIGGER], [], []],
+        `"${tab.name}" was handed something as it loaded`,
+      )
+      assert.equal(signingDeskState(MUSEUM.terms ?? [], desk, tab.progress(), MUSEUM).state, 'ready', `"${tab.name}": the deed is not ready to be signed`)
+      assert.equal(nextRadioCall(radio, tab.progress(), MUSEUM), null, `"${tab.name}": a call is owed to a save that had heard them all`)
+    }
+    const written = short.writes.length
+
+    // The player holds E at the lectern, in one tab: the handler the key calls, and what the fired hold does.
+    const request = atTheLectern.act(() => pressSigningDeskOn(atTheLectern.store.useMuseum, MUSEUM, LECTERN))
+    assert.deepEqual(request, { id: LECTERN, seconds: 1.2 }, 'the lectern does not ask for its press to be held')
+    assert.equal(held(request as { id: string; seconds: number }), LECTERN)
+    atTheLectern.act(() => assert.equal(signAtDeskOn(atTheLectern.store.useMuseum, MUSEUM, LECTERN), true))
+    settled(short, 'one tab signed the deed')
+    assert.deepEqual(short.writes.slice(written).map((write) => write.by), [atTheLectern.name], 'a signature is one write, and no other tab answers it')
+    for (const tab of short.tabs) {
+      assert.deepEqual(tab.progress().termsSigned, [POSSE], `"${tab.name}" does not have the deed`)
+      assert.deepEqual(tab.progress().flags, ['posse-signed'], `"${tab.name}" does not have its flag`)
+      assert.deepEqual(tab.progress().triggersFired, [KEY_TRIGGER, 'term:termo-posse:signed'], `"${tab.name}" does not have its trigger`)
+      assert.equal(signingDeskState(MUSEUM.terms ?? [], desk, tab.progress(), MUSEUM).state, 'signed')
+    }
+    // The card is owed in every tab that is in the game, and shown where the player is.
+    assert.equal(inTheOffice.act(() => startDueSequenceOn(inTheOffice.store.useMuseum, MUSEUM, true)), false, 'a tab in the background started the card')
+    atTheLectern.act(() => assert.equal(startDueSequenceOn(atTheLectern.store.useMuseum, MUSEUM, false), true, 'no card followed the signature'))
+    atTheLectern.act((state) => {
+      for (let step = 0; step < 3; step += 1) state.advanceSequence()
+    })
+    settled(short, 'the card and the two lines were seen out')
+    assert.deepEqual(short.writes.slice(written).map((write) => write.by), [atTheLectern.name, atTheLectern.name])
+    for (const tab of short.tabs) assert.deepEqual(tab.progress().sequencesSeen, ['seq-posse'], `"${tab.name}" would show the card again`)
+    assert.equal(inTheOffice.act(() => startDueSequenceOn(inTheOffice.store.useMuseum, MUSEUM, false)), false, 'the other tab showed the card a second time')
+    // The tab with no rules writes, and takes nothing of the ending off the disk.
+    onTheTitle.act((state) => state.setSetting('brightness', 1.2))
+    settled(short, 'the tab on the title screen changed a setting')
+    const disk = short.disk()!.progress!
+    assert.deepEqual([disk.termsSigned, disk.flags, disk.sequencesSeen, disk.credentials], [[POSSE], ['posse-signed'], ['seq-posse'], [KEY]])
+    assert.deepEqual(shrunk(SAVE_FIXTURES['l3-new-game-safe-open'].save.progress as Raw, disk), [], 'the night lost something it had before the signature')
+    const quietAt = short.writes.length
+    for (const tab of short.tabs) {
+      tab.hide()
+      tab.show()
+    }
+    settled(short, 'every tab was hidden and shown')
+    assert.equal(short.writes.length, quietAt, 'a tab with nothing new wrote as it was hidden')
+  } finally {
+    short.close()
+  }
+
+  // The night already signed: nothing is owed to it, in the game or on the title.
+  const record = SAVE_FIXTURES['l3-posse-signed'].save
+  const signed = openBrowser(record)
+  try {
+    const inTheGame = await signed.open('the tab in the game')
+    // Opened and left alone: it is there to be caught writing, by the two loops over every tab.
+    await signed.open('a tab left on the title screen', 'idle')
+    inTheGame.act((state) => state.start())
+    inTheGame.registerRules(MUSEUM_RULES)
+    settled(signed, 'the signed save, continued')
+    // Where the player wakes is the one thing a Continue changes: the office, not the hall they stopped in.
+    for (const tab of signed.tabs) {
+      assert.deepEqual({ ...throughJson(tab.progress()), lastRoom: record.progress.lastRoom }, record.progress, `"${tab.name}": the load, or the content arriving, changed the save`)
+    }
+    assert.ok(signed.writes.every((write) => write.by === inTheGame.name), 'a tab on the title screen wrote the save')
+    assert.equal(inTheGame.progress().lastRoom, MUSEUM.spawn.room)
+    const before = inTheGame.progress()
+    const calm = signed.writes.length
+    // No card, no call, and a lectern that declines the press: E at it does nothing, held or not.
+    assert.equal(inTheGame.act(() => startDueSequenceOn(inTheGame.store.useMuseum, MUSEUM, false)), false, 'the card was shown again')
+    assert.equal(inTheGame.state().sequence, null)
+    assert.equal(nextRadioCall(radio, inTheGame.progress(), MUSEUM), null, 'a call is owed after the night closed')
+    assert.equal(inTheGame.act(() => pressSigningDeskOn(inTheGame.store.useMuseum, MUSEUM, LECTERN)), false, 'the lectern took a press with nothing left to sign')
+    assert.equal(inTheGame.act(() => signAtDeskOn(inTheGame.store.useMuseum, MUSEUM, LECTERN)), false)
+    assert.deepEqual(devicePrompt(desk, deviceIntent(desk, deviceInputOf(desk, inTheGame.state(), MUSEUM))), {
+      form: 'signed',
+      titleKey: 'device.atrium-lectern.title',
+      termKey: 'term.posse.title',
+    })
+    assert.deepEqual(deskShows(signingDeskState(MUSEUM.terms ?? [], desk, inTheGame.progress(), MUSEUM), desk, inTheGame.progress()), { lamp: false, book: true })
+    assert.equal(inTheGame.progress(), before, 'a press on a signed lectern wrote to the save')
+    for (const tab of signed.tabs) {
+      tab.hide()
+      tab.show()
+    }
+    settled(signed, 'every tab was hidden and shown')
+    assert.equal(signed.writes.length, calm, 'a tab of a night already signed wrote with nothing new to say')
+  } finally {
+    signed.close()
+  }
+})
+
 // ---------------------------------------------------------------------------
 // The components call these rules
 // ---------------------------------------------------------------------------

@@ -52,6 +52,7 @@ export const FIRST_SNAPSHOT_LOT = 2
  */
 export const FROZEN_SNAPSHOTS: Readonly<Record<number, string>> = {
   2: '0eae15c3eaba5a4dc2fca5df72d708c0e7b0a73011616c4fb1be2cb8c310a5b1',
+  3: 'ff85b1a9986c537b3fb15db2b4cdee9be36881d81a72ec42483f78b1d0df29ed',
 }
 
 export type SnapshotOnDisk = {

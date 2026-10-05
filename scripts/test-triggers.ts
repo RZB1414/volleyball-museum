@@ -587,9 +587,14 @@ await test('the real museum registers itself, compiles the two triggers of its e
   for (const [id, fixture] of Object.entries(SAVE_FIXTURES)) {
     const loaded = migrateProgress(throughJson(fixture.save.progress))
     const settled = rules.settle(loaded)
-    // A save whose drawer was already open is owed the key; the others are
-    // owed nothing, and get back the very save they handed in.
-    const open = loaded.locksOpened.includes('office-drawer')
+    // A save whose drawer was already open, with no record of the trigger
+    // that hands over its key, is owed the key; the others are owed nothing,
+    // and get back the very save they handed in. Among the others, since the
+    // lot left its own saves in the corpus, are the ones this lot wrote: a
+    // save is written settled, so the trigger is on record beside the key.
+    // (This used to ask «is the drawer open», which owed a second key to a
+    // save that had been handed its first.)
+    const open = loaded.locksOpened.includes('office-drawer') && !loaded.triggersFired.includes('lock:office-drawer:opened')
     if (open) {
       owed.push(id)
       assert.deepEqual(
@@ -609,9 +614,15 @@ await test('the real museum registers itself, compiles the two triggers of its e
     // No action of the table opens the drawer or signs the deed: nothing else fires.
     assert.deepEqual(page.progress().triggersFired, settled.triggersFired, `${id}: a trigger fired that nothing done here is the cause of`)
     assert.deepEqual(page.progress().flags, [...settled.flags, 'effect-flag'], `${id}: the flags are the save's own and the one the table of actions grants`)
-    assert.ok(!page.progress().flags.includes('posse-signed'), id)
+    // The flag of the deed is in the save that signed it, and in no other.
+    assert.equal(page.progress().flags.includes('posse-signed'), loaded.termsSigned.includes('termo-posse'), id)
   }
   assert.deepEqual(owed, ['production-drawer-open', 'l1-route-end', 'l2-shortcut-released'])
+  // The corpus holds a deed signed, so the line above is asked both ways.
+  assert.ok(
+    Object.values(SAVE_FIXTURES).some((fixture) => ((fixture.save.progress as { termsSigned?: readonly string[] }).termsSigned ?? []).includes('termo-posse')),
+    'no save of the corpus has the deed of office signed',
+  )
 })
 
 const PLAY: Record<string, (state: StoreState) => void> = {

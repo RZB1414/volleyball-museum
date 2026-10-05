@@ -659,11 +659,25 @@ await test('the corpus: a save that says what it touched is believed, shut drawe
   }
   // The new game of L2 touched the drawer and left it shut: the plan names it
   // from the first frame of "Continue", with no second touch. The route from
-  // L1's save had the drawer open, so there is nothing to name.
+  // L1's save had the drawer open, so there is nothing to name. The two saves
+  // of L3 opened both locks of the house, the drawer and the iron safe.
   assert.deepEqual(pending, {
     'l2-shortcut-released': [],
     'l2-new-game-drawer-touched': ['office-drawer'],
+    'l3-posse-signed': [],
+    'l3-new-game-safe-open': [],
   })
+  // In both the key went into the safe and stayed there: spent, and still in
+  // the save (DL3-1). The save of L2 above was handed the same key as it
+  // loaded, and holds it unspent: its safe is shut and was never touched.
+  for (const id of ['l3-posse-signed', 'l3-new-game-safe-open'] as const) {
+    const held = await openGame(SAVE_FIXTURES[id].save)
+    assert.deepEqual(throughJson(held.progress().locksOpened), ['office-drawer', 'office-safe'], id)
+    assert.deepEqual([...toolSpent(MUSEUM.locks, held.progress())], ['tool:service-key'], `${id}: the key that opened the safe`)
+    assert.ok(held.progress().credentials.includes('tool:service-key'), `${id}: a spent key left the save`)
+  }
+  const handed = await openGame(SAVE_FIXTURES['l2-shortcut-released'].save)
+  assert.deepEqual([throughJson(handed.progress().credentials), [...toolSpent(MUSEUM.locks, handed.progress())]], [['tool:service-key'], []])
   // The keypad still asks, and the year still opens it, for the player who
   // had only looked: one path, whoever wrote the save.
   const page = await openGame(SAVE_FIXTURES['l2-new-game-drawer-touched'].save)

@@ -432,11 +432,28 @@ await test('the terms signed and the sequences shown are fields of the table: re
   assert.deepEqual(junk.termsSigned, [])
   assert.deepEqual(junk.sequencesSeen, ['seq-posse'])
   assert.deepEqual(junk.catalogued, ['ball-spalding'])
-  // A save from before the fields existed gets them empty: every save of the corpus.
+  // A save from before the fields existed gets them empty. One written since
+  // says what it signed and what it was shown, and the load takes its word.
+  // (This used to say «every save of the corpus»: true until the lot that
+  // brought the fields left its own saves there.)
+  const signedInTheCorpus: string[] = []
   for (const id of fixtureIds) {
-    const loaded = migrateProgress(throughJson(rawFixture(id)))
-    assert.deepEqual([loaded.termsSigned, loaded.sequencesSeen], [[], []], id)
+    const raw = rawFixture(id)
+    const loaded = migrateProgress(throughJson(raw))
+    if (fixtureLot(SAVE_FIXTURES[id]) < 3) {
+      assert.ok(!('termsSigned' in raw) && !('sequencesSeen' in raw), `${id}: a record from before the terms names one`)
+      assert.deepEqual([loaded.termsSigned, loaded.sequencesSeen], [[], []], id)
+    } else {
+      assert.deepEqual([loaded.termsSigned, loaded.sequencesSeen], [raw.termsSigned, raw.sequencesSeen], `${id}: the load changed what the save says it signed or saw`)
+      if (loaded.termsSigned.length > 0) signedInTheCorpus.push(id)
+    }
   }
+  // Both sides of the signature are kept: a deed signed, and one left on the desk.
+  assert.ok(signedInTheCorpus.length > 0, 'the corpus holds no save with a term signed')
+  assert.ok(
+    fixtureIds.some((id) => fixtureLot(SAVE_FIXTURES[id]) >= 3 && !signedInTheCorpus.includes(id)),
+    'the corpus holds no save of L3 from before the signature',
+  )
   // "New game" asks before erasing a signature, and does not ask for what was only shown.
   assert.equal(PROGRESS_FIELDS.termsSigned.counts, true)
   assert.equal(PROGRESS_FIELDS.sequencesSeen.counts, false)
@@ -2480,8 +2497,16 @@ await test("the Posse's old news, save by save: what each had passed counts as h
     assert.deepEqual(loaded.flags, [...before.flags, ...drawerMarkOf(before as Raw)], `${id}: the flags`)
     assert.deepEqual({ ...loaded, radioCalls: before.radioCalls, flags: before.flags }, before, `${id}: the migration moved something besides the calls and the mark`)
     assert.deepEqual(shrunk(before as Raw, loaded as Raw), [], id)
-    // His introduction is owed, and is the first thing this save hears.
-    assert.ok(!loaded.radioCalls.includes(PRE_POSSE_SAVE.helloCallId), `${id}: the introduction was taken as heard`)
+    if (fixtureLot(SAVE_FIXTURES[id]) < 3) {
+      // His introduction is owed, and is the first thing this save hears.
+      assert.ok(!loaded.radioCalls.includes(PRE_POSSE_SAVE.helloCallId), `${id}: the introduction was taken as heard`)
+    } else {
+      // A save this lot wrote has met him: nothing in it is old news, and
+      // the load adds no call to it. (Until the lot left its own saves in
+      // the corpus, this case asked the line above of every record.)
+      assert.ok(loaded.radioCalls.includes(PRE_POSSE_SAVE.helloCallId), `${id}: a save of L3 that never heard his introduction`)
+      assert.deepEqual(loaded.radioCalls, raw.radioCalls, `${id}: the load added a call to a save that had met the porter`)
+    }
     // Idempotent, through the disk and back as often as it goes.
     assert.deepEqual(migrateProgress(throughJson(loaded)), loaded, `${id}: a second load`)
     assert.deepEqual(migrateProgress(throughJson(migrateProgress(throughJson(loaded)))), loaded, `${id}: a third`)
@@ -2745,6 +2770,7 @@ await test('the drawer that was open before it held a key, save by save: the loa
   assert.deepEqual(SAVE_ALIASES, [{ sinceLot: 3, field: 'documentsRead', from: 'doc-predecessor', to: 'doc-otavio-handover' }])
   const list = (raw: Raw, field: string) => (raw[field] as string[] | undefined) ?? []
   const marked: string[] = []
+  const carried: string[] = []
   for (const id of fixtureIds) {
     const raw = rawFixture(id)
     const loaded = migrateProgress(throughJson(raw))
@@ -2756,21 +2782,43 @@ await test('the drawer that was open before it held a key, save by save: the loa
     })
     // Open, and the trigger that hands over its key not on record: it was opened before there was one.
     const before = list(raw, 'locksOpened').includes('office-drawer') && !list(raw, 'triggersFired').includes(DRAWER_TRIGGER)
-    assert.equal(loaded.flags.includes(LEGACY_DRAWER), before, `${id}: the mark of a drawer opened before the key`)
+    // A record of this lot may carry the mark an earlier load left on it: it
+    // is the save's own by then, and the load neither repeats nor removes it.
+    // (The corpus had no such record while the lot was being written, and
+    // this case took `before` for the whole answer.)
+    const already = list(raw, 'flags').includes(LEGACY_DRAWER)
+    assert.ok(!(before && already), `${id}: marked, with the trigger that follows the mark not on record`)
+    assert.equal(loaded.flags.includes(LEGACY_DRAWER), before || already, `${id}: the mark of a drawer opened before the key`)
     if (before) marked.push(id)
+    if (already) carried.push(id)
     assert.deepEqual(loaded.flags, [...older.flags, ...(before ? [LEGACY_DRAWER] : [])], `${id}: the load set a flag of its own`)
     assert.deepEqual(drawerMarkOf(older as Raw), before ? [LEGACY_DRAWER] : [], `${id}: this suite's own account of the rule`)
     // Whoever read the note has read the sheet that took its place, and keeps the note:
     // the build before the rename, in another tab, knows the note and nothing of the sheet.
+    // A save that holds both already (it was loaded by this lot once) gains nothing.
     const note = list(raw, 'documentsRead').includes('doc-predecessor')
-    assert.deepEqual(loaded.documentsRead, [...older.documentsRead, ...(note ? ['doc-otavio-handover'] : [])], `${id}: the papers`)
-    assert.deepEqual(sheetForTheNoteOf(older as Raw), note ? ['doc-otavio-handover'] : [], id)
+    const sheet = list(raw, 'documentsRead').includes('doc-otavio-handover')
+    assert.deepEqual(loaded.documentsRead, [...older.documentsRead, ...(note && !sheet ? ['doc-otavio-handover'] : [])], `${id}: the papers`)
+    assert.deepEqual(sheetForTheNoteOf(older as Raw), note && !sheet ? ['doc-otavio-handover'] : [], id)
     // No key by the load alone, and no trigger taken as fired: the key is the
     // content's to hand over, and the store does not know the content.
     assert.deepEqual([loaded.credentials, loaded.triggersFired], [list(raw, 'credentials'), list(raw, 'triggersFired')], `${id}: the load handed something over`)
     assert.deepEqual(migrateProgress(throughJson(loaded)), loaded, `${id}: a second load`)
   }
-  assert.deepEqual(marked.slice(0, 3), ['production-drawer-open', 'l1-route-end', 'l2-shortcut-released'], 'the three saves of the corpus that opened the drawer before L3')
+  assert.deepEqual(marked, ['production-drawer-open', 'l1-route-end', 'l2-shortcut-released'], 'the three saves of the corpus that opened the drawer before L3')
+  // And the one that is the third of them a night later: marked at its first
+  // load in this lot, with the key, the trigger, the note and the sheet.
+  assert.deepEqual(carried, ['l3-posse-signed'], 'the saves of the corpus that carry the mark from an earlier load')
+  for (const id of carried) {
+    const raw = rawFixture(id as keyof typeof SAVE_FIXTURES)
+    assert.ok(fixtureLot(SAVE_FIXTURES[id as keyof typeof SAVE_FIXTURES]) >= 3, `${id}: a record from before L3 carries the mark`)
+    assert.ok(list(raw, 'triggersFired').includes(DRAWER_TRIGGER) && list(raw, 'credentials').includes(SERVICE_KEY), `${id}: marked and never handed its key`)
+    assert.deepEqual(['doc-predecessor', 'doc-otavio-handover'].filter((doc) => !list(raw, 'documentsRead').includes(doc)), [], `${id}: the note or the sheet is missing`)
+  }
+  // A new game of the lot opens the drawer with the key in the same write, and is never marked.
+  const tonight = fixtureIds.filter((id) => fixtureLot(SAVE_FIXTURES[id]) >= 3 && !carried.includes(id) && list(rawFixture(id), 'locksOpened').includes('office-drawer'))
+  assert.ok(tonight.length > 0, 'the corpus holds no save of L3 whose drawer was opened in L3')
+  for (const id of tonight) assert.ok(list(rawFixture(id), 'triggersFired').includes(DRAWER_TRIGGER) && !list(rawFixture(id), 'flags').includes(LEGACY_DRAWER), id)
 
   // By what the save holds, never by its stamp (DL3-3): a slice of the lot
   // before this one wrote saves that carry this lot's number already.

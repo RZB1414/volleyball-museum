@@ -264,6 +264,76 @@ test('the report of L2 cites every frame of its two sets, and no frame they do n
   assert.deepEqual([...new Set(problems)], [])
 })
 
+test('the L3 set is the sixteen frames of the Posse, frozen on the tree they show', () => {
+  const l3 = readCaptureManifest(ROOT, 'l3')
+  assert.ok(l3, `${CAPTURE_ROOT}/l3/${MANIFEST_FILE} is missing`)
+  assert.equal(l3.count, 16)
+  assert.equal(l3.captures.length, 16)
+  // The lot's last slice. The commit that closes the lot adds saves, tests
+  // and documents, and moves nothing a frame shows.
+  assert.equal(l3.commit, '4c97f47')
+  assert.equal(l3.frozen, true)
+  assert.equal(l3.report, 'docs/HANDOFF.md')
+  assert.deepEqual(l3.viewport, { cssWidth: 1280, cssHeight: 720, pixelRatio: 1.2, quality: 'medium' })
+  assert.deepEqual(l3.frame, { width: 1536, height: 864 })
+  // The lot lit nothing and darkened nothing: its route is walked with the
+  // house lit, and the one refusal it shows is of a hall that has its light.
+  const count = (room: string, light: string) =>
+    l3.captures.filter((capture: Capture) => capture.room === room && capture.light === light).length
+  assert.equal(count('office', 'lit'), 6)
+  assert.equal(count('atrium', 'lit'), 10)
+  assert.equal(l3.captures.filter((capture: Capture) => capture.light !== 'lit').length, 0)
+  // What the lot gave the player: a list that keeps count, and a lectern in
+  // each of the answers the plan gives it (a room without light named, the
+  // press asked for, the press counted).
+  const subjects = (start: string) => l3.captures.filter((capture: Capture) => capture.subject.startsWith(start)).length
+  assert.equal(subjects('notebook-'), 3)
+  assert.equal(subjects('lectern-'), 4)
+  // The lot is walked in both languages, and three frames say so by name:
+  // the list, the press asked for, and the hour as the loudspeaker says it.
+  assert.equal(l3.captures.filter((capture: Capture) => capture.subject.endsWith('-in-english')).length, 3)
+})
+
+test('the L3 touch set is the eight frames of the phone viewport, on the same tree', () => {
+  const touch = readCaptureManifest(ROOT, 'l3-touch')
+  assert.ok(touch, `${CAPTURE_ROOT}/l3-touch/${MANIFEST_FILE} is missing`)
+  assert.equal(touch.count, 8)
+  assert.equal(touch.captures.length, 8)
+  assert.deepEqual(touch.viewport, { cssWidth: 844, cssHeight: 390, pixelRatio: 2, quality: 'medium' })
+  assert.deepEqual(touch.frame, { width: 1688, height: 780 })
+  assert.equal(touch.commit, '4c97f47')
+  assert.equal(touch.frozen, true)
+  assert.equal(touch.report, 'docs/HANDOFF.md')
+  // The held press has no key on a phone: the three frames of the lectern
+  // are the Action button asked for, counted, and split in two by a tap.
+  assert.equal(touch.captures.filter((capture: Capture) => capture.subject.startsWith('lectern-')).length, 3)
+  assert.equal(touch.captures.filter((capture: Capture) => capture.subject.endsWith('-on-a-phone')).length, 5)
+})
+
+test('the report of L3 cites every frame of its two sets, and no frame they do not hold', () => {
+  // The same bargain as L2's: a frame nobody argues from is a leftover, and
+  // a name no set holds is evidence nobody can open.
+  const report = readText(resolve(ROOT, 'docs/HANDOFF.md'))
+  const problems: string[] = []
+  const names = new Set<string>()
+  for (const setName of ['l3', 'l3-touch']) {
+    const manifest = readCaptureManifest(ROOT, setName)
+    assert.ok(manifest, `${CAPTURE_ROOT}/${setName}/${MANIFEST_FILE} is missing`)
+    for (const capture of manifest.captures as Capture[]) {
+      const name = capture.file.replace(/\.jpg$/, '')
+      names.add(name)
+      if (!report.includes(`\`${name}\``)) problems.push(`${setName}/${capture.file} is in the set and docs/HANDOFF.md never cites it`)
+    }
+  }
+  for (const path of ['docs/HANDOFF.md', 'docs/lotes/L3-plano.md', 'docs/PLANO-ATE-O-FINAL.md']) {
+    const text = readText(resolve(ROOT, path))
+    for (const [slug] of text.matchAll(/(?<![\w-])l3t?-[a-z]\d\d(?:-[a-z0-9]+)+/g)) {
+      if (!names.has(slug)) problems.push(`${path} cites \`${slug}\`, which is not a frame of the L3 sets`)
+    }
+  }
+  assert.deepEqual([...new Set(problems)], [])
+})
+
 test('a file name is read as id, room, light, view and subject, or refused', () => {
   const set = CAPTURE_SETS[BASELINE]
   assert.deepEqual(describeCaptureFile('wf3-h27-examine-spalding-lit.jpg', set), {

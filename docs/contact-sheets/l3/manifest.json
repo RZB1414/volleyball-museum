@@ -1,0 +1,48 @@
+{
+  "set": "l3",
+  "capturedAt": "2026-10-05",
+  "commit": "4c97f47",
+  "report": "docs/HANDOFF.md",
+  "filePrefix": "l3",
+  "viewport": {
+    "cssWidth": 1280,
+    "cssHeight": 720,
+    "pixelRatio": 1.2,
+    "quality": "medium"
+  },
+  "frame": {
+    "width": 1536,
+    "height": 864
+  },
+  "groups": {
+    "o": {
+      "room": "office",
+      "powered": true
+    },
+    "a": {
+      "room": "atrium",
+      "powered": true
+    }
+  },
+  "frozen": true,
+  "count": 16,
+  "digest": "b2422f2fa92d6a7029f1b548f55395449dfc50b7386620baa8740acd13dc78ec",
+  "captures": [
+    {"id":"a01","file":"l3-a01-plinth-notice-closed-off-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"plinth-notice-closed-off","width":1536,"height":864,"bytes":295805,"sha256":"964ff95fdc34e29a9610f956acc81121d3009b653d35add68f91e068631e4f57"},
+    {"id":"a02","file":"l3-a02-lectern-lamp-lit-hold-e-to-sign-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"lectern-lamp-lit-hold-e-to-sign","width":1536,"height":864,"bytes":253961,"sha256":"7066e8a33a893bd8fd0b66adb226259d745ea16dbce30e04800d4024ba4041d3"},
+    {"id":"a03","file":"l3-a03-lectern-hold-ring-half-way-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"lectern-hold-ring-half-way","width":1536,"height":864,"bytes":254313,"sha256":"a2347c50a9604893375925ad45bd9bfa71ccb002920ea36485e06395d50c3a80"},
+    {"id":"a04","file":"l3-a04-card-deed-of-office-signed-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"card-deed-of-office-signed","width":1536,"height":864,"bytes":257072,"sha256":"5fd12c6d4dc1245c0edfe41788c61b58116fcd3c3d1ea96209c7091568f6c233"},
+    {"id":"a05","file":"l3-a05-loudspeaker-line-with-the-hour-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"loudspeaker-line-with-the-hour","width":1536,"height":864,"bytes":257208,"sha256":"50a300ded905786622252107f8aff98e91877cf23362e64d6ac87b55464d4b26"},
+    {"id":"a06","file":"l3-a06-book-on-the-lectern-deed-signed-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"book-on-the-lectern-deed-signed","width":1536,"height":864,"bytes":254505,"sha256":"825963e4865562e671ab831b2eb07ff39a75da7a1251e2495ff58a871e798314"},
+    {"id":"a07","file":"l3-a07-notebook-posse-struck-and-deeds-signed-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"notebook-posse-struck-and-deeds-signed","width":1536,"height":864,"bytes":123614,"sha256":"a6857323e4c2bc922ceb5d67484226cc5dd1fd0288ec476a1f0d363794f94904"},
+    {"id":"a08","file":"l3-a08-lectern-red-lamp-names-the-wing-without-light-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"lectern-red-lamp-names-the-wing-without-light","width":1536,"height":864,"bytes":263219,"sha256":"818811eff259fac90a73b5fc09c1951ef670d2db1f6589fad2146f0c1ba316bb"},
+    {"id":"a09","file":"l3-a09-lectern-hold-e-to-sign-in-english-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"lectern-hold-e-to-sign-in-english","width":1536,"height":864,"bytes":254241,"sha256":"284d121732a0f3d0b5594530ed97d05ab4994c0f2f548d6cf8f5cb9dc54219d7"},
+    {"id":"a10","file":"l3-a10-loudspeaker-line-with-the-hour-in-english-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"loudspeaker-line-with-the-hour-in-english","width":1536,"height":864,"bytes":261857,"sha256":"15dcfebe145c5a5290ec164da9ba51b4dad7ec8181c125c8e03a6dc918975337"},
+    {"id":"o01","file":"l3-o01-notebook-list-pencil-lines-and-two-notes-lit.jpg","room":"office","light":"lit","view":"room","subject":"notebook-list-pencil-lines-and-two-notes","width":1536,"height":864,"bytes":114654,"sha256":"751d4f3808466ca4c84f39b9345bb2305abd93718ef805c1a629496cdc7241c0"},
+    {"id":"o02","file":"l3-o02-otavio-message-in-the-subtitle-lit.jpg","room":"office","light":"lit","view":"room","subject":"otavio-message-in-the-subtitle","width":1536,"height":864,"bytes":274879,"sha256":"dfe903ca292518de53f453b8956a89ac5e2d7ebf19a09378eaa34a1db80061da"},
+    {"id":"o03","file":"l3-o03-iron-safe-open-proof-on-the-shelf-lit.jpg","room":"office","light":"lit","view":"room","subject":"iron-safe-open-proof-on-the-shelf","width":1536,"height":864,"bytes":161426,"sha256":"516943e537cdc9b97bd06df586a391478bb435d1d48ebf910fb7b1ce348e3fe2"},
+    {"id":"o04","file":"l3-o04-book-of-deeds-deed-of-office-unsigned-lit.jpg","room":"office","light":"lit","view":"room","subject":"book-of-deeds-deed-of-office-unsigned","width":1536,"height":864,"bytes":112876,"sha256":"f1306f8f074eb2afe7319d2e93f495eed77348cb37342fb241076462cc355a6c"},
+    {"id":"o05","file":"l3-o05-notebook-list-in-english-lit.jpg","room":"office","light":"lit","view":"room","subject":"notebook-list-in-english","width":1536,"height":864,"bytes":118209,"sha256":"a8bdff6e478e93df780ac54fbad9e054bf2f00730ed8678cbb5b548ac16222cf"},
+    {"id":"o06","file":"l3-o06-old-save-told-to-look-again-in-the-drawer-lit.jpg","room":"office","light":"lit","view":"room","subject":"old-save-told-to-look-again-in-the-drawer","width":1536,"height":864,"bytes":227908,"sha256":"5a440363519786682ee47203b326d08106c2efab1288617c739b93515f4f09ee"}
+  ]
+}

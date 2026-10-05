@@ -189,11 +189,24 @@ export type ReferencePoint = {
  * it drew in L1 and 60 triangles more where the Book is in the frame, and
  * one draw less than that before the Book of Deeds is read (R04 at 100, R10
  * at 124). The wing did not change.
+ *
+ * Measured again as the lot closed, on the tree it goes out with
+ * (docs/HANDOFF.md, §12.3): the same ten figures, three passes each, in a
+ * new game and with the deed signed. Two things the table does not say. The
+ * fullest the office gets is one draw and 24 triangles more than its two
+ * points, 63 and 71: the proof on the shelf, for whoever opens the safe with
+ * the radio and the notebook still on the desk. And R01 has the wall clock
+ * on the top edge of its frame: for some thirteen seconds of every minute
+ * the second hand points down into it, and the point reads one draw and 60
+ * triangles more (63 · 36,586). The record is the hand outside, which is
+ * what every lot since the baseline wrote down without knowing it; a reading
+ * one draw off at R01 is the clock before it is anything else.
  */
 export const BROWSER_RECORD = {
   lot: 3,
   date: '2026-10-05',
-  source: 'docs/lotes/L3-plano.md, §15.5 (the record before it: docs/HANDOFF.md, §10.3, of L1)',
+  source:
+    'docs/lotes/L3-plano.md, §15.5, and again as the lot closed, docs/HANDOFF.md, §12.3 (the record before it: docs/HANDOFF.md, §10.3, of L1)',
   programs: 35,
   points: [
     { id: 'R01', ratchet: 'roomDraws', camera: '11.05,0,2.95,-1.5708,-0.45', draws: 62, triangles: 36_526 },

@@ -1,0 +1,40 @@
+{
+  "set": "l3-touch",
+  "capturedAt": "2026-10-05",
+  "commit": "4c97f47",
+  "report": "docs/HANDOFF.md",
+  "filePrefix": "l3t",
+  "viewport": {
+    "cssWidth": 844,
+    "cssHeight": 390,
+    "pixelRatio": 2,
+    "quality": "medium"
+  },
+  "frame": {
+    "width": 1688,
+    "height": 780
+  },
+  "groups": {
+    "o": {
+      "room": "office",
+      "powered": true
+    },
+    "a": {
+      "room": "atrium",
+      "powered": true
+    }
+  },
+  "frozen": true,
+  "count": 8,
+  "digest": "d95a6059d5043b7b3688a8bb43bb3e44c5c793e08573c6cb440ce716204b5152",
+  "captures": [
+    {"id":"a01","file":"l3t-a01-lectern-hold-action-to-sign-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"lectern-hold-action-to-sign","width":1688,"height":780,"bytes":211421,"sha256":"050c89040b02b242a686ad22f710f7421e6ae7e5f43043f32a24972756d72b70"},
+    {"id":"a02","file":"l3t-a02-lectern-ring-on-the-action-button-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"lectern-ring-on-the-action-button","width":1688,"height":780,"bytes":212348,"sha256":"0ccba7cdbea3093008508c96310da97746b73ca7a5f5b7527a23b68ff3e0b942"},
+    {"id":"a03","file":"l3t-a03-lectern-sign-or-cancel-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"lectern-sign-or-cancel","width":1688,"height":780,"bytes":210473,"sha256":"1018534649388628e0617fc9c8caff621c5ff0582018f136e87d5417ed9c8d63"},
+    {"id":"a04","file":"l3t-a04-card-deed-signed-above-the-prompt-on-a-phone-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"card-deed-signed-above-the-prompt-on-a-phone","width":1688,"height":780,"bytes":213692,"sha256":"3065a052e8f25482abfcf9c08e82a4f68e7c37fd55eb77c8cb37be976bf03a1a"},
+    {"id":"a05","file":"l3t-a05-loudspeaker-line-on-a-phone-lit.jpg","room":"atrium","light":"lit","view":"room","subject":"loudspeaker-line-on-a-phone","width":1688,"height":780,"bytes":219945,"sha256":"adc6dbc1cf808b5ce49f548cc19380ab9c497d3a4a93b9b4b05169e2697dc855"},
+    {"id":"o01","file":"l3t-o01-safe-reader-deed-of-office-on-a-phone-lit.jpg","room":"office","light":"lit","view":"room","subject":"safe-reader-deed-of-office-on-a-phone","width":1688,"height":780,"bytes":89835,"sha256":"ff0e375e02d6f0c22e7802e8dae9a32ddfd9764de453165393a166bcd225e93a"},
+    {"id":"o02","file":"l3t-o02-notebook-list-top-on-a-phone-lit.jpg","room":"office","light":"lit","view":"room","subject":"notebook-list-top-on-a-phone","width":1688,"height":780,"bytes":97136,"sha256":"4fd6d0881b986275266fd6dc0b77c439b10fb6242299e6ec1c589f36b9e5e288"},
+    {"id":"o03","file":"l3t-o03-notebook-list-end-on-a-phone-lit.jpg","room":"office","light":"lit","view":"room","subject":"notebook-list-end-on-a-phone","width":1688,"height":780,"bytes":126664,"sha256":"6c3e46eb0d73c46d77bab448a26e0fbc27b723df7b8f862bbc896adf680e1fe1"}
+  ]
+}
