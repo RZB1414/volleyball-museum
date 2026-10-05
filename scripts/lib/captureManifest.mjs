@@ -106,9 +106,10 @@ export const CAPTURE_SETS = {
    * exist from 047f3bb on. The set used to name ab6625e, the commit the
    * working tree stood on when they were shot, where the breaker still hangs
    * beside the door and no frame can be shot again.
-   * Not frozen yet: the lot still has its touch pass to run, and it may add
-   * frames (shot on that same tree, or the set is split). Whoever closes L1
-   * freezes it with a digest.
+   *
+   * Frozen by L2, with the lot published (Cloudflare `1d3a4554`): the touch
+   * pass it was held open for added no frame. These seventeen are the
+   * "before" of every lot that moves the same walls again.
    */
   l1: {
     capturedAt: '2026-10-04',
@@ -123,7 +124,8 @@ export const CAPTURE_SETS = {
       h: { room: 'holyoke', powered: true },
       e: { room: 'holyoke', powered: false },
     },
-    frozen: false,
+    frozen: true,
+    digest: 'af2dd6fea65c18c090fd0f7369f2274f6eb8cd7d8ac15807211b2c268067d063',
   },
   /**
    * The review of L1 (docs/HANDOFF.md, §10.11): the credit under the two
@@ -134,12 +136,13 @@ export const CAPTURE_SETS = {
    * and with it.
    *
    * A set of its own because these four were shot on another tree than the
-   * seventeen of `l1`: the working tree of the review commit, on top of
-   * 047f3bb. Whoever closes L1 writes that commit's hash here and freezes it.
+   * seventeen of `l1`: the working tree of the review, on top of 047f3bb,
+   * which is the tree 513ec09 recorded. The set read `047f3bb+` while it was
+   * open; L2 froze it under that commit's own hash.
    */
   'l1-review': {
     capturedAt: '2026-10-04',
-    commit: '047f3bb+',
+    commit: '513ec09',
     report: 'docs/HANDOFF.md',
     filePrefix: 'l1r',
     viewport: { cssWidth: 1280, cssHeight: 720, pixelRatio: 1.2, quality: 'medium' },
@@ -148,7 +151,8 @@ export const CAPTURE_SETS = {
       h: { room: 'holyoke', powered: true },
       e: { room: 'holyoke', powered: false },
     },
-    frozen: false,
+    frozen: true,
+    digest: 'f29cbd37e1cd571df6cf99d012daefd12bd428969b7f2e6d1d432116fe170394',
   },
 }
 

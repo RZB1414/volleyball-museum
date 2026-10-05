@@ -20,6 +20,11 @@
  *
  * Production here is the build of 2026-10-03 (`db4cc70`, Cloudflare version
  * `0027afaa`), except where a fixture says it is older.
+ *
+ * From L1 on, each lot that closes adds one more: the save at the end of the
+ * lot's route, read out of the browser's storage rather than written by hand,
+ * and named after the build that wrote it (`l1-…`). The lot after starts its
+ * own route from it.
  */
 
 export type SaveFixture = {
@@ -269,6 +274,47 @@ export const SAVE_FIXTURES = {
         devicesCarried: [],
         radioMemory: {},
         lastRoom: 'holyoke',
+      },
+    },
+  },
+
+  /**
+   * The end of L1's route, as the build of L1 wrote it.
+   *
+   * Not written by hand: read out of `localStorage` on 2026-10-04 after
+   * playing a new game on the dev server, whose `src/` was the published
+   * tree (`f0fb5a3`, Cloudflare version `1d3a4554`; the checkout stood one
+   * documents-only commit ahead of it). The route: the lamp, the porter's
+   * first call heard out, the notebook, the radio, the atrium's breaker,
+   * Holyoke's, out by the shortcut, back for Morgan's portrait and tilting
+   * it until the date showed, then the drawer opened with the year. The
+   * porter was never called, so he remembers nothing.
+   *
+   * The same fields as production's saves: L1 changed nothing in what a
+   * save holds. In particular it does not say the shortcut was used, which
+   * is why L2 cannot open that door for a returning player.
+   */
+  'l1-route-end': {
+    from: 'l1-f0fb5a3',
+    summary: 'Fim da rota de L1: tudo aceso, retrato do Morgan catalogado pela data, gaveta aberta com o ano.',
+    save: {
+      settings: UNTOUCHED_SETTINGS,
+      progress: {
+        version: 1,
+        catalogued: ['portrait-morgan'],
+        hotspots: ['portrait-morgan:date'],
+        documentsRead: ['doc-welcome', 'doc-predecessor'],
+        factsKnown: ['springfield-renaming'],
+        credentials: [],
+        roomsVisited: ['office', 'atrium', 'holyoke'],
+        roomsPowered: ['office', 'atrium', 'holyoke'],
+        locksOpened: ['office-drawer'],
+        radioCalls: ['porter-first-call', 'porter-radio-taken'],
+        clockSeconds: { 'office-clock': 180 },
+        hintsShown: ['journal-taken', 'radio-taken'],
+        devicesCarried: ['office-radio'],
+        radioMemory: {},
+        lastRoom: 'office',
       },
     },
   },

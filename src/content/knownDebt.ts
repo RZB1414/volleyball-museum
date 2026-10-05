@@ -43,10 +43,11 @@ export type KnownDebt = {
 }
 
 /**
- * The lot the content stands at: the last one whose work is in this tree.
- * The lot that closes moves it, in the same commit that pays what fell due.
+ * The lot every line below is judged at. It lives in `contentLot.ts` because
+ * the store stamps saves with it and may not import this table; the gates
+ * keep reading it from here.
  */
-export const CONTENT_LOT = 1
+export { CONTENT_LOT } from './contentLot.ts'
 
 const kitUnused = (id: string): KnownDebt => ({
   gate: 'validate:content',

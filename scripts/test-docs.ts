@@ -477,7 +477,7 @@ function contentLotProblem(planText: string, contentLot: number): string | null 
   if (contentLot < done) {
     return (
       `the plan says L${done} is done and CONTENT_LOT is ${contentLot}: no debt dated for L${contentLot + 1} to L${done} ` +
-      `has fallen due. Move CONTENT_LOT in src/content/knownDebt.ts and pay what it accuses.`
+      `has fallen due. Move CONTENT_LOT in src/content/contentLot.ts and pay what it accuses.`
     )
   }
   // One ahead is the lot in progress: the constant moves in the commit that
@@ -508,6 +508,12 @@ test('the lot the dated debts are judged at is the lot the plan says is done', (
   assert.equal(contentLotProblem(made(1), 2), null, 'the next lot, in progress')
   assert.match(contentLotProblem(made(1, 2), 1) ?? '', /L2 is done and CONTENT_LOT is 1/, 'a lot closed with the constant left behind')
   assert.match(contentLotProblem(made(1), 3) ?? '', /was not written up/, 'a constant two lots ahead of the plan')
+
+  // The message sends whoever reads it to a file, and the constant is written
+  // in exactly one: the table of debts only passes it on.
+  const [, named] = /Move CONTENT_LOT in (\S+)/.exec(contentLotProblem(made(1, 2), 1) ?? '') ?? []
+  assert.ok(named, 'the message no longer says where the constant is')
+  assert.match(readIfThere(named) ?? '', /^export const CONTENT_LOT = \d+$/m, `${named} does not define CONTENT_LOT`)
 })
 
 // ---------------------------------------------------------------------------

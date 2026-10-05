@@ -32,7 +32,7 @@
       "powered": false
     }
   },
-  "frozen": false,
+  "frozen": true,
   "count": 17,
   "digest": "af2dd6fea65c18c090fd0f7369f2274f6eb8cd7d8ac15807211b2c268067d063",
   "captures": [

@@ -139,7 +139,7 @@ test('a fixture is written whole, under the key the store reads', () => {
 // Every fixture, through the real load
 // ---------------------------------------------------------------------------
 
-test('the corpus holds the production saves the plan lists', () => {
+test('the corpus holds the production saves the plan lists, and the save each lot left behind', () => {
   // P0, item 4: drawer open and closed; two pieces catalogued without a turn;
   // no `radioCalls`; the radio on the desk with the player in Holyoke. Later
   // lots add their own saves beside these; these five never leave.
@@ -153,6 +153,16 @@ test('the corpus holds the production saves the plan lists', () => {
   for (const id of production) {
     assert.ok(Object.hasOwn(SAVE_FIXTURES, id), `${id} is gone from the corpus`)
     assert.ok(SAVE_FIXTURES[id as FixtureId].from.startsWith('production-'), `${id} is a production save`)
+  }
+  // One per closed lot, taken from the browser at the end of the lot's route
+  // and named after the build that wrote it (plan §9.1, step 12). They never
+  // leave either: the lot after starts its own route from the one before.
+  const lots: Record<string, string> = {
+    'l1-route-end': 'l1-f0fb5a3',
+  }
+  for (const [id, from] of Object.entries(lots)) {
+    assert.ok(Object.hasOwn(SAVE_FIXTURES, id), `${id} is gone from the corpus`)
+    assert.equal(SAVE_FIXTURES[id as FixtureId].from, from, `${id} names the build that wrote it`)
   }
   for (const id of fixtureIds) {
     assert.ok(SAVE_FIXTURES[id].summary.length > 0, `${id} says what it is`)
@@ -443,6 +453,25 @@ test('the radio is on the desk and the player stopped in a dark Holyoke', () => 
   assert.equal(progressConditionMet({ carried: ['office-radio'] }, progress, MUSEUM), false)
   // He was heard out before the player left: nothing is still owed in the office.
   assert.ok(progress.radioCalls.includes(PRE_OPENING_SAVE.firstCallId))
+})
+
+test('the save L1 left is the end of its route, and holds nothing production\'s does not', () => {
+  // Lamp, notebook, radio, both breakers, out by the shortcut, the portrait
+  // tilted until its date showed, the drawer opened with the year.
+  const id = 'l1-route-end'
+  assert.deepEqual(list(id, 'roomsPowered'), ['office', 'atrium', 'holyoke'])
+  assert.deepEqual(list(id, 'documentsRead'), ['doc-welcome', 'doc-predecessor'])
+  assert.deepEqual(list(id, 'devicesCarried'), ['office-radio'])
+  assert.deepEqual(list(id, 'catalogued'), ['portrait-morgan'])
+  assert.deepEqual(list(id, 'hotspots'), ['portrait-morgan:date'])
+  assert.deepEqual(list(id, 'factsKnown'), ['springfield-renaming'], 'the year came off the portrait, not out of a cabinet')
+  assert.deepEqual(list(id, 'locksOpened'), [DRAWER])
+  assert.equal(progressConditionMet({ locksOpened: [DRAWER] }, progressOf(id), MUSEUM), true)
+  // L1 moved breakers, pieces and words, and nothing in what a save holds:
+  // the same fields as the furthest production save, no more and no fewer.
+  // Leaving by the shortcut is not among them, which is why no save of this
+  // build can prove its player ever went that way.
+  assert.deepEqual(Object.keys(rawProgress(id)).sort(), Object.keys(rawProgress('production-drawer-open')).sort())
 })
 
 // ---------------------------------------------------------------------------

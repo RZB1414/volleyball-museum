@@ -1,0 +1,275 @@
+/**
+ * What a save holds, as one table.
+ *
+ * A field of the save used to be written in five places (the type, the empty
+ * save, its fresh copy, the list the loader walked and the question "is there
+ * anything to erase"), and leaving one out erased the field on load without
+ * an error anywhere. Here a field is a line of the type and a row of
+ * `PROGRESS_FIELDS`, and the compiler refuses one without the other.
+ *
+ * Four rules, each held by `npm run test:save`:
+ *
+ *   1. A field this build does not know stays in the save. Another tab may be
+ *      running a later lot, and what it wrote is not this build's to drop.
+ *   2. A field never changes type. A new meaning is a new field: that is what
+ *      lets the build before this one read a save written by this one.
+ *   3. Nothing shrinks. Loading, migrating and playing only add; "New game"
+ *      is the one thing that erases.
+ *   4. `contentLot` never goes down.
+ *
+ * Imports the spawn and the lot and nothing else: the store is on the title
+ * screen, and the content set must not follow it there.
+ */
+
+import { CONTENT_LOT } from '../content/contentLot.ts'
+import { SPAWN } from '../content/spawn.ts'
+
+/**
+ * Never raised. A save of another version is not read at all
+ * (`saveMigrations.ts`), so raising this starts every player over, which is
+ * the one thing a save exists to prevent. No build has written another
+ * version, and none will: what changes from lot to lot is `contentLot`, and a
+ * lot that needs to repair old saves writes a migration.
+ */
+export const SAVE_VERSION = 1
+
+/**
+ * What a radio's voice remembers of the player's calls.
+ *
+ * Persisted on purpose: a porter who forgot every insult on reload would make
+ * F5 the cure for his temper. Times are wall-clock epoch milliseconds because
+ * calming down is something real minutes do, not frames of play.
+ */
+export type RadioMemory = {
+  /** Every call he answered, ever; dead air and content calls not included. */
+  readonly calls: number
+  /** Calls since he last calmed down, which picks his tier. */
+  readonly temper: number
+  /** Epoch ms of the last answered call; 0 is never. */
+  readonly lastCallAt: number
+  /** The hint he gave last time, -1 for none: a different one is progress. */
+  readonly lastHint: number
+  /** The last opener or outburst, so no joke is told twice in a row. */
+  readonly lastReplyId: string | null
+  /** The last outburst, so the next one is a different tantrum. */
+  readonly lastOutburstId: string | null
+}
+
+export const FRESH_RADIO_MEMORY: RadioMemory = {
+  calls: 0,
+  temper: 0,
+  lastCallAt: 0,
+  lastHint: -1,
+  lastReplyId: null,
+  lastOutburstId: null,
+}
+
+export type Progress = {
+  version: number
+  /**
+   * The lot of the build that last wrote this save, which only grows. A save
+   * without it was written before the field existed: that is lot 1.
+   */
+  contentLot: number
+  /** Exhibit ids fully catalogued — every required hotspot examined. */
+  catalogued: string[]
+  /** Hotspot keys seen, as `${exhibitId}:${hotspotId}`. */
+  hotspots: string[]
+  documentsRead: string[]
+  factsKnown: string[]
+  credentials: string[]
+  roomsVisited: string[]
+  roomsPowered: string[]
+  locksOpened: string[]
+  /** Radio calls heard to their last line; each one plays exactly once. */
+  radioCalls: string[]
+  /**
+   * Seconds each mains clock has run since its power came back, by device id.
+   * Elapsed play time rather than a wall-clock instant: a clock that caught
+   * up on the two days a player was away would break "it resumes from where
+   * it stopped".
+   */
+  clockSeconds: Record<string, number>
+  /** One-off teaching toasts already shown, so a reload never repeats one. */
+  hintsShown: string[]
+  /** Devices that left their furniture with the player (the porter's radio). */
+  devicesCarried: string[]
+  /** How each radio's voice feels about being called, by device id. */
+  radioMemory: Record<string, RadioMemory>
+  lastRoom: string
+}
+
+/** The fields of the save that are lists of ids: the ones play adds to. */
+export type ListField = {
+  [K in keyof Progress]: Progress[K] extends string[] ? K : never
+}[keyof Progress]
+
+/** What a verb of the player adds to the save. Lists only: progress grows. */
+export type ProgressGrant = { readonly [K in ListField]?: readonly string[] }
+
+type FieldSpec<T> = {
+  /** A fresh default, so no two saves share a list. */
+  readonly fresh: () => T
+  /** A valid value out of whatever the save holds; null when it holds none. */
+  readonly read: (raw: unknown) => T | null
+  /** Whether a non-empty value is something "New game" would erase. */
+  readonly counts: boolean
+}
+
+const wholeAtLeast = (value: unknown, minimum: number) =>
+  typeof value === 'number' && Number.isFinite(value) && value >= minimum ? Math.floor(value) : null
+const idOrNull = (value: unknown) => (typeof value === 'string' ? value : null)
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value)
+
+/** The strings of a list, in order; null for anything that is not a list. */
+export function stringList(value: unknown): string[] | null {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : null
+}
+
+/** Appends to a string array only when the value is new. */
+export function withValue(list: string[], value: string): string[] {
+  return list.includes(value) ? list : [...list, value]
+}
+
+/**
+ * A radio memory from the save, or nothing for a radio whose entry is junk.
+ *
+ * Dropping only the broken entry rather than the whole record: a corrupted
+ * number must cost the player at most one porter's good mood. What a valid
+ * entry carries beyond the fields this build knows is kept, as in the save
+ * itself.
+ *
+ * Built with `fromEntries` and never by assignment: the ids come out of the
+ * save, and assigning to a key called `__proto__` would change what the
+ * record inherits from instead of adding to it.
+ */
+export function sanitiseRadioMemory(raw: unknown): Record<string, RadioMemory> {
+  if (!isRecord(raw)) return {}
+  return Object.fromEntries(
+    Object.entries(raw).flatMap(([deviceId, entry]): [string, RadioMemory][] => {
+      if (!entry || typeof entry !== 'object') return []
+      const saved = entry as Partial<Record<keyof RadioMemory, unknown>>
+      const calls = wholeAtLeast(saved.calls, 0)
+      const temper = wholeAtLeast(saved.temper, 0)
+      const lastCallAt = wholeAtLeast(saved.lastCallAt, 0)
+      const lastHint = wholeAtLeast(saved.lastHint, -1)
+      if (calls === null || temper === null || lastCallAt === null || lastHint === null) return []
+      const memory = {
+        ...saved,
+        calls,
+        temper,
+        lastCallAt,
+        lastHint,
+        lastReplyId: idOrNull(saved.lastReplyId),
+        lastOutburstId: idOrNull(saved.lastOutburstId),
+      }
+      return [[deviceId, memory]]
+    }),
+  )
+}
+
+/** Each clock's finite, non-negative seconds; anything else is dropped alone. */
+function clockSeconds(raw: unknown): Record<string, number> {
+  if (!isRecord(raw)) return {}
+  return Object.fromEntries(
+    Object.entries(raw).filter(
+      (entry): entry is [string, number] => typeof entry[1] === 'number' && Number.isFinite(entry[1]) && entry[1] >= 0,
+    ),
+  )
+}
+
+const idList = { fresh: (): string[] => [], read: stringList }
+
+/**
+ * Every field of the save but the version, which is the gate and not a field:
+ * read first, written as `SAVE_VERSION`.
+ *
+ * `counts` is the title screen's question: would "New game" erase something
+ * worth asking about? A lesson already shown, a clock's time and a porter's
+ * mood are kept for the player's comfort, not earned.
+ */
+export const PROGRESS_FIELDS = {
+  contentLot: {
+    // A new game is this build's. A save that does not say, or says junk, is
+    // production's from before the field existed: lot 1, whatever lot this is,
+    // so that no migration mistakes it for a save already brought forward.
+    fresh: () => CONTENT_LOT,
+    read: (raw) => (Number.isInteger(raw) && (raw as number) >= 1 ? (raw as number) : 1),
+    counts: false,
+  },
+  catalogued: { ...idList, counts: true },
+  hotspots: { ...idList, counts: true },
+  documentsRead: { ...idList, counts: true },
+  factsKnown: { ...idList, counts: true },
+  credentials: { ...idList, counts: true },
+  // Its own rule, in `hasSavedProgress`: the room every session starts in is
+  // visited by clicking "Enter", which is not progress.
+  roomsVisited: { ...idList, counts: false },
+  roomsPowered: { ...idList, counts: true },
+  locksOpened: { ...idList, counts: true },
+  radioCalls: { ...idList, counts: true },
+  clockSeconds: { fresh: (): Record<string, number> => ({}), read: clockSeconds, counts: false },
+  hintsShown: { ...idList, counts: false },
+  devicesCarried: { ...idList, counts: true },
+  // A save from before the radio could be carried has no memory and holds
+  // nothing: its radio waits on the desk for the next E, like a new game's.
+  radioMemory: { fresh: (): Record<string, RadioMemory> => ({}), read: sanitiseRadioMemory, counts: false },
+  lastRoom: {
+    fresh: (): string => SPAWN.room,
+    read: (raw) => (typeof raw === 'string' ? raw : null),
+    counts: false,
+  },
+} satisfies {
+  readonly [K in Exclude<keyof Progress, 'version'>]: FieldSpec<Progress[K]>
+}
+
+const FIELDS = Object.entries(PROGRESS_FIELDS)
+const COUNTED = FIELDS.flatMap(([field, spec]) => (spec.counts ? [field as keyof typeof PROGRESS_FIELDS] : []))
+
+/** A new game. A fresh copy every time, so no two saves share a list. */
+export function emptyProgress(): Progress {
+  const progress: Record<string, unknown> = { version: SAVE_VERSION }
+  for (const [field, spec] of FIELDS) progress[field] = spec.fresh()
+  return progress as Progress
+}
+
+export const EMPTY_PROGRESS: Progress = /* @__PURE__ */ emptyProgress()
+
+/**
+ * A valid save out of whatever the storage held, field by field from the
+ * table: what is valid in a field is kept, and a field with nothing valid
+ * gets its default.
+ *
+ * Every key the table does not know is carried over untouched. It is carried
+ * by spreading and never by assigning key by key: a tampered save can hold a
+ * key called `__proto__`, and that has to stay a piece of data.
+ */
+export function sanitiseProgress(raw: Readonly<Record<string, unknown>>): Progress {
+  const known: Record<string, unknown> = {}
+  for (const [field, spec] of FIELDS) known[field] = spec.read(raw[field]) ?? spec.fresh()
+  return { ...raw, ...known, version: SAVE_VERSION } as Progress
+}
+
+/** The save with the grant added; the same object when it adds nothing. */
+export function grantProgress(progress: Progress, grant: ProgressGrant): Progress {
+  let next = progress
+  for (const [field, values] of Object.entries(grant) as [ListField, readonly string[]][]) {
+    const list = values.reduce(withValue, next[field])
+    if (list !== next[field]) next = { ...next, [field]: list }
+  }
+  return next
+}
+
+/**
+ * Whether the save holds anything a new game would erase.
+ *
+ * Walking around the spawn room is not progress: offering "New game" to a
+ * player who only clicked "Enter" once would be a button that erases nothing.
+ */
+export function hasSavedProgress(progress: Progress) {
+  return (
+    progress.roomsVisited.some((room) => room !== SPAWN.room) ||
+    COUNTED.some((field) => Object.keys(progress[field]).length > 0)
+  )
+}

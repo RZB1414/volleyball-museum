@@ -1483,6 +1483,13 @@ Do harness, para quem repetir a rota:
    - **capturas**: congelar `l1` e `l1-review` com o digest, trocando o `047f3bb+` do segundo
      pelo hash do commit da revisão;
    - `npm run graph:snapshot` não existe ainda: o primeiro instantâneo é o de L2.
+
+   **Os dois primeiros foram pagos pela primeira fatia de L2** (`docs/lotes/L2-plano.md`, §14):
+   o corpus tem `l1-route-end`, tirado do navegador sobre a árvore publicada (`f0fb5a3`,
+   Cloudflare `1d3a4554`) e coberto em `test:qa-save`; `l1` e `l1-review` estão congelados, o
+   segundo em `513ec09`. A mesma fatia tirou o formato do save de `store.ts`
+   (`src/state/progressFields.ts`, `saveMigrations.ts`; portão `test:save`) e moveu `CONTENT_LOT`
+   para `src/content/contentLot.ts`. O registro completo de L2 entra aqui no fecho do lote.
 2. L2 (Trilhos). Ele paga `map.legend` (`i18n-key-unused`) e move `CONTENT_LOT` para 2 no commit
    que a pagar. Texto novo na tela de título mexe no teto de `title` do bundle, que tem cerca de
    meio por cento de folga (28.500 sobre 28.353 medidos): se passar, sobe no mesmo commit, com o

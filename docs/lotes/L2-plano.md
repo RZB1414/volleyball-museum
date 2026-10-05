@@ -146,7 +146,12 @@ export function emptyProgress(): Progress
 export function sanitiseProgress(raw: Readonly<Record<string, unknown>>): Progress
 /** The same object when the grant adds nothing. */
 export function grantProgress(progress: Progress, grant: ProgressGrant): Progress
+/** The `counts` column, plus the rule of the visited rooms. */
+export function hasSavedProgress(progress: Progress): boolean
 ```
+
+O módulo exporta ainda `EMPTY_PROGRESS`, `withValue` (o store e o migrador de abertura usam a mesma),
+`stringList`, `sanitiseRadioMemory`, `FRESH_RADIO_MEMORY` e o tipo `RadioMemory`.
 
 A tabela de campos, como fica no fim do lote (um campo novo é uma linha aqui e uma no tipo; a falta
 de qualquer das duas é erro de compilação):
@@ -156,13 +161,13 @@ de qualquer das duas é erro de compilação):
 | `version` | `1` | `1` | não é campo da tabela: lido como porteira (DL2-5), escrito sempre `1` | — | existe |
 | `contentLot` | inteiro ≥ 1 | `CONTENT_LOT` em jogo novo; `1` quando o save não traz | inteiro finito ≥ 1, senão `1`; na carga vira `max(save, CONTENT_LOT)` | não | F1 |
 | `catalogued`, `hotspots`, `documentsRead`, `factsKnown`, `credentials`, `roomsPowered`, `locksOpened`, `radioCalls`, `devicesCarried` | `string[]` | `[]` | `stringList`: fica o que é string, na ordem; não-lista vira o padrão | sim | existe |
-| `roomsVisited` | `string[]` | `[]` | `stringList` | sim, se houver sala além da de partida (regra própria, como hoje) | existe |
+| `roomsVisited` | `string[]` | `[]` | `stringList` | sim, se houver sala além da de partida. É regra própria de `hasSavedProgress`, como hoje: na tabela a coluna fica `false`, com o comentário | existe |
 | `locksSeen` | `string[]` | `[]` | `stringList` | sim | F2 |
 | `flags` | `string[]` | `[]` | `stringList` | sim | F2 |
 | `triggersFired` | `string[]` | `[]` | `stringList` | não | F2 |
 | `doorsReleased` | `string[]` | `[]` | `stringList` | sim | F3 |
 | `hintsShown` | `string[]` | `[]` | `stringList` | não | existe |
-| `clockSeconds` | `Record<string, number>` | `{}` | só valor finito ≥ 0; o resto sai (como `store.ts:239-245`) | não | existe |
+| `clockSeconds` | `Record<string, number>` | `{}` | só valor finito ≥ 0; o resto sai (como `store.ts:239-245`). Uma lista não é registro e vira o padrão (L1 lia `[12]` como `{ '0': 12 }`; nenhum build gravou isso) | não | existe |
 | `radioMemory` | `Record<string, RadioMemory>` | `{}` | `sanitiseRadioMemory` (`store.ts:128-149`): entrada com número inválido sai inteira; **subcampo desconhecido de entrada válida fica** | não | existe |
 | `lastRoom` | `string` | `SPAWN.room` | string, senão o padrão | não | existe |
 
@@ -199,6 +204,11 @@ export const SAVE_MIGRATIONS: readonly SaveMigration[] = [
 
 /** version gate → table → migrations → aliases → stamp. Null, a non-object or another version: a new game. */
 export function migrateProgress(raw: unknown): Progress
+/** The same pipeline with the lists and the lot handed in, so the rules are proved on lists made for the test. */
+export function migrateProgressWith(
+  raw: unknown,
+  rules: { migrations: readonly SaveMigration[]; aliases: readonly SaveAlias[]; contentLot: number },
+): Progress
 
 // legacySave.ts
 export type SaveAlias = {
@@ -215,6 +225,10 @@ export const SAVE_ALIASES: readonly SaveAlias[] = []
 `migrateProgress` continua exportado por `store.ts` (reexporta), junto de `Progress`,
 `EMPTY_PROGRESS`, `SAVE_VERSION`, `hasSavedProgress`, `sanitiseRadioMemory`, `FRESH_RADIO_MEMORY` e
 `RadioMemory`: nenhum importador de hoje muda.
+
+Os aliases são aplicados até nada mudar (o renome de um renome assenta numa carga só, qualquer
+que seja a ordem da lista), e em toda carga, seja qual for o lote do save: uma aba do build antigo
+pode gravar o id velho amanhã.
 
 ### 3.3 Condições, efeitos e gatilhos (`src/content/schema.ts`)
 
@@ -494,7 +508,8 @@ navegador carrega (o molde de `scripts/test-qa-save.ts:30-76`):
 - «o store e o que ele importa de forma estática não chegam ao conteúdo»: caminhando os `import`
   de `src/state/store.ts` (sem os `import type`), só aparecem `zustand`, `content/legacySave.ts`,
   `content/spawn.ts`, `content/contentLot.ts`, `state/progressFields.ts`,
-  `state/saveMigrations.ts` e `state/progressRules.ts`;
+  `state/saveMigrations.ts` e `state/progressRules.ts` (este entra na lista do teste em F2, junto
+  com o arquivo: a lista é exata, e módulo novo no caminho do título entra nela de propósito);
 - «um save deste lote lido pelo código de L1 não perde nada que L1 conhece»: cada campo da tabela
   com a sua amostra, gravado pelo store, lido por `scripts/lib/frozen/sanitiseProgress.L1.ts` (a
   cópia literal de `migrateProgress` e dos seus auxiliares em `f0fb5a3`, com as três constantes
@@ -521,7 +536,10 @@ mutação: mudar o tipo de `clockSeconds` na tabela o reprova.
    `stringList(saved.hintsShown) === null`, que são perguntas sobre o save cru).
 3. `src/content/legacySave.ts`: `SaveAlias` e `SAVE_ALIASES = []`. `validate.ts`
    (`validateOpening`, junto de `:1083-1109`): `legacy-save-alias`, quando o `to` de um alias não
-   é id do conteúdo no campo que ele nomeia.
+   é id do conteúdo no campo que ele nomeia. A checagem é `validateSaveAliases(content, aliases)`,
+   exportada para o teste poder passar uma lista feita para ele; os ids de cada lista do save saem
+   de `saveIdsByField`, tipada por `ListField` (lista nova no save sem linha ali não compila).
+   `hintsShown` não tem ids no conteúdo (as lições são do HUD): alias nesse campo é recusado.
 
 **Teste.** `test:save`:
 
@@ -1195,7 +1213,7 @@ jogo 388.248 (teto 390.200). **A folga do título é de 147 bytes.**
 
 | Caminho | O que entra | Previsto | Fatia |
 |---|---|---|---|
-| título | `progressFields.ts`, `saveMigrations.ts`, `contentLot.ts`, `SAVE_ALIASES` (o store é importado pela tela de título) | +0,5 a +0,8 kB | F1 |
+| título | `progressFields.ts`, `saveMigrations.ts`, `contentLot.ts`, `SAVE_ALIASES` (o store é importado pela tela de título) | +0,5 a +0,8 kB; **[medido em F1: +293 bytes, 28.646; teto 28.800]** | F1 |
 | título | `progressRules.ts` e `commitProgress`; duas linhas da tabela | +0,2 kB | F2 |
 | título | as quatro chaves novas e as duas mudadas de 6, nas duas línguas (os dicionários viajam com o título) | +0,2 kB | F3 |
 | jogo | `triggers.ts`, `contentRegistry.ts`, `progressGrants.ts`, `lockRules.ts` | +1,5 a +2 kB | F2 |
@@ -1288,3 +1306,88 @@ na fatia que paga a única dívida que vence em L2, e todos os migradores de lot
   7.2, **a perda do rollback (caso E)** e as lições; o Anexo C do plano mestre ganha as quatro
   linhas de texto; a seção L2 do plano ganha o «Feito em»;
 - revisor, push, deploy e fumaça (passos 8 a 11), que este plano não autoriza por si.
+
+## 14. Execução, fatia por fatia
+
+O que cada fatia fez de diferente do que está acima, para a fatia seguinte não redescobrir. O
+registro completo do lote vai para o `docs/HANDOFF.md` no fecho.
+
+### F1 — O save que não se perde (2026-10-04; commit local, sem push)
+
+T1, T2 e T3 inteiros. Nada muda para o jogador.
+
+**O save de L1 foi tirado do navegador** (T3, item 1), antes de qualquer edição em `src/`:
+servidor `museum-dev` reiniciado sobre `78412ee` (`src/` idêntico ao de `f0fb5a3`), 1280 × 720,
+`localStorage` vazio, painel visível (o jogo rodou em tempo real). Tudo pelo `E`, pelas teclas e
+pelos botões do próprio jogo; o teleporte do harness só pôs a câmera diante de cada alvo, dentro da
+sala em que o jogador já estava, e as seis travessias de porta foram andadas com `W`. A rota:
+luminária; a primeira chamada do Jorge ouvida até a última fala; caderno, as três páginas; rádio,
+com `porter-radio-taken` até o fim; quadro do saguão; quadro da Ala 1; saída pelo atalho; de volta
+pela porta principal; retrato do Morgan arrastado 112 px até a data aparecer; saída pelo atalho de
+novo; gaveta, `1896` nos botões do teclado, bilhete lido. O Jorge não foi chamado, então
+`radioMemory` está vazio. O que está em `saveFixtures.ts` sob `l1-route-end` é, byte a byte, o texto
+lido da chave. O save tem os mesmos campos dos de produção: L1 não mudou o que um save guarda.
+
+**Vermelho primeiro** (§9.1, passo 2), sobre a árvore sem o conserto:
+
+- `test:save`: «um campo que este build não conhece…» reprovou com «the load dropped what it did not
+  know» e «aba velha não rebaixa `contentLot`» com «the load lowered it»; o que a aba regravava já
+  não tinha `contentLot`, `termsSigned` nem `socketsFilled`. A suíte inteira nem carregava
+  (`contentLot.ts` não existia);
+- `test:qa-save`: «l1-route-end is gone from the corpus»;
+- `test:captures`: com o teste novo e a biblioteca intocada, `frozen` era `false`; com `frozen: true`
+  e o `+` ainda no commit, «l1-review is frozen on a working tree nobody can check out»;
+- «save deste lote lido pelo código de L1» nasce verde. Por mutação: com `clockSeconds` virando lista
+  de pares na tabela, reprova, e com ele boa parte da suíte; e o próprio caso prova os dentes a cada
+  execução, lendo com o código de L1 um save em que um campo mudou de tipo. Outras treze mutações
+  foram aplicadas uma a uma, e cada uma reprovou pelo menos o caso que a nomeia: descartar o campo
+  desconhecido; copiá-lo por
+  atribuição (só o caso do `__proto__` pega); carimbar o lote do build por cima do save; o migrador
+  pular o save do próprio lote; o alias trocar o id em vez de acrescentar; uma ação reconstruir o
+  save; `hintsShown` contar como progresso; o store importar o museu; a memória do rádio refeita só
+  com os campos conhecidos; ler save de outra versão; subir `SAVE_VERSION`; o migrador escrever no
+  que recebeu; a abertura deixar de dar o caderno.
+
+**Onde a execução se afastou do plano.**
+
+- `hasSavedProgress`, `EMPTY_PROGRESS` e `withValue` moram em `progressFields.ts` (o store reexporta
+  os dois primeiros e importa o terceiro); `roomsVisited` tem `counts: false` e a regra própria.
+- O sanitizador de `clockSeconds` recusa lista, e ele e o de `radioMemory` montam o registro com
+  `Object.fromEntries`: um id `__proto__` vindo do save continua sendo dado também ali.
+- `migrateProgressWith(raw, regras)` existe para os testes; `migrateProgress` é ele com as listas
+  reais. O contexto do migrador é o tipo `SavedAs` (`raw`, `savedLot`).
+- A leitura de `contentLot` devolve `1` para ausente ou lixo, **nunca** `CONTENT_LOT`: no dia em que
+  a constante for 2, o save de produção tem de continuar mais velho que o migrador do lote 1. O
+  teste prende o `1` por valor; em F1 as duas coisas coincidem, então só F3 o veria reprovar.
+- `validateSaveAliases` e `saveIdsByField` (ver T2). `hintsShown` não é «aliasável».
+- A migração de abertura está em `saveMigrations.ts` como `preOpening`, e o corpo dela é, linha a
+  linha, `store.ts:250-280` de `f0fb5a3` (conferido por `diff`). Um caso novo de `test:save` compara,
+  campo a campo, a carga deste build com a do código congelado de L1 para todo o corpus e nove saves
+  feitos para o teste.
+- `scripts/lib/staticImports.ts` (novo) é quem caminha os `import`; serve às listas «só do portão»
+  de F4 e F5. A lista de módulos do store é exata e ainda não tem `state/progressRules.ts`.
+- `test:save` não para no primeiro caso reprovado: imprime todos. E cada ação do store roda contra
+  um save com campos desconhecidos; a tabela `ACTIONS` é conferida contra as funções do store, então
+  **ação nova em F2 (`grant`) ou removida entra ou sai dessa tabela**, senão a suíte reprova.
+- `test:docs` passou a conferir que o arquivo citado na mensagem de `CONTENT_LOT` define a constante.
+- O congelado de L1 tem as linhas 57-107, 118-149, 164-200, 204-281 e 481-484 de `store.ts` em
+  `f0fb5a3`: do intervalo 118-281 ficaram de fora as configurações e o tipo `Persisted`, que nenhuma
+  dessas linhas lê.
+
+**Medições.** Título 28.646 bytes de gzip (era 28.353; +293), teto 28.800; documento 63.230 e jogo
+388.227, sem crescer. `npm run check` e `npm run build` verdes; `test:opening-flow` e `test:radio`
+verdes sem nenhuma edição.
+
+**No navegador, depois do verde** (servidor reiniciado; o painel ficou oculto no meio da sessão, e
+daí em diante o jogo andou por `__museumStep`): `?qaSave=l1-route-end` oferece «Continuar» e carrega
+com `contentLot: 1` e nada perdido; a primeira escrita de verdade leva o carimbo para o disco (carregar
+sem mudar nada não escreve, como já era com a migração de abertura); um save com `contentLot: 7`,
+`termsSigned`, `socketsFilled` e `locksSeen` posto sob a chave, recarregado, continuado e jogado (uma
+chamada ao Jorge) volta ao disco com tudo isso; `?qaSave=production-pre-opening` abre em inglês,
+trazido para a frente como antes; «New game», nos dois cliques, grava o save vazio com o carimbo e
+mantém o idioma. Console sem erro nem aviso novo.
+
+**Para F2.** `PROGRESS_FIELDS` ganha `locksSeen`, `flags` e `triggersFired`, e com isso: uma linha em
+`SAMPLES` e outra em `ADDED_BY_THE_LOT` (`test:save`), uma em `saveIdsByField` (`validate.ts`, senão
+não compila) e a lista de campos que contam. O caso D já carrega um `locksSeen` com um id que o
+conteúdo não tem.

@@ -233,10 +233,20 @@ export const BUNDLE_BUDGETS = {
  *     mount it hangs on (`CREDIT_COLOUR`), and the leaves of a door and the
  *     supports of a mount are read from the table the content gate reads
  *     (`runtimePlacedParts.ts`) instead of being typed in each component.
+ *
+ * Raised by L2, slice by slice (the lot plan, §9, said it would be):
+ *   - `title` +300 bytes, on 28,646 measured (it was 28,500 on 28,353): the
+ *     store is on the title screen, and loading a save stopped being forty
+ *     lines that rebuilt it from the fields they knew. It is now the table of
+ *     fields (`progressFields.ts`), which carries over what it does not know,
+ *     and the pipeline of migrations, renamed ids and the lot's stamp
+ *     (`saveMigrations.ts`). 293 bytes for a save that another tab, a later
+ *     lot or a rollback can no longer empty. The other two paths did not
+ *     grow (63,230 and 388,227).
  */
 export const BUNDLE_PATH_CEILINGS = {
   document: 63_600,
-  title: 28_500,
+  title: 28_800,
   game: 390_200,
 } as const
 

@@ -8,29 +8,39 @@
  *   - settings   what the player chose. Persisted, and the accessibility
  *                defaults matter more than the graphics ones.
  *   - session    transient per-frame input and UI state. Never persisted.
- *   - progress   what the player has found. Persisted, versioned, and able to
- *                survive content ids being renamed or deleted.
+ *   - progress   what the player has found. Persisted, and able to survive
+ *                content ids being renamed, a lot that adds fields and a tab
+ *                still running the lot before. Its shape is the table in
+ *                `progressFields.ts`; reading a save is `saveMigrations.ts`.
  */
 
 import { create } from 'zustand'
 
 import type { ProgressCondition, UnlockEffect } from '../content/schema'
-// The spawn and legacy-save modules have no runtime imports, so naming the
-// start room and the migration ids here does not pull the content set into
-// the title screen's bundle.
-import { PRE_OPENING_SAVE } from '../content/legacySave.ts'
+// None of these imports anything of the content (the spawn, the lot and the
+// ids of old saves are modules of their own for that reason), so naming the
+// start room and migrating a save here does not pull the content set into
+// the title screen's bundle. `npm run test:save` walks these imports.
 import { SPAWN } from '../content/spawn.ts'
+import { emptyProgress, withValue, type Progress, type RadioMemory } from './progressFields.ts'
+import { migrateProgress } from './saveMigrations.ts'
+
+// The save's shape moved out of this file; whoever imported it from here still can.
+export {
+  EMPTY_PROGRESS,
+  FRESH_RADIO_MEMORY,
+  hasSavedProgress,
+  sanitiseRadioMemory,
+  SAVE_VERSION,
+  type Progress,
+  type RadioMemory,
+} from './progressFields.ts'
+export { migrateProgress } from './saveMigrations.ts'
 
 export type Locale = 'pt-BR' | 'en'
 export type QualityTier = 'low' | 'medium' | 'high'
 
 const STORAGE_KEY = 'volleyball-museum:v1'
-/**
- * Bumped whenever the persisted shape changes incompatibly. A save that
- * references a deleted exhibit must degrade, not crash — content ids WILL
- * change while six wings are being built.
- */
-const SAVE_VERSION = 1
 
 export type Settings = {
   locale: Locale
@@ -54,100 +64,6 @@ export type Settings = {
   subtitles: boolean
 }
 
-export type Progress = {
-  version: number
-  /** Exhibit ids fully catalogued — every required hotspot examined. */
-  catalogued: string[]
-  /** Hotspot keys seen, as `${exhibitId}:${hotspotId}`. */
-  hotspots: string[]
-  documentsRead: string[]
-  factsKnown: string[]
-  credentials: string[]
-  roomsVisited: string[]
-  roomsPowered: string[]
-  locksOpened: string[]
-  /** Radio calls heard to their last line; each one plays exactly once. */
-  radioCalls: string[]
-  /**
-   * Seconds each mains clock has run since its power came back, by device id.
-   * Elapsed play time rather than a wall-clock instant: a clock that caught
-   * up on the two days a player was away would break "it resumes from where
-   * it stopped".
-   */
-  clockSeconds: Record<string, number>
-  /** One-off teaching toasts already shown, so a reload never repeats one. */
-  hintsShown: string[]
-  /** Devices that left their furniture with the player (the porter's radio). */
-  devicesCarried: string[]
-  /** How each radio's voice feels about being called, by device id. */
-  radioMemory: Record<string, RadioMemory>
-  lastRoom: string
-}
-
-/**
- * What a radio's voice remembers of the player's calls.
- *
- * Persisted on purpose: a porter who forgot every insult on reload would make
- * F5 the cure for his temper. Times are wall-clock epoch milliseconds because
- * calming down is something real minutes do, not frames of play.
- */
-export type RadioMemory = {
-  /** Every call he answered, ever; dead air and content calls not included. */
-  readonly calls: number
-  /** Calls since he last calmed down, which picks his tier. */
-  readonly temper: number
-  /** Epoch ms of the last answered call; 0 is never. */
-  readonly lastCallAt: number
-  /** The hint he gave last time, -1 for none: a different one is progress. */
-  readonly lastHint: number
-  /** The last opener or outburst, so no joke is told twice in a row. */
-  readonly lastReplyId: string | null
-  /** The last outburst, so the next one is a different tantrum. */
-  readonly lastOutburstId: string | null
-}
-
-export const FRESH_RADIO_MEMORY: RadioMemory = {
-  calls: 0,
-  temper: 0,
-  lastCallAt: 0,
-  lastHint: -1,
-  lastReplyId: null,
-  lastOutburstId: null,
-}
-
-const wholeAtLeast = (value: unknown, minimum: number) =>
-  typeof value === 'number' && Number.isFinite(value) && value >= minimum ? Math.floor(value) : null
-const idOrNull = (value: unknown) => (typeof value === 'string' ? value : null)
-
-/**
- * A radio memory from the save, or nothing for a radio whose entry is junk.
- *
- * Dropping only the broken entry rather than the whole record: a corrupted
- * number must cost the player at most one porter's good mood.
- */
-export function sanitiseRadioMemory(raw: unknown): Record<string, RadioMemory> {
-  const memory: Record<string, RadioMemory> = {}
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return memory
-  for (const [deviceId, entry] of Object.entries(raw)) {
-    if (!entry || typeof entry !== 'object') continue
-    const saved = entry as Partial<Record<keyof RadioMemory, unknown>>
-    const calls = wholeAtLeast(saved.calls, 0)
-    const temper = wholeAtLeast(saved.temper, 0)
-    const lastCallAt = wholeAtLeast(saved.lastCallAt, 0)
-    const lastHint = wholeAtLeast(saved.lastHint, -1)
-    if (calls === null || temper === null || lastCallAt === null || lastHint === null) continue
-    memory[deviceId] = {
-      calls,
-      temper,
-      lastCallAt,
-      lastHint,
-      lastReplyId: idOrNull(saved.lastReplyId),
-      lastOutburstId: idOrNull(saved.lastOutburstId),
-    }
-  }
-  return memory
-}
-
 const DEFAULT_SETTINGS: Settings = {
   locale: 'pt-BR',
   quality: 'medium',
@@ -161,145 +77,7 @@ const DEFAULT_SETTINGS: Settings = {
   subtitles: true,
 }
 
-const EMPTY_PROGRESS: Progress = {
-  version: SAVE_VERSION,
-  catalogued: [],
-  hotspots: [],
-  documentsRead: [],
-  factsKnown: [],
-  credentials: [],
-  roomsVisited: [],
-  roomsPowered: [],
-  locksOpened: [],
-  radioCalls: [],
-  clockSeconds: {},
-  hintsShown: [],
-  devicesCarried: [],
-  radioMemory: {},
-  lastRoom: SPAWN.room,
-}
-
-/** A fresh copy, so a new game never shares a list with the constant. */
-function emptyProgress(): Progress {
-  return {
-    ...EMPTY_PROGRESS,
-    catalogued: [],
-    hotspots: [],
-    documentsRead: [],
-    factsKnown: [],
-    credentials: [],
-    roomsVisited: [],
-    roomsPowered: [],
-    locksOpened: [],
-    radioCalls: [],
-    clockSeconds: {},
-    hintsShown: [],
-    devicesCarried: [],
-    radioMemory: {},
-  }
-}
-
 type Persisted = { settings: Settings; progress: Progress }
-
-const LIST_FIELDS = [
-  'catalogued',
-  'hotspots',
-  'documentsRead',
-  'factsKnown',
-  'credentials',
-  'roomsVisited',
-  'roomsPowered',
-  'locksOpened',
-  'radioCalls',
-  'hintsShown',
-  'devicesCarried',
-] as const satisfies readonly (keyof Progress)[]
-
-function stringList(value: unknown): string[] | null {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : null
-}
-
-/**
- * Turns whatever the save holds into a valid Progress.
- *
- * A save from another version is discarded rather than migrated: losing a
- * partial playthrough of a portfolio museum is a far smaller cost than a crash
- * on load. Within the version, every field is checked rather than trusted,
- * and a save written before the opening scene existed (it has no `radioCalls`)
- * is brought forward instead of being replayed against a story it predates.
- */
-export function migrateProgress(raw: unknown): Progress {
-  if (!raw || typeof raw !== 'object') return emptyProgress()
-  const saved = raw as Partial<Record<keyof Progress, unknown>>
-  if (saved.version !== SAVE_VERSION) return emptyProgress()
-
-  const progress = emptyProgress()
-  for (const field of LIST_FIELDS) progress[field] = stringList(saved[field]) ?? progress[field]
-  if (typeof saved.lastRoom === 'string') progress.lastRoom = saved.lastRoom
-  if (saved.clockSeconds && typeof saved.clockSeconds === 'object') {
-    for (const [clockId, seconds] of Object.entries(saved.clockSeconds)) {
-      if (typeof seconds === 'number' && Number.isFinite(seconds) && seconds >= 0) {
-        progress.clockSeconds[clockId] = seconds
-      }
-    }
-  }
-  // A save from before the radio could be carried has no memory and holds
-  // nothing: its radio waits on the desk for the next E, like a new game's.
-  progress.radioMemory = sanitiseRadioMemory(saved.radioMemory)
-
-  if (!('radioCalls' in saved)) {
-    // The porter's first call names the atrium's breaker as the next step;
-    // with the atrium already lit, that call is history, not news.
-    if (progress.roomsPowered.includes(PRE_OPENING_SAVE.firstCallOverOncePowered)) {
-      progress.radioCalls = withValue(progress.radioCalls, PRE_OPENING_SAVE.firstCallId)
-    }
-    // A returning player already used the journal: keep it, rather than lock
-    // their catalogue away behind a notebook they never saw on the desk.
-    const played =
-      progress.catalogued.length > 0 ||
-      progress.hotspots.length > 0 ||
-      progress.documentsRead.length > 0 ||
-      progress.factsKnown.length > 0 ||
-      progress.credentials.length > 0 ||
-      progress.roomsPowered.length > 0 ||
-      progress.locksOpened.length > 0
-    if (played) {
-      progress.documentsRead = withValue(progress.documentsRead, PRE_OPENING_SAVE.journalDocumentId)
-    }
-  }
-  // A save without the flag list predates it, so its notebook — taken in an
-  // earlier session, or just granted above — was never announced through it.
-  // Announcing it on this Continue would tell the player they took something
-  // just now, before they have touched anything.
-  if (
-    stringList(saved.hintsShown) === null &&
-    progress.documentsRead.includes(PRE_OPENING_SAVE.journalDocumentId)
-  ) {
-    progress.hintsShown = withValue(progress.hintsShown, PRE_OPENING_SAVE.journalHintId)
-  }
-  return progress
-}
-
-/**
- * Whether the save holds anything a new game would erase.
- *
- * Walking around the spawn room is not progress: offering "New game" to a
- * player who only clicked "Enter" once would be a button that erases nothing.
- */
-export function hasSavedProgress(progress: Progress) {
-  return (
-    progress.roomsVisited.some((room) => room !== SPAWN.room) ||
-    progress.catalogued.length > 0 ||
-    progress.hotspots.length > 0 ||
-    progress.documentsRead.length > 0 ||
-    progress.factsKnown.length > 0 ||
-    progress.credentials.length > 0 ||
-    progress.roomsPowered.length > 0 ||
-    progress.locksOpened.length > 0 ||
-    progress.radioCalls.length > 0 ||
-    progress.devicesCarried.length > 0
-  )
-}
 
 function loadPersisted(): Persisted {
   if (typeof localStorage === 'undefined') {
@@ -314,8 +92,9 @@ function loadPersisted(): Persisted {
     const progress = migrateProgress(parsed.progress)
 
     return {
-      // Settings survive a version bump: they are the player's preferences,
-      // not game state, and losing "I turned head-bob off" is user-hostile.
+      // Settings survive a progress that could not be read: they are the
+      // player's preferences, not game state, and losing "I turned head-bob
+      // off" is user-hostile.
       settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
       progress,
     }
@@ -476,11 +255,6 @@ export type MuseumStore = {
    * written to the save at once. Settings are the player's, and survive.
    */
   resetProgress: () => void
-}
-
-/** Appends to a string array only when the value is new. */
-function withValue(list: string[], value: string): string[] {
-  return list.includes(value) ? list : [...list, value]
 }
 
 /**
@@ -909,4 +683,4 @@ function sessionDefaults() {
   } satisfies Partial<MuseumStore>
 }
 
-export { DEFAULT_SETTINGS, EMPTY_PROGRESS, SAVE_VERSION, STORAGE_KEY }
+export { DEFAULT_SETTINGS, STORAGE_KEY }

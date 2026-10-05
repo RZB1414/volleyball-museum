@@ -1,7 +1,7 @@
 {
   "set": "l1-review",
   "capturedAt": "2026-10-04",
-  "commit": "047f3bb+",
+  "commit": "513ec09",
   "report": "docs/HANDOFF.md",
   "filePrefix": "l1r",
   "viewport": {
@@ -24,7 +24,7 @@
       "powered": false
     }
   },
-  "frozen": false,
+  "frozen": true,
   "count": 4,
   "digest": "f29cbd37e1cd571df6cf99d012daefd12bd428969b7f2e6d1d432116fe170394",
   "captures": [

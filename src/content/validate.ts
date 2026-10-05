@@ -13,9 +13,10 @@
 
 import { MOUNT_PARTS, mountPartNames, transitionDoorPartNames } from '../engine/runtimePlacedParts.ts'
 import { buildRoomSignageLayout } from '../engine/signageLayout.ts'
+import type { ListField } from '../state/progressFields.ts'
 import { validateFactCaptures, type FactCaptureSet } from './factCapture.ts'
 import { settleKnownDebt, type KnownDebt } from './knownDebt.ts'
-import { PRE_OPENING_SAVE } from './legacySave.ts'
+import { PRE_OPENING_SAVE, SAVE_ALIASES, type SaveAlias } from './legacySave.ts'
 import type {
   Credential,
   DeviceData,
@@ -1107,8 +1108,78 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
       `The pre-opening save migration watches unknown room "${PRE_OPENING_SAVE.firstCallOverOncePowered}".`,
     )
   }
+  issues.push(...validateSaveAliases(content))
 
   return issues
+}
+
+/**
+ * The ids each list of the save holds, as the content defines them; null for
+ * a list whose ids the content does not define.
+ *
+ * Typed by the save's own lists: a lot that adds one has to say here what its
+ * ids are, or the build stops.
+ */
+function saveIdsByField(content: MuseumContent): Record<ListField, ReadonlySet<string> | null> {
+  const rooms = new Set<string>(content.rooms.map((room) => room.id))
+  const devices = content.rooms.flatMap((room) => room.devices ?? [])
+  return {
+    catalogued: new Set(content.exhibits.map((exhibit) => exhibit.id)),
+    hotspots: new Set(
+      content.exhibits.flatMap((exhibit) => exhibit.hotspots.map((hotspot) => `${exhibit.id}:${hotspot.id}`)),
+    ),
+    documentsRead: new Set(content.documents.map((doc) => doc.id)),
+    factsKnown: new Set(content.facts.map((fact) => fact.id)),
+    // What a lock asks for and what an exhibit hands out, in the store's own spelling.
+    credentials: new Set([
+      ...content.locks.flatMap(lockCredentialKeys),
+      ...content.exhibits.flatMap((exhibit) =>
+        (exhibit.unlocks ?? []).flatMap((effect) =>
+          effect.kind === 'grant-credential' ? [credentialKey(effect.credential)] : [],
+        ),
+      ),
+    ]),
+    roomsVisited: rooms,
+    roomsPowered: rooms,
+    locksOpened: new Set(content.locks.map((lock) => lock.id)),
+    radioCalls: new Set(
+      devices.flatMap((device) => (device.kind === 'radio' ? device.calls.map((call) => call.id) : [])),
+    ),
+    // The lessons are named by the HUD, not by the content.
+    hintsShown: null,
+    devicesCarried: new Set(
+      devices.flatMap((device) => (device.kind === 'radio' && device.carriedOnUse ? [device.id] : [])),
+    ),
+  }
+}
+
+/**
+ * A renamed id has to lead somewhere.
+ *
+ * An alias whose new id the content does not have carries the player's
+ * progress to nothing, and silently: the old id stays in the save, so nothing
+ * looks lost until the document that should be read is not.
+ */
+export function validateSaveAliases(
+  content: MuseumContent,
+  aliases: readonly SaveAlias[] = SAVE_ALIASES,
+): ValidationIssue[] {
+  const idsByField = saveIdsByField(content)
+  return aliases.flatMap((alias): ValidationIssue[] => {
+    const ids = idsByField[alias.field]
+    if (ids?.has(alias.to)) return []
+    const where = `Save alias "${alias.from}" → "${alias.to}" in \`${alias.field}\` (since L${alias.sinceLot})`
+    return [
+      {
+        severity: 'error',
+        code: 'legacy-save-alias',
+        id: `${alias.field}:${alias.from}`,
+        message: ids
+          ? `${where} points at an id the content does not have in that list.`
+          : `${where} cannot be checked: the content does not define the ids of that list.`,
+      },
+    ]
+  })
 }
 
 // ---------------------------------------------------------------------------
