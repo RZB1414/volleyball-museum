@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 
 import {
   BoxGeometry,
@@ -48,6 +47,7 @@ import {
 import type { Object3D, WebGLRenderer } from 'three'
 
 import { roomReadinessWiringProblems, type SourceReader } from './lib/runtimeWiring.ts'
+import { readText } from './lib/readText.ts'
 
 function deferred<T>() {
   let resolve!: (value: T) => void
@@ -712,7 +712,7 @@ await doorTest('a wall image that fails to load becomes a grey card, and one tha
  * are pinned in the source (`scripts/lib/runtimeWiring.ts`).
  */
 await doorTest('the scene counts the wait and every wall image goes through the loader that never rejects', () => {
-  const read: SourceReader = (path) => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8')
+  const read: SourceReader = (path) => readText(new URL(`../src/${path}`, import.meta.url))
   assert.deepEqual(roomReadinessWiringProblems(read), [])
 
   // The check has to bite: each refactor it exists to catch, on the real

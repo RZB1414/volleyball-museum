@@ -19,7 +19,7 @@
  */
 
 import assert from 'node:assert/strict'
-import { readFileSync, statSync } from 'node:fs'
+import { statSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import sharp from 'sharp'
@@ -35,6 +35,7 @@ import {
   TEXT_ATLAS_BYTES,
   type Ratchet,
 } from './lib/ratchets.ts'
+import { readText } from './lib/readText.ts'
 
 let passed = 0
 let failed = 0
@@ -90,7 +91,7 @@ async function imageSize(src: string): Promise<{ width: number; height: number }
   const path = `${PUBLIC}${src}`
   if (src.endsWith('.svg')) {
     // An SVG becomes a texture at the size its root element declares.
-    const root = /<svg\b[^>]*>/.exec(readFileSync(path, 'utf8'))?.[0] ?? ''
+    const root = /<svg\b[^>]*>/.exec(readText(path))?.[0] ?? ''
     const attribute = (name: string) => Number(new RegExp(`\\b${name}="([\\d.]+)(?:px)?"`).exec(root)?.[1])
     const [, , boxWidth, boxHeight] = (/\bviewBox="([^"]+)"/.exec(root)?.[1] ?? '').split(/[\s,]+/).map(Number)
     const width = attribute('width') || boxWidth

@@ -1,0 +1,17 @@
+# Unix line ends in every checkout, whatever the machine.
+#
+# Git for Windows turns text into CRLF on the way out (core.autocrlf=true is
+# its default) and leaves `git status` clean. The suites read source files by
+# the line, and three of them went red on a fresh clone with nothing changed.
+# Everything in the index is already LF, so this rule rewrites no file.
+# `npm run test:docs` holds this file to its first rule.
+* text=auto eol=lf
+
+# What a line-end conversion would corrupt, named instead of left to Git's
+# guess: their bytes are measured (the kit, the textures, the bundle).
+*.jpg binary
+*.png binary
+*.webp binary
+*.glb binary
+*.ktx2 binary
+*.woff2 binary

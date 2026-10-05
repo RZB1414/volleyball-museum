@@ -22,13 +22,14 @@
  */
 
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
+import { readdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { progressWiringProblems, type SourceReader } from './lib/runtimeWiring.ts'
 import { STORE_ACTIONS } from './lib/storeActions.ts'
 import { deepFreeze, openGame, saveOf, seeded, shrunk, shuffled, suite, throughJson } from './lib/storePage.ts'
+import { readText } from './lib/readText.ts'
 
 const { MUSEUM } = await import('../src/content/museum.ts')
 const { SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
@@ -195,7 +196,7 @@ const FIELD_CASES: Record<string, { ask: Condition; empty: boolean; turnedBy: Ra
 
 /** The fields of `ProgressCondition`, read off the schema: scripts are not type-checked. */
 const schemaConditionFields = (() => {
-  const schema = readFileSync(resolve(ROOT, 'src/content/schema.ts'), 'utf8')
+  const schema = readText(resolve(ROOT, 'src/content/schema.ts'))
   const body = schema.slice(schema.indexOf('export type ProgressCondition = {'))
   return [...body.slice(0, body.indexOf('\n}\n')).matchAll(/^ {2}readonly (\w+)\?:/gm)].map((match) => match[1])
 })()
@@ -390,7 +391,7 @@ const EFFECTS: Record<string, { effect: Effect; grant: Raw }> = {
 }
 
 await test('each effect is a grant, in the spelling the save and the lock graph use', () => {
-  const schema = readFileSync(resolve(ROOT, 'src/content/schema.ts'), 'utf8')
+  const schema = readText(resolve(ROOT, 'src/content/schema.ts'))
   const declared = schema.slice(schema.indexOf('export type UnlockEffect ='), schema.indexOf('export type Trigger ='))
   assert.deepEqual(
     Object.keys(EFFECTS).sort(),
@@ -967,7 +968,7 @@ await test('a listener of the registry can leave, as the store does when it is r
 // ---------------------------------------------------------------------------
 
 const SRC = resolve(ROOT, 'src')
-const readSource: SourceReader = (path) => readFileSync(resolve(SRC, path), 'utf8')
+const readSource: SourceReader = (path) => readText(resolve(SRC, path))
 const components = (readdirSync(SRC, { recursive: true }) as string[])
   .map((path) => path.replaceAll('\\', '/'))
   .filter((path) => path.endsWith('.tsx'))
@@ -1013,6 +1014,17 @@ await test('the examine view, the canvas and the store are wired to the one door
         '$1\n        museum.recordCatalogued(exhibit.id)',
       ),
     ],
+    // The piece with two required details is catalogued by the second one
+    // counting the first. Handed an empty list instead of the save's, every
+    // detail is the only one seen: the Spalding never catalogues.
+    [
+      'a detail judged without the details the save already holds',
+      changed('engine/Interaction.tsx', 'hotspotGrant(exhibit, hotspot.id, museum.progress.hotspots)', 'hotspotGrant(exhibit, hotspot.id, [])'),
+    ],
+    [
+      'a detail judged by the details of this visit only',
+      changed('engine/Interaction.tsx', 'hotspotGrant(exhibit, hotspot.id, museum.progress.hotspots)', 'hotspotGrant(exhibit, hotspot.id, [...seenRef.current])'),
+    ],
     ['the registry no longer imported by the canvas', changed('scenes/MuseumCanvas.tsx', /import '\.\.\/engine\/contentRegistry'\n/, '')],
     [
       'the store importing the museum',
@@ -1029,7 +1041,7 @@ await test('the examine view, the canvas and the store are wired to the one door
     ['a replaced store left listening to the registry', changed('state/store.ts', /\n {4}forgetRules\(\)\n/, '\n')],
     [
       'the store fetching the registry by itself',
-      changed('state/store.ts', 'const initial = loadPersisted()', "const initial = loadPersisted()\nvoid import('../engine/contentRegistry.ts')"),
+      changed('state/store.ts', 'const initialText = storedText()', "const initialText = storedText()\nvoid import('../engine/contentRegistry.ts')"),
     ],
   ]
   const uncaught = refactors

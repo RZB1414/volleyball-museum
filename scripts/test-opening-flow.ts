@@ -17,9 +17,9 @@
  */
 
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 
 import { Box3, Matrix4, Ray, Vector3 } from 'three'
+import { readText } from './lib/readText.ts'
 
 // ---------------------------------------------------------------------------
 // A browser save from before the opening scene existed
@@ -147,7 +147,7 @@ function progressWith(patch: Partial<Progress> = {}): Progress {
   return { ...migrateProgress({ version: SAVE_VERSION, radioCalls: [] }), ...patch }
 }
 
-const source = (path: string) => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8')
+const source = (path: string) => readText(new URL(`../src/${path}`, import.meta.url))
 
 console.log('\nOpening flow')
 
@@ -833,15 +833,28 @@ test('a new game empties progress and every session field, and writes at once', 
   assert.deepEqual(disk.progress.catalogued, [], 'a reload cannot bring the old save back')
 })
 
-test('a tab that changed nothing never overwrites a newer save', () => {
-  // Another tab has played on since this one last wrote. Every tab switch
-  // forces a flush now, so a stale tab must not put its old snapshot back.
-  const newer = JSON.stringify({ settings: {}, progress: { ...EMPTY_PROGRESS, catalogued: ['ball-spalding'] } })
+test('"New game" is the one write that goes over a newer save, and it marks the game as another', () => {
+  // Another tab has played on since this one last wrote. This case used to
+  // ask that a tab with nothing new wrote nothing, and used "New game" to
+  // force the flush, there being no page to hide in this suite: it passed
+  // because an empty save reset to empty had nothing to write. That rule now
+  // lives where a tab can be hidden (`test:save`, the two tabs), with the
+  // one beside it: a tab reads the disk before it writes, and joins what it
+  // finds. "New game" is the exception, and is held here: it erases what the
+  // other tab wrote, on purpose, and leaves a mark, so that a tab still
+  // holding the erased game does not join it back in.
+  const newer = JSON.stringify({ settings: { brightness: 1.3 }, progress: { ...EMPTY_PROGRESS, catalogued: ['ball-spalding'] } })
   storage.set(STORAGE_KEY, newer)
   writes.length = 0
   useMuseum.getState().resetProgress()
-  assert.deepEqual(writes, [], 'nothing new to write')
-  assert.equal(storage.get(STORAGE_KEY), newer)
+  assert.deepEqual(writes, [STORAGE_KEY], 'a new game waited for something else to write it')
+  const disk = JSON.parse(storage.get(STORAGE_KEY) ?? '{}')
+  assert.deepEqual(disk.progress, { ...EMPTY_PROGRESS }, 'the game the other tab was playing is still on the disk')
+  assert.deepEqual(useMuseum.getState().progress, { ...EMPTY_PROGRESS })
+  assert.ok(typeof disk.game === 'string' && disk.game.length > 0, 'a new game is not marked as one')
+  // The settings the other tab chose are the player's, not the game's.
+  assert.equal(disk.settings.brightness, 1.3)
+  assert.equal(useMuseum.getState().settings.brightness, 1.3)
 })
 
 // ---------------------------------------------------------------------------
@@ -1227,13 +1240,13 @@ test('every correction of the fact check is on the wall, in both languages', () 
   }
   // The generator of the net explained its height by the claim the label
   // dropped; whoever remodels the net reads that comment first.
-  const netGenerator = readFileSync(new URL('../scripts/bake/kit.mjs', import.meta.url), 'utf8')
+  const netGenerator = readText(new URL('../scripts/bake/kit.mjs', import.meta.url))
   if (/half a foot/i.test(netGenerator)) wrong.push('scripts/bake/kit.mjs still explains the net by "half a foot"')
   assert.deepEqual(wrong, [])
 })
 
 test('the museum has one name, everywhere it names itself', () => {
-  const root = (path: string) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8')
+  const root = (path: string) => readText(new URL(`../${path}`, import.meta.url))
   const wrong: string[] = []
   for (const [key, text] of Object.entries(ptBR)) {
     if (/Museu do V[ôo]lei\b/i.test(text)) wrong.push(`${key} (pt-BR): ${text}`)

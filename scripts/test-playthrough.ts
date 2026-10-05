@@ -3,7 +3,7 @@
  * away from the players of the lot before.
  *
  *   npm run test:playthrough
- *   SEED=<n> npm run test:playthrough     one night of the five hundred, with its log
+ *   npm run test:playthrough -- --seed <n>     the same, after printing night <n> press by press
  *
  * Four things, each of which used to be taken on trust:
  *
@@ -25,7 +25,8 @@
  */
 
 import assert from 'node:assert/strict'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -36,17 +37,31 @@ import {
   describe,
   endOf,
   everyPress,
+  luckyDetail,
   ORDINARY,
   playToEnd,
   press,
   pressProblem,
   reload,
   sameAction,
+  seedAsked,
   type RobotProfile,
 } from './lib/playthrough.ts'
-import { newestSnapshot, RELEASES_DIRECTORY, snapshotFileName, snapshotForGate } from './lib/graphSnapshots.ts'
-import { lastLotDone } from './lib/planLots.ts'
-import { examineWiringProblems, type SourceReader } from './lib/runtimeWiring.ts'
+import {
+  baselineSnapshot,
+  FIRST_SNAPSHOT_LOT,
+  FROZEN_SNAPSHOTS,
+  frozenSnapshotProblems,
+  newestSnapshot,
+  RELEASES_DIRECTORY,
+  snapshotDigest,
+  snapshotFileName,
+  snapshotForGate,
+  snapshotsIn,
+  snapshotWriteRefusal,
+} from './lib/graphSnapshots.ts'
+import { lastLotDone, lastLotPublished } from './lib/planLots.ts'
+import { examineWiringProblems, squeezed, type SourceReader } from './lib/runtimeWiring.ts'
 import { staticImportGraph } from './lib/staticImports.ts'
 import { openGame, seeded, shrunk, suite, throughJson } from './lib/storePage.ts'
 
@@ -85,6 +100,7 @@ import {
 } from '../src/engine/examineReach.ts'
 import { emptyProgress, grantProgress, PROGRESS_FIELDS, type Progress, type ProgressGrant } from '../src/state/progressFields.ts'
 import { migrateProgress } from '../src/state/saveMigrations.ts'
+import { readText } from './lib/readText.ts'
 
 // The museum hands the store its rules as the canvas chunk arrives. Here, now:
 // every store this suite opens is created with them in place.
@@ -96,7 +112,7 @@ type Document = MuseumContent['documents'][number]
 type Raw = Record<string, unknown>
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const readSource: SourceReader = (path) => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8')
+const readSource: SourceReader = (path) => readText(new URL(`../src/${path}`, import.meta.url))
 const { test, done } = suite('The playthrough: a ruler, an exhaustive player, a robot and a snapshot')
 
 /** The ids a code accuses, among errors. */
@@ -174,6 +190,22 @@ await test('the three pieces no honest save has are the three the ruler refuses'
   assert.equal(cone('ball-spalding', 'lacing').reachable, true, 'the narrowest cone a production save holds')
   assert.ok(cone('ball-spalding', 'lacing').coneDegrees > EXAMINE_MIN_CONE_DEGREES)
   assert.ok(cone('photo-gym', 'apparatus').coneDegrees < EXAMINE_MIN_CONE_DEGREES)
+
+  // Two questions, and the ruler answers both. Whether the view WOULD record
+  // a detail, were the camera ever inside its cone (`shows`): that is the
+  // component's whole test. And whether a hand gets there (`reachable`):
+  // that is what the play is planned on. The photograph is where they part.
+  assert.deepEqual(
+    [cone('photo-gym', 'apparatus'), cone('gym-suit', 'knit'), cone('net-1897', 'tape')].map((reach) => [reach.shows, reach.reachable]),
+    [[true, false], [false, false], [false, false]],
+  )
+  for (const exhibit of MUSEUM.exhibits) {
+    for (const hotspot of exhibit.hotspots) {
+      const reach = examineReach(exhibit, hotspot)
+      assert.equal(reach.shows, reach.coneDegrees > 0, `${exhibit.id}:${hotspot.id}`)
+      assert.ok(reach.shows || !reach.reachable, `${exhibit.id}:${hotspot.id} is reachable and never shows`)
+    }
+  }
 })
 
 await test('every piece and every detail a save of the corpus holds is within reach of the ruler', () => {
@@ -332,6 +364,30 @@ const MAXIMUM = {
 } as const satisfies ProgressGrant
 const MAXIMUM_END = endOf(MAXIMUM)
 
+/**
+ * What luck adds to that.
+ *
+ * The view records a detail the moment its cone holds the camera, however
+ * narrow the cone, and the apparatus of the gymnasium photograph has one of
+ * 1.5°: three pixels of drag either way. The simulation does not offer it (a
+ * player who does not know where to look does not find it), the store takes
+ * it, and some nights one of the robot's wasted presses lands there. So a
+ * night ends at the maximum, or at the maximum and this. The robot's hand
+ * used to refuse the detail by the simulation's own 5°, and the two were
+ * then compared with each other: a save the real game can write was outside
+ * everything the suite called possible.
+ */
+const LUCK = sorted(
+  MUSEUM.exhibits.flatMap((exhibit) => {
+    const narrow = exhibit.hotspots.filter((hotspot) => examineReach(exhibit, hotspot).shows && !examineReach(exhibit, hotspot).reachable)
+    if (narrow.length === 0) return []
+    // The piece too, when luck is all it was waiting for.
+    const never = exhibit.hotspots.some((hotspot) => hotspot.requiredForCatalogue && !examineReach(exhibit, hotspot).shows)
+    return [...narrow.map((hotspot) => `detail:${exhibit.id}:${hotspot.id}`), ...(never ? [] : [`cat:${exhibit.id}`])]
+  }),
+)
+const withoutLuck = (end: readonly string[]) => end.filter((entry) => !LUCK.includes(entry))
+
 await test('the furthest the game goes today, atom by atom', () => {
   for (const [field, ids] of Object.entries(MAXIMUM) as [keyof typeof MAXIMUM, readonly string[]][]) {
     assert.deepEqual(sorted(played.final[field]), sorted(ids), field)
@@ -346,6 +402,9 @@ await test('the furthest the game goes today, atom by atom', () => {
     sorted(MUSEUM.exhibits.map((exhibit) => exhibit.id).filter((id) => !played.final.catalogued.includes(id))),
     ['gym-suit', 'net-1897', 'photo-gym'],
   )
+  // And one piece more for a lucky hand, which no script counts on.
+  assert.deepEqual(LUCK, ['cat:photo-gym', 'detail:photo-gym:apparatus'])
+  assert.deepEqual(LUCK.filter((entry) => MAXIMUM_END.includes(entry)), [])
   // What the play does not write stays as it was handed over.
   assert.deepEqual(played.final.radioCalls, [])
   assert.equal(played.final.lastRoom, emptyProgress().lastRoom)
@@ -409,7 +468,7 @@ await test('the script in levels: the lamp, the atrium, its light and Wing 1, th
   assert.match(printed[4], /^ {2}N4 +lock:office-drawer · doc:doc-predecessor$/)
 })
 
-await test('she accuses the museum of five things the old walk let through, and they are the five that are dated', () => {
+await test('she accuses the museum of six things the old walk let through, and they are the six that are dated', () => {
   const errors = played.issues.map((issue) => `${issue.severity} ${issue.code} ${issue.id}`)
   assert.deepEqual(sorted(errors), [
     'error checklist-item-untickable notebook.todo.catalogue',
@@ -417,19 +476,33 @@ await test('she accuses the museum of five things the old walk let through, and 
     'error exhibit-uncataloguable gym-suit',
     'error exhibit-uncataloguable net-1897',
     'error exhibit-uncataloguable photo-gym',
+    // The detail nothing waits for. It is offered to nobody, so it is in no
+    // action and in no snapshot, and the day the net catalogues its debt
+    // goes with nothing left to say that the socket is still dead content.
+    'error hotspot-unreachable net-1897:socket',
   ])
   // With the table applied, nothing is left, and nothing in the table is paid.
-  const owed = debtOf('validate:content').filter((line) => ['exhibit-uncataloguable', 'checklist-item-untickable'].includes(line.code))
-  assert.equal(owed.length, 5)
+  const owed = debtOf('validate:content').filter((line) =>
+    ['exhibit-uncataloguable', 'checklist-item-untickable', 'hotspot-unreachable'].includes(line.code),
+  )
+  assert.equal(owed.length, 6)
   const settled = settleKnownDebt(played.issues, owed, CONTENT_LOT)
   assert.deepEqual(settled.filter((issue) => issue.severity === 'error'), [])
   assert.deepEqual(sorted(owed.map((line) => `${line.id} L${line.untilLot}`)), [
     'gym-suit L4',
     'net-1897 L4',
+    'net-1897:socket L4',
     'notebook.todo.catalogue L4',
     'notebook.todo.vault L3',
     'photo-gym L4',
   ])
+  // Four details are out of a hand's reach, and each is named by exactly one
+  // accusation: the required ones by their piece, the optional one by itself.
+  const out = MUSEUM.exhibits.flatMap((exhibit) =>
+    exhibit.hotspots.filter((hotspot) => !examineReach(exhibit, hotspot).reachable).map((hotspot) => `${exhibit.id}:${hotspot.id}`),
+  )
+  assert.deepEqual(sorted(out), ['gym-suit:knit', 'net-1897:socket', 'net-1897:tape', 'photo-gym:apparatus'])
+  assert.deepEqual(accused(played.issues, 'hotspot-unreachable'), ['net-1897:socket'])
 })
 
 await test('what the rules answer is offered, and what they ignore is not', () => {
@@ -561,6 +634,33 @@ await test('each accusation, on a museum broken for the purpose', () => {
     exhibits: [...MUSEUM.exhibits, { ...MUSEUM.exhibits[0], id: 'stored-away' }],
   })
 
+  // A detail nothing waits for, put where no hand turns it: a piece that
+  // catalogues all the same, with something on it that is never found.
+  const hidden = withExhibits((exhibit) =>
+    exhibit.id === 'ball-improvised'
+      ? { ...exhibit, hotspots: [...exhibit.hotspots, { ...exhibit.hotspots[0], id: 'underside', localPosition: [0, -0.9, 0], requiredForCatalogue: false }] }
+      : exhibit,
+  )
+  const withHidden = proves('hotspot-unreachable', 'ball-improvised:underside', hidden)
+  if (accused(withHidden, 'exhibit-uncataloguable').includes('ball-improvised')) noisy.push('a piece is called uncataloguable for a detail it does not need')
+  assert.ok(simulateProgress(hidden).final.catalogued.includes('ball-improvised'))
+  // The net with its tape brought within reach and its socket left where it
+  // is: the piece catalogues, its own accusation goes, and the socket's stays.
+  const tapePaid = simulateProgress(
+    withExhibits((exhibit) =>
+      exhibit.id === 'net-1897'
+        ? { ...exhibit, hotspots: exhibit.hotspots.map((hotspot) => (hotspot.id === 'tape' ? { ...hotspot, localPosition: [0, 0.05, 0.1] } : hotspot)) }
+        : exhibit,
+    ),
+  )
+  assert.ok(tapePaid.final.catalogued.includes('net-1897'))
+  if (accused(tapePaid.issues, 'exhibit-uncataloguable').includes('net-1897')) noisy.push('exhibit-uncataloguable accuses the net with its tape in reach')
+  if (!accused(tapePaid.issues, 'hotspot-unreachable').includes('net-1897:socket')) quiet.push('with the tape paid, nothing says the socket is still out of reach')
+  // A required detail out of reach is its piece's accusation, and is not said twice.
+  for (const required of ['net-1897:tape', 'gym-suit:knit', 'photo-gym:apparatus']) {
+    if (accused(played.issues, 'hotspot-unreachable').includes(required)) noisy.push(`hotspot-unreachable repeats ${required}, which exhibit-uncataloguable already names`)
+  }
+
   // A cabinet behind a badge nobody hands out.
   const badged: MuseumContent = {
     ...withRooms((room) => ({
@@ -689,6 +789,7 @@ await test('each accusation, on a museum broken for the purpose', () => {
       'lock-unopenable',
       'document-unreadable',
       'exhibit-uncataloguable',
+      'hotspot-unreachable',
       'credential-unobtainable',
       'credential-orphan',
       'trigger-never-fires',
@@ -705,7 +806,7 @@ await test('each accusation, on a museum broken for the purpose', () => {
   )
   // And the authored museum of none of them but the two that are dated.
   for (const code of raised) {
-    if (!['exhibit-uncataloguable', 'checklist-item-untickable'].includes(code) && accused(played.issues, code).length > 0) {
+    if (!['exhibit-uncataloguable', 'checklist-item-untickable', 'hotspot-unreachable'].includes(code) && accused(played.issues, code).length > 0) {
       noisy.push(`${code} accuses the authored museum: ${accused(played.issues, code).join(', ')}`)
     }
   }
@@ -990,44 +1091,86 @@ await test('the canonical route is playable in its order, ends on the critical p
   // the robot reaches the end like anybody else.
   assert.deepEqual(critical.filter((entry) => !MAXIMUM_END.includes(entry)), [])
   const night = await playToEnd(page, MUSEUM, seeded(1896))
-  assert.deepEqual(endOf(night.page.progress()), MAXIMUM_END)
+  assert.deepEqual(withoutLuck(endOf(night.page.progress())), MAXIMUM_END)
 })
 
-const ONE_SEED = process.env.SEED === undefined ? null : Number(process.env.SEED)
+const NIGHTS = 500
+/**
+ * `-- --seed <n>`: one of the five hundred nights, printed press by press,
+ * BEFORE the five hundred are played as always.
+ *
+ * An argument, and one that only adds. This used to be `SEED` in the
+ * environment and to replace the run: with the variable left in a shell
+ * (which is how PowerShell sets one), or exported by anything else, `npm run
+ * check` played one night, skipped every assertion about the five hundred
+ * and printed `pass` under their name.
+ */
+const ONE_SEED = seedAsked(process.argv.slice(2), NIGHTS)
+
+await test('the one night to replay is asked for by an argument, and never stands in for the five hundred', () => {
+  assert.equal(seedAsked([], NIGHTS), null)
+  assert.equal(seedAsked(['--seed', '7'], NIGHTS), 7)
+  assert.equal(seedAsked(['--seed', '1'], NIGHTS), 1)
+  assert.equal(seedAsked(['--seed', '500'], NIGHTS), 500)
+  // Nothing, junk, a night that is not one of them, a flag it does not know: said, not guessed at.
+  for (const bad of [['--seed'], ['--seed', ''], ['--seed', 'abc'], ['--seed', '7.5'], ['--seed', '-3'], ['--seed', '0'], ['--seed', '501'], ['--sede', '7'], ['7']]) {
+    assert.throws(() => seedAsked(bad, NIGHTS), /--seed <n>, a whole number from 1 to 500/, JSON.stringify(bad))
+  }
+  // The environment is not asked, here or in the robot.
+  for (const path of ['scripts/test-playthrough.ts', 'scripts/lib/playthrough.ts']) {
+    assert.ok(!/process\.env\b/.test(squeezed(readText(resolve(ROOT, path)))), `${path} reads the environment`)
+  }
+})
 
 await test('five hundred shuffled orders, with wasted presses and closed tabs, all end where the simulation ends', async () => {
-  const seeds = ONE_SEED === null ? Array.from({ length: 500 }, (_, index) => index + 1) : [ONE_SEED]
+  if (ONE_SEED !== null) {
+    // The night that was asked for, with its log, whether or not it ends well.
+    console.log(`        night ${ONE_SEED}:`)
+    try {
+      const night = await playToEnd(await openGame(), MUSEUM, seeded(ONE_SEED))
+      console.log(night.log.map((line) => `          ${line}`).join('\n'))
+    } catch (error) {
+      console.log(((error as { log?: readonly string[] }).log ?? []).map((line) => `          ${line}`).join('\n'))
+      console.log(`          it stopped there: ${error instanceof Error ? error.message.split('\n')[0] : error}`)
+    }
+  }
+  const seeds = Array.from({ length: NIGHTS }, (_, index) => index + 1)
   const failed: string[] = []
   const openings = new Set<string>()
   let presses = 0
   let wasted = 0
   let reloads = 0
+  let lucky = 0
   const began = performance.now()
   for (const seed of seeds) {
     try {
       const night = await playToEnd(await openGame(), MUSEUM, seeded(seed))
-      if (ONE_SEED !== null) console.log(night.log.map((line) => `        ${line}`).join('\n'))
       presses += night.presses
       wasted += night.wasted
       reloads += night.reloads
       openings.add(night.log.filter((line) => line.startsWith('do:')).slice(0, 6).join('|'))
-      assert.deepEqual(endOf(night.page.progress()), MAXIMUM_END, 'the night ended somewhere else')
+      const end = endOf(night.page.progress())
+      assert.deepEqual(withoutLuck(end), MAXIMUM_END, 'the night ended somewhere else')
+      if (end.length > MAXIMUM_END.length) lucky += 1
       // And the end is still the end after one more trip through the disk.
-      assert.deepEqual(endOf((await reload(night.page)).progress()), MAXIMUM_END, 'the end did not survive the disk')
+      assert.deepEqual(endOf((await reload(night.page)).progress()), end, 'the end did not survive the disk')
     } catch (error) {
       failed.push(`seed ${seed}: ${error instanceof Error ? error.message.split('\n')[0] : error}`)
     }
   }
   const seconds = (performance.now() - began) / 1000
   console.log(
-    `        ${seeds.length} night(s) · ${presses} presses, ${wasted} of them for nothing · ${reloads} tabs closed · ${seconds.toFixed(1)} s`,
+    `        ${seeds.length} nights · ${presses} presses, ${wasted} of them for nothing · ${reloads} tabs closed · ` +
+      `${lucky} found the detail only luck finds · ${seconds.toFixed(1)} s`,
   )
-  assert.deepEqual(failed.slice(0, 5), [], `${failed.length} night(s) failed. \`SEED=<n> npm run test:playthrough\` plays one again and prints it.`)
-  if (ONE_SEED !== null) return
+  assert.deepEqual(failed.slice(0, 5), [], `${failed.length} night(s) failed. \`npm run test:playthrough -- --seed <n>\` plays one again and prints it.`)
   // The robot is not five hundred copies of one night.
   assert.ok(openings.size > 200, `only ${openings.size} different openings in 500 nights: the order is not being shuffled`)
   assert.ok(reloads > 500, `only ${reloads} reloads in 500 nights`)
   assert.ok(wasted > 2000, `only ${wasted} wasted presses in 500 nights`)
+  // Some nights a wasted press finds the photograph's detail, and most do
+  // not: both ends are ends the real game reaches.
+  assert.ok(lucky > 10 && lucky < seeds.length - 10, `${lucky} of ${seeds.length} nights found the detail only luck finds`)
   // About eight seconds on the machine that wrote it. The bound is loose on
   // purpose: it is there for a robot that has started walking in circles,
   // not for a slow disk.
@@ -1046,7 +1189,7 @@ await test('the player who skips everything optional ends in the same place, les
   const skipped = ['doc:doc-welcome', 'carried:office-radio']
   for (const seed of [1, 2, 3, 5, 8, 13, 21, 34]) {
     const night = await playToEnd(await openGame(), MUSEUM, seeded(seed), skipper)
-    assert.deepEqual(endOf(night.page.progress()), MAXIMUM_END.filter((entry) => !skipped.includes(entry)), `seed ${seed}`)
+    assert.deepEqual(withoutLuck(endOf(night.page.progress())), MAXIMUM_END.filter((entry) => !skipped.includes(entry)), `seed ${seed}`)
     assert.equal(night.page.state().flashlightUsed, false, 'the torch was lit')
     assert.ok(!night.log.some((line) => /office-notebook|office-radio/.test(line)), `seed ${seed} touched what it skips`)
   }
@@ -1077,7 +1220,7 @@ await test('the player who types the year without having read it only gets the d
   const guesser: RobotProfile = { ...ORDINARY, guessesCodes: true }
   for (const seed of [1, 2, 3, 5, 8, 13, 21, 34]) {
     const night = await playToEnd(await openGame(), MUSEUM, seeded(seed), guesser)
-    assert.deepEqual(endOf(night.page.progress()), MAXIMUM_END, `seed ${seed}`)
+    assert.deepEqual(withoutLuck(endOf(night.page.progress())), MAXIMUM_END, `seed ${seed}`)
   }
 })
 
@@ -1093,7 +1236,7 @@ await test('every save of the corpus, loaded and played to the end, loses nothin
       assert.deepEqual(held.filter((entry) => !endOf(end).includes(entry)), [], `${name}, seed ${seed}: an atom of the save is gone`)
       assert.deepEqual(MAXIMUM_END.filter((entry) => !endOf(end).includes(entry)), [], `${name}, seed ${seed}: short of the end`)
       // The robot on the store and the simulation in Node agree from a save too.
-      assert.deepEqual(endOf(end), endOf(simulateProgress(MUSEUM, migrateProgress(throughJson(fixture.save.progress))).final), `${name}, seed ${seed}`)
+      assert.deepEqual(withoutLuck(endOf(end)), endOf(simulateProgress(MUSEUM, migrateProgress(throughJson(fixture.save.progress))).final), `${name}, seed ${seed}`)
       // The settings of whoever played it are theirs.
       assert.deepEqual(night.page.state().settings, { ...page.state().settings }, name)
     }
@@ -1150,10 +1293,6 @@ await test('the shortcut opens from the atrium after the first way out, and is s
 })
 
 await test('the store and the simulation are held against each other, press by press, and the check bites', async () => {
-  // Two museums that differ in one thing: in `shrunk`, the gymnasium
-  // photograph is small enough for its detail to be found.
-  const shrunkPhoto = withExhibits((exhibit) => (exhibit.id === 'photo-gym' ? { ...exhibit, scale: 0.5 } : exhibit))
-  const photo: PlayerAction = { kind: 'hotspot', exhibitId: 'photo-gym', hotspotId: 'apparatus' }
   const inHolyoke = async () => {
     const page = await openGame()
     page.state().start()
@@ -1162,31 +1301,56 @@ await test('the store and the simulation are held against each other, press by p
     }
     return page
   }
-  assert.ok(availableActions(shrunkPhoto, saveHolding(['room:holyoke']), 'holyoke').some((candidate) => sameAction(candidate, photo)))
-  assert.ok(!availableActions(MUSEUM, saveHolding(['room:holyoke']), 'holyoke').some((candidate) => sameAction(candidate, photo)))
+  const offeredIn = (content: MuseumContent, action: PlayerAction) =>
+    availableActions(content, saveHolding(['room:holyoke']), 'holyoke').some((candidate) => sameAction(candidate, action))
 
-  // The simulation offers a detail and no hand finds it: this is the state
-  // the lot was in while the three pieces were still offered.
+  // The simulation offers a detail and no hand finds it: the state the lot
+  // was in while the three large pieces were still offered. Here the mind is
+  // told of a net a tenth of its size, with the tape within reach; in the
+  // wing the hands are in, the tape is two metres from what the view holds
+  // and never faces the camera.
+  const smallNet = withExhibits((exhibit) => (exhibit.id === 'net-1897' ? { ...exhibit, scale: 0.1 } : exhibit))
+  const tape: PlayerAction = { kind: 'hotspot', exhibitId: 'net-1897', hotspotId: 'tape' }
+  assert.ok(offeredIn(smallNet, tape) && !offeredIn(MUSEUM, tape))
   const offeredOnly = await inHolyoke()
   const before = offeredOnly.progress()
-  press(offeredOnly, MUSEUM, photo)
-  assert.equal(offeredOnly.progress(), before, 'the hand found a detail the ruler puts out of reach')
+  press(offeredOnly, MUSEUM, tape)
+  assert.equal(offeredOnly.progress(), before, 'the hand found a detail that never faces the camera')
   assert.match(
-    pressProblem(shrunkPhoto, 'holyoke', photo, before, offeredOnly.progress()) ?? '',
-    /the simulation offers "detail photo-gym:apparatus" in holyoke \(hotspot:photo-gym:apparatus\) and the store did something else: it did not write .*detail:photo-gym:apparatus/,
+    pressProblem(smallNet, 'holyoke', tape, before, offeredOnly.progress()) ?? '',
+    /the simulation offers "detail net-1897:tape" in holyoke \(hotspot:net-1897:tape\) and the store did something else: it did not write .*detail:net-1897:tape/,
   )
   // And a night played with that simulation does not end: it stops at the press.
   await assert.rejects(
-    playToEnd(await openGame(), shrunkPhoto, seeded(3), { reloadChance: 0, uselessChance: 0 }, MUSEUM),
-    /the simulation offers "detail photo-gym:apparatus" in holyoke .* it did not write/,
+    playToEnd(await openGame(), smallNet, seeded(3), { reloadChance: 0, uselessChance: 0 }, MUSEUM),
+    /the simulation offers "detail net-1897:(?:tape|socket)" in holyoke .* it did not write/,
   )
 
-  // The store takes a press the simulation never offered.
+  // The store takes a press the simulation never offered, and this one is the
+  // museum as built: the photograph's detail shows inside 1.5°, the view
+  // records it there, and the simulation, which plans on a hand that needs
+  // 5°, does not count on it.
+  const photo: PlayerAction = { kind: 'hotspot', exhibitId: 'photo-gym', hotspotId: 'apparatus' }
+  assert.ok(!offeredIn(MUSEUM, photo))
   const tookMore = await inHolyoke()
   const earlier = tookMore.progress()
-  press(tookMore, shrunkPhoto, photo)
-  assert.ok(tookMore.progress().catalogued.includes('photo-gym'))
+  press(tookMore, MUSEUM, photo)
+  assert.ok(tookMore.progress().catalogued.includes('photo-gym'), 'the hand refuses a detail the view records')
   assert.match(pressProblem(MUSEUM, 'holyoke', photo, earlier, tookMore.progress()) ?? '', /the store accepted "detail photo-gym:apparatus" in holyoke, which the simulation does not offer there: it wrote .*cat:photo-gym/)
+  // Named for what it is, the press is not let off: it is held to what the
+  // rules give for it, no more and no less.
+  assert.equal(luckyDetail(MUSEUM, photo), true)
+  assert.equal(pressProblem(MUSEUM, 'holyoke', photo, earlier, tookMore.progress(), true), null)
+  assert.match(pressProblem(MUSEUM, 'holyoke', photo, earlier, earlier, true) ?? '', /it did not write cat:photo-gym, detail:photo-gym:apparatus/)
+  assert.match(
+    pressProblem(MUSEUM, 'holyoke', photo, earlier, grantProgress(tookMore.progress(), { credentials: ['badge:curator'] }), true) ?? '',
+    /it also wrote .*badge:curator/,
+  )
+  // Only that kind of press is luck: a detail that never shows, one a hand finds, a door.
+  assert.equal(luckyDetail(MUSEUM, tape), false)
+  assert.equal(luckyDetail(MUSEUM, { kind: 'hotspot', exhibitId: 'portrait-morgan', hotspotId: 'date' }), false)
+  assert.equal(luckyDetail(MUSEUM, door('atrium-to-holyoke', 'holyoke', 'atrium')), false)
+  assert.equal(luckyDetail(MUSEUM, { kind: 'hotspot', exhibitId: 'no-such-piece', hotspotId: 'apparatus' }), false)
 
   // Every press a room's furniture offers is one or the other, on a night in
   // which all of them are tried: offered and written as said, or not offered
@@ -1205,7 +1369,7 @@ await test('the store and the simulation are held against each other, press by p
       for (const action of everyPress(MUSEUM, page.progress(), room)) {
         const save = page.progress()
         press(page, MUSEUM, action)
-        assert.equal(pressProblem(MUSEUM, room, action, save, page.progress()), null)
+        assert.equal(pressProblem(MUSEUM, room, action, save, page.progress(), luckyDetail(MUSEUM, action)), null)
         tried += 1
         if (page.progress() === save) refused += 1
         // A door that opened took her through it: back, for the rest of the room.
@@ -1216,7 +1380,8 @@ await test('the store and the simulation are held against each other, press by p
       }
     }
   }
-  assert.deepEqual(endOf(page.progress()), MAXIMUM_END, 'pressing everything everywhere did not reach the end')
+  // Every press, the photograph's detail among them: this player is the lucky one, by construction.
+  assert.deepEqual(endOf(page.progress()), sorted([...MAXIMUM_END, ...LUCK]), 'pressing everything everywhere did not reach the end')
   assert.ok(tried > 200 && refused > 100, `${tried} presses tried, ${refused} for nothing`)
 })
 
@@ -1437,58 +1602,199 @@ await test('a renamed id with its aliases takes nothing away, in what is given a
   )
 })
 
-await test('the snapshot on disk: written by the script, the content\'s own while the lot is open, a record once it is published', () => {
-  const directory = resolve(ROOT, RELEASES_DIRECTORY)
-  const newest = newestSnapshot(directory)
-  assert.ok(newest, `${RELEASES_DIRECTORY} holds no snapshot: run \`npm run graph:snapshot\``)
-  const gate = snapshotForGate(newest, CONTENT_LOT)
-  assert.deepEqual(gate.issues, [])
-  assert.ok(gate.graph)
+const PLAN = readText(resolve(ROOT, 'docs/PLANO-ATE-O-FINAL.md'))
+const LOT_DONE = lastLotDone(PLAN)
+const LOT_PUBLISHED = lastLotPublished(PLAN)
+
+await test("the snapshots on disk: written by the script, the content's own until its lot is published, a pinned record once the lot is closed", () => {
+  const onDisk = snapshotsIn(resolve(ROOT, RELEASES_DIRECTORY))
+  assert.ok(onDisk.length > 0, `${RELEASES_DIRECTORY} holds no snapshot: run \`npm run graph:snapshot\``)
+  assert.ok(LOT_PUBLISHED <= LOT_DONE, 'the plan gives a lot as published that it does not give as done')
 
   // In the shape the script writes: one action to a line, everything sorted.
   // A file edited by hand, or by a formatter, does not read back as itself.
-  assert.equal(serialiseGraphSnapshot(parseGraphSnapshot(newest.text)), newest.text, `${newest.path} was not written by \`npm run graph:snapshot\``)
-  for (const list of [gate.graph.actions.map((entry) => entry.id), gate.graph.checklist.map((item) => item.id), ...Object.values(gate.graph.ids), Object.keys(gate.graph.saveFields)]) {
-    assert.deepEqual(list, sorted(list))
-  }
-  for (const entry of gate.graph.actions) {
-    assert.deepEqual([entry.requires, entry.grants], [sorted(entry.requires), sorted(entry.grants)], entry.id)
+  for (const snapshot of onDisk) {
+    const graph = parseGraphSnapshot(snapshot.text)
+    assert.equal(serialiseGraphSnapshot(graph), snapshot.text, `${snapshot.path} was not written by \`npm run graph:snapshot\``)
+    assert.equal(graph.lot, snapshot.lot, `${snapshot.path} says it is the graph of another lot`)
+    for (const list of [graph.actions.map((entry) => entry.id), graph.checklist.map((item) => item.id), ...Object.values(graph.ids), Object.keys(graph.saveFields)]) {
+      assert.deepEqual(list, sorted(list))
+    }
+    for (const entry of graph.actions) {
+      assert.deepEqual([entry.requires, entry.grants], [sorted(entry.requires), sorted(entry.grants)], entry.id)
+    }
   }
   // Writing twice changes no byte.
   assert.equal(serialiseGraphSnapshot(graphSnapshot(MUSEUM, CONTENT_LOT)), serialiseGraphSnapshot(NOW))
   assert.ok(!serialiseGraphSnapshot(NOW).includes('\r') && serialiseGraphSnapshot(NOW).endsWith('}\n'))
+  // No lot has written down what it gave before the content got there.
+  assert.deepEqual(onDisk.filter((snapshot) => snapshot.lot > CONTENT_LOT).map((snapshot) => snapshot.path), [])
 
-  // The content takes nothing from what the snapshot recorded, whichever lot wrote it.
+  // What the gate holds the content to, and the content takes nothing from it.
+  const gate = snapshotForGate(onDisk, CONTENT_LOT, LOT_PUBLISHED)
+  assert.deepEqual(gate.issues, [])
+  assert.ok(gate.graph)
   assert.deepEqual(validateAdditive(gate.graph, MUSEUM), [])
 
-  // While the plan does not yet say the snapshot's lot is done, the lot is
-  // still being written and the file has to be the content's own, byte for
-  // byte: whatever a later slice adds, the snapshot that is published has it.
-  // Once the plan says «Feito em», the file is a record. Nothing here asks it
-  // to follow the content again, and `graph:snapshot` cannot rewrite it,
-  // because by then `CONTENT_LOT` has moved on or soon will.
-  const plan = readFileSync(resolve(ROOT, 'docs/PLANO-ATE-O-FINAL.md'), 'utf8')
-  if (newest.lot > lastLotDone(plan)) {
-    assert.equal(newest.lot, CONTENT_LOT, `${newest.path} is of a lot the content is not at`)
+  // Every lot the plan gives as done has its file, and the file is the one
+  // whose SHA-256 is pinned: nothing rewrites the record of a closed lot
+  // without a second, deliberate, edit beside it.
+  assert.deepEqual(frozenSnapshotProblems(onDisk, LOT_DONE), [])
+
+  // Until the plan records that the content's lot is PUBLISHED, its snapshot
+  // has to be the content's own, byte for byte. «Feito em» alone does not end
+  // that: a lot is closed before it is reviewed and published, and whatever
+  // the review adds has to be in the record that goes out. (It used to end
+  // there, and a fix made between the closing and the push would have been
+  // given to players and written down nowhere: the next lot could take it
+  // away again unaccused.)
+  const own = onDisk.find((snapshot) => snapshot.lot === CONTENT_LOT)
+  if (own && CONTENT_LOT > LOT_PUBLISHED) {
     assert.equal(
-      newest.text,
+      own.text,
       serialiseGraphSnapshot(NOW),
-      `${newest.path} is not the graph of the content as it stands: L${newest.lot} is still open, so run \`npm run graph:snapshot\` and commit the file`,
+      `${own.path} is not the graph of the content as it stands, and L${CONTENT_LOT} is not published yet. ` +
+        (CONTENT_LOT <= LOT_DONE
+          ? `If this is a fix to L${CONTENT_LOT} made before it goes out, run \`npm run graph:snapshot -- --reopen\` and pin the new SHA-256 ` +
+            `in scripts/lib/graphSnapshots.ts. If it is the next lot's work, the file is L${CONTENT_LOT}'s record: leave it, and move CONTENT_LOT first.`
+          : 'Run `npm run graph:snapshot` and commit the file.'),
     )
   }
+})
+
+await test('the content is held to the record of the lot before, never to the draft of its own', () => {
+  // A lot writes its snapshot before it is done (in a middle slice, or as it
+  // closes, before the plan says so). The gate used to take the newest file:
+  // from that moment the content was compared with itself, the record of the
+  // lot before went unread, and anything could be taken out.
+  const directory = mkdtempSync(join(tmpdir(), 'museum-baseline-'))
+  try {
+    const write = (lot: number, content: MuseumContent) => writeFileSync(join(directory, snapshotFileName(lot)), serialiseGraphSnapshot(graphSnapshot(content, lot)), 'utf8')
+    const heldTo = (contentLot: number, published: number) => baselineSnapshot(snapshotsIn(directory), contentLot, published)?.lot ?? null
+    // A wing that lost the date on Morgan's portrait: what L3 must not do.
+    const dateless = withExhibits((exhibit) => (exhibit.id === 'portrait-morgan' ? { ...exhibit, hotspots: [] } : exhibit))
+
+    // The first lot to write one has only its own: there is no record before it.
+    write(2, MUSEUM)
+    assert.equal(heldTo(2, 1), 2)
+    assert.deepEqual(snapshotForGate(snapshotsIn(directory), 2, 1).issues, [])
+    // Published, its own file is the record, for the slices of the next lot that still run at lot 2.
+    assert.equal(heldTo(2, 2), 2)
+    // The next lot, before it has written anything.
+    assert.equal(heldTo(3, 2), 2)
+
+    // L3 writes its draft, with the date already gone.
+    write(3, dateless)
+    assert.deepEqual(snapshotsIn(directory).map((snapshot) => snapshot.lot), [2, 3])
+    assert.equal(newestSnapshot(directory)?.lot, 3)
+    assert.equal(heldTo(3, 2), 2, 'the content of L3 is held to its own draft')
+    // Whether or not anybody wrote «e publicado» for L2: the content moved on, so L2's file is a record.
+    assert.equal(heldTo(3, 1), 2)
+    const open = snapshotForGate(snapshotsIn(directory), 3, 2)
+    assert.equal(open.graph?.lot, 2)
+    assert.deepEqual(
+      validateAdditive(open.graph!, dateless).map((issue) => issue.code).sort(),
+      ['id-renamed-without-alias', 'node-removed', 'node-removed'],
+      'what L3 took away is not accused',
+    )
+    // Against the draft, which is what the gate used to read, nothing is wrong: the content is itself.
+    assert.deepEqual(validateAdditive(parseGraphSnapshot(newestSnapshot(directory)!.text), dateless), [])
+    // Closed and under review, L3 is still not its own judge; published, it is the record L4 is held to.
+    assert.equal(heldTo(3, 2), 2)
+    assert.equal(heldTo(3, 3), 3)
+    assert.equal(heldTo(4, 3), 3)
+
+    // A lot that closed without writing its own leaves the next one held to nothing recent.
+    rmSync(join(directory, snapshotFileName(2)))
+    assert.deepEqual(
+      snapshotForGate(snapshotsIn(directory), 3, 2).issues.map((issue) => issue.code),
+      ['graph-snapshot-stale'],
+      'the only snapshot is the draft of the lot being written, and the gate took it for a record',
+    )
+    assert.equal(snapshotForGate(snapshotsIn(directory), 3, 2).graph, null)
+  } finally {
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+await test('the snapshot of a closed lot cannot be rewritten or edited without the gate saying so', () => {
+  const text = serialiseGraphSnapshot(NOW)
+  const at = (lot: number, body: string) => ({ lot, path: `${RELEASES_DIRECTORY}/${snapshotFileName(lot)}`, text: body })
+  const pinned = { 2: snapshotDigest(text) }
+  assert.match(snapshotDigest(text), /^[0-9a-f]{64}$/)
+
+  assert.deepEqual(frozenSnapshotProblems([at(2, text)], 2, pinned), [])
+  // Lots before the first snapshot owe none, and an open lot's draft is not judged here.
+  assert.deepEqual(frozenSnapshotProblems([at(2, text), at(3, text)], 2, pinned), [])
+  assert.deepEqual(frozenSnapshotProblems([], 1, {}), [])
+  assert.equal(FIRST_SNAPSHOT_LOT, 2)
+
+  // Rewritten by the script after the content grew (what `graph:snapshot` did without asking).
+  const grown = serialiseGraphSnapshot({ ...NOW, actions: [...NOW.actions, { id: 'container:added-since', requires: ['room:atrium'], grants: [] }] })
+  assert.match(frozenSnapshotProblems([at(2, grown)], 2, pinned).join('\n'), /L2\.graph\.json is not the file L2 closed with/)
+  // A line deleted by hand: still a well-formed snapshot, and not the record.
+  const shorter = serialiseGraphSnapshot({ ...NOW, actions: NOW.actions.slice(1) })
+  assert.equal(frozenSnapshotProblems([at(2, shorter)], 2, pinned).length, 1)
+  // A closed lot with no file, and one whose digest nobody wrote down.
+  assert.match(frozenSnapshotProblems([], 2, pinned).join('\n'), /L2\.graph\.json is missing/)
+  const unpinned = frozenSnapshotProblems([at(2, text)], 2, {}).join('\n')
+  assert.match(unpinned, /pinned nowhere/)
+  assert.ok(unpinned.includes(snapshotDigest(text)), 'the message does not give the digest to pin')
+  // Every closed lot, not only the newest: L2's record still counts when L3 is done.
+  assert.match(frozenSnapshotProblems([at(3, text)], 3, { 3: snapshotDigest(text) }).join('\n'), /L2\.graph\.json is missing/)
+  // A digest pinned for a lot the plan does not give as done is a record of nothing.
+  assert.match(frozenSnapshotProblems([at(2, text)], 2, { ...pinned, 3: pinned[2] }).join('\n'), /L3 is pinned/)
+
+  // The real table names every lot the plan gives as done, and no other.
+  assert.deepEqual(
+    Object.keys(FROZEN_SNAPSHOTS).map(Number).sort((first, second) => first - second),
+    Array.from({ length: Math.max(0, LOT_DONE - FIRST_SNAPSHOT_LOT + 1) }, (_, index) => index + FIRST_SNAPSHOT_LOT),
+  )
+})
+
+await test('`npm run graph:snapshot` refuses to write the file of a lot the plan gives as done', () => {
+  // An open lot is written freely; a closed one only when asked to reopen it.
+  assert.equal(snapshotWriteRefusal(3, 2, false), null)
+  assert.equal(snapshotWriteRefusal(3, 2, true), null)
+  assert.match(snapshotWriteRefusal(2, 2, false) ?? '', /L2\.graph\.json is the record of a lot the plan gives as done/)
+  assert.match(snapshotWriteRefusal(2, 2, false) ?? '', /--reopen/)
+  assert.match(snapshotWriteRefusal(2, 3, false) ?? '', /record/)
+  assert.equal(snapshotWriteRefusal(2, 2, true), null)
+
+  // The script itself, on this tree, told to write nothing: it has to answer
+  // as the rule says for the lot the content stands at today.
+  const path = resolve(ROOT, RELEASES_DIRECTORY, snapshotFileName(CONTENT_LOT))
+  const before = existsSync(path) ? readText(path) : null
+  const run = (...flags: string[]) =>
+    spawnSync(process.execPath, ['--experimental-strip-types', 'scripts/graph-snapshot.ts', '--dry-run', ...flags], { cwd: ROOT, encoding: 'utf8' })
+  const plain = run()
+  const refusal = snapshotWriteRefusal(CONTENT_LOT, LOT_DONE, false)
+  if (refusal) {
+    assert.equal(plain.status, 1, `the script would write the record of L${CONTENT_LOT}: ${plain.stdout}`)
+    assert.ok(plain.stderr.includes(refusal), plain.stderr)
+  } else {
+    assert.equal(plain.status, 0, plain.stderr)
+  }
+  const reopened = run('--reopen')
+  assert.equal(reopened.status, 0, reopened.stderr)
+  assert.match(reopened.stdout, /SHA-256 [0-9a-f]{64}/)
+  assert.match(reopened.stdout, /nothing was written/)
+  assert.equal(existsSync(path) ? readText(path) : null, before, 'a dry run wrote the file')
 })
 
 await test('the gate refuses to run without a snapshot, with one a lot too old, or with one nobody wrote', () => {
   const directory = mkdtempSync(join(tmpdir(), 'museum-releases-'))
   try {
     const write = (name: string, text: string) => writeFileSync(join(directory, name), text, 'utf8')
-    const codes = (lot: number) => snapshotForGate(newestSnapshot(directory), lot).issues.map((issue) => `${issue.severity} ${issue.code}`)
+    const gate = (lot: number) => snapshotForGate(snapshotsIn(directory), lot, lot - 1)
+    const codes = (lot: number) => gate(lot).issues.map((issue) => `${issue.severity} ${issue.code}`)
 
     // Nothing there, or no directory at all: this is the state before the first snapshot.
     assert.deepEqual(codes(2), ['error graph-snapshot-missing'])
     assert.equal(newestSnapshot(join(directory, 'not-there')), null)
-    assert.deepEqual(snapshotForGate(null, 2).issues.map((issue) => issue.code), ['graph-snapshot-missing'])
-    assert.equal(snapshotForGate(null, 2).graph, null)
+    assert.deepEqual(snapshotsIn(join(directory, 'not-there')), [])
+    assert.deepEqual(snapshotForGate([], 2, 1).issues.map((issue) => issue.code), ['graph-snapshot-missing'])
+    assert.equal(snapshotForGate([], 2, 1).graph, null)
     write('notes.md', 'not a snapshot')
     assert.deepEqual(codes(2), ['error graph-snapshot-missing'])
 
@@ -1496,36 +1802,45 @@ await test('the gate refuses to run without a snapshot, with one a lot too old, 
     write(snapshotFileName(2), serialiseGraphSnapshot(graphSnapshot(MUSEUM, 2)))
     assert.deepEqual(codes(2), [])
     assert.deepEqual(codes(3), [])
-    assert.equal(snapshotForGate(newestSnapshot(directory), 3).graph?.lot, 2)
+    assert.equal(gate(3).graph?.lot, 2)
     // A whole lot closed without writing its own.
     assert.deepEqual(codes(4), ['error graph-snapshot-stale'])
 
     // The newest is the highest lot, not the last name in the directory.
     write(snapshotFileName(10), serialiseGraphSnapshot(graphSnapshot(MUSEUM, 10)))
     assert.equal(newestSnapshot(directory)?.lot, 10)
+    assert.deepEqual(snapshotsIn(directory).map((snapshot) => snapshot.lot), [2, 10])
     assert.deepEqual(codes(11), [])
 
     // A file renamed by hand, and one that is not a snapshot.
     write(snapshotFileName(11), serialiseGraphSnapshot(graphSnapshot(MUSEUM, 10)))
-    assert.deepEqual(codes(11), ['error graph-snapshot-invalid'])
+    assert.deepEqual(codes(12), ['error graph-snapshot-invalid'])
     write(snapshotFileName(11), '{ "lot": 11 }')
-    assert.deepEqual(codes(11), ['error graph-snapshot-invalid'])
+    assert.deepEqual(codes(12), ['error graph-snapshot-invalid'])
     write(snapshotFileName(11), 'not json')
-    assert.deepEqual(codes(11), ['error graph-snapshot-invalid'])
+    assert.deepEqual(codes(12), ['error graph-snapshot-invalid'])
 
-    // A checkout that turned the line ends is the same file.
+    // A checkout that turned the line ends is the same file, and has the same digest.
     mkdirSync(join(directory, 'crlf'))
     writeFileSync(join(directory, 'crlf', snapshotFileName(2)), serialiseGraphSnapshot(NOW).replaceAll('\n', '\r\n'), 'utf8')
     assert.equal(newestSnapshot(join(directory, 'crlf'))?.text, serialiseGraphSnapshot(NOW))
+    assert.deepEqual(frozenSnapshotProblems(snapshotsIn(join(directory, 'crlf')), 2, { 2: snapshotDigest(serialiseGraphSnapshot(NOW)) }), [])
   } finally {
     rmSync(directory, { recursive: true, force: true })
   }
-  // And the gate script asks: it reads the newest, and hands it to the gate.
-  const script = readFileSync(resolve(ROOT, 'scripts/validate-content.ts'), 'utf8')
-  assert.match(script, /snapshotForGate\(snapshot, CONTENT_LOT\)/)
+  // And the gate script asks: it reads what is on disk and what the plan says
+  // is published, and hands the record to the gate.
+  const script = readText(resolve(ROOT, 'scripts/validate-content.ts'))
+  assert.match(script, /snapshotForGate\(snapshotsIn\([^)]*\), CONTENT_LOT, lastLotPublished\(plan\)\)/)
   assert.match(script, /previousGraph: previous\.graph/)
   assert.match(script, /\.\.\.previous\.issues,/)
   assert.match(script, /formatScript\(simulateProgress\(MUSEUM\)\.levels\)/)
+  // And the script that writes asks before it writes.
+  const writer = squeezed(readText(resolve(ROOT, 'scripts/graph-snapshot.ts')))
+  assert.ok(
+    writer.indexOf('snapshotWriteRefusal(CONTENT_LOT, lastLotDone(') > 0 && writer.indexOf('snapshotWriteRefusal(') < writer.indexOf('writeFileSync('),
+    'scripts/graph-snapshot.ts writes before it asks whether the lot is closed',
+  )
 })
 
 done('playthrough checks')

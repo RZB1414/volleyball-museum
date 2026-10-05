@@ -1,13 +1,15 @@
 /**
- * Whether a detail of a piece can be turned towards the camera at all.
+ * Whether a detail of a piece can be turned towards the camera at all, and
+ * whether a hand finds it.
  *
  * The examine view holds the piece's ORIGIN at a fixed distance and counts a
  * detail as seen when the direction from the origin out to the detail points
  * back at the camera (`Interaction.tsx`). That is right for a ball, whose
  * details sit a hand's width from its centre, and it quietly breaks for
  * anything large: the tape of a net is two metres from the origin, so it is
- * always behind the camera, and no amount of turning shows it. Three pieces
- * could never be catalogued and nothing said so.
+ * always behind the camera, and no amount of turning shows it. Two pieces
+ * could never be catalogued, a third only by a hand that landed inside a
+ * cone of a degree and a half, and nothing said so.
  *
  * This is the ruler, as arithmetic, so that Node can ask it of every piece
  * (`content/simulate.ts`, `npm run test:playthrough`). With the origin `d`
@@ -60,13 +62,26 @@ export function examineConeDegrees(rho: number): number {
   return cosine >= 1 ? 0 : (Math.acos(cosine) * 180) / Math.PI
 }
 
-/** Whether a hand can turn this detail of this piece to the camera, and how wide the cone is. */
+/**
+ * How wide the cone of a detail is, and the two things that follow from it.
+ *
+ *   - `shows`: there is a way of holding the piece in which the view records
+ *     the detail. This is the component's whole test: it knows nothing of the
+ *     minimum below, and writes the detail the moment the camera is inside
+ *     the cone, however narrow.
+ *   - `reachable`: a hand finds it. This is what a play may be planned on
+ *     (`content/simulate.ts`), and what the content gate asks of every detail
+ *     a piece needs.
+ *
+ * A detail that shows and is not reachable is the gap between the two: no
+ * script counts on it, and a save may hold it all the same.
+ */
 export function examineReach(
   exhibit: Pick<ExhibitData, 'scale'>,
   hotspot: Pick<ExamineHotspot, 'localPosition'>,
-): { readonly reachable: boolean; readonly coneDegrees: number } {
+): { readonly shows: boolean; readonly reachable: boolean; readonly coneDegrees: number } {
   // The piece is scaled as a whole, so its details move out with it.
   const rho = Math.hypot(...hotspot.localPosition) * (exhibit.scale ?? 1)
   const coneDegrees = examineConeDegrees(rho)
-  return { reachable: coneDegrees >= EXAMINE_MIN_CONE_DEGREES, coneDegrees }
+  return { shows: coneDegrees > 0, reachable: coneDegrees >= EXAMINE_MIN_CONE_DEGREES, coneDegrees }
 }

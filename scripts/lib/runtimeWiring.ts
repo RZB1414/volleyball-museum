@@ -123,6 +123,17 @@ export function progressWiringProblems(read: SourceReader, components: readonly 
       'engine/Interaction.tsx no longer records a detail with `grant(hotspotGrant(…))`: what an examine writes is decided in the component again, where no suite reaches it',
     )
   }
+  // The third argument is what makes the second required detail count the
+  // first. The suites prove `hotspotGrant` with the save's list; a call that
+  // hands it another list (none, or this visit's) is a piece with two
+  // required details that never catalogues, and every suite green.
+  for (const call of callArguments(interaction, 'hotspotGrant')) {
+    if (!/\.progress\.hotspots$/.test(call)) {
+      problems.push(
+        `engine/Interaction.tsx calls hotspotGrant(${call}) without the save's hotspots: a detail is judged without the ones already seen, and a piece with two required details is never catalogued`,
+      )
+    }
+  }
   for (const call of ['applyUnlockEffect', 'recordHotspot(', 'recordCatalogued(', 'recordFact(']) {
     if (interaction.includes(call)) {
       problems.push(
@@ -161,6 +172,26 @@ export function progressWiringProblems(read: SourceReader, components: readonly 
     if (!/outcome === 'refused'\) \{ museumAudio\.lockDenied\(\)/.test(source(path))) {
       problems.push(`${path}: a lock that refuses no longer answers the press with a sound, and E does nothing at all`)
     }
+  }
+  // Asking the rule is half of it: what the rule decided has to reach the
+  // save, and before the panel takes the press. The playthrough robot cannot
+  // see this line go, because its hands are written after these handlers and
+  // not by them: with it deleted the plan never lists a touched lock, and the
+  // right year opens a drawer that asks for it again on the next touch.
+  const touched =
+    "const attempt = attemptLock(lock, MUSEUM.facts, state.progress, { kind: 'touch' }) " +
+    "if (attempt.outcome !== 'open') state.grant(attempt.grant) if (attempt.outcome === 'ask') {"
+  for (const path of ['engine/Containers.tsx', 'engine/PowerControls.tsx']) {
+    if (!source(path).includes(touched)) {
+      problems.push(
+        `${path} no longer hands the save what attemptLock decided on a touch, right after asking and before the panel opens: a lock that was touched is never on the plan`,
+      )
+    }
+  }
+  if (!source('ui/LockPanel.tsx').includes("{ kind: 'code', entry }) if (attempt.outcome !== 'open') state.grant(attempt.grant)")) {
+    problems.push(
+      'ui/LockPanel.tsx no longer hands the save what attemptLock decided on a code: the right year closes the panel and the lock is never written as open',
+    )
   }
   for (const path of ['engine/Containers.tsx', 'ui/LockPanel.tsx']) {
     if (!source(path).includes('.grant(containerGrant(MUSEUM, ')) {
@@ -356,6 +387,17 @@ export function planWiringProblems(read: SourceReader): string[] {
   if (!map.includes("t('map.legend')")) {
     problems.push('ui/MuseumMap.tsx no longer titles the legend: `map.legend` is copy nobody shows again')
   }
+  // One sign, one meaning. A question mark on the plan is the room beyond a
+  // door nobody has been through; the list of locks used the same mark, and
+  // what the stub's meant was said by a tooltip a finger never sees.
+  if (/className="map-lock-mark"[^>]*>\s*\?/.test(map)) {
+    problems.push('ui/MuseumMap.tsx marks a listed lock with the question mark the plan uses for a room not visited yet')
+  }
+  if (!/model\.doors\.some\(\(door\) => door\.stub\) \? \( <li>(?:(?!<\/li>).)*t\('map\.unknown'\)/.test(map)) {
+    problems.push(
+      'ui/MuseumMap.tsx no longer explains the stub in the legend while the plan draws one: on touch nothing says what the question mark is',
+    )
+  }
 
   // In the frame loop, as its last line: the dev harness's teleport publishes
   // the yaw too, and that one alone would leave a player's marker where the
@@ -423,6 +465,69 @@ export function journalLayoutProblems(read: SourceReader): string[] {
 }
 
 /**
+ * The plan's page inside the notebook's body, and the title screen's column
+ * inside the screen (`styles/museum.css`).
+ *
+ * Both are a column of things in a box of fixed height, and both went wrong
+ * the same way: the height of one thing was worked out for what stood under
+ * it on the day it was written. The plan's allowed for the legend, and the
+ * list of touched locks came after; the title's column was centred, and with
+ * two buttons it is taller than a phone held sideways.
+ *
+ * The cure is a form, not a figure: the plan's page is a flex column the
+ * height of the body, the drawing is the one item that shrinks, and what is
+ * under it never does; the title scrolls, and is centred by auto margins,
+ * which do not push the top of a tall column off the screen. No layout engine
+ * runs in Node, so this holds the rules to that form, and the browser route
+ * measures the result.
+ */
+export function planPageLayoutProblems(read: SourceReader): string[] {
+  const css = read('styles/museum.css').replace(/\/\*[\s\S]*?\*\//g, ' ')
+  // Every rule written for the selector at the top level, together. What a
+  // media query adds is indented, and is not the form.
+  const body = (selector: string) =>
+    [...css.matchAll(new RegExp(`(?:^|\\n)${selector.replace(/[.>]/g, '\\$&')}\\s*\\{([^}]*)\\}`, 'g'))]
+      .map((rule) => rule[1])
+      .join('\n')
+  const has = (selector: string, declaration: RegExp) => declaration.test(body(selector))
+  const problems: string[] = []
+
+  if (!has('.journal-body', /\bflex:\s*1\s*;/) || !has('.journal-body', /\boverflow-y:\s*auto\s*;/)) {
+    problems.push('styles/museum.css: `.journal-body` no longer takes what the tabs leave of the panel and scrolls inside it: the plan has no page to fit')
+  }
+  if (
+    !has('.map', /\bdisplay:\s*flex\s*;/) ||
+    !has('.map', /\bflex-direction:\s*column\s*;/) ||
+    !has('.map', /\bheight:\s*100%\s*;/)
+  ) {
+    problems.push('styles/museum.css: `.map` is no longer a column the height of its page: the plan cannot give way to what is under it')
+  }
+  if (!has('.map > svg', /\bflex:\s*0 1 auto\s*;/) || !has('.map > svg', /\bmin-height:\s*0\s*;/)) {
+    problems.push('styles/museum.css: the plan no longer shrinks (`.map > svg` wants `flex: 0 1 auto` and `min-height: 0`): the legend or the locks end under the fold')
+  }
+  if (/\bmax-height:[^;]*\b(?:calc|vh)\b/.test(body('.map > svg'))) {
+    problems.push(
+      'styles/museum.css: `.map > svg` allows for what is under the plan by a figure. It was right for the legend alone, and the first touched lock was listed under the fold',
+    )
+  }
+  for (const under of ['.map-legend', '.map-locks']) {
+    if (!has(under, /\bflex:\s*none\s*;/)) {
+      problems.push(`styles/museum.css: \`${under}\` may be squeezed instead of the plan (it wants \`flex: none\`)`)
+    }
+  }
+
+  if (!has('.title', /\boverflow-y:\s*auto\s*;/)) {
+    problems.push('styles/museum.css: the title screen no longer scrolls: on a short screen the language buttons are under the bottom edge')
+  }
+  if (/\b(?:place-items|align-items|align-content|place-content):\s*center\b/.test(body('.title')) || !has('.title-panel', /\bmargin:\s*auto\s*;/)) {
+    problems.push(
+      'styles/museum.css: the title screen centres its panel in a way that cuts off the top of a column taller than the screen (centre it with `margin: auto` on `.title-panel`)',
+    )
+  }
+  return problems
+}
+
+/**
  * The volumes the flood measures (M15). `test:navigation` proves that a
  * player can stand in front of every interactive with the eye within its
  * ray's reach and outside its volume, and it builds each volume itself
@@ -443,6 +548,30 @@ export function interactionVolumeWiringProblems(read: SourceReader): string[] {
     scene,
     'name={`exhibit:${exhibit.id}`} position={exhibit.position as unknown as [number, number, number]} rotation={[0, exhibit.rotationY ?? 0, 0]} scale={exhibit.scale ?? 1}',
     'a piece is placed by something other than its position, turn and scale, and the flood measured it where the content says',
+  )
+
+  // What is solid in the suites' world is put there by `buildMuseumWorld`,
+  // which copies each placement by hand. These hold the three components to
+  // registering the collider where that copy puts it: the base under a piece
+  // (`mountPlacements`), a cabinet and the furniture of a room. The breaker's
+  // is held by `powerControlWiringProblems`.
+  need(
+    'scenes/MuseumScene.tsx',
+    scene,
+    'registerKitColliders(kit, spec?.part, KIT_BUNDLE, collision, { roomOrigin, position: [exhibit.position[0], 0, exhibit.position[2]], rotationY: exhibit.rotationY, })',
+    'the base under a mounted piece is no longer solid where the suites place it, and the capsule walks through a plinth the flood stood beside',
+  )
+  need(
+    'engine/Containers.tsx',
+    squeezed(read('engine/Containers.tsx')),
+    'registerKitColliders(kit, container.part, kitBundle, collision, { roomOrigin, position: container.position, rotationY: container.rotationY, scale: 1, })',
+    'a cabinet is no longer solid where the suites place it',
+  )
+  need(
+    'engine/RoomFurniture.tsx',
+    squeezed(read('engine/RoomFurniture.tsx')),
+    'registerKitColliders(kit, placement.part, kitBundle, collision, { roomOrigin: room.origin, position: placement.position, rotationY: placement.rotationY, scale: placement.scale, })',
+    'the furniture of a room is no longer solid where the suites place it',
   )
 
   const view = squeezed(read('engine/Interaction.tsx'))

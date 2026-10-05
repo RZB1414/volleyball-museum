@@ -1856,7 +1856,7 @@ Tranca contada e ritual abrem quando a evidência declarada está alcançável. 
 | Erro (reprova o `check`) | O que pega |
 |---|---|
 | `ending-unreachable`, `term-unsignable` | algum termo fora do ponto fixo |
-| `room-unreachable`, `lock-unopenable`, `document-unreadable`, `exhibit-uncataloguable` | conteúdo morto |
+| `room-unreachable`, `lock-unopenable`, `document-unreadable`, `exhibit-uncataloguable`, `hotspot-unreachable` | conteúdo morto (o último é o detalhe opcional que nenhuma mão alcança: não está em ação nenhuma, e sem código próprio sumiria do grafo calado; revisão de L2) |
 | `credential-unobtainable`, `credential-orphan` | chave sem fonte ou sem fechadura |
 | `trigger-never-fires`, `flag-never-set`, `flag-never-read` | fiação solta |
 | `gate-uses-negative-condition`, `gate-uses-all-condition` | R2 |
@@ -1876,8 +1876,12 @@ no Anexo C: os portões novos de L1 e L2 reprovam conteúdo que só fecha mais t
 lá por extenso.
 
 **`validateAdditive`.** `npm run graph:snapshot` grava `docs/releases/L<n>.graph.json` (ações,
-guardas, concessões, termos, itens de lista). O `check` compara o conteúdo com o instantâneo do
-último lote publicado. O primeiro instantâneo é o de L2.
+guardas, concessões, termos, itens de lista). O `check` compara o conteúdo com o **registro** mais
+novo: o instantâneo de um lote que o conteúdo já deixou para trás, ou o do próprio lote depois de
+publicado. O instantâneo do lote em andamento é rascunho (tem de ser o grafo do conteúdo, byte a
+byte) e nunca é o juiz dele mesmo. Lote fechado tem o SHA-256 do instantâneo fixado em
+`scripts/lib/graphSnapshots.ts`, e o script só o regrava com `--reopen` (revisão de L2). O primeiro
+instantâneo é o de L2.
 
 **`test:playthrough`**, no nível do store, em Node: (1) a rota canônica termina com cada flag de
 termo do lote; (2) 500 sementes de ordem embaralhada, inclusive ações inúteis, com salvar, migrar e
@@ -2562,8 +2566,15 @@ cita objeto ou acrescenta item de lista sem consumidor no mesmo deploy.
 | 9. Publicar | commit com mensagem clara e só os arquivos do lote; push para `main` | — |
 | 10. Deploy | `npm run deploy` (build e `wrangler deploy`). Se o Wrangler falhar por IPv6: `NODE_OPTIONS=--dns-result-order=ipv4first` | versão Cloudflare anotada |
 | 11. Fumaça | em produção: novo jogo até o primeiro marco; "Continuar" com um save do lote anterior; console sem erro | ok |
-| 12. Fechar | `npm run graph:snapshot`; corpus de saves ampliado; manifesto de capturas; `docs/HANDOFF.md` atualizado (estado, medições, lições, testes que mudaram, promessas e dívidas datadas, o que a medição manual mostrou); `docs/PESQUISA-CONTEUDO.md` se alguma fonte mudou | passagem |
+| 12. Fechar | `npm run graph:snapshot` (e o SHA-256 que ele imprime fixado em `scripts/lib/graphSnapshots.ts`); corpus de saves ampliado; manifesto de capturas; `docs/HANDOFF.md` atualizado (estado, medições, lições, testes que mudaram, promessas e dívidas datadas, o que a medição manual mostrou); `docs/PESQUISA-CONTEUDO.md` se alguma fonte mudou | passagem |
 | 13. Playtest | uma pessoa nova, quando o lote muda o percurso (critérios em 8.10) | observações viram tarefas |
+
+**«Feito em» e «publicado» são dois momentos, e os portões leem os dois** (`scripts/lib/planLots.ts`).
+A seção de um lote ganha «Feito em AAAA-MM-DD» quando ele fecha; ao sair, a mesma linha passa a
+dizer «Feito em AAAA-MM-DD e publicado», com o commit e a versão Cloudflare. Enquanto a segunda
+forma não estiver escrita, o instantâneo do lote tem de acompanhar o conteúdo: um conserto feito
+entre o fecho e o push regrava o arquivo (`npm run graph:snapshot -- --reopen`) e o digest, no
+mesmo commit.
 
 **Armadilhas do harness de captura:** com o painel oculto, só `__museumStep(n)` anda o jogo; rajadas
 de captura derrubam o DPR adaptativo (forçar `document.visibilityState` a `hidden`); o
@@ -2697,9 +2708,15 @@ dono e continua pendente. Não trava L1; trava o livro-caixa de L6.
   dois conjuntos e o registro em `docs/HANDOFF.md` §11, com o que um rollback perde. `CONTENT_LOT`
   é 2 desde a fatia que pagou `map.legend`. Os dez pontos de referência foram medidos de novo por
   conferência e deram os números de L1; o `BROWSER_RECORD` continua o do lote 1, de propósito, e
-  quem muda o que uma sala desenha (L3) mede e troca. **Faltam** os passos 5 (revisão adversarial
-  por quem não implementou), 8 a 11 (revisor, push, deploy e fumaça em produção, com a versão
-  Cloudflare anotada no HANDOFF) e 13 (playtest); e o aparelho real, que continua com o dono.
+  quem muda o que uma sala desenha (L3) mede e troca.
+- **Revisão adversarial (passo 5) feita em 2026-10-05**, num commit local: 18 achados em cinco
+  lentes (saves, fluxo, provas, testes, visual), 17 distintos, todos fechados; o registro está em
+  `docs/HANDOFF.md`, §11.12. O maior: uma aba aberta antes de outra gravar sobrescrevia o save mais
+  novo; agora a aba lê o disco antes de gravar e funde as duas cópias. O instantâneo foi gerado de
+  novo sobre a árvore da revisão e não mudou um byte; o digest dele está fixado. **Faltam** os
+  passos 8 a 11 (revisor, push, deploy e fumaça em produção, com a versão Cloudflare anotada no
+  HANDOFF e esta linha passando a dizer que o lote foi publicado) e 13 (playtest); e o aparelho
+  real, que continua com o dono.
 
 ### L3 — Posse
 
@@ -3200,7 +3217,7 @@ Só a chuva.)»); depois da bomba, «(Nada. Parou de chover.)»; turno da noite,
 |---|---|---|---|---|
 | caderno não lido **e** o jogador ainda não saiu do escritório | «Primeiro o caderno: a diretora, a Helena, deixou um na mesa.» | «Capa vermelha, do lado da luminária.» | «Aperta E nele e lê até a última página.» | «Caderno da Helena» |
 | átrio sem energia | «O quadro fica do outro lado do saguão.» | «Luzinha vermelha, perto da porta com placa.» | «Caixa cinza na parede. Alavanca. Aperta E.» | «Quadro de serviço» |
-| Ala 1 sem energia | «A Ala 1 tem quadro próprio, na parede do outro lado da sala.» | «Em frente à entrada, mais para a esquerda de quem entra.» | «Atravessa no escuro até o piloto vermelho. A lanterna dá conta.» | «Quadro de serviço» |
+| Ala 1 sem energia | «A Ala 1 tem quadro próprio, na parede do outro lado da sala.» | «Na parede de frente para as portas.» (sem lado: desde L2 a ala tem duas entradas, e o que fica à esquerda de quem entra pela porta principal fica à direita de quem volta pelo atalho; `test:opening` mede toda dica que diz um lado; revisão de L2) | «Atravessa no escuro até o piloto vermelho. A lanterna dá conta.» | «Quadro de serviço» |
 | gaveta fechada | «A gaveta do Otávio abre com um ano. Ele deixou recado na secretária do escritório.» | «O ano tá na Ala 1, no retrato do Morgan.» | L3: «Pega a moldura e inclina: tá na borda de baixo. Ou na gaveta de cima do arquivo ao lado.» (não «plaqueta»: a moldura modelada não tem uma, e o texto ao pé dela é o crédito da foto, com 1897; revisão de L1) · L4 em diante: «Pega o retrato e vira a moldura.» | «Gaveta do Otávio — trancada (um ano)» |
 | chave na mão | «Chave do Otávio? É do cofre de ferro.» | «Canto do escritório, do lado das estantes.» | «Encosta e aperta E. A chave fica lá.» | «Cofre de ferro — precisa de chave» |
 | Livro na mão, posse por assinar | «O termo se assina no púlpito do saguão.» | «O púlpito com a lâmpada acesa, perto do plinto.» | «Com luz nas três salas, segura o E até a pena parar.» | «Púlpito — Assinar: Posse» ou «falta luz em: [sala]» |
@@ -3425,6 +3442,7 @@ gaveta.)
 | Código | O que acusa hoje | Fecha em |
 |---|---|---|
 | `exhibit-uncataloguable` | `net-1897`, `gym-suit`, `photo-gym` | L4 |
+| `hotspot-unreachable` | `net-1897:socket`: detalhe opcional a 2,4 m da origem que a vista segura a 0,42 m (H-01); a vista das peças grandes o traz, ou ele vira detalhe do modelo (B.11) | L4 |
 | `checklist-item-untickable` | «Catalogar o acervo» (até L4); «Caixa-forte» (até L3, que a transforma em promessa datada sem caixa de riscar, `deferredUntilLot` 12; a promessa é paga em L12) | L4, L3 |
 | `standing-point-inside-target` | `net-1897`: sem colisor, quem anda até a rede fica com o olho dentro da caixa dela (H-31) | L14 |
 | `text-ages` | `document.predecessor.body` («há cento e trinta anos», H-23); o bilhete dá lugar a `doc-otavio-handover` | L3 |

@@ -22,7 +22,6 @@
  */
 
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import { NodeIO } from '@gltf-transform/core'
@@ -45,6 +44,7 @@ import {
 import { buildHistoryCaseRun } from './bake/parts/holyokeDecor.mjs'
 import { readFontMetrics, wrapLines } from './lib/creditWrap.ts'
 import { squeezed } from './lib/runtimeWiring.ts'
+import { readText } from './lib/readText.ts'
 
 let passed = 0
 let failed = 0
@@ -296,7 +296,7 @@ function printPlane(piece: Piece) {
  * from the same package, so the lines are measured with the file the player
  * downloads.
  */
-const roomText = readFileSync(new URL('../src/engine/RoomText.tsx', import.meta.url), 'utf8')
+const roomText = readText(new URL('../src/engine/RoomText.tsx', import.meta.url))
 const fontImport = /from '(@ibm\/plex-sans-condensed\/[^'?]+-Regular\.woff)\?url'/.exec(roomText)?.[1]
 assert.ok(fontImport, 'RoomText imports the regular face of the museum font')
 const creditFont = readFontMetrics(fileURLToPath(new URL(`../node_modules/${fontImport}`, import.meta.url)))
@@ -682,7 +682,7 @@ test('the credit under every frame reads against the lining, in a lit bay and in
 
   // And the colour proven here is the one drawn: the scene hands it to the
   // frame by its mount, and the frame sets the credit in it.
-  const source = (path: string) => squeezed(readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8'))
+  const source = (path: string) => squeezed(readText(new URL(`../src/${path}`, import.meta.url)))
   assert.ok(
     source('scenes/MuseumScene.tsx').includes('creditColour={CREDIT_COLOUR[exhibit.mount]}'),
     'MuseumScene passes the credit colour of the mount to FramedMedia',

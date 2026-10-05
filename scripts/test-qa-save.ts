@@ -24,9 +24,10 @@
  */
 
 import assert from 'node:assert/strict'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { readText } from './lib/readText.ts'
 
 // ---------------------------------------------------------------------------
 // A browser's storage, in place before anything imports the store
@@ -191,7 +192,7 @@ test('every lot the plan says is done left a save of its own in the corpus', () 
   // written up as done with a corpus that had none of its saves, and the lot
   // after had to play it again on the published tree. The plan's «Feito em»
   // is what says a lot is done, so that line now asks for the save.
-  const plan = readFileSync(resolve(ROOT, 'docs/PLANO-ATE-O-FINAL.md'), 'utf8')
+  const plan = readText(resolve(ROOT, 'docs/PLANO-ATE-O-FINAL.md'))
   const done = lastLotDone(plan)
   assert.ok(done >= 2, 'the plan no longer marks L2 as done: the pattern has gone stale')
   const written = new Set(fixtureIds.map((id) => fixtureLot(SAVE_FIXTURES[id])))
@@ -261,7 +262,7 @@ const containers = MUSEUM.rooms.flatMap((room) => room.containers ?? [])
 const doors = buildTransitionDoorSpecs(MUSEUM.rooms)
 const radios = radioDevices(MUSEUM).map((entry) => entry.device)
 const callIds = new Set<string>(radios.flatMap((radio) => radio.calls.map((call) => call.id)))
-const hudSource = readFileSync(resolve(ROOT, 'src/ui/Hud.tsx'), 'utf8')
+const hudSource = readText(resolve(ROOT, 'src/ui/Hud.tsx'))
 
 /** The one-off lessons the HUD records: one by a shared id, the rest inline. */
 const hintIds = new Set<string>([
@@ -612,7 +613,7 @@ test('a save the lot in the tree wrote loads as itself', () => {
   }
   // While a lot is open the corpus has no save of it yet, and this holds of
   // nothing; the lot closes by adding one (the check on the plan, above).
-  if (lastLotDone(readFileSync(resolve(ROOT, 'docs/PLANO-ATE-O-FINAL.md'), 'utf8')) === CONTENT_LOT) {
+  if (lastLotDone(readText(resolve(ROOT, 'docs/PLANO-ATE-O-FINAL.md'))) === CONTENT_LOT) {
     assert.ok(own.length > 0, `L${CONTENT_LOT} is done and none of its saves is in the corpus`)
   }
 })
@@ -638,16 +639,16 @@ test('the dev server injects the harness ahead of the entry, and only the dev se
   ])
   assert.ok(existsSync(resolve(ROOT, `.${QA_SAVE_BOOT_MODULE}`)), 'the injected module does not exist')
 
-  const config = readFileSync(resolve(ROOT, 'vite.config.ts'), 'utf8')
+  const config = readText(resolve(ROOT, 'vite.config.ts'))
   assert.ok(config.includes('qaSavePlugin()'), 'vite.config.ts does not load the plugin')
 
   // The entry sits in <body>: a module script in <head> runs before it.
-  const html = readFileSync(resolve(ROOT, 'index.html'), 'utf8')
+  const html = readText(resolve(ROOT, 'index.html'))
   assert.ok(html.indexOf('</head>') < html.indexOf('src="/src/main.tsx"'))
 })
 
 test('nothing the game ships can reach the harness or the fixtures', () => {
-  const html = readFileSync(resolve(ROOT, 'index.html'), 'utf8')
+  const html = readText(resolve(ROOT, 'index.html'))
   assert.ok(!/qaSave|\/dev\//.test(html), 'index.html mentions the harness')
 
   // The production graph starts at index.html and only follows imports, so a
@@ -656,7 +657,7 @@ test('nothing the game ships can reach the harness or the fixtures', () => {
   const offenders = sourceFiles(resolve(ROOT, 'src'))
     .filter((path) => !path.startsWith(devDirectory))
     .filter((path) =>
-      /(?:from|import)\s*\(?\s*['"][^'"]*(?:\/dev\/|saveFixtures)[^'"]*['"]/.test(readFileSync(path, 'utf8')),
+      /(?:from|import)\s*\(?\s*['"][^'"]*(?:\/dev\/|saveFixtures)[^'"]*['"]/.test(readText(path)),
     )
     .map((path) => relative(ROOT, path))
   assert.deepEqual(offenders, [], 'a shipped module imports the dev harness or the save fixtures')
@@ -664,7 +665,7 @@ test('nothing the game ships can reach the harness or the fixtures', () => {
   // And the harness itself stays small: the fixtures and nothing of the game.
   for (const path of sourceFiles(devDirectory)) {
     // Every form an import takes: `from '…'`, a bare `import '…'`, `import('…')`.
-    const imports = [...readFileSync(path, 'utf8').matchAll(/(?:from\s+|import\s*\(?\s*)['"]([^'"]+)['"]/g)].map(
+    const imports = [...readText(path).matchAll(/(?:from\s+|import\s*\(?\s*)['"]([^'"]+)['"]/g)].map(
       (match) => match[1],
     )
     assert.ok(imports.length > 0 || path.endsWith('.d.ts'), `${relative(ROOT, path)}: no import was recognised`)

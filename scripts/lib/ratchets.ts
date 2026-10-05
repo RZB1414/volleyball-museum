@@ -263,10 +263,25 @@ export const BUNDLE_BUDGETS = {
  *     view imports its two numbers from `examineReach.ts` and the cone's
  *     arithmetic stays out of the game; the exhaustive player, the snapshot
  *     and the robot are the gate's and ship nowhere.
+ *
+ * Raised by the review of L2:
+ *   - `title` +800 bytes, on 29,598 measured (it was 29,000 on 28,859). The
+ *     store is on the title screen, and it used to write what it held over
+ *     whatever another tab had written since it loaded: a page of the build
+ *     before a deploy stamped the save down and dropped the fields of the
+ *     build after. It now reads the disk before every write and joins the two
+ *     copies field by field (a rule per field in `progressFields.ts`, the
+ *     reading in `store.ts`, the mark that tells a new game from the one it
+ *     replaced). Most of the 739 bytes are that. The rest are the style
+ *     sheet, which ships with the title too: the plan's page as a column
+ *     whose drawing gives way to the list of locks, the padlock that replaced
+ *     a second question mark, and the title's own column on a phone held
+ *     sideways. The game grew 131 bytes (390,892, inside its ceiling) and the
+ *     document none (63,235).
  */
 export const BUNDLE_PATH_CEILINGS = {
   document: 63_600,
-  title: 29_000,
+  title: 29_800,
   game: 392_700,
 } as const
 

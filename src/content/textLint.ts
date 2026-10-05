@@ -24,13 +24,15 @@
  *
  * Text is what a player can read without opening an image: the two
  * dictionaries, the words drawn in the authored SVGs (read by the gate
- * script and handed in) and the credit line under every picture.
+ * script and handed in), the credit line under every picture, and the line
+ * the notebook's Credits tab prints beside it (why a picture is in the
+ * public domain, what was changed in it, what generated it).
  *
  * Gate-only, like `validate.ts`: nothing the game ships imports it
  * (`test:facts` checks).
  */
 
-import { formatCreditLine, type CreditLocale } from './credit.ts'
+import { formatCreditEntry, formatCreditLine, type CreditLocale } from './credit.ts'
 import type { Fact, MuseumContent, ProgressCondition } from './schema'
 import type { ValidationIssue } from './validate.ts'
 
@@ -47,7 +49,11 @@ export type TextLintExtras = {
 
 /** One piece of text a player can read. */
 export type PrintedText = {
-  /** A dictionary key, `credit:<media id>` for a credit line, `media:<media id>` for words drawn in an image. */
+  /**
+   * A dictionary key; `credit:<media id>` for the line under a picture;
+   * `credits:<media id>` for what the Credits tab adds to it; `media:<media
+   * id>` for words drawn in an image.
+   */
   readonly where: string
   /** The dictionary's locale; `image` for words drawn in a picture, the same in every language. */
   readonly locale: string
@@ -69,6 +75,12 @@ export function printedTexts(
     if (!CREDIT_LOCALES.has(locale)) continue
     for (const asset of content.media) {
       texts.push({ where: `credit:${asset.id}`, locale, text: formatCreditLine(asset.credit, locale as CreditLocale) })
+      // The Credits tab prints the title, the author and the licence too, and
+      // those are the line above: read twice they would be accused twice.
+      // What only the tab prints is the detail, and it is where a source is
+      // named with its date.
+      const { detail } = formatCreditEntry(asset.credit, locale as CreditLocale)
+      if (detail) texts.push({ where: `credits:${asset.id}`, locale, text: detail })
     }
   }
   for (const [mediaId, drawn] of Object.entries(extras.mediaTexts ?? {})) {

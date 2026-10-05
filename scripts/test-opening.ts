@@ -12,7 +12,6 @@
  */
 
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import { Box3, Vector3 } from 'three'
@@ -65,10 +64,11 @@ import {
   transitionDoorBlock,
 } from '../src/engine/transitionDoorTopology.ts'
 import { useMuseum } from '../src/state/store.ts'
-import { arrivalOf, recipeParts } from './lib/museumWorld.ts'
+import { ARRIVAL_DEPTH, arrivalOf, recipeParts } from './lib/museumWorld.ts'
 import { squeezed } from './lib/runtimeWiring.ts'
 import { bearingDegrees, projectedSize, roomObstacles, sightlineBlockers } from './lib/sightline.ts'
 import { KEY_NAMED_NOT_USED, keysCitedIn, readSourceTree } from './lib/translationUsage.ts'
+import { readText } from './lib/readText.ts'
 
 let passed = 0
 let failed = 0
@@ -297,11 +297,12 @@ test('a door powered from beyond itself is a soft-lock the gate catches', () => 
     .map((issue) => issue.id)
   assert.deepEqual(unreachable.sort(), ['atrium', 'holyoke'], 'the atrium is unreachable from the office')
   // The authored museum is accused of nothing the debt table has not dated
-  // (three pieces no hand can catalogue, and the two list items that follow
-  // from them): every room is reached and every lock opens.
+  // (three pieces a hand cannot be counted on to catalogue, the two list
+  // items that follow from them, and one optional detail out of reach):
+  // every room is reached and every lock opens.
   const authored = simulateProgress(MUSEUM)
   const owed = debtOf('validate:content').filter((line) =>
-    ['exhibit-uncataloguable', 'checklist-item-untickable'].includes(line.code),
+    ['exhibit-uncataloguable', 'checklist-item-untickable', 'hotspot-unreachable'].includes(line.code),
   )
   assert.deepEqual(
     settleKnownDebt(authored.issues, owed, CONTENT_LOT)
@@ -427,8 +428,8 @@ test('the torch is one permanent spot added to the gallery pool', () => {
   assert.equal(FLASHLIGHT_SPOT_SLOTS, 1)
   // Mounted unconditionally at the scene root and never hidden: either would
   // change the light count and recompile every material at the first press.
-  const component = readFileSync(new URL('../src/engine/Flashlight.tsx', import.meta.url), 'utf8')
-  const scene = readFileSync(new URL('../src/scenes/MuseumScene.tsx', import.meta.url), 'utf8')
+  const component = readText(new URL('../src/engine/Flashlight.tsx', import.meta.url))
+  const scene = readText(new URL('../src/scenes/MuseumScene.tsx', import.meta.url))
   assert.equal((component.match(/<spotLight\b/g) ?? []).length, FLASHLIGHT_SPOT_SLOTS)
   assert.ok(!/visible=\{/.test(component), 'the torch spot is never hidden')
   assert.ok(/\n\s*<Flashlight \/>\n/.test(scene), 'the scene always mounts the torch')
@@ -456,7 +457,7 @@ test('the beam lights a room as far as it did, without blowing out the near fiel
   assert.ok(Math.abs(held - (before(hold) * 0.12)) / (before(hold) * 0.12) < 0.05, `held: ${held.toFixed(2)}`)
   assert.ok(held < torchIrradiance(hold) * 0.5, 'dimmed while an object is held to the face')
   assert.ok(
-    readFileSync(new URL('../src/engine/Flashlight.tsx', import.meta.url), 'utf8').includes('decay={FLASHLIGHT.decay}'),
+    readText(new URL('../src/engine/Flashlight.tsx', import.meta.url)).includes('decay={FLASHLIGHT.decay}'),
     'the spot uses the decay these numbers assume',
   )
 })
@@ -637,6 +638,141 @@ test('the lighthouse rule sees what stands in the room, and where the door is', 
       besideTheDoor.some((problem) => problem.includes('behind the player')),
     `beside its own door the panel is behind the player (${besideTheDoor.join('; ') || 'nothing reported'})`,
   )
+})
+
+// ---------------------------------------------------------------------------
+// A hint that says "to your left" is right from every door, or says no side
+// ---------------------------------------------------------------------------
+
+/**
+ * A hint that sends the player to a dark room's control may name a side only
+ * if the control is on that side whichever door they come in by.
+ *
+ * The porter is asked from wherever the player stands, at any time. His hint
+ * for Wing 1 said the breaker was «à esquerda de quem entra», which was true
+ * while the wing had one way in. Since the shortcut stays open, a player who
+ * crossed the wing in the dark and left by it can come back that way, and
+ * from there the breaker is to the right: the one direction the hint gave
+ * pointed at the wrong wall.
+ *
+ * So: for every hint that waits on one room's power, each line in each
+ * language is read for a side, and the control is measured from every
+ * doorway of that room a player can walk in by while it is dark (any door
+ * but one that waits for the room's own power). A line that names no side
+ * passes. The first call is not a hint: it is said once, in the office, and
+ * names the door it counts from.
+ */
+const SIDE_WORDS: Record<'pt-BR' | 'en', readonly (readonly [RegExp, 'left' | 'right'])[]> = {
+  'pt-BR': [
+    [/\besquerd[ao]\b/i, 'left'],
+    [/\bdireita\b/i, 'right'],
+  ],
+  // "Right beside the door" and "left you a notebook" are not directions.
+  en: [
+    [/\b(?:to|on) (?:your|the|his|her) left\b|\bleft of\b|\bleft-hand\b/i, 'left'],
+    [/\b(?:to|on) (?:your|the|his|her) right\b|\bright of\b|\bright-hand\b/i, 'right'],
+  ],
+}
+
+function sidedHintProblems(
+  content: MuseumContent,
+  dictionaries: Readonly<Record<'pt-BR' | 'en', Readonly<Record<string, string>>>>,
+): string[] {
+  const problems: string[] = []
+  const doors = buildTransitionDoorSpecs(content.rooms)
+  for (const { device } of radioDevices(content)) {
+    for (const hint of device.hints) {
+      const when = hint.when as { readonly unpowered?: readonly string[] }
+      const roomId = when.unpowered?.length === 1 && Object.keys(when).length === 1 ? when.unpowered[0] : null
+      const room = content.rooms.find((candidate) => candidate.id === roomId)
+      const control = room?.powerControl
+      if (!room || !control) continue
+
+      // Each way in, with the side the control is on from 0.95 m inside it.
+      const ways = room.portals
+        .filter((portal) => {
+          const door = doors.find(
+            (candidate) => candidate.id === portal.id || (candidate.reciprocalPortalId === portal.id && candidate.otherRoomId === room.id),
+          )
+          return door?.requiresPower !== room.id
+        })
+        .map((portal) => {
+          // A portal's own +Z points into its room; to the right of that is (-z, x).
+          const heading = [Math.sin(portal.rotationY), Math.cos(portal.rotationY)]
+          const eye = [portal.position[0] + heading[0] * ARRIVAL_DEPTH, portal.position[2] + heading[1] * ARRIVAL_DEPTH]
+          const to = [control.position[0] - eye[0], control.position[2] - eye[1]]
+          const across = to[0] * -heading[1] + to[1] * heading[0]
+          const degrees = bearingDegrees(
+            new Vector3(eye[0], 0, eye[1]),
+            new Vector3(heading[0], 0, heading[1]),
+            new Vector3(control.position[0], 0, control.position[2]),
+          )
+          return { portalId: portal.id, side: across > 0 ? ('right' as const) : ('left' as const), degrees }
+        })
+
+      for (const locale of ['pt-BR', 'en'] as const) {
+        for (const key of [...hint.lineKeys, ...(hint.curtLineKeys ?? [])]) {
+          const line = dictionaries[locale][key] ?? ''
+          for (const [pattern, said] of SIDE_WORDS[locale]) {
+            const word = pattern.exec(line)?.[0]
+            if (!word) continue
+            for (const way of ways.filter((candidate) => candidate.side !== said)) {
+              problems.push(
+                `${key} (${locale}) says "${word}", and for a player who walks into ${room.id} by "${way.portalId}" ` +
+                  `${control.id} is ${way.degrees.toFixed(1)}° to the ${way.side}`,
+              )
+            }
+          }
+        }
+      }
+    }
+  }
+  return problems
+}
+
+test('a hint to a dark room names a side only if it is that side from every door', () => {
+  assert.deepEqual(sidedHintProblems(MUSEUM, { 'pt-BR': ptBR, en }), [])
+
+  // The lines as they were while the wing had one way in: wrong by the shortcut, in both languages.
+  const asItWas = {
+    'pt-BR': {
+      ...ptBR,
+      'radio.hint.holyoke':
+        'A Ala 1 tem quadro próprio, na parede do outro lado da sala, à esquerda de quem entra. Atravessa no escuro: a lanterna dá conta.',
+      'radio.hint.holyoke.curt': 'Ala 1. Quadro na parede do fundo, à esquerda. Luzinha vermelha. Vai.',
+    },
+    en: {
+      ...en,
+      'radio.hint.holyoke': 'Wing 1 has its own breaker, on the far wall, to your left as you walk in. Cross it in the dark — the torch will do.',
+      'radio.hint.holyoke.curt': 'Wing 1. Breaker on the far wall, to the left. Little red light. Go.',
+    },
+  }
+  const accusedLines = sidedHintProblems(MUSEUM, asItWas)
+  assert.equal(accusedLines.length, 4, accusedLines.join('\n'))
+  for (const line of accusedLines) assert.match(line, /by "holyoke-shortcut" holyoke-breaker is 2\d\.\d° to the right/)
+  assert.deepEqual(
+    accusedLines.map((line) => line.split(' says ')[0]).sort(),
+    ['radio.hint.holyoke (en)', 'radio.hint.holyoke (pt-BR)', 'radio.hint.holyoke.curt (en)', 'radio.hint.holyoke.curt (pt-BR)'],
+  )
+  // The right side for the main door and the wrong one for the shortcut: said the other way round, it is the main door that is accused.
+  const mirrored = { ...asItWas, 'pt-BR': { ...ptBR, 'radio.hint.holyoke': 'O quadro fica à direita de quem entra, no escuro.' } }
+  assert.ok(sidedHintProblems(MUSEUM, mirrored).some((line) => /radio\.hint\.holyoke \(pt-BR\).*by "holyoke-to-atrium".*to the left/.test(line)))
+
+  // With one way in, the same lines are true, and pass: this is the wing before the shortcut stayed open.
+  const oneDoor: MuseumContent = {
+    ...MUSEUM,
+    rooms: MUSEUM.rooms.map((room) => ({ ...room, portals: room.portals.filter((portal) => !/shortcut/.test(portal.id)) })),
+  }
+  assert.deepEqual(sidedHintProblems(oneDoor, asItWas), [])
+
+  // What is a direction and what is not, in English.
+  const side = (line: string) => SIDE_WORDS.en.flatMap(([pattern, said]) => (pattern.test(line) ? [said] : []))
+  assert.deepEqual(side('right beside the door'), [])
+  assert.deepEqual(side('Helena left you a notebook. All right?'), [])
+  assert.deepEqual(side('a little to your right as you leave'), ['right'])
+  assert.deepEqual(side('on the left-hand wall'), ['left'])
+  // The atrium's hint says "right beside the door" and is measured from three doorways without complaint.
+  assert.match(en['radio.hint.atrium'], /right beside the door/)
 })
 
 // ---------------------------------------------------------------------------
@@ -939,6 +1075,7 @@ test('a condition, an effect or a trigger that points at nothing fails the gate 
     'condition-exhibit-missing',
     'condition-hotspot-missing',
     'condition-door-missing',
+    'condition-room-missing',
     'condition-credential-missing',
     'trigger-duplicate',
     'effect-target-missing',
@@ -981,6 +1118,9 @@ test('a condition, an effect or a trigger that points at nothing fails the gate 
   // A door is named by the portal that declares the leaf (DL2-1). The portal
   // facing it across the same opening is not a door, and is the easy mistake.
   proves('condition-door-missing', 'holyoke-shortcut', gate(when({ doorsReleased: ['holyoke-shortcut'] })))
+  // A room the type allows and the house does not have yet: the compiler
+  // takes `paris`, and the condition would simply never hold.
+  proves('condition-room-missing', 'paris', gate(when({ roomsVisited: ['paris'] })))
   // Nothing in the museum hands out a badge: the condition would wait for good.
   proves('condition-credential-missing', 'badge:indoor', gate(when({ credentials: [{ kind: 'badge', id: 'indoor' }] })))
   // Inside a branch, and in every place a condition is asked from.
@@ -998,6 +1138,8 @@ test('a condition, an effect or a trigger that points at nothing fails the gate 
       ),
     }))
   proves('condition-exhibit-missing', 'asked-by-the-porter', gate(asked({ catalogued: ['asked-by-the-porter'] })))
+  // A call and a hint that wait for a room nobody can visit: no other code says so.
+  proves('condition-room-missing', 'paris', gate(asked({ roomsVisited: ['paris'] })))
   const listed: MuseumContent = {
     ...MUSEUM,
     documents: MUSEUM.documents.map((doc) => ({
@@ -1140,7 +1282,7 @@ test('what the runtime places by itself is what the validator counts as used', (
   }
 
   // And the components draw from that table rather than from one of their own.
-  const source = (path: string) => squeezed(readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8'))
+  const source = (path: string) => squeezed(readText(new URL(`../src/${path}`, import.meta.url)))
   assert.ok(source('scenes/MuseumScene.tsx').includes('MOUNT_PARTS[exhibit.mount]'), 'the scene reads MOUNT_PARTS')
   assert.ok(
     source('engine/TransitionDoors.tsx').includes("TRANSITION_DOOR_LEAVES['double-panel'][side]"),

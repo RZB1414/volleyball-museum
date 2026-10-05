@@ -23,7 +23,7 @@
  */
 
 import assert from 'node:assert/strict'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -61,10 +61,11 @@ import {
   serialiseCaptures,
   sha256,
 } from './lib/factsCapture.mjs'
+import { readText } from './lib/readText.ts'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 // A Windows checkout may hand these files over with CRLF; the script writes LF.
-const read = (path: string) => readFileSync(resolve(ROOT, path), 'utf8').replace(/\r\n/g, '\n')
+const read = (path: string) => readText(resolve(ROOT, path))
 
 let passed = 0
 function test(name: string, run: () => void) {
@@ -721,7 +722,7 @@ test('the capture stays out of the gate, and the gate reads what it wrote', () =
   // Importing the capture script runs it, so nothing else may import it.
   const importers = sourceFiles(resolve(ROOT, 'scripts'), /\.(?:ts|mjs)$/)
     .filter((path) => !path.endsWith('facts-capture.mjs'))
-    .filter((path) => /(?:from|import)\s*\(?\s*['"][^'"]*facts-capture\.mjs['"]/.test(readFileSync(path, 'utf8')))
+    .filter((path) => /(?:from|import)\s*\(?\s*['"][^'"]*facts-capture\.mjs['"]/.test(readText(path)))
     .map((path) => relative(ROOT, path))
   assert.deepEqual(importers, [])
   // And everything it does to a page after fetching it lives where this suite ran it.
@@ -754,7 +755,7 @@ test('nothing the game ships carries the capture record', () => {
     )
   const offenders = sourceFiles(resolve(ROOT, 'src'), /\.(?:ts|tsx)$/)
     .filter((path) => !gateOnly.some((name) => path.endsWith(`content${path.includes('\\') ? '\\' : '/'}${name}`)))
-    .filter((path) => importsTheGate(readFileSync(path, 'utf8')))
+    .filter((path) => importsTheGate(readText(path)))
     .map((path) => relative(ROOT, path))
   assert.deepEqual(offenders, [], 'a shipped module imports the capture record or the gate')
   // Every module of the list is one, and is where the list says.

@@ -129,6 +129,16 @@ export const KNOWN_DEBT: readonly KnownDebt[] = [
   ).map(
     ([id, note]): KnownDebt => ({ gate: 'validate:content', code: 'exhibit-uncataloguable', id, untilLot: 4, note }),
   ),
+  // The fourth detail out of reach is one nothing waits for, so no piece's
+  // accusation names it: it has a line of its own, or the day the net
+  // catalogues nothing would say the socket is still content nobody can see.
+  {
+    gate: 'validate:content',
+    code: 'hotspot-unreachable',
+    id: 'net-1897:socket',
+    untilLot: 4,
+    note: 'H-01: the post socket is 2.4 m from the origin the view holds at 0.42 m; the view for large pieces brings it in, or it becomes a detail of the model',
+  },
   // And with three pieces out of reach, the notebook's "catalogue everything"
   // can never be ticked; the line about the vault never could.
   {

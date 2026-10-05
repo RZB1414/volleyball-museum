@@ -165,7 +165,7 @@ export const en = {
   'radio.hint.atrium':
     'The atrium breaker is on the same wall as the Wing 1 entrance, right beside the door. The little red light shows you where.',
   'radio.hint.holyoke':
-    'Wing 1 has its own breaker, on the far wall, to your left as you walk in. Cross it in the dark — the torch will do.',
+    'Wing 1 has its own breaker, on the wall facing the doors. Cross it in the dark to the little red light — the torch will do.',
   'radio.hint.drawer':
     "That locked drawer in your office? Otávio used dates you can find on the labels. Have a look at Morgan's portrait in Wing 1.",
   'radio.hint.vault':
@@ -178,7 +178,7 @@ export const en = {
     'Just press the side button and call me. Just not every five minutes, eh? Over.',
   'radio.hint.notebook.curt': 'Notebook. On the desk. Pick it up and read it. Over.',
   'radio.hint.atrium.curt': 'Atrium. Beside the Wing 1 door. Little red light. Over.',
-  'radio.hint.holyoke.curt': 'Wing 1. Breaker on the far wall, to the left. Little red light. Go.',
+  'radio.hint.holyoke.curt': 'Wing 1. Breaker on the far wall. Little red light. Go.',
   'radio.hint.drawer.curt':
     "Otávio's drawer: a date. Morgan's portrait, Wing 1. Pick the frame up and tilt it: it's on the bottom edge.",
   'radio.hint.vault.curt': "Basement's flooded: nobody goes down tonight. Lights are done; the rest is just checking.",

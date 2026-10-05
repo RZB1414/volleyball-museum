@@ -11,10 +11,10 @@
  * lives here, with the gate script and the suite that call it.
  */
 
-import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import type { MediaAsset } from '../../src/content/schema.ts'
+import { readText } from './readText.ts'
 
 const ENTITIES: Readonly<Record<string, string>> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' }
 
@@ -46,7 +46,7 @@ export function readMediaTexts(media: readonly MediaAsset[], publicDirectory: st
   const texts: Record<string, string[]> = {}
   for (const asset of media) {
     if (!/\.svg$/i.test(asset.src)) continue
-    texts[asset.id] = svgTextNodes(readFileSync(resolve(publicDirectory, `.${asset.src}`), 'utf8'))
+    texts[asset.id] = svgTextNodes(readText(resolve(publicDirectory, `.${asset.src}`)))
   }
   return texts
 }

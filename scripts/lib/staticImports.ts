@@ -12,8 +12,9 @@
  * and `x` is evaluated.
  */
 
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
+import { readText } from './readText.ts'
 
 // A statement is only looked for at the start of a line: a line of a block
 // comment starts with its star and a commented-out import with its slashes,
@@ -69,7 +70,7 @@ export function staticImportGraph(root: string, entry: string): StaticImportGrap
   const visit = (path: string) => {
     if (modules.has(name(path))) return
     modules.add(name(path))
-    for (const specifier of staticSpecifiers(readFileSync(path, 'utf8'))) {
+    for (const specifier of staticSpecifiers(readText(path))) {
       if (!specifier.startsWith('.')) {
         const [scope, pack] = specifier.split('/')
         packages.add(scope.startsWith('@') ? `${scope}/${pack}` : scope)

@@ -1,9 +1,9 @@
 # Handoff — Museu do Voleibol
 
-Atualizado em 2026-10-05 (L2, o segundo lote do plano, §11; L1 é §10; a abertura no
-escritório é §9); o estado técnico das salas é o de 2026-08-12. Este documento é o ponto de
-entrada para retomar o projeto sem depender da conversa anterior. **Próxima tarefa:** publicar
-L2 (§11.11, item 1) e começar L3.
+Atualizado em 2026-10-05 (L2, o segundo lote do plano, §11, com a revisão adversarial dele em
+§11.12; L1 é §10; a abertura no escritório é §9); o estado técnico das salas é o de 2026-08-12.
+Este documento é o ponto de entrada para retomar o projeto sem depender da conversa anterior.
+**Próxima tarefa:** publicar L2 (§11.11, item 1) e começar L3.
 
 Leia também, nesta ordem: `docs/PLANO-DO-ZERO.md` (o desenho do jogo),
 `docs/REFERENCIA-TECNICA.md` (gramática de Resident Evil + pipeline web-3D) e
@@ -32,16 +32,16 @@ intencionalmente no commit `5e51e24`. O museu data-driven é a única aplicaçã
 
 O corte vertical está integrado, assado, caminhável e com progressão de energia.
 
-Portão verde em 2026-10-05 (`npm run check`, 33 passos, depois de L2, §11; a lista completa
-das suítes e o que cada uma ganhou está em §11.4, e a de L1 em §10.4):
+Portão verde em 2026-10-05 (`npm run check`, 33 passos, depois de L2 e da revisão dele, §11; a
+lista completa das suítes e o que cada uma ganhou está em §11.4, e a de L1 em §10.4):
 
-- conteúdo: 3 salas válidas, com 37 dívidas datadas impressas (`knownDebt.ts`), o roteiro em
+- conteúdo: 3 salas válidas, com 38 dívidas datadas impressas (`knownDebt.ts`), o roteiro em
   níveis e a comparação com o instantâneo do grafo (`docs/releases/L2.graph.json`);
-- lint de texto: 21/21; catracas: 4/4; fontes: 28; documentação: 23/23;
-- capturas: 15/15; saves do corpus: 27/27; save: 30/30;
+- lint de texto: 21/21; catracas: 4/4; fontes: 28; documentação: 25/25;
+- capturas: 15/15; saves do corpus: 27/27; save: 39/39;
 - energia: 30/30;
-- abertura: 32/32; fluxo da abertura: 44/44; rádio: 27/27;
-- gatilhos: 30/30; trancas: 15/15; planta: 16/16;
+- abertura: 33/33; fluxo da abertura: 44/44; rádio: 27/27;
+- gatilhos: 30/30; trancas: 15/15; planta: 17/17;
 - colisão: 28/28;
 - kit e posicionamento: 339/339; vitrine corrida: 12/12;
 - materiais: 10; mesa do curador: 9; estantes: 20;
@@ -53,15 +53,15 @@ das suítes e o que cada uma ganhou está em §11.4, e a de L1 em §10.4):
 - sinalização arquitetônica: 26/26;
 - portas de transição: 38/38;
 - controles móveis e modo imersivo: 14/14;
-- navegação: 108/108; partida (o robô e a simulação): 30/30;
+- navegação: 108/108; partida (o robô e a simulação): 34/34;
 - bundle por caminho: 5/5;
 - `npm run build`: verde.
 
 O único aviso é o preexistente `react(only-export-components)` em `src/main.tsx:17`.
 Deploy de produção: `https://volleyball-museum.renanbuiatti14.workers.dev`, versão
 Cloudflare `1d3a4554-c21a-457a-9bf3-7d5bfc594ae4` (2026-10-04: P0 e L1 do plano, até
-`f0fb5a3`; §10). A anterior era `0027afaa` (2026-10-03, a rodada de §9). **L2 está fechado e
-ainda não publicado** (commits locais até o do fecho; §11): o que está no ar é L1.
+`f0fb5a3`; §10). A anterior era `0027afaa` (2026-10-03, a rodada de §9). **L2 está fechado,
+revisado e ainda não publicado** (commits locais até o da revisão; §11): o que está no ar é L1.
 
 Bake atual:
 
@@ -421,6 +421,12 @@ npm run test:navigation
 npm run test:bundle
 npm run build
 ```
+
+`npm run test:playthrough -- --seed <n>` imprime a noite `n` das quinhentas, aperto a aperto, e
+depois joga as quinhentas (§11.12). `npm run graph:snapshot` grava o instantâneo do grafo do
+lote em que o conteúdo está e recusa o de um lote que o plano já dá como feito; `-- --reopen`
+regrava (e aí o digest de `scripts/lib/graphSnapshots.ts` muda no mesmo commit), `-- --dry-run`
+só diz o que faria.
 
 `npm run test:ratchets` e `npm run test:bundle` são as catracas de L1 (§10): o que foi
 medido pode descer e não pode subir. Os tetos, de onde veio cada um e como mexer neles
@@ -1576,21 +1582,28 @@ aplicadas e o que saiu diferente do planejado (§14 dele). Saiu em commits locai
 | `30f2334` | F4: a prova de que se joga (`examineReach`, `simulateProgress`, o robô, o instantâneo) |
 | `90dd9a6` | F5: a inundação da navegação e o lint do que o museu imprime |
 | `d299df8` | o painel do caderno dentro da tela do telefone (achado da rota de toque do fecho) |
-| o do fecho | este registro, os dois saves do lote, os dois conjuntos de capturas, o «Feito em» |
+| `02f9992` | o fecho: este registro, os dois saves do lote, os dois conjuntos de capturas, o «Feito em» |
+| o da revisão | os 18 achados da revisão adversarial (11.12): a aba que não sobrescreve mais o save de outra, o instantâneo que não se regrava sozinho, a fiação que faltava, `.gitattributes` |
 
-**Estado: fechado em 2026-10-05, não publicado.** Dos passos de §9.1 do plano estão feitos o 1
-(plano do lote), o 2 (teste primeiro, fatia por fatia e no fecho), o 3, o 4 (portão verde), o 6
-(rota do lote: 11.8) e o 12 (este registro, o instantâneo, o corpus e as capturas). O 7 não se
-aplica (não é lote de arte: nenhuma sala desenha nada diferente). **Faltam** o 5 (revisão
-adversarial por quem não implementou: cada fatia aplicou as próprias mutações, mas ninguém sem o
-contexto tentou refutar o lote), o 8 ao 11 (revisor, push, deploy e fumaça em produção) e o 13
-(playtest). Quem publicar anota a versão Cloudflare em §2 e aqui.
+**Estado: fechado e revisado em 2026-10-05, não publicado.** Dos passos de §9.1 do plano estão
+feitos o 1 (plano do lote), o 2 (teste primeiro, fatia por fatia, no fecho e na revisão), o 3, o
+4 (portão verde), o 5 (revisão adversarial por quem não implementou: 11.12), o 6 (rota do lote:
+11.8) e o 12 (este registro, o instantâneo, o corpus e as capturas). O 7 não se aplica (não é
+lote de arte: nenhuma sala desenha nada diferente). **Faltam** o 8 ao 11 (revisor, push, deploy
+e fumaça em produção) e o 13 (playtest). Quem publicar anota a versão Cloudflare em §2 e aqui, e
+troca, na seção L2 do plano, «Feito em 2026-10-05» pela forma que diz que o lote foi publicado:
+é essa frase que solta o instantâneo de acompanhar o conteúdo (11.10).
 
 ### 11.1 O que mudou para o jogador
 
 - **O save não se perde.** Um save de produção carrega inteiro. Um campo que este build não
-  conhece (gravado por um lote mais novo, numa outra aba) fica no save em vez de ser descartado, e
-  uma aba velha não rebaixa o carimbo do lote.
+  conhece (gravado por um lote mais novo, numa outra aba) fica no save em vez de ser descartado.
+- **Duas abas não se atropelam** (da revisão, 11.12). Uma aba que já estava aberta quando outra
+  gravou lê o disco antes de gravar e junta as duas cópias: o carimbo do lote fica o maior, o
+  campo desconhecido e o progresso da outra aba ficam, o brilho escolhido lá não é desfeito, e a
+  aba passa a mostrar o que juntou assim que o navegador avisa. Antes, ela punha o save dela por
+  cima; a garantia «aba velha não rebaixa» só valia para a aba que carregava **depois**. «Novo
+  jogo» continua apagando tudo, e uma aba que ainda tinha o jogo apagado não o traz de volta.
 - **O atalho da Ala 1 fica aberto.** Depois da primeira saída por ele, abre dos dois lados, para
   sempre, com o aviso «Atalho destrancado — Ala 1 · Holyoke» e o som do trinco, uma vez só. Do
   saguão, antes disso, o `E` (e o botão de Ação, no toque) responde com o zumbido em vez de
@@ -1599,10 +1612,19 @@ contexto tentou refutar o lote), o 8 ao 11 (revisor, push, deploy e fumaça em p
   atalho só aparece depois de aberto; a tranca só é listada depois de tocada, e sai ao abrir; o
   marcador é uma seta que aponta para onde a câmera olha e a planta tem norte; os três estados de
   sala diferem por padrão e por cor, com a legenda titulada («Sem energia», «Acesa, falta
-  conferir», «Completa»).
+  conferir», «Completa»). Da revisão: enquanto a planta desenha um toco, a legenda o explica
+  («Sala ainda não visitada»; era só um `<title>`, que o dedo não vê); a tranca listada leva um
+  cadeado, não um segundo «?»; e a lista de trancas cabe na página do telefone, porque a planta
+  cede a altura que ela pedir.
 - **Uma tranca que recusa responde** com o zumbido. Só a tranca de conhecimento abre painel.
 - **No telefone o caderno fica dentro da tela** (`d299df8`): o painel ia de x = 34 a x = 844 numa
   tela de 844, com margem à esquerda e nenhuma à direita; agora vai de 33,8 a 810,2.
+- **A dica do Jorge para a Ala 1 não diz mais um lado** (revisão). Dizia «à esquerda de quem
+  entra», e desde este lote a ala tem duas entradas: pelo atalho o quadro fica à direita. Agora:
+  «na parede de frente para as portas», até a luzinha vermelha.
+- **A tela de título cabe num telefone deitado** (revisão; defeito anterior ao lote). Com save
+  há dois botões sob a introdução, e em 844 × 390 os de idioma ficavam abaixo da borda de uma
+  página que não rolava.
 - Nada mais: nenhuma história nova, nenhuma sala, nenhuma textura, nenhum modelo, nenhuma
   dependência. O jogo continua com o fecho honesto de L1.
 
@@ -1619,6 +1641,14 @@ O desenho de cada peça está em `docs/lotes/L2-plano.md` §3; aqui, só o mapa.
   `doorsReleased`, `flags` e `triggersFired` (os dois últimos vazios em todo save: o conteúdo de
   L2 não compila gatilho nenhum). Um save sem `locksSeen` ganha as trancas que abriu; nenhuma
   porta é dada como liberada para quem não a liberou.
+- **O save entre duas abas** (`src/state/store.ts`, `takeInOtherTabs`; `progressFields.ts`,
+  `joinProgress`): a tabela de campos ganhou a coluna `join`, a regra de cada campo para duas
+  cópias do mesmo save (lista por união, lote e relógio pelo maior, memória do rádio pela chamada
+  mais recente, `lastRoom` da aba). O store lê o disco antes de toda escrita e no evento
+  `storage`. Um jogo recomeçado leva uma marca, `game`, gravada **ao lado** de `settings` e
+  `progress`: não é campo do save (`PROGRESS_FIELDS` tem os mesmos 19, e o instantâneo não
+  mudou), e um save que nunca recomeçou não a tem. O que outro build gravar nesse nível também
+  passa adiante.
 - **Uma porta só para o progresso** (`src/state/store.ts`, `src/state/progressRules.ts`,
   `src/engine/triggers.ts`, `contentRegistry.ts`, `progressGrants.ts`): todo verbo é uma função
   pura que devolve uma concessão, e o store tem uma entrada, `grant`, que aplica, assenta os
@@ -1638,7 +1668,12 @@ O desenho de cada peça está em `docs/lotes/L2-plano.md` §3; aqui, só o mapa.
   (os volumes de interação), `graphSnapshots.ts`, `planLots.ts`, `staticImports.ts`,
   `mediaTexts.ts`, `runtimeWiring.ts` (a fiação de cada regra ao componente, e agora a conta do
   painel do caderno) e `frozen/sanitiseProgress.L1.ts` (o leitor de save que L1 publicou,
-  congelado por hash).
+  congelado por hash). Da revisão: `readText.ts` (todo arquivo de texto lido por uma suíte chega
+  com final de linha Unix; `test:docs` recusa a leitura crua) e, na raiz, `.gitattributes`.
+- **O instantâneo do grafo tem três estados** (`scripts/lib/graphSnapshots.ts`, da revisão):
+  rascunho de um lote aberto, arquivo de um lote fechado (digest fixado em `FROZEN_SNAPSHOTS`,
+  o script recusa regravar sem `--reopen`) e registro, que é com o que o conteúdo é comparado. O
+  rascunho do lote em andamento nunca é o juiz dele mesmo.
 
 ### 11.3 Medições
 
@@ -1647,16 +1682,18 @@ O desenho de cada peça está em `docs/lotes/L2-plano.md` §3; aqui, só o mapa.
 | Caminho | L1 (bytes) | L2 (bytes) | Teto |
 |---|---|---|---|
 | documento | 63.235 | 63.235 | 63.600 |
-| tela de título | 28.353 | 28.859 | 29.000 |
-| jogo | 388.248 | 390.761 | 392.700 |
+| tela de título | 28.353 | 29.598 | 29.800 |
+| jogo | 388.248 | 390.892 | 392.700 |
 
-São 92,09 kB antes do clique (orçamento 250; eram 91,59) e 482,86 kB no total (orçamento 600;
-eram 479,84). O título cresceu 506 bytes com o save (a tabela de campos e a migração moram no
-store, que a tela de título importa) e com os textos e as regras de estilo da planta; o jogo,
-2.513, com o modelo da planta, as concessões e os gatilhos. Cada teto subiu no commit da fatia
-que precisou, com o motivo em `scripts/lib/ratchets.ts`. **O título tem 141 bytes de folga**: L3
-escreve texto e sobe o teto no commit dele. Kit, texturas e GLBs não mudaram (`npm run bake` não
-rodou no lote).
+São 92,83 kB antes do clique (orçamento 250; eram 91,59) e 483,73 kB no total (orçamento 600;
+eram 479,84). O título cresceu 1.245 bytes: 506 nas fatias, com o save (a tabela de campos e a
+migração moram no store, que a tela de título importa) e com os textos e as regras de estilo da
+planta; e 739 na revisão, quase tudo o store lendo o disco antes de gravar e juntando as duas
+cópias, mais a folha de estilos (a página da planta como coluna, o cadeado, a tela de título
+deitada). O jogo cresceu 2.644, com o modelo da planta, as concessões e os gatilhos. Cada teto
+subiu no commit que precisou, com o motivo em `scripts/lib/ratchets.ts`; o do título foi de
+29.000 a 29.800 na revisão. **O título tem 202 bytes de folga**: L3 escreve texto e sobe o teto
+no commit dele. Kit, texturas e GLBs não mudaram (`npm run bake` não rodou no lote).
 
 **Pontos de referência.** Nenhuma sala desenha nada diferente, e o `BROWSER_RECORD` continua o
 do lote 1, de propósito: com `CONTENT_LOT` em 3 o portão passa a recusá-lo, e L3, que põe coisas
@@ -1684,10 +1721,14 @@ base e o caderno, que saíram da mesa (com o rádio ainda na base, em
 `?qaSave=production-radio-on-desk`, 55 · 35.554 e 62 · 37.314). Não é regressão, é o estado; quem
 medir o escritório mede no estado da linha de base.
 
-**Portão.** `npm run check` inteiro leva 45 s nesta máquina, com os 33 passos.
-`test:playthrough`: as 500 noites em 8 s (19.809 apertos, 1.064 abas fechadas e reabertas). `test:navigation`: 108 casos em 3,3 s; a inundação tem 6.618 lugares e julga 26 alvos.
+**Portão.** `npm run check` inteiro leva 47 s nesta máquina, com os 33 passos.
+`test:playthrough`: as 500 noites em 9 s (19.809 apertos, 2.441 deles à toa, 1.064 abas fechadas
+e reabertas; 87 noites acham o detalhe da fotografia do ginásio, que só a sorte acha: 11.12).
+`test:navigation`: 108 casos em 3,3 s; a inundação tem 6.618 lugares e julga 26 alvos.
 `docs/releases/L2.graph.json`: 42 ações, 3 itens de lista, 54 ids, 19 campos do save (SHA-256
-`0eae15c3eaba…`); gerado de novo no fecho, não mudou um byte.
+`0eae15c3eaba5a4dc2fca5df72d708c0e7b0a73011616c4fb1be2cb8c310a5b1`, fixado em
+`scripts/lib/graphSnapshots.ts`); gerado de novo no fecho e outra vez sobre a árvore da revisão,
+com `--reopen`: não mudou um byte.
 
 ### 11.4 O portão
 
@@ -1696,17 +1737,17 @@ medir o escritório mede no estado da linha de base.
 `test:map` (depois de `test:radio`) e `test:playthrough` (depois de `test:navigation`).
 `test:bundle` continua no fim.
 
-- conteúdo: 3 salas válidas, 37 dívidas datadas impressas (eram 29), o roteiro em níveis e a
-  comparação com o instantâneo;
-- lint de texto: 21/21 (novo); catracas: 4/4; fontes: 28; documentação: 23/23;
-- capturas: 15/15 (eram 12); saves do corpus: 27/27 (eram 19); save: 30/30 (novo);
-- energia: 30/30; abertura: 32/32 (eram 31); fluxo da abertura: 44/44; rádio: 27/27;
-- gatilhos: 30/30 (novo); trancas: 15/15 (novo); planta: 16/16 (novo);
+- conteúdo: 3 salas válidas, 38 dívidas datadas impressas (eram 29; 37 no fecho), o roteiro em
+  níveis e a comparação com o instantâneo;
+- lint de texto: 21/21 (novo); catracas: 4/4; fontes: 28; documentação: 25/25 (23 no fecho);
+- capturas: 15/15 (eram 12); saves do corpus: 27/27 (eram 19); save: 39/39 (novo; 30 no fecho);
+- energia: 30/30; abertura: 33/33 (eram 31; 32 no fecho); fluxo da abertura: 44/44; rádio: 27/27;
+- gatilhos: 30/30 (novo); trancas: 15/15 (novo); planta: 17/17 (novo; 16 no fecho);
 - colisão: 28/28; kit e posicionamento: 339/339; vitrine corrida: 12/12;
 - materiais: 10; mesa do curador: 9; estantes: 20;
 - runtime do kit: 26; runtime das salas: 19; LOD: 23; aquecimento de GPU: verde; prontidão: 6/6;
 - render: 16/16; sinalização: 26; portas: 38/38 (eram 29); controles móveis: 14/14 (eram 13);
-- navegação: 108/108 (eram 68), com duas dívidas impressas; partida: 30/30 (novo);
+- navegação: 108/108 (eram 68), com duas dívidas impressas; partida: 34/34 (novo; 30 no fecho);
 - bundle: 5/5; `npm run build`: verde.
 
 Vermelho primeiro (§9.1, passo 2): o de cada fatia está em `docs/lotes/L2-plano.md` §14. No
@@ -1769,7 +1810,29 @@ dá como feito tem um save no corpus**; um save do lote em que a árvore está c
 mesmo, campo a campo e na mesma ordem; e, para registros de L2 em diante, tranca aberta foi
 tocada e porta liberada foi empurrada de uma sala visitada.
 
-### 11.6 Dívidas datadas (`src/content/knownDebt.ts`, 45 linhas; eram 36)
+Da revisão (11.12):
+
+- `scripts/test-opening-flow.ts`: «a tab that changed nothing never overwrites a newer save»
+  usava «Novo jogo» para forçar a gravação (a suíte não tem página para ocultar) e passava
+  porque um save vazio recomeçado não tinha nada a gravar. «Novo jogo» agora grava sempre, com a
+  marca do jogo novo. O caso virou «"New game" is the one write that goes over a newer save, and
+  it marks the game as another»; a regra antiga mora em `scripts/test-save.ts`, com abas que se
+  ocultam;
+- `scripts/test-playthrough.ts`: o caso do instantâneo em disco passou a ler todos os arquivos, o
+  digest dos lotes fechados e a igualdade **até a publicação** (era até o «Feito em»); o portão é
+  provado com a lista de instantâneos e o último lote publicado, não com «o mais novo»; as cinco
+  acusações viraram seis; o fim de toda noite é comparado sem o que a sorte acrescenta; o caso
+  «a simulação oferece e a mão não acha» passou da fotografia (que a vista grava) para a fita da
+  rede (que nunca aparece); a noite a repetir vem por `-- --seed <n>`, e as 500 são jogadas de
+  todo jeito;
+- `scripts/test-opening.ts`: «o museu de hoje é jogável» assenta também a dívida nova,
+  `hotspot-unreachable`; `scripts/test-triggers.ts`: uma das mutações do store aponta para a
+  linha nova da carga (`const initialText = storedText()`);
+- o store: `recordClockSeconds` não aceita mais um tempo menor que o do save. Nenhum caso
+  existente pedia isso; o caso novo de duas abas pede o contrário;
+- toda suíte lê texto por `scripts/lib/readText.ts` (25 arquivos, sem mudança de sentido).
+
+### 11.6 Dívidas datadas (`src/content/knownDebt.ts`, 46 linhas; eram 36)
 
 **Paga:** `i18n-key-unused` de `map.legend` (a legenda da planta ganhou título, em F3, no commit
 que moveu `CONTENT_LOT` para 2).
@@ -1778,7 +1841,8 @@ que moveu `CONTENT_LOT` para 2).
 
 | Portão | Código | O quê | Fecha em |
 |---|---|---|---|
-| `validate:content` | `exhibit-uncataloguable` | `net-1897`, `gym-suit`, `photo-gym`: o detalhe obrigatório fica fora do alcance do exame (H-01) | L4 |
+| `validate:content` | `exhibit-uncataloguable` | `net-1897`, `gym-suit`, `photo-gym`: o detalhe obrigatório fica fora do alcance do exame (H-01). Duas nunca; a fotografia, só num cone de 1,5° que a vista grava e nenhum roteiro conta com ele | L4 |
+| `validate:content` | `hotspot-unreachable` | `net-1897:socket`: detalhe opcional fora do alcance, que nenhuma outra acusação nomeava (revisão) | L4 |
 | `validate:content` | `checklist-item-untickable` | `notebook.todo.catalogue`: pede as doze peças, e três não catalogam | L4 |
 | `validate:content` | `checklist-item-untickable` | `notebook.todo.vault`: sem `doneWhen`; vira promessa datada sem caixa de riscar | L3 |
 | `validate:content` | `text-ages` | `document.predecessor.body`: «há cento e trinta anos» (H-23); o bilhete dá lugar a `doc-otavio-handover` | L3 |
@@ -1789,7 +1853,10 @@ que moveu `CONTENT_LOT` para 2).
 `CONTENT_LOT` em 3, cada uma que ainda acusar vira `known-debt-overdue`. As demais linhas são as
 de §10.6, sem mudança. O Anexo C do plano ganhou as linhas de L2 e os códigos novos que hoje não
 acusam nada (`no-standing-point`, `numeral-exclusivity`, `numeral-printed-in-missing`,
-`fact-code-without-printed-in`, `fact-exception-without-patterns`, `counted-pattern`).
+`fact-code-without-printed-in`, `fact-exception-without-patterns`, `counted-pattern`). O lint de
+numerais passou a ler também a linha que só a aba Créditos imprime (por que a foto é de domínio
+público, o que foi modificado, o gerador), sob `credits:<id>`: é onde uma fonte aparece com a
+data dela.
 
 Sem código, só registradas (texto que outro lote conserta): a versão inglesa do bilhete («has
 been here a hundred and thirty years») escapa da lista inglesa de `text-ages` e vai embora com o
@@ -1834,6 +1901,15 @@ save sem `contentLot` é tratado como de produção:
   vezes (as listas do save não repetem item, mas uma fala ou um aviso preso a ele repete);
 - enquanto o build antigo estiver no ar, a planta volta a desenhar o prédio inteiro e o atalho
   volta a não ficar aberto: é o código de L1.
+
+**Duas abas, e o que a marca do jogo não cobre.** Desde a revisão uma aba junta o que acha no
+disco com o que tem (11.12), e isso vale também contra um build antigo aberto em outra aba: o
+que o leitor de L1 derruba (os cinco campos de L2) a aba de L2 repõe na escrita seguinte. Um
+limite fica registrado: «Novo jogo» feito numa aba de **build anterior à marca** (o de L1, o que
+está no ar hoje) não se distingue do save de uma aba que ainda não jogou, então a aba de L2 que
+ainda tinha o jogo antigo o junta de volta. Entre duas abas deste build em diante, não: a marca
+(`game`, ao lado de `settings` e `progress`) diz que é outro jogo, e o disco vence. A aba que
+adota o jogo novo continua de pé onde estava até recarregar; o save é o do jogo novo, inteiro.
 
 **Um rollback para dentro de L2 não perde nada**: de `1ecc2cb` em diante todo build preserva o
 campo que não conhece. Se for preciso voltar atrás, volte para um commit a partir dele; para
@@ -1902,6 +1978,28 @@ quadro ligado e numa gaveta já lida não gravou nada; recarregar não repete av
 `triggersFired` e `flags` ficaram vazios em todas as sessões. Console sem erro; o único aviso é o
 `THREE.Clock` de sempre.
 
+**Da revisão (11.12)**, com o servidor reiniciado depois das edições:
+
+- **Duas abas de verdade**, no mesmo navegador, sobre `l2-new-game-drawer-touched`. A segunda aba
+  acende a Ala 1, cataloga o retrato e sobe o brilho: a primeira, sem ser tocada, passa a ter os
+  três (o evento `storage` chegou). A segunda grava como um build seguinte gravaria (`contentLot`
+  3, um campo `termsSigned`, um gatilho, a gaveta aberta); a primeira anota uma lição e desliga a
+  legenda: no disco ficam o lote 3, o campo, o gatilho, a gaveta, a lição, a legenda desligada e
+  o brilho da outra. «Novo jogo» pelos dois cliques na segunda: save vazio, com a marca; a
+  primeira fica com o jogo novo, e a escrita seguinte dela entra nele, sem nada do antigo.
+- **A planta em 844 × 390 com a gaveta tocada**, pt-BR e inglês: sem rolagem (página de 297 px);
+  a planta com 200 px (y de 82 a 282), a legenda numa linha com os quatro itens (292 a 313), a
+  tranca com o cadeado (332 a 353), tudo acima do fim da página (366). Com sete trancas a mais,
+  postas à mão no DOM para medir, a planta cede até 26 px e nada passa da página. Em 1366 × 650 a
+  linha da tranca termina em 588 de 610 (ficava cortada em 2 px); em 1280 × 720 a planta mantém
+  os 416 px.
+- **A tela de título em 844 × 390, com save**: o painel vai de y = 39 a 351; «Continuar», «Novo
+  jogo» e os dois idiomas na tela, sem rolagem (antes o painel ia de 23 a 429, com os idiomas em
+  401).
+- Não conferido no navegador: a fala nova do Jorge (só nas suítes); nenhum quadro de captura novo
+  foi feito, e os dois conjuntos congelados mostram a planta como era no fecho (com o «?» na
+  lista de trancas e sem o toco na legenda).
+
 **Capturas.** Dez quadros em `docs/contact-sheets/l2/` (1536 × 864, sobre `90dd9a6`) e sete em
 `docs/contact-sheets/l2-touch/` (1688 × 780, sobre `d299df8`), os dois conjuntos congelados com
 digest. **Não são capturas do canvas**, que não tem HUD: cada quadro é o canvas com a camada do
@@ -1967,11 +2065,30 @@ Nada disto é de L2, e nada ganhou código de dívida; cada item já tem lote no
   «nenhum save tem o campo» com um laço sobre todos, e reprovaram no dia em que o lote guardou o
   próprio save. Pergunte antes quem escreveu o registro (`fixtureLot`), e escreva as duas metades:
   o que se infere para quem não tinha o campo, e o que se respeita de quem tem.
-- **O «Feito em» do plano é portão, e a ordem do fecho segue disso:** `npm run graph:snapshot`
-  (depois dele o instantâneo vira registro e deixa de ser comparado byte a byte), os saves do lote
-  no corpus (`test:qa-save` reprova um lote «feito» sem save), as capturas citadas no registro
-  (`test:captures`), e só então a linha no plano. `CONTENT_LOT` já tem de estar no lote
-  (`test:docs`).
+- **O «Feito em» do plano é portão, e a ordem do fecho segue disso:** `npm run graph:snapshot`,
+  os saves do lote no corpus (`test:qa-save` reprova um lote «feito» sem save), as capturas
+  citadas no registro (`test:captures`), e só então a linha no plano, **junto com o SHA-256 do
+  instantâneo em `FROZEN_SNAPSHOTS`** (`test:playthrough` reprova lote feito sem digest).
+  `CONTENT_LOT` já tem de estar no lote (`test:docs`).
+- **«Feito» não é «publicado», e o instantâneo sabe a diferença** (corrigido na revisão). O
+  «Feito em» é escrito antes da revisão e do push. Até a seção do lote dizer que ele foi
+  publicado (a forma exata está em `scripts/lib/planLots.ts`, e é a da seção de L1), o
+  instantâneo tem de ser o grafo do conteúdo, byte a byte: um conserto que mude o grafo entre o
+  fecho e o push pede `npm run graph:snapshot -- --reopen` e o digest novo, no mesmo commit.
+  Antes, o «Feito em» desligava a comparação, e o conserto ia ao ar sem estar no registro.
+- **Quem começa o lote seguinte com `CONTENT_LOT` ainda no anterior não regrava o instantâneo.**
+  O script recusa, e a mensagem diz as duas saídas. Se o lote anterior não foi publicado, a
+  primeira mudança de grafo do seguinte reprova a igualdade: ou se publica o anterior, ou
+  `CONTENT_LOT` sobe antes (e aí o arquivo anterior vira registro, com o digest que já tem).
+- **Mão de robô copiada do handler não prova o handler.** O robô joga o store com uma cópia de
+  cada `interact`; tirar do componente a linha que grava deixava as 500 noites verdes. Onde a
+  regra é pura e o componente só a chama, uma asserção sobre a fonte prende a chamada inteira,
+  com o que vem antes e depois dela, e uma mutação em memória prova que a asserção morde.
+- **Uma garantia de save se prova com duas páginas sobre o mesmo storage.** «Aba velha não
+  rebaixa» era provado com uma aba que carregava depois, que é o caso fácil; a aba que já estava
+  aberta é a que existe em produção depois de um deploy.
+- **Heredoc do shell come barra invertida** nesta máquina: script com regex ou `\n` literal se
+  escreve em arquivo, não em heredoc.
 - **Save tirado do navegador se copia do texto, não da memória.** O texto lido da chave foi
   guardado e o registro digitado foi comparado com ele byte a byte; e o portão passou a exigir que
   um save do lote da árvore carregue como ele mesmo. Um save trazido de um lote anterior tem os
@@ -2010,13 +2127,79 @@ Do harness, para quem repetir a rota:
 1. Fechar L2 de verdade: revisão adversarial (passo 5), revisor, push, deploy e fumaça (8 a 11).
    Na fumaça, além do novo jogo até o primeiro marco, «Continuar» com um save do lote anterior:
    `l1-route-end` posto sob a chave `volleyball-museum:v1` na origem de produção, e conferir que
-   nada some e que a planta abre sem tranca listada. Anotar a versão Cloudflare em §2 e no topo
-   desta seção. Se a revisão mudar conteúdo, o instantâneo já é registro: mudança aditiva passa;
-   outra coisa pede decisão escrita.
+   nada some e que a planta abre sem tranca listada. Vale abrir a produção em **duas abas** e
+   repetir o que 11.8 fez no servidor local. Anotar a versão Cloudflare em §2 e no topo desta
+   seção, e trocar o «Feito em» da seção L2 do plano pela forma publicada. A revisão adversarial
+   (passo 5) está feita e não mudou o grafo; **se o revisor mudar, regravar o instantâneo**
+   (`npm run graph:snapshot -- --reopen`) e fixar o digest novo no mesmo commit: até a
+   publicação o portão exige o arquivo igual ao conteúdo.
 2. **L3 (Posse).** Começa a rota por `l2-shortcut-released` e `l2-new-game-drawer-touched`. Paga
    as cinco dívidas com data dele (11.6). É o primeiro lote com gatilho de verdade: `flags` e
    `triggersFired` deixam de ser vazios, e o aviso de rollback de 11.7 passa a valer para eles.
    Muda o que o escritório desenha: mede os dez pontos e troca o `BROWSER_RECORD`. Escreve texto
-   na tela de título e no jogo: o teto de `title` tem 141 bytes. Fecha na ordem de 11.10, com
-   `docs/releases/L3.graph.json` e um save próprio no corpus.
+   na tela de título e no jogo: o teto de `title` tem 202 bytes. Fecha na ordem de 11.10, com
+   `docs/releases/L3.graph.json`, o digest dele fixado e um save próprio no corpus. Campo novo
+   no save entra na tabela com a coluna `join` (a regra dele entre duas abas). Se `rememberRadioCall`
+   ganhar subcampos (M9), o que a entrada já tinha continua nela. As falas do rádio com `when`
+   por porta liberada podem voltar a dizer um lado; `test:opening` mede.
 3. Do dono, ainda: o aparelho real (P0, item 6), que trava o livro-caixa de L6.
+
+### 11.12 Revisão adversarial (passo 5 de §9.1), 2026-10-05
+
+Cinco lentes (saves, fluxo, provas, testes, visual), 18 achados, 17 distintos (a semente lida do
+ambiente apareceu em duas); cada um conferido de forma independente antes de chegar aqui. Seis
+«major», nove «minor», dois de acabamento. Todos fechados num commit local, com `npm run check`
+e `npm run build` verdes; nenhum datado, nenhum recusado. O que muda o desenho do lote está
+escrito em `docs/lotes/L2-plano.md` §14, «Revisão adversarial».
+
+| Achado | O que foi feito | Onde está provado |
+|---|---|---|
+| Uma aba que já estava aberta sobrescrevia o save que outra gravou depois: rebaixava `contentLot`, apagava campo desconhecido e progresso (major) | a aba lê o disco antes de toda escrita e no evento `storage`, e junta as duas cópias campo a campo (`joinProgress`; coluna `join` na tabela de campos); ajustes: os do disco mais os que esta aba mudou; «Novo jogo» não junta, e marca o jogo (`game`, ao lado do save) para que a aba com o jogo apagado fique com o disco; o relógio não anda para trás | `test:save`, oito casos com duas páginas sobre o mesmo storage (a aba que joga, a que só muda um ajuste, a que só tem o relógio e é ocultada, duas do mesmo build, a memória do rádio, «Novo jogo» nos dois sentidos, o que há ao lado do save, a junção campo a campo); `test:opening-flow`; duas abas reais no navegador (11.8) |
+| Subcampo desconhecido da memória do rádio sumia na primeira chamada ao Jorge | `rememberRadioCall` grava por cima da entrada; `remember()` espalha a memória, como o outro ramo já fazia | `test:save`: pela ação do store e por um `placeRadioCall` de verdade, no estado e no disco |
+| A dica do Jorge para a Ala 1 apontava o lado errado para quem entra pelo atalho | a fala não diz mais um lado, nas duas línguas e nas duas alturas; a linha de B.2 do plano também | `test:opening`: toda dica de sala escura que diga um lado é medida de toda porta por onde se entra com a sala escura (as quatro linhas antigas, acusadas pelo atalho a 21° à direita); `test:radio` e `test:opening-flow` (alvo e tamanho da fala) |
+| `npm run graph:snapshot` reescrevia o instantâneo de um lote fechado, e nenhum portão percebia (major) | o script recusa com «Feito em» no plano, salvo `--reopen`; `--dry-run`; o SHA-256 de cada lote fechado fixado em `FROZEN_SNAPSHOTS` | `test:playthrough`: digest de todo lote feito, a recusa como função e pelo próprio script em modo de ensaio; mutação: recusa desligada |
+| O portão comparava o conteúdo com o instantâneo mais novo, que no lote em andamento é o próprio conteúdo (major) | compara com o registro mais novo (`baselineSnapshot`): lote que o conteúdo deixou para trás, ou o próprio depois de publicado; só o rascunho, de L3 em diante, é `graph-snapshot-stale` | `test:playthrough`: L2 e o rascunho de L3 num diretório de teste, com o retrato sem a data acusado contra L2 e limpo contra o rascunho; mutação: voltar a ler o mais novo |
+| O «Feito em», escrito antes da revisão e do push, desligava a comparação do instantâneo com o conteúdo (major) | `lastLotPublished`; a igualdade byte a byte vale até o plano dizer «e publicado»; textos corrigidos (11.10, 11.11, §9.1 e §6.4 do plano) | `test:docs` (o que conta e o que não conta como publicado); `test:playthrough`; mutação: um detalhe acrescentado ao conteúdo, que em `02f9992` deixava o `check` verde |
+| O lint de numerais não lia a linha que só a aba Créditos imprime | `printedTexts` lê o `detail` de cada crédito, sob `credits:<id>` | `test:lints`: o ano num `reason`, num `modifications` e num `generator` |
+| A mão do robô decidia pela régua de 5° da simulação, que o componente não tem | `examineReach` responde `shows` e `reachable`; a mão usa a da vista; o detalhe de cone estreito é exceção declarada e conferida (`luckyDetail`); textos de `simulate.ts`, `examineReach.ts` e da acusação corrigidos | `test:playthrough`: a fotografia gravada pelo store no museu real, 87 de 500 noites com ela, o fim comparado sem a sorte |
+| Com `SEED` no ambiente o `check` jogava uma noite e passava (2 achados) | `-- --seed <n>`, validado de 1 a 500; a noite pedida é impressa (com o registro, mesmo quando para no meio) e as 500 são jogadas depois | `test:playthrough`: os argumentos, e nenhuma leitura do ambiente na suíte nem no robô |
+| Detalhe opcional fora do alcance era pulado em silêncio | código `hotspot-unreachable`; `net-1897:socket` datado para L4 | `test:playthrough`: seis acusações e seis linhas; museu quebrado de propósito; a fita paga com o soquete ainda acusado |
+| O colisor da base de peça que a inundação ganhou era uma cópia sem amarra ao componente (acabamento) | o registro do colisor preso em `MuseumScene.tsx`, `Containers.tsx` e `RoomFurniture.tsx` | `test:navigation`: quatro refactors a mais (dezessete) |
+| Sem `.gitattributes`, num checkout com o Git padrão do Windows três suítes do lote reprovavam por CRLF (major) | `.gitattributes` (`* text=auto eol=lf`, binários nomeados); `scripts/lib/readText.ts` em toda leitura de texto das suítes | `test:docs` (a regra e nenhuma leitura crua em `scripts/`); a árvore inteira convertida para CRLF: trinta suítes verdes |
+| A fiação não prendia os componentes a gravar o que `attemptLock` decide nem a lista de detalhes do save (major) | a sequência «pergunta, grava, abre o painel» nos dois componentes, a gravação no teclado e o terceiro argumento de `hotspotGrant` presos em `progressWiringProblems` | `test:locks` (cinco refactors a mais) e `test:triggers` (dois) |
+| `condition-room-missing` para `roomsVisited` entrou sem caso | dois casos (num gatilho; numa chamada e numa dica do rádio) | `test:opening`; com a linha do validador tirada, os dois reprovam |
+| No telefone a tranca tocada era listada abaixo da dobra do caderno | a página da planta é uma coluna e a planta cede; menos respiro em telas baixas | `test:map` (a forma das regras, com oito mutações); medido no navegador (11.8) |
+| O «?» da planta tinha dois sentidos, e o do toco só era explicado num tooltip (acabamento) | cadeado na lista de trancas; o toco entra na legenda enquanto a planta desenha um | `test:map` (três refactors a mais); visto no navegador |
+| Em 844 × 390, com save, os botões de idioma da tela de título ficavam fora da tela (anterior ao lote) | a tela rola e o painel é centrado por margem automática; menos respiro em telas baixas: cabe sem rolar | `test:map` (a forma das regras, com três mutações); medido no navegador (11.8) |
+
+**O que não foi feito, e por quê.**
+
+- **Os handlers não foram extraídos para funções puras** que o componente e o robô chamassem,
+  que é a alternativa mais forte do achado da fiação. Mexe em três componentes com cobertura e
+  muda de quem é o `interact`; fica para quem refizer o teclado e o exame (L4), com aviso ao dono.
+  O que entrou é a amarra da linha, com a vizinhança dela.
+- **O leitor de SVG não mudou** para juntar `<tspan>`: o verificador do achado não sustentou essa
+  metade (nenhum SVG do museu parte um número), e ler as duas formas quando um exportador entrar
+  é mais seguro que trocar uma pela outra agora.
+- **A aba que adota um jogo recomeçado em outra aba não volta à tela de título.** O save fica
+  certo; a cena dela é a do jogo antigo até recarregar. Levá-la ao título é trabalho de interface
+  (L16).
+- **Nenhuma captura nova.** As medidas estão em 11.8; os conjuntos `l2` e `l2-touch` continuam
+  congelados no que mostravam.
+
+**Vermelho primeiro.** Cada caso novo reprovou `02f9992` antes do conserto, pelo motivo certo:
+«the old tab stamped the save down … 2 !== 3» e os outros sete de duas abas; «a field inside the
+porter's memory is gone»; as quatro linhas da dica («says "esquerda", and for a player who walks
+into holyoke by "holyoke-shortcut" holyoke-breaker is 21.0° to the right»); «.gitattributes is
+missing», e depois as leituras cruas de vinte e cinco arquivos; «a refactor this check exists to catch went through», com
+cinco nomes em `test:locks`, dois em `test:triggers` e quatro em `test:navigation`; «the Credits
+tab's line for photo-morgan-1897 is not read»; sete problemas de forma na folha de estilos e dois
+no componente da planta. Os casos que pedem função nova (`baselineSnapshot`,
+`snapshotWriteRefusal`, `luckyDetail`, `seedAsked`, `lastLotPublished`) reprovaram por falta
+dela e foram provados por mutação depois de verdes. `condition-room-missing` nasce verde, e é
+provado tirando a linha do validador.
+
+**O que os verificadores mediram e esta rodada repetiu.** A direção do quadro pelo atalho (21°
+à direita); o digest do instantâneo (`0eae15c3eaba…`, o mesmo do fecho); `SEED=7` com uma noite
+só e `pass` sob o nome das quinhentas (agora: 500 noites, com ou sem a variável); a linha da
+tranca fora da página em 844 × 390 (agora dentro, com 13 px de sobra).

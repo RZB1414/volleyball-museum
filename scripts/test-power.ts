@@ -7,7 +7,6 @@
  */
 
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 
 import { Box3, BoxGeometry, Group, Mesh, MeshBasicMaterial, Raycaster, Vector3 } from 'three'
 
@@ -32,6 +31,7 @@ import {
   recipeParts,
 } from './lib/museumWorld.ts'
 import { powerControlWiringProblems, type SourceReader } from './lib/runtimeWiring.ts'
+import { readText } from './lib/readText.ts'
 
 let checks = 0
 let failed = 0
@@ -319,7 +319,7 @@ for (const part of new Set(wallControls.map(({ control }) => control.part))) {
  * (`scripts/lib/runtimeWiring.ts`).
  */
 {
-  const read: SourceReader = (path) => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8')
+  const read: SourceReader = (path) => readText(new URL(`../src/${path}`, import.meta.url))
   const problems = powerControlWiringProblems(read)
   check(
     'the components call what this suite proves: collider, lens by state, double-sided proxy',

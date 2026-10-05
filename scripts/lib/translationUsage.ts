@@ -12,8 +12,9 @@
  * of whole keys instead.
  */
 
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readdirSync, statSync } from 'node:fs'
 import { join, relative, sep } from 'node:path'
+import { readText } from './readText.ts'
 
 export type SourceFile = { readonly path: string; readonly text: string }
 
@@ -49,7 +50,7 @@ export function readSourceTree(root: string, skip: readonly string[] = []): Sour
       const local = relative(root, path).split(sep).join('/')
       if (skip.includes(local)) continue
       if (statSync(path).isDirectory()) visit(path)
-      else if (/\.tsx?$/.test(name)) files.push({ path: local, text: readFileSync(path, 'utf8') })
+      else if (/\.tsx?$/.test(name)) files.push({ path: local, text: readText(path) })
     }
   }
   visit(root)

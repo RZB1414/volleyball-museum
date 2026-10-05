@@ -1,5 +1,4 @@
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 import { PerspectiveCamera, Vector3 } from 'three'
 
 import { MUSEUM } from '../src/content/museum.ts'
@@ -40,6 +39,7 @@ import { doorReleaseWiringProblems, type SourceReader } from './lib/runtimeWirin
 // Puts a storage on `globalThis`; the store itself is only loaded by
 // `openGame`, one fresh evaluation per page, as a browser would.
 import { openGame } from './lib/storePage.ts'
+import { readText } from './lib/readText.ts'
 
 let passed = 0
 
@@ -611,7 +611,7 @@ await testWithStore('the release is written on the press and survives the disk',
   assert.equal(canOpenTransitionDoor(SHORTCUT, 'atrium', back.progress().doorsReleased), false)
 })
 
-const readSource: SourceReader = (path) => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8')
+const readSource: SourceReader = (path) => readText(new URL(`../src/${path}`, import.meta.url))
 
 test('the door, the touch button and the toast ask what this suite proves', () => {
   assert.deepEqual(doorReleaseWiringProblems(readSource), [])

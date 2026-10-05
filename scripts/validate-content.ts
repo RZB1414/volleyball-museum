@@ -10,7 +10,9 @@
  *
  * The content is also held to the graph the last lot wrote down as it closed
  * (`docs/releases`): with no snapshot to compare against, or one a whole lot
- * out of date, the gate fails rather than pass a rule it did not apply.
+ * out of date, the gate fails rather than pass a rule it did not apply. The
+ * snapshot of the lot being written is not that record: it follows the
+ * content, and would accuse it of nothing (`scripts/lib/graphSnapshots.ts`).
  */
 
 import { fileURLToPath } from 'node:url'
@@ -26,9 +28,11 @@ import { CONTENT_LOT, debtOf } from '../src/content/knownDebt.ts'
 import { MUSEUM } from '../src/content/museum.ts'
 import { formatScript, simulateProgress } from '../src/content/simulate.ts'
 import { formatIssues, formatKnownDebt, validateContent } from '../src/content/validate.ts'
-import { newestSnapshot, RELEASES_DIRECTORY, snapshotForGate } from './lib/graphSnapshots.ts'
+import { RELEASES_DIRECTORY, snapshotForGate, snapshotsIn } from './lib/graphSnapshots.ts'
 import { readMediaTexts } from './lib/mediaTexts.ts'
+import { lastLotPublished } from './lib/planLots.ts'
 import { KEY_NAMED_NOT_USED, keysCitedIn, readSourceTree } from './lib/translationUsage.ts'
+import { readText } from './lib/readText.ts'
 
 // The committed record of what each source held, never the network: the gate
 // has to give the same verdict offline (`npm run facts:capture` is the
@@ -49,9 +53,12 @@ const keysCitedByCode = keysCitedIn(
 // any dictionary, read by the numeral lint with everything else.
 const mediaTexts = readMediaTexts(MUSEUM.media, fileURLToPath(new URL('../public', import.meta.url)))
 
-// What the lot before this one gave its players, as it wrote it down.
-const snapshot = newestSnapshot(fileURLToPath(new URL(`../${RELEASES_DIRECTORY}`, import.meta.url)))
-const previous = snapshotForGate(snapshot, CONTENT_LOT)
+// What the lot before this one gave its players, as it wrote it down. The
+// plan says whether the content's own lot has gone out, which is when its
+// own snapshot becomes a record too.
+const plan = readText(new URL('../docs/PLANO-ATE-O-FINAL.md', import.meta.url))
+const releases = fileURLToPath(new URL(`../${RELEASES_DIRECTORY}`, import.meta.url))
+const previous = snapshotForGate(snapshotsIn(releases), CONTENT_LOT, lastLotPublished(plan))
 
 const issues = [
   ...validateContent(MUSEUM, BAKED_BUNDLES, translationKeys, captures, {

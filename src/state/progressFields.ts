@@ -17,6 +17,10 @@
  *      is the one thing that erases.
  *   4. `contentLot` never goes down.
  *
+ * The same four hold between two tabs. A tab that finds on the disk a save it
+ * did not write joins it with its own (`joinProgress`), field by field, by
+ * the rule each field carries in the table.
+ *
  * Imports the spawn and the lot and nothing else: the store is on the title
  * screen, and the content set must not follow it there.
  */
@@ -132,6 +136,12 @@ type FieldSpec<T> = {
   readonly read: (raw: unknown) => T | null
   /** Whether a non-empty value is something "New game" would erase. */
   readonly counts: boolean
+  /**
+   * One value out of two copies of the same save: what another tab left on
+   * the disk, with what this tab holds added to it. Never less than either,
+   * and it writes into neither.
+   */
+  readonly join: (disk: T, tab: T) => T
 }
 
 const wholeAtLeast = (value: unknown, minimum: number) =>
@@ -197,7 +207,40 @@ function clockSeconds(raw: unknown): Record<string, number> {
   )
 }
 
-const idList = { fresh: (): string[] => [], read: stringList }
+/**
+ * Two copies of a record, key by key: the disk's entries in the disk's order,
+ * then the ones only the tab has. Spread and `fromEntries`, never assignment,
+ * for the reason given at `sanitiseRadioMemory`.
+ */
+function joinRecords<T>(disk: Record<string, T>, tab: Record<string, T>, both: (disk: T, tab: T) => T): Record<string, T> {
+  return {
+    ...disk,
+    ...Object.fromEntries(
+      Object.entries(tab).map(([key, value]) => [key, Object.hasOwn(disk, key) ? both(disk[key], value) : value]),
+    ),
+  }
+}
+
+const RADIO_MEMORY_FIELDS = Object.keys(FRESH_RADIO_MEMORY) as (keyof RadioMemory)[]
+
+/**
+ * The porter remembers the call that came last, whichever tab placed it.
+ *
+ * Whole, and not number by number: his temper after the later call already
+ * counts the earlier one, if it was there to count. What a later build keeps
+ * inside the entry is the disk's even when the call is this tab's: this tab
+ * never writes those, so its copy of them is never the newer one.
+ */
+function laterCall(disk: RadioMemory, tab: RadioMemory): RadioMemory {
+  if (tab.lastCallAt <= disk.lastCallAt) return disk
+  return { ...tab, ...disk, ...Object.fromEntries(RADIO_MEMORY_FIELDS.map((field) => [field, tab[field]])) }
+}
+
+const idList = {
+  fresh: (): string[] => [],
+  read: stringList,
+  join: (disk: string[], tab: string[]) => tab.reduce(withValue, disk),
+}
 
 /**
  * Every field of the save but the version, which is the gate and not a field:
@@ -215,6 +258,9 @@ export const PROGRESS_FIELDS = {
     fresh: () => CONTENT_LOT,
     read: (raw) => (Number.isInteger(raw) && (raw as number) >= 1 ? (raw as number) : 1),
     counts: false,
+    // Rule 4, between tabs: a tab of the build before must not stamp down
+    // what a tab of the build after wrote.
+    join: Math.max,
   },
   catalogued: { ...idList, counts: true },
   hotspots: { ...idList, counts: true },
@@ -234,16 +280,29 @@ export const PROGRESS_FIELDS = {
   // The bookkeeping of what already happened, not something that happened.
   triggersFired: { ...idList, counts: false },
   radioCalls: { ...idList, counts: true },
-  clockSeconds: { fresh: (): Record<string, number> => ({}), read: clockSeconds, counts: false },
+  clockSeconds: {
+    fresh: (): Record<string, number> => ({}),
+    read: clockSeconds,
+    counts: false,
+    // A clock does not run backwards: the longer of the two times.
+    join: (disk, tab) => joinRecords(disk, tab, Math.max),
+  },
   hintsShown: { ...idList, counts: false },
   devicesCarried: { ...idList, counts: true },
   // A save from before the radio could be carried has no memory and holds
   // nothing: its radio waits on the desk for the next E, like a new game's.
-  radioMemory: { fresh: (): Record<string, RadioMemory> => ({}), read: sanitiseRadioMemory, counts: false },
+  radioMemory: {
+    fresh: (): Record<string, RadioMemory> => ({}),
+    read: sanitiseRadioMemory,
+    counts: false,
+    join: (disk, tab) => joinRecords(disk, tab, laterCall),
+  },
   lastRoom: {
     fresh: (): string => SPAWN.room,
     read: (raw) => (typeof raw === 'string' ? raw : null),
     counts: false,
+    // Where a tab's player stands is that tab's to say.
+    join: (_disk, tab) => tab,
   },
 } satisfies {
   readonly [K in Exclude<keyof Progress, 'version'>]: FieldSpec<Progress[K]>
@@ -274,6 +333,30 @@ export function sanitiseProgress(raw: Readonly<Record<string, unknown>>): Progre
   const known: Record<string, unknown> = {}
   for (const [field, spec] of FIELDS) known[field] = spec.read(raw[field]) ?? spec.fresh()
   return { ...raw, ...known, version: SAVE_VERSION } as Progress
+}
+
+/**
+ * One save out of two copies of it: what another tab left on the disk, with
+ * what this tab holds added.
+ *
+ * Each field the table knows is joined by its own rule. A field it does not
+ * know is the disk's: this build never writes one, so the copy this tab
+ * loaded can only be the older of the two. The tab's copy is kept where the
+ * disk has none, which is what a tab of an earlier build leaves behind when
+ * it rewrites the save from the fields it knows.
+ *
+ * In the disk's order, so that a tab with nothing to add ends up holding the
+ * very text that is on the disk, and has nothing to write.
+ */
+export function joinProgress(disk: Progress, tab: Progress): Progress {
+  const onlyInTab = Object.fromEntries(Object.entries(tab).filter(([field]) => !Object.hasOwn(disk, field)))
+  const known = Object.fromEntries(
+    FIELDS.map(([field, spec]) => {
+      const name = field as keyof typeof PROGRESS_FIELDS
+      return [field, (spec.join as (disk: unknown, tab: unknown) => unknown)(disk[name], tab[name])]
+    }),
+  )
+  return { ...disk, ...onlyInTab, ...known, version: SAVE_VERSION } as Progress
 }
 
 /** The save with the grant added; the same object when it adds nothing. */

@@ -24,13 +24,13 @@
 
 import assert from 'node:assert/strict'
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { isDeepStrictEqual } from 'node:util'
 
 import { dynamicSpecifiers, staticImportGraph, staticSpecifiers } from './lib/staticImports.ts'
 import { STORE_ACTIONS as ACTIONS, STORE_ACTIONS_LEAVE as ACTED } from './lib/storeActions.ts'
+import { readText } from './lib/readText.ts'
 
 // ---------------------------------------------------------------------------
 // A browser's storage, in place before anything imports the store
@@ -61,6 +61,7 @@ const {
   EMPTY_PROGRESS,
   grantProgress,
   hasSavedProgress,
+  joinProgress,
   PROGRESS_FIELDS,
   sanitiseProgress,
   sanitiseRadioMemory,
@@ -78,7 +79,7 @@ type SaveAlias = (typeof SAVE_ALIASES)[number]
 type SaveMigration = (typeof SAVE_MIGRATIONS)[number]
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-const read = (path: string) => readFileSync(resolve(ROOT, path), 'utf8')
+const read = (path: string) => readText(resolve(ROOT, path))
 const fields = Object.keys(PROGRESS_FIELDS) as Field[]
 const fixtureIds = Object.keys(SAVE_FIXTURES) as (keyof typeof SAVE_FIXTURES)[]
 const rawFixture = (id: keyof typeof SAVE_FIXTURES): Raw => SAVE_FIXTURES[id].save.progress
@@ -92,13 +93,21 @@ const throughJson = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
  * Each load gets a page of its own. The store binds its exit flush to the
  * `window` it finds, and a store left over from the load before must not
  * answer this page's `pagehide` with its own, older, progress. The page's
- * timer never fires: the only write is the one `leave` forces, which is the
- * write a closing tab makes.
+ * timer never fires: the only write is the one `leave` or `hide` forces,
+ * which is the write a closing or a backgrounded tab makes.
  */
 let pageLoads = 0
 async function openGame(save?: unknown) {
   storage.clear()
   if (save !== undefined) storage.set(STORAGE_KEY, typeof save === 'string' ? save : JSON.stringify(save))
+  return openTab()
+}
+
+/**
+ * One more tab of the same browser: the storage is left as it is, and
+ * whatever tabs were opened before are still there, with what they hold.
+ */
+async function openTab() {
   const page = Object.assign(new EventTarget(), { setTimeout: () => 1, clearTimeout: () => undefined })
   const tab = Object.assign(new EventTarget(), { visibilityState: 'visible' })
   Object.assign(globalThis, { window: page, document: tab })
@@ -112,11 +121,24 @@ async function openGame(save?: unknown) {
     leave: () => {
       page.dispatchEvent(new Event('pagehide'))
     },
+    /** The player switches to another tab: the last thing a phone reliably tells a page. */
+    hide: () => {
+      tab.visibilityState = 'hidden'
+      tab.dispatchEvent(new Event('visibilitychange'))
+    },
+    /** The browser tells this tab that another one wrote the save. */
+    toldOfAWrite: (key: string | null = STORAGE_KEY) => {
+      page.dispatchEvent(Object.assign(new Event('storage'), { key }))
+    },
     /** The text under the save key, and the progress in it. */
     savedText: () => storage.get(STORAGE_KEY) ?? null,
     savedProgress: () => (JSON.parse(storage.get(STORAGE_KEY) ?? '{}') as { progress?: Raw }).progress ?? null,
   }
 }
+/** What is under the save key, whole: the settings beside the progress, and whatever else was written there. */
+const savedWhole = () => JSON.parse(storage.get(STORAGE_KEY) ?? '{}') as { settings?: Raw; progress?: Raw } & Raw
+/** Another tab writes the save: one of a later build, which this suite cannot run, so its write is put there. */
+const anotherTabWrites = (save: unknown) => storage.set(STORAGE_KEY, typeof save === 'string' ? save : JSON.stringify(save))
 const saveOf = (progress: Raw) => ({ settings: {}, progress })
 
 /** Frozen all the way down: code that writes into what it was handed throws. */
@@ -366,6 +388,64 @@ await test('a radio memory keeps what a later build wrote inside a valid entry',
   assert.deepEqual(migrateProgress({ version: 1, radioCalls: [], radioMemory: throughJson(later) }).radioMemory, later)
   // A broken entry still leaves whole, with whatever else it carried.
   assert.deepEqual(sanitiseRadioMemory({ 'office-radio': { ...later['office-radio'], calls: 'many' } }), {})
+})
+
+await test('a call to the porter keeps what a later build wrote inside his memory', async () => {
+  // The load keeps it (the test above). The first press of R used to drop it:
+  // the answer was built from the six numbers this build knows, and the store
+  // put it in place of the entry.
+  const later = {
+    calls: 4,
+    temper: 1,
+    lastCallAt: 1791075900000,
+    lastHint: 4,
+    lastReplyId: 'porter-praise-knack',
+    lastOutburstId: null,
+    mood: 'sour',
+    streak: { best: 3 },
+  }
+  const kept = (memory: Raw | undefined, when: string) => {
+    assert.equal(memory?.mood, 'sour', `${when}: a field inside the porter's memory is gone`)
+    assert.deepEqual(memory?.streak, { best: 3 }, when)
+  }
+
+  // By the store's own action, as every caller reaches it.
+  const page = await openGame(saveOf({ ...SAMPLE_SAVE, radioMemory: { 'office-radio': later } }))
+  ACTIONS.rememberRadioCall(page.state())
+  assert.equal(page.progress().radioMemory['office-radio'].calls, 5, 'the call was not remembered')
+  kept(page.progress().radioMemory['office-radio'], 'after the store remembered a call')
+  page.leave()
+  kept((page.savedProgress()!.radioMemory as Record<string, Raw>)['office-radio'], 'in the storage')
+  // A radio with no entry yet gets one, and nothing is invented for it.
+  page.state().rememberRadioCall('vault-radio', { ...later, calls: 1 } as never)
+  assert.equal(page.progress().radioMemory['vault-radio'].calls, 1)
+
+  // And by a real press: the porter's own answer, through `placeRadioCall`.
+  // That module holds the store under its plain name, so the save has to be
+  // under the key before either is first evaluated.
+  const night = SAVE_FIXTURES['production-drawer-open'].save
+  storage.clear()
+  storage.set(STORAGE_KEY, JSON.stringify({ ...night, progress: { ...night.progress, radioMemory: { 'office-radio': later } } }))
+  const window = Object.assign(new EventTarget(), { setTimeout: () => 1, clearTimeout: () => undefined })
+  Object.assign(globalThis, { window, document: Object.assign(new EventTarget(), { visibilityState: 'visible' }) })
+  const { placeRadioCall } = await import('../src/engine/radioCall.ts')
+  const { useMuseum } = await import('../src/state/store.ts')
+  const remembered = () => useMuseum.getState().progress.radioMemory['office-radio'] as unknown as Raw
+  kept(remembered(), 'on load (was the store evaluated before this test put the save there?)')
+  // "Continue": nobody answers a radio from the title screen.
+  useMuseum.getState().start()
+
+  // An hour after his last call, with a dice that never loses its temper.
+  // The press that reaches him may come after a call he still owed.
+  const now = later.lastCallAt + 3_600_000
+  for (let presses = 0; presses < 40 && remembered().calls === later.calls; presses += 1) {
+    assert.ok(placeRadioCall('office-radio', now, () => 0.99), 'the radio did not answer')
+  }
+  assert.equal(remembered().calls, later.calls + 1, 'the porter never answered a call of the player\'s')
+  assert.equal(remembered().lastCallAt, now)
+  kept(remembered(), 'after a real call')
+  window.dispatchEvent(new Event('pagehide'))
+  kept(((savedWhole().progress ?? {}).radioMemory as Record<string, Raw>)['office-radio'], 'in the storage, after a real call')
 })
 
 // ---------------------------------------------------------------------------
@@ -907,6 +987,344 @@ await test('an alias that points at an id the content does not have fails the co
     'legacy-save-alias doorsReleased:old',
   ])
   for (const issue of validateSaveAliases(MUSEUM, misplaced)) assert.equal(issue.severity, 'error')
+})
+
+// ---------------------------------------------------------------------------
+// Two tabs on one save
+// ---------------------------------------------------------------------------
+
+// The store reads the save once, as the page loads, and used to write back
+// everything it held whenever it had something new: a tab that had been open
+// since before another tab's write put its own, older, save over it. In
+// production that is the only way an old build ever meets a newer save (the
+// page is served fresh, so a build from before a deploy is a tab from before
+// it), and it was the one case nothing protected. Now a tab reads the disk
+// before it writes, and what it finds there that it did not write is joined
+// with what it holds.
+
+const OLD_TAB = SAVE_FIXTURES['l2-new-game-drawer-touched'].save
+const OLD_TAB_PROGRESS: Raw = OLD_TAB.progress
+
+/**
+ * What a tab of a later build wrote over the save the old tab had loaded: a
+ * later lot's stamp, a field and a trigger this build has no name for, and
+ * the progress made there.
+ */
+const laterWrite = (settings: Raw = {}, more: Raw = {}) => ({
+  settings: { ...OLD_TAB.settings, ...settings },
+  progress: {
+    ...OLD_TAB_PROGRESS,
+    contentLot: CONTENT_LOT + 1,
+    catalogued: ['portrait-morgan'],
+    hotspots: ['portrait-morgan:date'],
+    factsKnown: ['springfield-renaming'],
+    locksOpened: ['office-drawer'],
+    documentsRead: [...(OLD_TAB_PROGRESS.documentsRead as string[]), 'doc-predecessor'],
+    roomsVisited: ['office', 'atrium', 'holyoke'],
+    triggersFired: ['lock:office-drawer:opened'],
+    termsSigned: ['termo-posse'],
+    lastRoom: 'holyoke',
+    ...more,
+  } as Raw,
+})
+
+await test('a tab that was open before another tab wrote does not put its older save over it', async () => {
+  const old = await openGame(OLD_TAB)
+  const later = laterWrite()
+  anotherTabWrites(later)
+
+  // The old tab plays on: a door is crossed, which is a write of its own.
+  old.state().setCurrentRoom('atrium')
+  old.state().powerRoom('holyoke')
+  old.leave()
+
+  const disk = old.savedProgress()!
+  assert.equal(disk.contentLot, CONTENT_LOT + 1, 'the old tab stamped the save down: the later lot would migrate it a second time')
+  assert.deepEqual(disk.termsSigned, ['termo-posse'], 'a field the old tab does not know was written over')
+  assert.deepEqual(disk.triggersFired, ['lock:office-drawer:opened'], 'a trigger that fired in the other tab would fire again')
+  assert.deepEqual(shrunk(later.progress, disk), [], 'what the other tab did is gone from the disk')
+  // And what the old tab did is there with it.
+  assert.ok((disk.roomsPowered as string[]).includes('holyoke'), 'the old tab lost its own write')
+  assert.equal(disk.lastRoom, 'atrium', "where a tab stopped is that tab's to say")
+  // The tab now holds what it wrote: its own plan and catalogue show the other tab's night too.
+  assert.deepEqual(throughJson(old.progress()), disk)
+  // The next load is that save, whole.
+  assert.deepEqual(throughJson((await openGame(old.savedText()!)).progress()), disk)
+})
+
+await test('nor when all it changed is a setting, and the setting the other tab chose stays chosen', async () => {
+  const old = await openGame(OLD_TAB)
+  const later = laterWrite({ brightness: 1.4, locale: 'en' })
+  anotherTabWrites(later)
+
+  old.state().setSetting('subtitles', false)
+  old.leave()
+
+  // The progress is the other tab's, to the last field: this one had nothing
+  // to add but where it stands.
+  assert.deepEqual(old.savedProgress(), { ...later.progress, lastRoom: OLD_TAB_PROGRESS.lastRoom })
+  // The one setting this tab changed, over the ones it did not.
+  assert.deepEqual(savedWhole().settings, { ...later.settings, subtitles: false })
+  assert.equal(old.state().settings.brightness, 1.4, 'the tab still shows the brightness it loaded with')
+  assert.equal(old.state().settings.locale, 'en')
+})
+
+await test("nor when all it has is a clock's time to add as it is hidden", async () => {
+  // The clock on the office wall contributes its time to every forced write
+  // (`contributeToSave`): a backgrounded tab always has something new.
+  const old = await openGame(OLD_TAB)
+  assert.deepEqual(OLD_TAB_PROGRESS.clockSeconds, { 'office-clock': 225 })
+  old.store.contributeToSave(() => {
+    old.state().recordClockSeconds('office-clock', 240)
+    old.state().recordClockSeconds('atrium-clock', 12)
+  })
+  const later = laterWrite({}, { clockSeconds: { 'office-clock': 900 } })
+  anotherTabWrites(later)
+
+  old.hide()
+
+  const disk = old.savedProgress()!
+  assert.equal(disk.contentLot, CONTENT_LOT + 1)
+  assert.deepEqual(disk.termsSigned, ['termo-posse'])
+  assert.deepEqual(shrunk(later.progress, disk), [])
+  // A clock never runs backwards: the longer of the two times, clock by clock.
+  assert.deepEqual(disk.clockSeconds, { 'office-clock': 900, 'atrium-clock': 12 })
+  // Nor on the next frame: the tab's own count is behind the save now, and stays out of it.
+  old.state().recordClockSeconds('office-clock', 255)
+  assert.equal(old.progress().clockSeconds['office-clock'], 900)
+  old.state().recordClockSeconds('office-clock', 901)
+  assert.equal(old.progress().clockSeconds['office-clock'], 901)
+})
+
+await test('two tabs of this build: what each one did reaches the disk, and a tab told of a write shows it', async () => {
+  const first = await openGame(OLD_TAB)
+  const second = await openTab()
+  assert.deepEqual(second.progress(), first.progress())
+
+  first.state().recordCatalogued('ball-spalding')
+  first.leave()
+  const afterFirst = first.savedText()
+
+  // The browser tells the other tab, which takes it in without waiting to write.
+  second.toldOfAWrite()
+  assert.ok(second.progress().catalogued.includes('ball-spalding'), 'the tab went on showing the save as it was')
+  // It has nothing of its own to add, so it writes nothing: told again, hidden, closed.
+  second.toldOfAWrite()
+  second.hide()
+  second.leave()
+  assert.equal(second.savedText(), afterFirst, 'a tab with nothing new wrote')
+  // A change to some other key of the origin is not a change to the save.
+  second.toldOfAWrite('somebody-else')
+
+  second.state().recordDocument('doc-halstead')
+  second.state().setSetting('brightness', 0.8)
+  second.leave()
+  first.state().setSetting('headBob', true)
+  first.state().recordFact('first-rulebook')
+  first.leave()
+
+  const disk = first.savedProgress()!
+  assert.ok((disk.catalogued as string[]).includes('ball-spalding'))
+  assert.ok((disk.documentsRead as string[]).includes('doc-halstead'), 'the first tab wrote over the second')
+  assert.ok((disk.factsKnown as string[]).includes('first-rulebook'))
+  assert.equal(savedWhole().settings?.brightness, 0.8, 'the first tab put the brightness back')
+  assert.equal(savedWhole().settings?.headBob, true)
+  // Both settle on the same save, and then neither has anything to write.
+  second.toldOfAWrite()
+  const settled = first.savedText()
+  for (const tab of [first, second]) {
+    tab.hide()
+    tab.leave()
+  }
+  assert.equal(first.savedText(), settled, 'two tabs with the same save go on writing it at each other')
+  assert.deepEqual(throughJson(second.progress()), disk)
+
+  // The whole storage wiped (the browser's "clear site data" names no key):
+  // nothing to take in, and no reason to throw.
+  storage.clear()
+  assert.doesNotThrow(() => first.toldOfAWrite(null))
+  assert.ok(first.progress().catalogued.includes('ball-spalding'))
+})
+
+await test("a porter's memory is the later call's, radio by radio, with what a later build keeps inside it", async () => {
+  const memory = (calls: number, lastCallAt: number, more: Raw = {}) => ({
+    calls,
+    temper: 1,
+    lastCallAt,
+    lastHint: 2,
+    lastReplyId: null,
+    lastOutburstId: null,
+    ...more,
+  })
+  const withMemory = (entry: Raw) => saveOf({ ...OLD_TAB_PROGRESS, radioMemory: { 'office-radio': entry } })
+
+  // The other tab called him later than this one did: its entry stands.
+  const earlier = await openGame(withMemory(memory(4, 100)))
+  anotherTabWrites(withMemory(memory(6, 300, { mood: 'sour' })))
+  earlier.state().rememberRadioCall('office-radio', memory(5, 200))
+  earlier.leave()
+  assert.deepEqual(earlier.savedProgress()!.radioMemory, { 'office-radio': memory(6, 300, { mood: 'sour' }) })
+
+  // This tab called him last: its call, and still what it never knew about.
+  const latest = await openGame(withMemory(memory(4, 100)))
+  anotherTabWrites(
+    saveOf({ ...OLD_TAB_PROGRESS, radioMemory: { 'office-radio': memory(6, 300, { mood: 'sour' }), 'vault-radio': memory(1, 50) } }),
+  )
+  latest.state().rememberRadioCall('office-radio', memory(5, 400))
+  latest.leave()
+  assert.deepEqual(latest.savedProgress()!.radioMemory, {
+    'office-radio': memory(5, 400, { mood: 'sour' }),
+    'vault-radio': memory(1, 50),
+  })
+})
+
+await test('"New game" still erases everything, and a tab holding the erased game does not bring it back', async () => {
+  // The tab that asks for a new game gets one, whatever another tab wrote in
+  // the meantime; the settings chosen there are the player's, and stay.
+  const fresh = await openGame(OLD_TAB)
+  anotherTabWrites(laterWrite({ brightness: 1.4 }))
+  fresh.state().resetProgress()
+  assert.deepEqual(fresh.savedProgress(), emptyProgress(), '"New game" kept something of the other tab\'s game')
+  assert.deepEqual(fresh.progress(), emptyProgress())
+  assert.equal(savedWhole().settings?.brightness, 1.4, '"New game" put a setting back')
+
+  // The other way round, which joining alone would get wrong: the union of an
+  // erased game and a new one is the erased game. A new game is marked, and a
+  // tab that finds another game's mark on the disk takes that game as it is.
+  const stale = await openGame(SAVE_FIXTURES['production-drawer-open'].save)
+  const restarted = await openTab()
+  stale.store.contributeToSave(() => stale.state().recordHint('torch-used'))
+  restarted.state().resetProgress()
+  const mark = savedWhole().game
+  assert.ok(typeof mark === 'string' && mark.length > 0, 'a new game is not marked as one')
+
+  stale.state().recordDocument('doc-rule-changes')
+  stale.hide()
+  assert.deepEqual(shrunk(rawFixture('production-drawer-open'), stale.savedProgress()!).length > 0, true, 'the tab that still held the erased game wrote it back')
+  assert.deepEqual(stale.savedProgress()!.catalogued, [])
+  assert.deepEqual(stale.savedProgress()!.documentsRead, [], 'what the stale tab did in the erased game went into the new one')
+  assert.equal(savedWhole().game, mark)
+  assert.deepEqual(stale.progress().catalogued, [], 'the stale tab goes on showing a game that no longer exists')
+
+  // From there the stale tab plays the new game, and the tab that started it is not handed the old one.
+  stale.state().recordCatalogued('ball-spalding')
+  stale.leave()
+  assert.deepEqual(stale.savedProgress()!.catalogued, ['ball-spalding'])
+  restarted.toldOfAWrite()
+  assert.deepEqual(restarted.progress().catalogued, ['ball-spalding'])
+  restarted.state().recordHint('journal-taken')
+  restarted.leave()
+  assert.deepEqual(restarted.savedProgress()!.catalogued, ['ball-spalding'])
+  assert.deepEqual(restarted.savedProgress()!.documentsRead, [], 'the erased game came back into the tab that erased it')
+
+  // The mark is the game's: it survives a reload, and the next "New game" is another one.
+  const reloaded = await openGame(restarted.savedText()!)
+  reloaded.state().setSetting('brightness', 1.1)
+  reloaded.leave()
+  assert.equal(savedWhole().game, mark, 'a reload dropped the mark of the game')
+  reloaded.state().resetProgress()
+  assert.notEqual(savedWhole().game, mark, 'two games share a mark')
+  assert.equal(typeof savedWhole().game, 'string')
+
+  // A save that was never started over carries no mark, and is written as it always was.
+  const never = await openGame(OLD_TAB)
+  never.state().recordHint('torch-used')
+  never.leave()
+  assert.deepEqual(Object.keys(savedWhole()), ['settings', 'progress'])
+
+  // On record, the limit: a build from before the mark cannot say it started
+  // over. Its empty save reads exactly like the save of a tab that had not
+  // played yet, so it is joined, and the game this tab holds stays. Dropping
+  // a player's night on that evidence would be the worse mistake.
+  const holder = await openGame(SAVE_FIXTURES['production-drawer-open'].save)
+  anotherTabWrites(saveOf(throughJson(frozenL1.migrateProgress(null)) as unknown as Raw))
+  holder.state().recordHint('torch-used')
+  holder.leave()
+  assert.deepEqual(shrunk(rawFixture('production-drawer-open'), holder.savedProgress()!), [])
+})
+
+await test('what another build wrote beside the settings and the progress stays in the save', async () => {
+  const beside = { profile: { name: 'curadora' }, seen: ['changelog-l3'] }
+  // There when the tab loaded, and written by another tab afterwards: both are carried.
+  const page = await openGame({ ...saveOf(SAMPLE_SAVE), ...beside })
+  page.state().setSetting('brightness', 1.1)
+  page.leave()
+  assert.deepEqual(savedWhole().profile, beside.profile, 'the write dropped what it did not know, one level up')
+  assert.deepEqual(savedWhole().seen, beside.seen)
+  assert.deepEqual(page.savedProgress(), SAMPLE_SAVE)
+
+  anotherTabWrites({ ...saveOf(SAMPLE_SAVE), ...beside, seen: ['changelog-l3', 'changelog-l4'] })
+  page.state().setSetting('brightness', 1.2)
+  page.leave()
+  assert.deepEqual(savedWhole().seen, ['changelog-l3', 'changelog-l4'], 'this tab never changes it, so its copy is never the newer one')
+  assert.equal(savedWhole().settings?.brightness, 1.2)
+
+  // Something under the key that is no save at all is nothing to join with.
+  for (const junk of ['not json', '7', '[]', 'null', '"texto"']) {
+    const tab = await openGame(saveOf(SAMPLE_SAVE))
+    anotherTabWrites(junk)
+    assert.doesNotThrow(() => tab.toldOfAWrite(), junk)
+    tab.state().recordHint('torch-used')
+    tab.leave()
+    assert.deepEqual(shrunk(SAMPLE_SAVE, tab.savedProgress()!), [], junk)
+  }
+})
+
+await test('joining two copies of a save only adds, field by field, and joining twice is joining once', () => {
+  const ours = migrateProgress({ ...throughJson(SAMPLE_SAVE), ...UNKNOWN, onlyOurs: ['kept'] })
+  const theirs = migrateProgress({
+    version: 1,
+    contentLot: CONTENT_LOT + 5,
+    catalogued: ['portrait-morgan', 'ball-spalding'],
+    radioCalls: ['porter-first-call', 'porter-late-call'],
+    clockSeconds: { 'office-clock': 20, 'vault-clock': 77 },
+    radioMemory: { 'office-radio': { calls: 9, temper: 0, lastCallAt: 5, lastHint: 0, lastReplyId: null, lastOutburstId: null } },
+    lastRoom: 'holyoke',
+    nightsWorked: 4,
+    wiresJoined: { 'paris-hero': { from: 'a', to: 'b' } },
+  })
+  const joined = joinProgress(deepFreeze(throughJson(theirs)), deepFreeze(throughJson(ours))) as Progress & Raw
+
+  // Every field of the table has its rule, and none takes anything away.
+  for (const field of fields) assert.equal(typeof PROGRESS_FIELDS[field].join, 'function', `${field} has no rule for two copies`)
+  // Of what the table knows, nothing of either copy is gone; of the rest, nothing of the disk's.
+  const knownOf = (save: Raw): Raw => Object.fromEntries(fields.map((field) => [field, save[field]]))
+  assert.deepEqual(shrunk(knownOf(ours as Raw), joined), [], "the tab's copy lost something")
+  assert.deepEqual(shrunk(theirs as Raw, joined), [], "the disk's copy lost something")
+  assert.equal(joined.version, 1)
+  assert.equal(joined.contentLot, CONTENT_LOT + 5, 'the lot of a save is the highest any copy says')
+  // A list is the disk's, then what the tab has that it lacks: nothing twice.
+  assert.deepEqual(joined.catalogued, ['portrait-morgan', 'ball-spalding'])
+  assert.deepEqual(joined.radioCalls, ['porter-first-call', 'porter-late-call', 'porter-radio-taken'])
+  assert.deepEqual(joined.clockSeconds, { 'office-clock': 612, 'vault-clock': 77, 'atrium-clock': 0.5 })
+  assert.equal(joined.radioMemory['office-radio'].calls, 4, 'the later call is the one remembered')
+  assert.equal(joined.lastRoom, 'atrium', "where the tab stopped is the tab's to say")
+  // What this build does not know: the disk's copy, and the tab's only where the disk has none.
+  assert.equal(joined.nightsWorked, 4)
+  assert.deepEqual(joined.wiresJoined, { 'paris-hero': { from: 'a', to: 'b' } })
+  assert.deepEqual(joined.termsSigned, UNKNOWN.termsSigned)
+  assert.deepEqual(joined.onlyOurs, ['kept'])
+
+  assert.deepEqual(joinProgress(joined, ours), joined, 'a second join added something')
+  assert.deepEqual(joinProgress(joined, theirs), { ...joined, lastRoom: theirs.lastRoom })
+  for (const [name, save] of [['ours', ours], ['theirs', theirs], ['a new game', emptyProgress()]] as const) {
+    assert.deepEqual(joinProgress(save, save), save, `${name} joined with itself changed`)
+    assert.deepEqual(joinProgress(save, emptyProgress()), { ...save, lastRoom: SPAWN.room }, `${name} joined with a new game changed`)
+  }
+  // Each field alone, against a new game on either side: the sample comes out whole.
+  for (const field of fields.filter((name) => name !== 'lastRoom')) {
+    const one = { ...emptyProgress(), [field]: throughJson(sampleOf(field)) } as Progress
+    assert.deepEqual(joinProgress(one, emptyProgress())[field], sampleOf(field), `${field}: the disk's value was lost`)
+    assert.deepEqual(joinProgress(emptyProgress(), one)[field], sampleOf(field), `${field}: the tab's value was lost`)
+  }
+
+  // A `__proto__` key stays a piece of data on its way through.
+  const tampered = migrateProgress(JSON.parse('{"version":1,"radioCalls":[],"__proto__":{"polluted":true}}'))
+  for (const result of [joinProgress(tampered, emptyProgress()), joinProgress(emptyProgress(), tampered)]) {
+    assert.equal(Object.getPrototypeOf(result), Object.prototype)
+    assert.deepEqual(Object.getOwnPropertyDescriptor(result, '__proto__')?.value, { polluted: true })
+    assert.equal(({} as Raw).polluted, undefined)
+  }
 })
 
 // ---------------------------------------------------------------------------

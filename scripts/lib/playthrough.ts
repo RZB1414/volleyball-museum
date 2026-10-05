@@ -24,6 +24,11 @@
  * nothing. A detail the simulation offers and no hand can turn to the camera
  * shows up here as a press that changed nothing.
  *
+ * Two presses are allowed to beat the simulation, and are named: the right
+ * code typed by somebody who never read it, and a detail whose cone is too
+ * narrow to plan on and wide enough for the view to record (`luckyDetail`).
+ * Both are still held to what the rules give for them.
+ *
  * Importing this module puts a storage on `globalThis` (through
  * `storePage.ts`): import it before anything that reaches the store.
  */
@@ -219,9 +224,13 @@ export function press(page: GamePage, world: MuseumContent, action: PlayerAction
       const hotspot = exhibit?.hotspots.find((candidate) => candidate.id === action.hotspotId)
       if (!exhibit || !hotspot || !room.exhibitIds.includes(exhibit.id)) return
       state.setExamining(exhibit.id)
-      // The hand: it finds a detail whose cone is as wide as the ruler asks,
-      // and turns for ever without finding one that is not.
-      const found = examineReach(exhibit, hotspot).reachable
+      // The hand turns the piece until the detail faces the camera, and the
+      // view records it there: its one test is the cone, however narrow
+      // (`outward.dot(toCamera) > EXAMINE_HOTSPOT_DOT`). Whether a player
+      // ever turns it that far is the mind's question, not the hand's: this
+      // used to ask the simulation's own 5°, and the two were then compared
+      // with each other. A detail that never shows is turned for ever.
+      const found = examineReach(exhibit, hotspot).shows
       if (found && !progress.hotspots.includes(`${exhibit.id}:${hotspot.id}`)) {
         page.state().grant(hotspotGrant(exhibit, hotspot.id, page.state().progress.hotspots))
       }
@@ -301,11 +310,29 @@ const sorted = (progress: Raw) => atomsOf(progress as never).sort()
 const settled = (progress: Progress) => progressRules()?.settle(progress) ?? progress
 
 /**
+ * A detail the view records and no play is planned on: its cone is open, and
+ * narrower than the hand the simulation plays with. The store takes the
+ * press; the simulation never offers it.
+ */
+export function luckyDetail(content: MuseumContent, action: PlayerAction): boolean {
+  if (action.kind !== 'hotspot') return false
+  const exhibit = content.exhibits.find((candidate) => candidate.id === action.exhibitId)
+  const hotspot = exhibit?.hotspots.find((candidate) => candidate.id === action.hotspotId)
+  if (!exhibit || !hotspot) return false
+  const reach = examineReach(exhibit, hotspot)
+  return reach.shows && !reach.reachable
+}
+
+/**
  * Why a press and the simulation disagree, or null when they do not.
  *
  * `content` is the museum the simulation was asked about. An offered press
  * has to have written what `actionGrant` said, with the triggers settled, and
  * no more; a press that was not offered has to have written nothing.
+ *
+ * `beyond` names a press the rules take although the simulation does not
+ * offer it (a guessed code, a lucky detail). It is held like an offered one:
+ * to exactly what the rules give for it.
  */
 export function pressProblem(
   content: MuseumContent,
@@ -313,10 +340,11 @@ export function pressProblem(
   action: PlayerAction,
   before: Progress,
   after: Progress,
+  beyond = false,
 ): string | null {
   const offered = availableActions(content, before, room).some((candidate) => sameAction(candidate, action))
   const wrote = sorted(after as Raw).filter((entry) => !atomsOf(before).includes(entry))
-  if (!offered) {
+  if (!offered && !beyond) {
     return wrote.length === 0
       ? null
       : `the store accepted "${describe(action)}" in ${room}, which the simulation does not offer there: it wrote ${wrote.join(', ')}`
@@ -327,7 +355,9 @@ export function pressProblem(
   const missing = expected.filter((entry) => !got.includes(entry))
   const extra = got.filter((entry) => !expected.includes(entry))
   return (
-    `the simulation offers "${describe(action)}" in ${room} (${actionRecord(content, before, room, action)?.id ?? 'no record'}) ` +
+    (offered
+      ? `the simulation offers "${describe(action)}" in ${room} (${actionRecord(content, before, room, action)?.id ?? 'no record'}) `
+      : `the rules take "${describe(action)}" in ${room}, beyond what the simulation offers, `) +
     `and the store did something else: ` +
     [missing.length > 0 ? `it did not write ${missing.join(', ')}` : '', extra.length > 0 ? `it also wrote ${extra.join(', ')}` : '']
       .filter(Boolean)
@@ -423,10 +453,10 @@ export async function playToEnd(
           lock.kind === 'knowledge' &&
           content.facts.some((fact) => fact.id === lock.factId && fact.value === action.entry),
       )
-    // The one press that is allowed to beat the simulation: the right code,
-    // typed by somebody who never read it.
-    if (guessed && !availableActions(content, before, room).some((candidate) => sameAction(candidate, action))) return
-    const problem = pressProblem(content, room, action, before, after)
+    // The two presses that are allowed to beat the simulation: the right
+    // code, typed by somebody who never read it, and the detail only luck
+    // finds. Allowed, and held to what the rules give for them.
+    const problem = pressProblem(content, room, action, before, after, guessed || luckyDetail(world, action))
     if (problem) throw new Error(problem)
   }
 
@@ -462,48 +492,72 @@ export async function playToEnd(
     return withWork.length > 0 ? (firstStep.get(pick(withWork)) ?? null) : null
   }
 
-  for (let step = 0; step < STEP_LIMIT; step += 1) {
-    const state = page.state()
-    const room = state.currentRoom
-    const progress = page.progress()
+  try {
+    for (let step = 0; step < STEP_LIMIT; step += 1) {
+      const state = page.state()
+      const room = state.currentRoom
+      const progress = page.progress()
 
-    if (random() < profile.reloadChance) {
-      page = await reload(page)
-      reloads += 1
-      log.push('— the tab is closed and opened again —')
-      continue
-    }
-
-    if (random() < profile.uselessChance) {
-      const idle = [
-        ...everyPress(content, progress, room).filter((action) => !skipped(action)),
-        ...(profile.noTorch ? [] : (['torch'] as const)),
-        'journal' as const,
-      ]
-      const chosen = pick(idle)
-      if (chosen === 'torch') {
-        state.toggleFlashlight()
-        log.push('  (torch)')
-      } else if (chosen === 'journal') {
-        // Opened on the plan and shut: a modal, and never a write.
-        state.setJournalTab('map')
-        page.state().setJournalTab(null)
-        log.push('  (journal)')
-      } else {
-        make(chosen, '  idle:')
+      if (random() < profile.reloadChance) {
+        page = await reload(page)
+        reloads += 1
+        log.push('— the tab is closed and opened again —')
+        continue
       }
-      if (page.progress() !== progress && (chosen === 'torch' || chosen === 'journal')) {
-        throw new Error(`"${chosen}" wrote to the save`)
-      }
-      continue
-    }
 
-    const useful = worthDoing(progress, room)
-    const next = useful.length > 0 ? pick(useful) : towardsWork(progress, room)
-    if (!next) return { page, log, presses, reloads, wasted }
-    make(next, useful.length > 0 ? 'do:  ' : 'walk:')
+      if (random() < profile.uselessChance) {
+        const idle = [
+          ...everyPress(content, progress, room).filter((action) => !skipped(action)),
+          ...(profile.noTorch ? [] : (['torch'] as const)),
+          'journal' as const,
+        ]
+        const chosen = pick(idle)
+        if (chosen === 'torch') {
+          state.toggleFlashlight()
+          log.push('  (torch)')
+        } else if (chosen === 'journal') {
+          // Opened on the plan and shut: a modal, and never a write.
+          state.setJournalTab('map')
+          page.state().setJournalTab(null)
+          log.push('  (journal)')
+        } else {
+          make(chosen, '  idle:')
+        }
+        if (page.progress() !== progress && (chosen === 'torch' || chosen === 'journal')) {
+          throw new Error(`"${chosen}" wrote to the save`)
+        }
+        continue
+      }
+
+      const useful = worthDoing(progress, room)
+      const next = useful.length > 0 ? pick(useful) : towardsWork(progress, room)
+      if (!next) return { page, log, presses, reloads, wasted }
+      make(next, useful.length > 0 ? 'do:  ' : 'walk:')
+    }
+    throw new Error(`the robot was still playing after ${STEP_LIMIT} steps`)
+  } catch (error) {
+    // The night as far as it went: whoever replays a seed wants the presses
+    // that led to the stop, and an error alone does not carry them.
+    throw Object.assign(error instanceof Error ? error : new Error(String(error)), { log })
   }
-  throw new Error(`the robot was still playing after ${STEP_LIMIT} steps`)
+}
+
+/**
+ * The one night a run was asked to replay, from the arguments after `--`, or
+ * null when it was asked for none.
+ *
+ * Anything else is said and not guessed at: a seed that is not a whole number
+ * of the range would be turned into night 0 by the dice, which is no night
+ * of the five hundred, and would be played without a word.
+ */
+export function seedAsked(args: readonly string[], nights: number): number | null {
+  if (args.length === 0) return null
+  const value = args.length === 2 && args[0] === '--seed' ? args[1] : ''
+  const seed = /^\d+$/.test(value) ? Number(value) : 0
+  if (seed < 1 || seed > nights) {
+    throw new Error(`this suite takes --seed <n>, a whole number from 1 to ${nights}, and was given: ${args.join(' ') || 'nothing'}`)
+  }
+  return seed
 }
 
 /** Everything a save holds that the graph speaks of, sorted: two nights that ended alike compare equal. */

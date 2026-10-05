@@ -27,9 +27,14 @@
  */
 
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
 
-import { journalLayoutProblems, planWiringProblems, type SourceReader } from './lib/runtimeWiring.ts'
+import { readText } from './lib/readText.ts'
+import {
+  journalLayoutProblems,
+  planPageLayoutProblems,
+  planWiringProblems,
+  type SourceReader,
+} from './lib/runtimeWiring.ts'
 import { openGame, suite } from './lib/storePage.ts'
 
 const { en } = await import('../src/content/i18n/en.ts')
@@ -552,7 +557,7 @@ await test('the plan\'s words are the ones the lot wrote, in both languages', ()
 // The component draws the model
 // ---------------------------------------------------------------------------
 
-const readSource: SourceReader = (path) => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8')
+const readSource: SourceReader = (path) => readText(new URL(`../src/${path}`, import.meta.url))
 
 await test('the notebook draws the model, and the controller tells it which way the player faces', () => {
   assert.deepEqual(planWiringProblems(readSource), [])
@@ -584,6 +589,12 @@ await test('the notebook draws the model, and the controller tells it which way 
     ['the marker with no heading', changed(map, 'yaw: playerHeading.yaw', 'yaw: 0')],
     ['the marker not turned', changed(map, ' rotate(${model.player.headingDegrees})', '')],
     ['the legend with no title', changed(map, "t('map.legend')", "''")],
+    [
+      'a listed lock marked with the question mark of a room not visited',
+      changed(map, /<svg className="map-lock-mark"[\s\S]*?<\/svg>/, '<span className="map-lock-mark" aria-hidden="true">\n            ?\n          </span>'),
+    ],
+    ['the stub explained by a tooltip only', changed(map, /\{model\.doors\.some\(\(door\) => door\.stub\) \? \([\s\S]*?\) : null\}/, '')],
+    ['the stub in the legend whether or not the plan draws one', changed(map, 'model.doors.some((door) => door.stub) ? (', 'true ? (')],
     // The frame loop's own line; the dev harness's teleport keeps its copy.
     ['the controller keeping the yaw to itself', changed('engine/PlayerController.tsx', /\s*playerHeading\.yaw = camera\.rotation\.y(\s*\}\)\s*return null)/, '$1')],
     ['the model importing the museum', changed('ui/mapModel.ts', /^import /m, "import { MUSEUM } from '../content/museum.ts'\nimport ")],
@@ -621,6 +632,51 @@ await test('the notebook\'s panel fits the room its backdrop leaves it, on a pho
   assert.match(problemsWith(panelWidth, '$<rule>60rem'), /cannot add it up/)
   assert.match(problemsWith(backdrop, '$<rule>1.5rem'), /cannot add it up/)
   assert.match(problemsWith(panelHeight, '$<rule>88vh'), /cannot add it up/)
+})
+
+await test('the plan gives way to its legend and to the locks under it, so the page never needs scrolling', () => {
+  // In the browser, at 844 x 390, with the drawer touched: the plan and the
+  // legend fitted, and the one line the player had just earned («Gaveta com
+  // segredo — 4 dígitos») sat 48 px under the fold of the page. The plan's
+  // height was the panel's less a figure that allowed for the legend and for
+  // nothing after it. Now the page is a column, the plan is the one thing in
+  // it that shrinks, and what is under it takes the room it needs.
+  assert.deepEqual(planPageLayoutProblems(readSource), [])
+
+  const styled =
+    (from: RegExp | string, to: string): SourceReader =>
+    (asked) => {
+      const source = readSource(asked)
+      if (asked !== 'styles/museum.css') return source
+      const next = source.replace(from, to)
+      assert.notEqual(next, source, 'the change found nothing to change')
+      return next
+    }
+  const problemsWith = (from: RegExp | string, to: string) => planPageLayoutProblems(styled(from, to)).join('\n')
+  // The rule as it was: a height worked out for the legend alone.
+  assert.match(
+    problemsWith(/(\n\.map > svg \{[^}]*?)max-height: 26rem;/, '$1max-height: min(26rem, calc(88vh - 8.25rem));'),
+    /allows for what is under the plan by a figure/,
+  )
+  // A plan that does not shrink, a page that is not a column, a list that is squeezed instead of the plan.
+  assert.match(problemsWith(/(\n\.map > svg \{[^}]*?)flex: 0 1 auto;/, '$1flex: none;'), /the plan no longer shrinks/)
+  assert.match(problemsWith(/(\n\.map > svg \{[^}]*?)min-height: 0;\n/, '$1'), /the plan no longer shrinks/)
+  assert.match(problemsWith(/(\n\.map \{[^}]*?)flex-direction: column;\n/, '$1'), /is no longer a column the height of its page/)
+  assert.match(problemsWith(/(\n\.map \{[^}]*?)height: 100%;\n/, '$1'), /is no longer a column the height of its page/)
+  assert.match(problemsWith(/(\n\.map-locks \{[^}]*?)flex: none;\n/, '$1'), /`\.map-locks` may be squeezed/)
+  assert.match(problemsWith(/(\n\.map-legend \{[^}]*?)flex: none;\n/, '$1'), /`\.map-legend` may be squeezed/)
+  assert.match(problemsWith(/(\n\.journal-body \{[^}]*?)flex: 1;\n/, '$1'), /`\.journal-body` no longer takes what the tabs leave/)
+
+  // The title screen, by the same reasoning (found on the lot's own touch
+  // route): with a save there are two buttons under the introduction, the
+  // column is taller than a phone held sideways, and the language buttons
+  // were under the bottom edge of a page that did not scroll.
+  assert.match(problemsWith(/(\n\.title \{[^}]*?)overflow-y: auto;\n/, '$1'), /the title screen no longer scrolls/)
+  assert.match(
+    problemsWith(/(\n\.title \{[^}]*?)overflow-y: auto;/, '$1place-items: center;\n  overflow-y: auto;'),
+    /cuts off the top of a column taller than the screen/,
+  )
+  assert.match(problemsWith(/(\n\.title-panel \{[^}]*?)margin: auto;\n/, '$1'), /cuts off the top of a column taller than the screen/)
 })
 
 done('plan checks')

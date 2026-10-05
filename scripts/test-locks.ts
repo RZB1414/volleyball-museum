@@ -19,12 +19,13 @@
  */
 
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
+import { readdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { progressWiringProblems, type SourceReader } from './lib/runtimeWiring.ts'
 import { openGame, saveOf, seeded, suite, throughJson } from './lib/storePage.ts'
+import { readText } from './lib/readText.ts'
 
 const { MUSEUM } = await import('../src/content/museum.ts')
 const { fixtureLot, SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
@@ -76,7 +77,7 @@ const opened = (lock: Lock) => ({ outcome: 'opened', grant: { locksSeen: [lock.i
 
 /** The kinds of lock the schema declares, read off it: scripts are not type-checked. */
 const schemaLockKinds = (() => {
-  const schema = readFileSync(resolve(ROOT, 'src/content/schema.ts'), 'utf8')
+  const schema = readText(resolve(ROOT, 'src/content/schema.ts'))
   const declared = schema.slice(schema.indexOf('export type Lock ='), schema.indexOf('export type UnlockEffect ='))
   return [...declared.matchAll(/readonly kind: '([a-z-]+)'/g)].map((match) => match[1]).sort()
 })()
@@ -447,7 +448,7 @@ await test('the corpus: a save that says what it touched is believed, shut drawe
 // ---------------------------------------------------------------------------
 
 const SRC = resolve(ROOT, 'src')
-const readSource: SourceReader = (path) => readFileSync(resolve(SRC, path), 'utf8')
+const readSource: SourceReader = (path) => readText(resolve(SRC, path))
 const components = (readdirSync(SRC, { recursive: true }) as string[])
   .map((path) => path.replaceAll('\\', '/'))
   .filter((path) => path.endsWith('.tsx'))
@@ -504,6 +505,35 @@ await test('the cabinet, the breaker, the keypad, the plan and the prompt ask th
       changed('ui/mapModel.ts', 'pendingLocks(content.locks, progress)', 'content.locks.filter((lock) => !progress.locksOpened.includes(lock.id))'),
     ],
     ['the prompt reading the save by itself', changed('ui/Hud.tsx', /lockStatus\([^)]*\) === 'closed'/, '!locksOpened.includes(container.lockId)')],
+    // The line that takes what the rule decided to the save. With it gone
+    // the rule is still asked, the sound still plays, and the game looks the
+    // same for one press: the drawer is never on the plan, and the right
+    // year opens a drawer that is shut again on the next touch. The robot
+    // does not see it, because its hands are a copy of these handlers.
+    [
+      'a touched cabinet never written to the save',
+      changed('engine/Containers.tsx', /\n *if \(attempt\.outcome !== 'open'\) state\.grant\(attempt\.grant\)\n/, '\n'),
+    ],
+    [
+      'a touched breaker never written to the save',
+      changed('engine/PowerControls.tsx', /\n *if \(attempt\.outcome !== 'open'\) state\.grant\(attempt\.grant\)\n/, '\n'),
+    ],
+    [
+      'the right code never written to the save',
+      changed('ui/LockPanel.tsx', /\n *if \(attempt\.outcome !== 'open'\) state\.grant\(attempt\.grant\)\n/, '\n'),
+    ],
+    [
+      'the keypad writing only when it asks again, and never when it opens',
+      changed('ui/LockPanel.tsx', "if (attempt.outcome !== 'open') state.grant(attempt.grant)", "if (attempt.outcome === 'ask') state.grant(attempt.grant)"),
+    ],
+    [
+      'the cabinet writing the touch after the panel has taken the press',
+      changed(
+        'engine/Containers.tsx',
+        /( *)if \(attempt\.outcome !== 'open'\) state\.grant\(attempt\.grant\)\n((?:.*\n)*?)( *)(if \(attempt\.outcome === 'refused'\))/,
+        "$2$3if (attempt.outcome !== 'open') state.grant(attempt.grant)\n$3$4",
+      ),
+    ],
     [
       'any other component opening a lock',
       changed('ui/Journal.tsx', /$/, '\nexport const cheat = () => useMuseum.getState().openLock("office-drawer")\n'),

@@ -11,7 +11,7 @@
  */
 
 import assert from 'node:assert/strict'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -27,6 +27,7 @@ import {
   MANIFEST_FILE,
   readCaptureManifest,
 } from './lib/captureManifest.mjs'
+import { readText } from './lib/readText.ts'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const BASELINE = 'baseline-2026-10-03'
@@ -242,7 +243,7 @@ test('the report of L2 cites every frame of its two sets, and no frame they do n
   // A frame nobody argues from is a leftover, and a frame cited by a name the
   // set does not have is evidence nobody can open. By the whole name: `a01`
   // alone is a frame of four other sets.
-  const report = readFileSync(resolve(ROOT, 'docs/HANDOFF.md'), 'utf8')
+  const report = readText(resolve(ROOT, 'docs/HANDOFF.md'))
   const problems: string[] = []
   const names = new Set<string>()
   for (const setName of ['l2', 'l2-touch']) {
@@ -255,7 +256,7 @@ test('the report of L2 cites every frame of its two sets, and no frame they do n
     }
   }
   for (const path of ['docs/HANDOFF.md', 'docs/lotes/L2-plano.md', 'docs/PLANO-ATE-O-FINAL.md']) {
-    const text = readFileSync(resolve(ROOT, path), 'utf8')
+    const text = readText(resolve(ROOT, path))
     for (const [slug] of text.matchAll(/(?<![\w-])l2t?-[a-z]\d\d(?:-[a-z0-9]+)+/g)) {
       if (!names.has(slug)) problems.push(`${path} cites \`${slug}\`, which is not a frame of the L2 sets`)
     }

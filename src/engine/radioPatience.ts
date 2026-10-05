@@ -138,6 +138,8 @@ export function porterAnswer(
   const tierIndex = patienceTierFor(patience, temper + 1)
   const tier = patience.tiers[tierIndex]
   const remember = (replyId: string | null, outburstId: string | null): RadioMemory => ({
+    // As the branch above does: whatever else the entry carries stays in it.
+    ...memory,
     calls: memory.calls + 1,
     temper: Math.min(temper + 1, temperCeiling(patience)),
     lastCallAt: now,

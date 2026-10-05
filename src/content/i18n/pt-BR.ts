@@ -185,8 +185,12 @@ export const ptBR = {
     'Primeiro o caderno, curador: a diretora, a Helena, deixou um pra você na mesa do escritório. Tá tudo explicado lá.',
   'radio.hint.atrium':
     'O quadro do átrio fica na mesma parede da entrada da Ala 1, do lado da porta. A luzinha vermelha mostra onde.',
+  // No side is named. The wing has two ways in once the shortcut stays
+  // open, and what is to the left of one is to the right of the other: the
+  // wall facing the doors and the red light are true from both
+  // (`test:opening` measures every hint that names a side).
   'radio.hint.holyoke':
-    'A Ala 1 tem quadro próprio, na parede do outro lado da sala, à esquerda de quem entra. Atravessa no escuro: a lanterna dá conta.',
+    'A Ala 1 tem quadro próprio, na parede de frente para as portas. Atravessa no escuro até a luzinha vermelha: a lanterna dá conta.',
   'radio.hint.drawer':
     'Aquela gaveta trancada do escritório? O Otávio usava datas que estão nas placas. Dá uma olhada no retrato do Morgan, na Ala 1.',
   // The last hint, when nothing is left to point at. Until the night has an
@@ -208,7 +212,7 @@ export const ptBR = {
   'radio.hint.notebook.curt': 'Caderno. Na mesa. Pega e lê. Câmbio.',
   // Curt is short, never vaguer: each keeps the address the full hint gives.
   'radio.hint.atrium.curt': 'Átrio. Do lado da porta da Ala 1. Luzinha vermelha. Câmbio.',
-  'radio.hint.holyoke.curt': 'Ala 1. Quadro na parede do fundo, à esquerda. Luzinha vermelha. Vai.',
+  'radio.hint.holyoke.curt': 'Ala 1. Quadro na parede do fundo. Luzinha vermelha. Vai.',
   // The year shows when the frame is picked up and tilted. The hint gives the
   // gesture, not a "plaque": none is modelled on the frame, and the one text
   // at its foot is the photograph's credit, which carries another year.

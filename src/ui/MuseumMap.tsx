@@ -157,6 +157,20 @@ export function MuseumMap() {
               {t(MAP_STATE_LABEL[state])}
             </li>
           ))}
+          {/*
+            The stub, while the plan draws one: the same dotted line and
+            question mark, with the words beside it. They used to be a
+            tooltip only, which a finger never sees.
+          */}
+          {model.doors.some((door) => door.stub) ? (
+            <li>
+              <svg className="map-swatch map-stub" viewBox="0 0 22 14" aria-hidden="true">
+                <line x1="1" y1="7" x2="11" y2="7" />
+                <text x="17" y="7">?</text>
+              </svg>
+              {t('map.unknown')}
+            </li>
+          ) : null}
         </ul>
       </div>
 
@@ -178,9 +192,10 @@ function LockList({ locks }: { readonly locks: MapModel['locks'] }) {
     <ul className="map-locks">
       {locks.map((lock) => (
         <li key={lock.id}>
-          <span className="map-lock-mark" aria-hidden="true">
-            ?
-          </span>
+          <svg className="map-lock-mark" viewBox="0 0 12 13" aria-hidden="true">
+            <path d="M3.6 6V4.2a2.4 2.4 0 0 1 4.8 0V6" />
+            <rect x="2.2" y="6" width="7.6" height="5.8" rx="0.9" />
+          </svg>
           {t(lock.labelKey as never)}
         </li>
       ))}

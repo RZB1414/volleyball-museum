@@ -27,18 +27,19 @@
 
 import assert from 'node:assert/strict'
 import { spawnSync } from 'node:child_process'
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { CONTENT_LOT } from '../src/content/knownDebt.ts'
-import { lastLotDone } from './lib/planLots.ts'
+import { lastLotDone, lastLotPublished } from './lib/planLots.ts'
+import { readText } from './lib/readText.ts'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const inRepo = (...segments: string[]) => resolve(ROOT, ...segments)
 // A Windows checkout may hand these files over with CRLF; every pattern below
 // is written for LF.
-const read = (path: string) => readFileSync(inRepo(path), 'utf8').replace(/\r\n/g, '\n')
+const read = (path: string) => readText(inRepo(path))
 const readIfThere = (path: string) => (existsSync(inRepo(path)) ? read(path) : null)
 
 const PLAN_PATH = 'docs/PLANO-ATE-O-FINAL.md'
@@ -499,6 +500,113 @@ test('the lot the dated debts are judged at is the lot the plan says is done', (
   const [, named] = /Move CONTENT_LOT in (\S+)/.exec(contentLotProblem(made(1, 2), 1) ?? '') ?? []
   assert.ok(named, 'the message no longer says where the constant is')
   assert.match(readIfThere(named) ?? '', /^export const CONTENT_LOT = \d+$/m, `${named} does not define CONTENT_LOT`)
+})
+
+test('a lot is published when the plan says so in full, and «Feito em» alone is only closed', () => {
+  // «Feito em» is written as a lot closes, before its review, push and
+  // deploy. The graph snapshot of a lot has to follow the content until the
+  // lot goes out (`test:playthrough`), so the two moments are read apart.
+  const section = (lot: number, line: string) => `### L${lot} — Um lote\n\n- **Objetivo.** …\n${line}\n`
+  const closed = '- **Feito em 2026-11-02**, em commits locais. Faltam os passos 8 a 11.'
+  const out = '- **Feito em 2026-11-02 e publicado** (até `abc1234`, versão Cloudflare `1d3a4554`).'
+
+  assert.equal(lastLotPublished(section(1, out)), 1)
+  assert.equal(lastLotPublished(section(1, out) + section(2, closed)), 1, 'a closed lot was read as published')
+  assert.equal(lastLotDone(section(1, out) + section(2, closed)), 2)
+  assert.equal(lastLotPublished(section(1, out) + section(2, out)), 2)
+  assert.equal(lastLotPublished(section(1, closed)), 0)
+  // The word alone is not the statement: this is how a lot that has NOT gone out is written up.
+  for (const notYet of [
+    '- **Feito em 2026-11-02, ainda não publicado.**',
+    '- **Feito em 2026-11-02.** Não publicado: falta o revisor.',
+    '- **Feito em 2026-11-02**; será publicado com o lote seguinte.',
+  ]) {
+    assert.equal(lastLotPublished(section(1, notYet)), 0, notYet)
+    assert.equal(lastLotDone(section(1, notYet)), 1, notYet)
+  }
+  assert.equal(lastLotPublished('### L18 a L22 — As cinco alas\n\n- **Feito em 2027-03-01 e publicado.**\n'), 22)
+
+  // The plan as it stands: nothing is published that is not done, L1 went
+  // out, and the phrase the pattern waits for is the one L1's section uses.
+  const done = lastLotDone(plan)
+  const published = lastLotPublished(plan)
+  assert.ok(published >= 1, 'the plan no longer says L1 was published: the pattern has gone stale')
+  assert.ok(published <= done, `the plan gives L${published} as published and only L${done} as done`)
+})
+
+// ---------------------------------------------------------------------------
+// Line ends
+// ---------------------------------------------------------------------------
+
+/** Spelt in two halves, so that this file's own text is not a read of anything. */
+const READ_CALL = ['read', 'FileSync'].join('')
+
+/**
+ * The text reads of a script that hand back the file as the checkout left
+ * it: a synchronous read asked for `'utf8'` whose result is neither parsed as
+ * JSON nor passed through a replacement of `\r\n`.
+ */
+function rawTextReads(source: string): string[] {
+  const found: string[] = []
+  for (const match of source.matchAll(new RegExp(`${READ_CALL}\\(`, 'g'))) {
+    const start = (match.index ?? 0) + match[0].length
+    let depth = 1
+    let end = start
+    while (end < source.length && depth > 0) {
+      if (source[end] === '(') depth += 1
+      else if (source[end] === ')') depth -= 1
+      end += 1
+    }
+    const call = source.slice(match.index ?? 0, end)
+    // A buffer is not text: an image to measure, a font, a bundle to gzip.
+    if (!/,\s*'utf-?8'\s*\)$/.test(call)) continue
+    if (source.slice(0, match.index ?? 0).endsWith('JSON.parse(')) continue
+    if (/^\s*\.replace(?:All)?\(\s*(?:\/\\r\\n\/g|'\\r\\n')\s*,\s*'\\n'\s*\)/.test(source.slice(end))) continue
+    found.push(call.replace(/\s+/g, ' '))
+  }
+  return found
+}
+
+test('a checkout keeps Unix line ends, and no suite reads a text file any other way', () => {
+  // Git for Windows checks text out with CRLF unless the repository says
+  // otherwise, and `git status` stays clean. Suites that spell a line end in
+  // what they look for (`indexOf('\n}\n')`, a pattern ending in `\n`) then
+  // find nothing: `test:triggers`, `test:navigation` and `test:playthrough`
+  // went red on a fresh clone with nothing changed.
+  const attributes = readIfThere('.gitattributes')
+  assert.ok(attributes, '.gitattributes is missing: on Windows a fresh clone gets CRLF, and the suites that read source by the line fail')
+  const rules = attributes
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !line.startsWith('#'))
+  assert.equal(rules[0], '* text=auto eol=lf', 'the first rule of .gitattributes keeps every text file with Unix line ends')
+  // What a line-end conversion would corrupt is named, not left to detection.
+  for (const extension of ['jpg', 'png', 'webp', 'glb', 'ktx2', 'woff2']) {
+    assert.ok(rules.includes(`*.${extension} binary`), `.gitattributes does not mark *.${extension} as binary`)
+  }
+
+  // And for a tree checked out before the attribute existed: every text read
+  // of a suite goes through `readText`, which hands back Unix line ends.
+  const scripts = [
+    ...readdirSync(inRepo('scripts')).filter((name) => name.endsWith('.ts')).map((name) => `scripts/${name}`),
+    ...readdirSync(inRepo('scripts/lib')).filter((name) => name.endsWith('.ts')).map((name) => `scripts/lib/${name}`),
+  ]
+  assert.ok(scripts.length > 40, `only ${scripts.length} scripts were found: the walk is looking in the wrong place`)
+  const raw = scripts
+    .filter((path) => path !== 'scripts/lib/readText.ts')
+    .flatMap((path) => rawTextReads(read(path)).map((call) => `${path}: ${call}`))
+  assert.deepEqual(raw, [], 'a script reads text as the checkout left it: read it with readText (scripts/lib/readText.ts)')
+  assert.equal(rawTextReads(read('scripts/lib/readText.ts')).length, 0, 'readText itself hands back the file as the checkout left it')
+
+  // The reader of reads, on calls made for the purpose.
+  assert.deepEqual(rawTextReads(`const a = ${READ_CALL}(resolve(ROOT, 'a.ts'), 'utf8')`), [`${READ_CALL}(resolve(ROOT, 'a.ts'), 'utf8')`])
+  assert.equal(rawTextReads(`const a = ${READ_CALL}(new URL(name, import.meta.url), 'utf8').includes('x')`).length, 1)
+  assert.equal(rawTextReads(`const a = ${READ_CALL}(path, 'utf-8')\nconst b = ${READ_CALL}(other,\n  'utf8',\n)`).length, 1)
+  assert.deepEqual(rawTextReads(`const a = ${READ_CALL}(path, 'utf8').replace(/\\r\\n/g, '\\n')`), [])
+  assert.deepEqual(rawTextReads(`const a = ${READ_CALL}(path, 'utf8').replaceAll('\\r\\n', '\\n')`), [])
+  assert.deepEqual(rawTextReads(`const a = JSON.parse(${READ_CALL}(path, 'utf8'))`), [])
+  assert.deepEqual(rawTextReads(`const bytes = ${READ_CALL}(path)`), [])
+  assert.deepEqual(rawTextReads(`await sharp(${READ_CALL}(resolve(ROOT, name))).raw()`), [])
 })
 
 // ---------------------------------------------------------------------------

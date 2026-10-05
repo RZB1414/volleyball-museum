@@ -10,9 +10,15 @@
 
 /* --- title screen --------------------------------------------------------- */
 
+/* Centred by the panel's own auto margins and not by the grid: a centred
+   item taller than its container overflows both ends, and the top end cannot
+   be scrolled to. An auto margin is never negative, so a column taller than
+   the screen starts at the top and the page scrolls. With a save there are
+   two buttons under the introduction, and on a phone held sideways the
+   language buttons were under the bottom edge of a page that did not move. */
 .title {
   display: grid;
-  place-items: center;
+  overflow-y: auto;
   background:
     radial-gradient(120% 90% at 50% 0%, #1c1a17 0%, #0a0b0d 62%),
     #0a0b0d;
@@ -23,6 +29,7 @@
 
 .title-panel {
   max-width: 34rem;
+  margin: auto;
   text-align: center;
 }
 
@@ -121,6 +128,31 @@
 .title-locale button.is-active {
   color: #d9cbaa;
   border-bottom-color: #8a6a3a;
+}
+
+/* A phone held sideways: the same column with less air in it, so that the
+   way in, "New game" and the two languages are on one screen. */
+@media (max-height: 420px) {
+  .title {
+    padding: 3vmin 6vmin;
+  }
+
+  .title-subtitle {
+    margin-bottom: 1rem;
+  }
+
+  .title-intro {
+    margin-bottom: 1.1rem;
+    line-height: 1.55;
+  }
+
+  .title-new-game {
+    margin-top: 0.6rem;
+  }
+
+  .title-locale {
+    margin-top: 0.9rem;
+  }
 }
 
 /* --- in-museum ------------------------------------------------------------ */
@@ -1098,13 +1130,25 @@
 
 /* --- map ------------------------------------------------------------------ */
 
-/* The plan and its legend on one page of the notebook, whatever the screen: a
-   map that has to be scrolled is a map nobody sees whole. The second figure
-   is the notebook's panel (88vh) less its tabs, its padding and the legend's
-   line; on a phone held sideways it is the one that binds. */
+/* The plan, its legend and the locks under it on one page of the notebook,
+   whatever the screen: a map that has to be scrolled is a map nobody sees
+   whole. The page is a column the height of the notebook's body, and the plan
+   is the one thing in it that gives way: the legend and the list of locks
+   take the lines they need, however many, and the drawing has the rest.
+   The plan's height used to be the panel's less a figure that allowed for
+   the legend alone, and on a phone the lock the player had just touched was
+   listed under the fold. `npm run test:map` holds these rules to this form. */
+.map {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
 .map > svg {
+  flex: 0 1 auto;
+  min-height: 0;
   width: 100%;
-  max-height: min(26rem, calc(88vh - 8.25rem));
+  max-height: 26rem;
   display: block;
 }
 
@@ -1191,6 +1235,7 @@
 }
 
 .map-legend {
+  flex: none;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -1221,6 +1266,7 @@
 }
 
 .map-locks {
+  flex: none;
   margin-top: 1rem;
   font-size: 0.8rem;
 }
@@ -1246,15 +1292,37 @@
   color: #a89e8b;
 }
 
+/* A padlock, and not the question mark it used to be: on the plan a
+   question mark is the room beyond a door nobody has been through, and the
+   same sign for two things on one page reads as one of them. */
 .map-lock-mark {
-  display: inline-grid;
-  place-items: center;
-  width: 1.15rem;
+  flex: none;
+  width: 1.05rem;
   height: 1.15rem;
-  border: 1px solid #a98a52;
-  color: #d9a441;
-  font-family: ui-monospace, monospace;
-  font-size: 0.72rem;
+  fill: none;
+  stroke: #d9a441;
+  stroke-width: 1.2;
+  stroke-linecap: round;
+}
+
+.map-lock-mark rect {
+  fill: rgb(217 164 65 / 28%);
+}
+
+/* A phone held sideways: less air round the plan, which is what gives way. */
+@media (max-height: 420px) {
+  .journal-body {
+    padding: 0.8rem 1.2rem;
+  }
+
+  .map-legend,
+  .map-locks {
+    margin-top: 0.6rem;
+  }
+
+  .map-locks {
+    padding-top: 0.55rem;
+  }
 }
 
 .document + .document {

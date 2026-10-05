@@ -48,6 +48,7 @@ import {
   type Dictionaries,
 } from '../src/content/textLint.ts'
 import { validateContent, type ValidationIssue } from '../src/content/validate.ts'
+import { readText } from './lib/readText.ts'
 
 const { test, done } = suite('Text lint')
 
@@ -251,6 +252,36 @@ await test('a credit line and the lettering of an image are printed text too', (
   }
   assert.deepEqual(accused(validateText(dated, REAL), 'numeral-exclusivity'), ['credit:photo-morgan-1897'])
 
+  // The Credits tab of the notebook prints one more line per picture than
+  // the frame does: why it is in the public domain, what was changed in it,
+  // or what generated it. The source L1 took off a wall by hand is the kind
+  // of thing that line says («Published in Physical Education, July 1896»).
+  for (const asset of MUSEUM.media) assert.ok(where.has(`credits:${asset.id}`), `the Credits tab's line for ${asset.id} is not read`)
+  assert.ok(texts.some((text) => text.where === 'credits:photo-morgan-1897' && text.text.includes('Holyoke Transcript')))
+  const withDetail = (id: string, patch: (credit: MuseumContent['media'][number]['credit']) => MuseumContent['media'][number]['credit']): MuseumContent => {
+    assert.ok(MUSEUM.media.some((asset) => asset.id === id), id)
+    return { ...MUSEUM, media: MUSEUM.media.map((asset) => (asset.id === id ? { ...asset, credit: patch(asset.credit) } : asset)) }
+  }
+  const inTheReason = withDetail('photo-morgan-1897', (credit) =>
+    credit.license === 'public-domain' ? { ...credit, reason: 'Published in Physical Education, July 1896; US work published before 1931.' } : credit,
+  )
+  assert.deepEqual(accused(validateText(inTheReason, REAL), 'numeral-exclusivity'), ['credits:photo-morgan-1897'])
+  const inTheChanges = withDetail('photo-holyoke-building-c1910', (credit) =>
+    credit.license !== 'public-domain' && credit.license !== 'procedural' ? { ...credit, modifications: 'Cropped to the 1896 wing and re-encoded to WebP.' } : credit,
+  )
+  assert.deepEqual(accused(validateText(inTheChanges, REAL), 'numeral-exclusivity'), ['credits:photo-holyoke-building-c1910'])
+  const inTheGenerator = withDetail('graphic-office-blueprint', (credit) =>
+    credit.license === 'procedural' ? { ...credit, generator: 'svg/office-blueprint-1896' } : credit,
+  )
+  assert.deepEqual(accused(validateText(inTheGenerator, REAL), 'numeral-exclusivity'), ['credits:graphic-office-blueprint'])
+  // The three kinds of credit were all patched: a case that changed nothing would have passed on nothing.
+  for (const patched of [inTheReason, inTheChanges, inTheGenerator]) assert.notDeepEqual(patched.media, MUSEUM.media)
+  // A picture with nothing to say there adds no empty line to read.
+  const silent = withDetail('photo-holyoke-building-c1910', (credit) =>
+    credit.license !== 'public-domain' && credit.license !== 'procedural' ? { ...credit, modifications: undefined } : credit,
+  )
+  assert.ok(!printedTexts(silent, REAL).some((text) => text.where === 'credits:photo-holyoke-building-c1910'))
+
   // The year lettered on the plan in the office.
   const lettered = { mediaTexts: { ...MEDIA_TEXTS, 'graphic-office-blueprint': [...MEDIA_TEXTS['graphic-office-blueprint'], 'FUNDADO EM 1896'] } }
   assert.deepEqual(accused(validateText(MUSEUM, REAL, lettered), 'numeral-exclusivity'), ['media:graphic-office-blueprint'])
@@ -274,7 +305,7 @@ await test('the lettering is read out of the SVG files, element by element', () 
   assert.ok(svgs.length >= 2, 'the plan in the office and the orientation wall')
   assert.ok(MEDIA_TEXTS['graphic-office-blueprint'].includes('MUSEU DO VOLEIBOL'))
   // The gate reads them: without this line the plan's lettering is never linted.
-  const gate = readFileSync(new URL('./validate-content.ts', import.meta.url), 'utf8')
+  const gate = readText(new URL('./validate-content.ts', import.meta.url))
   assert.match(gate, /const mediaTexts = readMediaTexts\(MUSEUM\.media,/)
   assert.match(gate, /dictionaries: \{ 'pt-BR': ptBR, en \},\s*mediaTexts,/)
   // A file that is gone is not an image with nothing written on it.

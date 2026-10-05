@@ -32,7 +32,6 @@
  * a convenient point in the middle of the floor.
  */
 
-import { readFileSync } from 'node:fs'
 
 import { BoxGeometry, Mesh, MeshBasicMaterial, Vector3 } from 'three'
 
@@ -76,6 +75,7 @@ import {
   type Placement,
 } from './lib/museumWorld.ts'
 import { interactionVolumeWiringProblems, type SourceReader } from './lib/runtimeWiring.ts'
+import { readText } from './lib/readText.ts'
 
 /** Give up after this many simulated seconds; a real crossing takes about six. */
 const TIME_LIMIT = 30
@@ -1064,7 +1064,7 @@ for (const room of MUSEUM.rooms) {
   )
 }
 
-const readSource: SourceReader = (path) => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8')
+const readSource: SourceReader = (path) => readText(new URL(`../src/${path}`, import.meta.url))
 
 /** The bake with one recipe's collider taken out of the manifest, as it was before the recipe had one. */
 function withoutCollider(recipe: string): BakedBundle[] {
@@ -1432,6 +1432,13 @@ function furnished(roomId: string, kit: RoomData['kit']): MuseumContent {
     ['a radio whose box is not the padded one', changed('engine/Devices.tsx', '<boxGeometry args={proxy.size} />', '<boxGeometry args={[1, 1, 1]} />')],
     ['a piece reached by the container\'s number', changed('engine/Interaction.tsx', 'INTERACTION_REACH.exhibit', 'INTERACTION_REACH.container')],
     ['a piece drawn at twice its scale', changed('scenes/MuseumScene.tsx', 'scale={exhibit.scale ?? 1}', 'scale={(exhibit.scale ?? 1) * 2}')],
+    // What is solid in the suites' world is put there by the suites (`buildMuseumWorld`).
+    // A component that stops registering its collider leaves the game with a
+    // base, a cabinet or a bench the capsule walks through, and the flood green.
+    ['the base under a mounted piece no longer solid', changed('scenes/MuseumScene.tsx', 'registerKitColliders(kit, spec?.part, KIT_BUNDLE, collision,', 'registerNothing(')],
+    ['the base under a mounted piece solid five metres away', changed('scenes/MuseumScene.tsx', 'position: [exhibit.position[0], 0, exhibit.position[2]],\n        rotationY: exhibit.rotationY,', 'position: [exhibit.position[0] + 5, 0, exhibit.position[2]],\n        rotationY: exhibit.rotationY,')],
+    ['a cabinet no longer solid', changed('engine/Containers.tsx', 'registerKitColliders(kit, container.part, kitBundle, collision,', 'registerNothing(')],
+    ['the furniture of a room no longer solid', changed('engine/RoomFurniture.tsx', 'registerKitColliders(kit, placement.part, kitBundle, collision,', 'registerNothing(')],
   ]
   const uncaught = refactors
     .filter(([, reader]) => interactionVolumeWiringProblems(reader).length === 0)

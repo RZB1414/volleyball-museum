@@ -5,8 +5,8 @@
  * treated the one-way shortcut as an ordinary door, took every piece for
  * cataloguable, opened a ritual by arriving in its room and never asked where
  * a code is learnt unless the lock stood on a doorway. It proved a museum,
- * but not the one the runtime plays: three pieces it counted cannot be
- * catalogued by anybody.
+ * but not the one the runtime plays: of three pieces it counted, two cannot
+ * be catalogued by anybody and the third only inside a cone of 1.5°.
  *
  * Here the player is moved by the game's own functions and nothing else: the
  * door rule with the save's released doors (`transitionDoorTopology.ts`), the
@@ -15,6 +15,11 @@
  * every room she can stand in she takes every action the rules allow, pass
  * after pass, until a pass adds nothing. What is outside that fixed point
  * cannot be reached by any order of play, because the save only grows.
+ *
+ * One thing she leaves alone on purpose: a detail whose cone is open and
+ * narrower than a hand finds (`examineReach`: it shows, and is not
+ * reachable). The view would record it, so a save may hold it; a play that
+ * needed it would be a play for somebody who already knew where to look.
  *
  * Two readers besides the gate. The playthrough robot asks `availableActions`
  * what the real store may be made to do, and is held to this player's final
@@ -27,7 +32,7 @@
  */
 
 import { deskRadioIntent, radioIsLive } from '../engine/deviceRules.ts'
-import { examineReach } from '../engine/examineReach.ts'
+import { EXAMINE_MIN_CONE_DEGREES, examineReach } from '../engine/examineReach.ts'
 import { attemptLock, lockCredentialKeys } from '../engine/lockRules.ts'
 import { isContainerTaken } from '../engine/notebook.ts'
 import { isRoomPowered } from '../engine/power.ts'
@@ -882,17 +887,36 @@ export function simulateProgress(content: MuseumContent, from: Progress = emptyP
     }
   }
   for (const exhibit of content.exhibits) {
+    // A detail nothing waits for, where no hand finds it. It is offered to
+    // nobody, so it is in no action and in no snapshot, and the piece's own
+    // accusation (below) only names the details the piece needs: without
+    // this one, content a player can never see would pass in silence.
+    for (const hotspot of exhibit.hotspots) {
+      const reach = examineReach(exhibit, hotspot)
+      if (hotspot.requiredForCatalogue || reach.reachable) continue
+      error(
+        'hotspot-unreachable',
+        `${exhibit.id}:${hotspot.id}`,
+        `Detail "${hotspot.id}" of "${exhibit.id}" is never found: ` +
+          (reach.shows
+            ? `it shows only inside a cone of ${reach.coneDegrees.toFixed(1)}°, under the ${EXAMINE_MIN_CONE_DEGREES}° a hand finds.`
+            : 'it can never be turned to the camera.'),
+      )
+    }
     if (final.catalogued.includes(exhibit.id)) continue
     const out = exhibit.hotspots
       .filter((hotspot) => hotspot.requiredForCatalogue && !examineReach(exhibit, hotspot).reachable)
-      .map((hotspot) => `"${hotspot.id}" (a cone of ${examineReach(exhibit, hotspot).coneDegrees.toFixed(1)}°)`)
+      .map((hotspot) => {
+        const reach = examineReach(exhibit, hotspot)
+        return reach.shows
+          ? `"${hotspot.id}" shows only inside a cone of ${reach.coneDegrees.toFixed(1)}°, under the ${EXAMINE_MIN_CONE_DEGREES}° a hand finds`
+          : `"${hotspot.id}" can never be turned to the camera`
+      })
     error(
       'exhibit-uncataloguable',
       exhibit.id,
-      `Exhibit "${exhibit.id}" can never be catalogued: ` +
-        (out.length > 0
-          ? `no hand can turn its required detail ${out.join(', ')} to the camera.`
-          : 'no required detail of it is ever seen.'),
+      `Exhibit "${exhibit.id}" cannot be catalogued by a player who does not already know where to look: ` +
+        (out.length > 0 ? `its required detail ${out.join('; ')}.` : 'no required detail of it is ever seen.'),
     )
   }
 

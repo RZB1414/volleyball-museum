@@ -28,6 +28,7 @@ import { SPAWN } from '../content/spawn.ts'
 import {
   emptyProgress,
   grantProgress,
+  joinProgress,
   type Progress,
   type ProgressGrant,
   type RadioMemory,
@@ -90,33 +91,77 @@ const DEFAULT_SETTINGS: Settings = {
   subtitles: true,
 }
 
-type Persisted = { settings: Settings; progress: Progress }
+/**
+ * What sits under the save key, as this build reads it.
+ *
+ * `game` tells one playthrough from the next (`newGameMark`); a save that was
+ * never started over has none. `beside` is whatever another build wrote next
+ * to the settings and the progress: carried along, like a field of the save
+ * this build does not know.
+ */
+type Persisted = {
+  readonly settings: Settings
+  readonly progress: Progress
+  readonly game: string | undefined
+  readonly beside: Readonly<Record<string, unknown>>
+}
 
-function loadPersisted(): Persisted {
-  if (typeof localStorage === 'undefined') {
-    return { settings: DEFAULT_SETTINGS, progress: emptyProgress() }
-  }
-
+/** The text under the save key, or null: no storage, nothing saved, or a profile that refuses the read. */
+function storedText(): string | null {
+  if (typeof localStorage === 'undefined') return null
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return { settings: DEFAULT_SETTINGS, progress: emptyProgress() }
+    return localStorage.getItem(STORAGE_KEY)
+  } catch {
+    return null
+  }
+}
 
-    const parsed = JSON.parse(raw) as Partial<Persisted>
-    const progress = migrateProgress(parsed.progress)
-
+/** The save in a text, or null when the text is not one. */
+function readPersisted(text: string | null): Persisted | null {
+  if (!text) return null
+  try {
+    const parsed: unknown = JSON.parse(text)
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    const { settings, progress, game, ...beside } = parsed as Record<string, unknown>
     return {
       // Settings survive a progress that could not be read: they are the
       // player's preferences, not game state, and losing "I turned head-bob
       // off" is user-hostile.
-      settings: { ...DEFAULT_SETTINGS, ...parsed.settings },
-      progress,
+      settings: { ...DEFAULT_SETTINGS, ...(settings as Partial<Settings> | undefined) },
+      progress: migrateProgress(progress),
+      game: typeof game === 'string' ? game : undefined,
+      beside,
     }
   } catch {
-    return { settings: DEFAULT_SETTINGS, progress: emptyProgress() }
+    return null
   }
 }
 
-const initial = loadPersisted()
+/**
+ * The save as it is written. With nothing beside it and no mark this is,
+ * byte for byte, the text every build before this one wrote.
+ */
+function serialise({ settings, progress, game, beside }: Persisted): string {
+  return JSON.stringify({ ...beside, settings, progress, ...(game === undefined ? {} : { game }) })
+}
+
+/**
+ * A mark for a game that was started over, written beside the save.
+ *
+ * Two tabs join what they hold, and the union of an erased game and a new one
+ * is the erased game. The mark is how a tab still holding the old game learns
+ * that the save on the disk is another one. Only "New game" makes one: a save
+ * that never started over has none, and is written as it always was.
+ */
+const newGameMark = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+
+const initialText = storedText()
+const initial: Persisted = readPersisted(initialText) ?? {
+  settings: DEFAULT_SETTINGS,
+  progress: emptyProgress(),
+  game: undefined,
+  beside: {},
+}
 
 export type DirectionalInput = { x: number; y: number }
 export type TransitionDoorBlock = 'other-side' | 'unpowered'
@@ -351,19 +396,93 @@ export const useMuseum = create<MuseumStore>((set, get) => {
   // of this state rather than the mechanism that drives it.
   let persistHandle: number | null = null
   let persistUsesIdleCallback = false
-  // What this tab last wrote — or loaded. A forced flush on every tab switch
-  // used to let a stale tab, one that had changed nothing, overwrite the newer
-  // save another tab had written since; only a tab with something new writes.
-  let lastWrittenSnapshot = JSON.stringify({ settings: initial.settings, progress: initial.progress })
+  // Which game this tab is playing, and what another build keeps beside the
+  // save. Neither is the store's state; both go to the disk with it.
+  let game = initial.game
+  let beside = initial.beside
+  /**
+   * The disk as this tab last saw it.
+   *
+   *   text      what was under the key: another text there now means another
+   *             tab has written since;
+   *   settings  the settings in it: the ones that differ in this tab are the
+   *             ones this tab changed;
+   *   snapshot  the save in it as this build holds it. A tab whose own
+   *             snapshot is the same has nothing new and writes nothing: a
+   *             forced flush on every tab switch must not let a tab that
+   *             changed nothing write at all.
+   */
+  let disk = { text: initialText, settings: initial.settings, snapshot: serialise(initial) }
+  const snapshotNow = () => {
+    const { settings, progress } = get()
+    return serialise({ settings, progress, game, beside })
+  }
 
-  const writePersisted = () => {
-    if (typeof localStorage === 'undefined') return
+  /**
+   * Takes in what another tab has written since this one last looked.
+   *
+   * The store reads the save once, as the page loads. A tab that stayed open
+   * while another one played used to answer its next change by writing
+   * everything it held: an older save over a newer one, the lot stamped down,
+   * the fields of a later build gone. A page of a build from before a deploy
+   * is, by definition, such a tab.
+   *
+   * So the disk is read before every write, and whenever the browser says
+   * the key changed. What is there is joined with what this tab holds
+   * (`joinProgress`); the settings are the disk's, with the ones this tab
+   * changed on top; the triggers settle on the result. One exception: a save
+   * marked as another game was started over in another tab, and joining the
+   * erased game to it would bring the erased game back. That one is taken as
+   * it is, and what this tab still held of the old game goes with the old
+   * game.
+   */
+  const takeInOtherTabs = () => {
     try {
-      const { settings, progress } = get()
-      const snapshot = JSON.stringify({ settings, progress })
-      if (snapshot === lastWrittenSnapshot) return
+      const text = storedText()
+      if (text === disk.text) return
+      disk = { ...disk, text }
+      const theirs = readPersisted(text)
+      // Wiped, or not a save: nothing to take in. Whether this tab has
+      // anything new is still judged by the last save it saw there.
+      if (!theirs) return
+
+      const mine = get()
+      const anotherGame = theirs.game !== undefined && theirs.game !== game
+      const joined = anotherGame ? theirs.progress : joinProgress(theirs.progress, mine.progress)
+      const progress = progressRules()?.settle(joined) ?? joined
+      const seenOnDisk: Readonly<Record<string, unknown>> = disk.settings
+      const changedHere = Object.fromEntries(
+        Object.entries(mine.settings).filter(([key, value]) => value !== seenOnDisk[key]),
+      )
+      const settings = { ...theirs.settings, ...changedHere } as Settings
+
+      game = theirs.game ?? game
+      beside = theirs.beside
+      disk = { text, settings: theirs.settings, snapshot: serialise(theirs) }
+      // Only what differs is set: a write that brought this tab nothing new
+      // wakes nobody.
+      const differs = (first: unknown, second: unknown) => JSON.stringify(first) !== JSON.stringify(second)
+      const taken: Partial<MuseumStore> = {}
+      if (differs(progress, mine.progress)) taken.progress = progress
+      if (differs(settings, mine.settings)) taken.settings = settings
+      if (taken.progress || taken.settings) set(taken)
+    } catch {
+      // A disk that cannot be read is not a reason to stop the game.
+    }
+  }
+
+  /**
+   * `join` is false for exactly one write: "New game", which is meant to
+   * erase whatever the disk holds.
+   */
+  const writePersisted = (join = true) => {
+    if (typeof localStorage === 'undefined') return
+    if (join) takeInOtherTabs()
+    try {
+      const snapshot = snapshotNow()
+      if (snapshot === disk.snapshot) return
       localStorage.setItem(STORAGE_KEY, snapshot)
-      lastWrittenSnapshot = snapshot
+      disk = { text: snapshot, settings: get().settings, snapshot }
     } catch {
       // Private browsing, quota, or a locked-down profile. Losing the save is
       // acceptable; throwing during gameplay is not.
@@ -377,13 +496,15 @@ export const useMuseum = create<MuseumStore>((set, get) => {
     persistHandle = null
   }
 
-  const flushPersisted = () => {
+  const flush = (join: boolean) => {
     // Contributors may schedule a write of their own; the cancel below folds
     // it into this one.
     for (const contribute of saveContributors) contribute()
     cancelScheduledPersist()
-    writePersisted()
+    writePersisted(join)
   }
+  // Bound to events, which hand a listener their event: it takes no argument.
+  const flushPersisted = () => flush(true)
 
   const persist = () => {
     if (typeof window === 'undefined' || persistHandle !== null) return
@@ -447,12 +568,29 @@ export const useMuseum = create<MuseumStore>((set, get) => {
     typeof window !== 'undefined' && typeof document !== 'undefined'
       ? bindSaveFlush({ window, document }, flushPersisted)
       : null
+  // The moment the browser says another tab wrote, so that this tab's plan
+  // and catalogue do not go on showing the save as it was. The read before a
+  // write is the guard and this is for the screen: a frozen tab hears of it
+  // late, and nothing orders it against `visibilitychange`.
+  const onStorage = (event: Event) => {
+    const key = (event as StorageEvent).key
+    // No key at all is the whole storage cleared.
+    if (key !== null && key !== STORAGE_KEY) return
+    takeInOtherTabs()
+    // What this tab holds that the disk now lacks goes back like any other
+    // change: a tab of an earlier build rewrites the save from the fields it
+    // knows.
+    if (snapshotNow() !== disk.snapshot) persist()
+  }
+  const storageTarget = typeof window === 'undefined' ? null : window
+  storageTarget?.addEventListener('storage', onStorage)
   // Vite replaces this module in place during local tuning. Leaving the old
   // listeners alive lets a stale store overwrite the new snapshot on exit, or
   // answer the content's next registration with its own, older, save.
   import.meta.hot?.dispose(() => {
     forgetRules()
     unbindSaveFlush?.()
+    storageTarget?.removeEventListener('storage', onStorage)
     flushPersisted()
   })
 
@@ -616,12 +754,25 @@ export const useMuseum = create<MuseumStore>((set, get) => {
     rememberRadioCall: (deviceId, memory) =>
       commitProgress((progress) => ({
         ...progress,
-        radioMemory: { ...progress.radioMemory, [deviceId]: memory },
+        radioMemory: {
+          ...progress.radioMemory,
+          // Over the entry that is there, not in its place: what a later
+          // build keeps inside it is not this build's to drop (rule 1 of the
+          // save, one level down). `hasOwn`, because the id is a key like
+          // any other and must not read what every object inherits.
+          [deviceId]: {
+            ...(Object.hasOwn(progress.radioMemory, deviceId) ? progress.radioMemory[deviceId] : null),
+            ...memory,
+          },
+        },
       })),
     recordClockSeconds: (clockId, seconds) => {
       if (!Number.isFinite(seconds)) return
       const whole = Math.max(0, Math.floor(seconds))
-      if (get().progress.clockSeconds[clockId] === whole) return
+      // Never back (rule 3 of the save: nothing shrinks). Another tab may
+      // have run this clock for longer, and once its time is joined in, this
+      // tab's own count is behind the save.
+      if ((get().progress.clockSeconds[clockId] ?? -1) >= whole) return
       commitProgress((progress) => ({
         ...progress,
         clockSeconds: { ...progress.clockSeconds, [clockId]: whole },
@@ -629,10 +780,17 @@ export const useMuseum = create<MuseumStore>((set, get) => {
     },
     recordHint: (hintId) => grant({ hintsShown: [hintId] }),
     resetProgress: () => {
+      // The settings another tab chose since are the player's, and stay. The
+      // progress it wrote comes in too, and is erased with the rest.
+      takeInOtherTabs()
+      // Another game from here on: a tab still holding the old one must not
+      // join it to this one.
+      game = newGameMark()
       commitProgress(() => emptyProgress(), sessionDefaults())
       // At once, not on the next idle callback: a reload straight after
-      // "New game" must not bring the old save back.
-      flushPersisted()
+      // "New game" must not bring the old save back. And without reading
+      // the disk first: this is the one write that is meant to erase.
+      flush(false)
     },
   }
 })

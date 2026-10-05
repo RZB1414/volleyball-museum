@@ -20,7 +20,7 @@
  */
 
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync } from 'node:fs'
+import { readdirSync } from 'node:fs'
 
 import { Group, Mesh, Vector3 } from 'three'
 
@@ -80,6 +80,7 @@ import {
   shouldAnnounceTaken,
   shouldCrackle,
 } from '../src/ui/hudRules.ts'
+import { readText } from './lib/readText.ts'
 
 let passed = 0
 function test(name: string, run: () => void) {
@@ -140,7 +141,7 @@ function finishTransmission() {
 }
 
 const memoryOf = () => useMuseum.getState().progress.radioMemory[RADIO] ?? FRESH_RADIO_MEMORY
-const source = (path: string) => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8')
+const source = (path: string) => readText(new URL(`../src/${path}`, import.meta.url))
 
 console.log('\nThe carried radio')
 
@@ -1021,7 +1022,7 @@ test('the touch column keeps the torch nearest the thumb', () => {
   assert.ok(order.every((index) => index > 0), 'all three tools are there')
   assert.deepEqual([...order].sort((a, b) => a - b), order, 'radio, notebook, torch — torch last')
 
-  const css = readFileSync(new URL('../src/styles/museum.css', import.meta.url), 'utf8')
+  const css = readText(new URL('../src/styles/museum.css', import.meta.url))
   const coarse = css.slice(css.indexOf('/* A column directly above the right-hand stick'))
   const rule = coarse.slice(coarse.indexOf('.hud-tools {'), coarse.indexOf('}'))
   assert.ok(/flex-direction:\s*column;/.test(rule), 'a plain column: the last child is the bottom one')
