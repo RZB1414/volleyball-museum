@@ -31,7 +31,9 @@ import { MUSEUM } from '../src/content/museum.ts'
 import type { MuseumContent, RadioPatience } from '../src/content/schema.ts'
 import { validateBake, validateOpening } from '../src/content/validate.ts'
 import {
+  aimableDevices,
   deskRadioIntent,
+  deviceIntent,
   dueRadioCalls,
   nextRadioCall,
   radioCallReady,
@@ -206,9 +208,15 @@ test('the desk prompt and E agree: take first, then skip or call', () => {
   assert.equal(deskRadioIntent(carriable, { live: true, carried: true, speaking: false }), 'call')
   assert.equal(deskRadioIntent({}, { live: true, carried: false, speaking: false }), 'call')
   assert.ok(ptBR['prompt.radio.take'] === 'Pegar o rádio' && en['prompt.radio.take'] === 'Take the radio')
+  // Both ask it through the one door every device goes through
+  // (`deviceIntent`, which hands a radio to the rule above): the prompt and
+  // E cannot word the radio apart, nor a radio apart from any other device.
   for (const file of ['ui/Hud.tsx', 'engine/Devices.tsx']) {
-    assert.ok(source(file).includes('deskRadioIntent('), `${file} asks the same intent`)
+    assert.ok(source(file).includes('deviceIntent('), `${file} asks the same intent`)
+    assert.ok(!source(file).includes('deskRadioIntent('), `${file} asks it of the radio's rule directly, past the shared door`)
   }
+  assert.deepEqual(deviceIntent(radio, { powered: true, carried: false, speaking: true }), { kind: 'radio', intent: 'take' })
+  assert.deepEqual(deviceIntent(radio, { powered: false, carried: true, speaking: false }), { kind: 'radio', intent: 'dead' })
 })
 
 test('the handset leaves its cradle without moving a node', () => {
@@ -276,12 +284,16 @@ test('the handset leaves its cradle without moving a node', () => {
   assert.equal(isLensNode('door-access-panel__led', 'desk-radio'), false)
 })
 
-test('the scan aims at desk radios only, never at one in hand', () => {
-  const radios = new Set([RADIO])
-  assert.equal(aimableDeviceId(`device:${RADIO}`, radios, []), RADIO)
-  assert.equal(aimableDeviceId(`device:${RADIO}`, radios, [RADIO]), null, 'its proxy stays off the ray layer')
-  assert.equal(aimableDeviceId('device:office-clock', radios, []), null, 'a clock is not operated')
-  assert.equal(aimableDeviceId(RADIO, radios, []), null, 'only the wrapper names a device')
+test('the scan aims at the devices that answer, never at a radio in hand', () => {
+  // What the crosshair may rest on is the content's to say (`aimableDevices`):
+  // the radio on its desk and, since L3, a thing that only says something.
+  const aimable = new Set(aimableDevices(MUSEUM).map((entry) => entry.device.id))
+  assert.ok(aimable.has(RADIO) && aimable.has('atrium-podium') && !aimable.has('office-clock'))
+  assert.equal(aimableDeviceId(`device:${RADIO}`, aimable, []), RADIO)
+  assert.equal(aimableDeviceId(`device:${RADIO}`, aimable, [RADIO]), null, 'its proxy stays off the ray layer')
+  assert.equal(aimableDeviceId('device:atrium-podium', aimable, [RADIO]), 'atrium-podium', 'a notice is aimed at like the radio')
+  assert.equal(aimableDeviceId('device:office-clock', aimable, []), null, 'a clock is not operated')
+  assert.equal(aimableDeviceId(RADIO, aimable, []), null, 'only the wrapper names a device')
 
   const wrapper = new Group()
   wrapper.name = `device:${RADIO}`
@@ -295,7 +307,7 @@ test('the scan aims at desk radios only, never at one in hand', () => {
   assert.equal(hiddenInScene(proxy), true, 'a carried radio\'s proxy is rejected even if hit')
 
   const devices = source('engine/Devices.tsx')
-  for (const helper of ['aimableDeviceId(object.name, RADIOS_BY_ID, carried)', 'hiddenInScene(hit.object)', 'placeHandset(handset, carried)']) {
+  for (const helper of ['aimableDeviceId(object.name, AIMABLE_BY_ID, carried)', 'hiddenInScene(hit.object)', 'placeHandset(handset, carried)']) {
     assert.ok(devices.includes(helper), `Devices.tsx asks ${helper}`)
   }
 })

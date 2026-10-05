@@ -625,10 +625,12 @@ grava a lista só com `id` e `doneWhen`.
 5. `simulate.ts:970-989`: linha com `deferredUntilLot` e sem `doneWhen` não é acusada; com os dois é
    `checklist-deferred-with-box`; `appearsWhen` fora do ponto fixo é `checklist-item-untickable`
    («nunca aparece»). `conditionsOf` (`:791-810`) passa a ler `appearsWhen`.
-6. `validate.ts` (novo `validateDeferred(content, lot)`, chamado de `validateContent` quando há
-   `extras.knownDebt`): `deferred-overdue` para linha ou aviso cuja data chegou;
-   `deferred-without-notice` para linha datada sem `noteKey` e aviso sem `noticeKey`. O portão
-   imprime as promessas com as dívidas (`formatKnownDebt` ganha a tabela «promessas datadas»).
+6. `validate.ts` (novo `validateDeferred(content, lot?)`, chamado de `validateContent` sempre, com
+   o lote de `extras.knownDebt` quando há): `deferred-overdue` para linha ou aviso cuja data chegou
+   (só é perguntado quando o portão sabe em que lote o conteúdo está);
+   `deferred-without-notice` para linha datada sem `noteKey` e aviso sem `noticeKey` (perguntado
+   sempre, também pelos museus quebrados das suítes). O portão imprime as promessas com as dívidas
+   (`datedPromises`; `formatKnownDebt` ganha a tabela «promessas datadas»).
 7. `additive.ts:174-179, 205-224, 364-379`: `deferredUntilLot` no instantâneo e a regra de DL3-5.
 8. `knownDebt.ts:151-157`: sai a linha de `notebook.todo.vault` (paga).
 
@@ -679,9 +681,12 @@ centro, o topo fica a 1,7 m do olho, contra 2,6 de alcance]; a cápsula continua
 do pódio (colisão registrada pelo dispositivo). `test:kit-runtime`: caso novo «o que cada sala
 desenha por dado» (§7). `runtimeWiring.ts`: `interactionVolumeWiringProblems` cobre `<DeviceProxy>`.
 
-**Vermelho hoje.** O caso do prompt: `deviceIntent` não existe, e com o pódio como único foco o
-vencedor de hoje é `null` (ele nem é alvo). Na inundação, a lista de alvos de hoje tem 26 e nenhum
-é o pódio: a asserção «todo dispositivo mirável do conteúdo é um alvo julgado» reprova.
+**Vermelho hoje.** O caso do prompt: `deviceIntent` e `aimableDevices` não existem, e o pódio não
+está em `devices` (a cena nunca o põe em foco). O plano dizia que, com o pódio como único foco, o
+vencedor de hoje é `null`: não é. `interactionWinner` responde `{ kind: 'device', live: false }`
+para **qualquer** id em `focusedDevice`, exista ou não o dispositivo; o que falta hoje é o alvo, não
+a resposta (corrigido em F1, ver §15). Na inundação, a lista de alvos de hoje tem 26 e nenhum é o
+pódio: a asserção «todo dispositivo mirável do conteúdo é um alvo julgado» reprova.
 
 ### T3 — Os nomes e as uniões (D34, CN9; D2; D13, CN12; CN19; a gaveta) · F1
 
@@ -1709,3 +1714,125 @@ gatilhos. F1 a F3 têm conteúdo de verdade que se fecha em si; F4 não tem nenh
 
 A preencher por cada fatia: o vermelho visto antes do conserto, as mutações, o que saiu diferente
 do que está acima.
+
+### 15.1 F1 — A lista como dado, a promessa datada e os nomes (2026-10-05)
+
+T1 a T4 feitas. `npm run check` (33 passos) e `npm run build` verdes. `CONTENT_LOT` continua 2;
+`docs/releases/L2.graph.json` não foi tocado e `validateAdditive` contra ele não acusa nada (as três
+linhas da lista com os mesmos átomos; a do cofre ganhou só a data).
+
+**Vermelho visto antes do conserto** (as suítes escritas primeiro, rodadas contra a fonte de
+`6cd9b7d`):
+
+| Suíte | Como reprovou |
+|---|---|
+| `test:opening` | `ERR_MODULE_NOT_FOUND`: `src/engine/checklist.ts` não existe. Perguntado à fonte de então por um script à parte: a linha 1 com as três salas acesas risca, e com uma quarta sala no build **desrisca** (`allRoomsPowered`) |
+| `test:opening-flow` | `JOURNAL_HOME_TAB` é `undefined` (esperado `'notebook'`); `Journal.tsx` e `Hud.tsx` abrem em `'map'` |
+| `test:radio`, `test:navigation` | `deviceRules.ts` não exporta `aimableDevices`. À parte: a inundação julga 26 alvos e nenhum é o pódio |
+| `test:locks` | a união da fonte é `founding, olympic, global`, e `ToolId` tem `breaker-handle` |
+| `test:kit-runtime` | «the plinth of the hall is drawn once, as a device»: kit 56, dispositivos 0 |
+| `test:playthrough` | sete casos: a acusação de `notebook.todo.vault` ainda existe; `checklist-deferred-with-box` não é levantado; o instantâneo não grava a data; uma peça e uma sala a mais mudam a lista (`checklist-condition-changed`); as quatro bolas do saguão declaram `ball` |
+| `test:map` (caso novo, ver abaixo) | «the letter (pt-BR) needs 662 px of a page of 588 at 720 px of window» |
+| textos | `intro.line3` «…no cofre.», `notebook.todo.vault` «Cofre — só o Otávio…», `container.office.title` «Gaveta trancada do curador» |
+
+`test:power` não reprova antes: trocar `breaker-handle` por `crate-dolly` é renomear um id de teste
+(as suítes rodam em Node com os tipos apagados; `tsc` só confere `src/`). Por isso as uniões de D2
+são lidas da fonte de `schema.ts` por `test:locks`, e não por um erro de compilação. O caso «por
+dado» de `test:kit-runtime` com tetos 59 / 33 / 74 também não reprova antes (é um teto igual ao
+medido); o que reprova é a asserção ao lado dele («kit 51, dispositivos 5») e a mutação «a peça
+deixada no kit e nos dispositivos estoura o teto por dado e não o do kit».
+
+**Mutações que provam que as asserções mordem.** `deviceWiringProblems` (nova, em
+`runtimeWiring.ts`, chamada por `test:opening-flow`): oito refatorações em memória, todas pegas
+(varredura só de rádios; caixa de mira só para o rádio; `E` sem perguntar a intenção; `E` sem a
+arbitragem; dispositivo vivo por estar na mira; prompt redigido no componente; aviso desenhado com
+tecla; botão de toque para o que estiver na mira). `interactionVolumeWiringProblems` ganhou quatro
+(o mínimo do rádio para todo dispositivo; dispositivo pendurado fora da colocação; dispositivo sem
+colisor; `DeviceLayer` sem o mundo de colisão) e trocou uma (o mínimo de mira de número próprio,
+que era do rádio e é de todo dispositivo). `notebookLetterLayoutProblems`: oito.
+
+**O que saiu diferente do plano.**
+
+1. **O vermelho do caso do prompt** (T2) estava descrito errado, e o texto acima foi corrigido: o
+   vencedor de hoje não é `null`.
+2. **`validateDeferred` roda sempre** (T1.6, corrigido acima): sem lote só pergunta
+   `deferred-without-notice`. Assim os museus quebrados das suítes, que chamam o portão sem a
+   tabela de dívidas, também são conferidos.
+3. **A redação dos prompts mora em `src/ui/promptRules.ts`** (módulo novo: `containerPrompt`,
+   `devicePrompt`), e não em `hudRules.ts`. A tela de título importa `hudRules.ts`: escritas lá,
+   as duas regras custavam 178 bytes antes do clique para algo que só o HUD do jogo pergunta.
+   `JOURNAL_HOME_TAB` ficou em `hudRules.ts`, como o plano pede.
+4. **Formas que o plano deixou em aberto** (3.5): `DeviceInput = { powered, carried, speaking }`;
+   `deviceInputOf(device, store, roomById)` lê as três do save e do ar; `devicePowerRoom(device)` é
+   a sala que alimenta cada tipo (um `switch` sobre todos os tipos, usado também por
+   `validateOpening`); `deviceProxyMinimum(device)` (em `interactionTarget.ts`) é o mínimo de mira
+   do tipo, lido pelo componente e pela inundação. `aimableDevices` pergunta à própria
+   `deviceIntent`. `DeviceLayer` passou a receber `kitBundle` e `collision` (era `kitUrl`).
+   `checklistPageOf` (em `notebook.ts`) dá a página que a aba Caderno mostra; `counterText` (em
+   `checklist.ts`) preenche «{done} de {total}».
+5. **O mundo das suítes** ganhou os dispositivos em três lugares, não em um: `buildMuseumWorld`
+   (colisor), `interactionVolumes` (mira), `collectSolidFootprints` de `test:navigation`
+   (sobreposição de sólidos) e `roomObstacles` de `sightline.ts` (linha de visão). O pódio era
+   obstáculo e sólido como mobília e continua sendo como dispositivo; a prova é o caso «the plinth
+   of the hall is solid as a device» (a cápsula para na face dele a partir de dentro do anel, e num
+   mundo sem o dispositivo atravessa).
+6. **A carta da Helena não cabia mais na página** [não previsto]. Com o parágrafo da seguradora,
+   em 1280 × 720 a página tinha 662 px de carta em 589 de folha (em inglês, 630), com barra de
+   rolagem e o P.S., que é a única lição do jogo sobre trancas, abaixo da dobra; em 1366 × 768
+   também rolava. O texto de §6.1 ficou como está; mudou a pauta da página manuscrita, de 2rem
+   para 1,7rem (linha, pauta e vão entre parágrafos, que são uma medida só). Medido no navegador
+   depois: 544 px numa folha de 604, com teto de 648, nas duas línguas, sem rolagem. Caso novo em
+   `test:map` (`notebookLetterLayoutProblems`): soma a folha e a margem do fundo, confere que a
+   escrita fica na pauta (também na regra de celular deitado) e conta as linhas da carta em cada
+   língua contra a altura da folha a 720 px, com 46 glifos por linha contados no navegador
+   (`LETTER_PAGE`); reprova a pauta de 2rem com a carta de hoje, aprova-a com a carta de L2, e
+   reprova a pauta de hoje com um parágrafo a mais. **B.12 dá à carta outra página em L12: quem
+   mexer nela roda `test:map`.**
+7. **`mentions`** entrou no tipo e já vem preenchido nas linhas 1 (as três salas) e 2 (as doze
+   peças); quem confere é `speech-mentions-missing`, de F2.
+8. **`test:playthrough` mudou de sentido em três casos** (para a tabela de 9.2 e para o HANDOFF):
+   `NAMED_LISTS` virou `ALL_OF_THEM` (o museu de teste agora é o que diz «todas», para mostrar que
+   essa lista se mexe; o de verdade tem os ids por extenso e não se mexe); «she accuses the museum
+   of six things» virou cinco (a linha do cofre não é mais acusação); «a museum with its debts
+   paid» não dá mais caixa à linha do cofre, e passou a conferir que no fim as duas linhas com
+   caixa estão riscadas e a terceira continua sem caixa. Uma peça renomeada no museu e esquecida na
+   lista é acusada mesmo com os aliases (caso novo).
+
+**Medido.**
+
+- Bundle (gzip, pelo próprio portão): documento 63.237 (teto 63.600), título 30.313 (era 29.913;
+  teto de 30.050 para 30.460, o medido mais meio por cento, com o motivo em
+  `BUNDLE_PATH_CEILINGS`), jogo 392.146 (era 390.995; **o teto de 392.700 não subiu**, sobram 554
+  bytes: F2 vai precisar subir). Antes do clique 93,55 kB; no jogo 485,70 kB.
+- Lotes por dado (`test:kit-runtime`): átrio 59 (kit 51, dispositivos 5, quadro 3), Holyoke 33,
+  escritório 74. O kit do átrio saiu do teto: 51 de 56.
+- Navegador, 1280 × 720, qualidade `medium`, save `l2-shortcut-released`: R03 80 · 63.940, R04
+  101 · 77.334, R05 85 · 67.820, R06 79 · 70.774, R07 39 · 37.676, R08 70 · 52.036, R09 81 ·
+  62.374 (draws · triângulos), todos **iguais** ao `BROWSER_RECORD`. Programas: 34 com as três
+  salas residentes (teto 35): o pódio clonado em vez de instanciado não compilou programa novo.
+  R01, R02 e R10 não foram medidos (pedem o estado de linha de base e a porta aberta); a medição
+  dos dez pontos continua sendo de F5 (DL3-15).
+- Inundação: 27 alvos (eram 26). Do melhor lugar de pé, o olho fica a 1,44 m do volume do pódio
+  (alcance 2,6); no navegador, de (2,05; 0), a mira dá 1,70 m, como o plano previa.
+
+**Navegador** (servidor reiniciado; aba oculta, jogo andado por `__museumStep`; pt-BR e inglês).
+Título: «…alguma coisa na caixa-forte.» Jogo novo: prompt «Ler — Caderno do curador»; a carta
+com a seguradora, cabendo na página; a lista com «0 de 3», «Átrio 0 de 4», «Ala 1 · Holyoke 0 de
+8» e a linha da caixa-forte sem caixa, com «hoje não: o subsolo alagou». `Tab` abre o caderno na
+aba «Caderno», com a lista viva («3 de 3» riscada, «Ala 1 · Holyoke 1 de 8» no save de L2). Gaveta
+fechada: «E · Gaveta do Otávio — trancada (um ano)», e `E` abre o teclado; aberta: «E · Ler ·
+Gaveta do Otávio ✓». Pódio: «Plinto do Fundador — Interditado: obra do piso.», sem tecla; `E` não
+é tomado e nada muda no save; o colisor do pódio está no mundo de colisão vivo, uma vez. Em inglês:
+*Notebook*, *3 of 3*, *Otávio's drawer — locked (a year)*, *The Founder's plinth — Closed off: the
+floor is being relaid.* Em 844 × 390, pelos botões: o ícone do caderno abre em «Caderno», as cinco
+abas e «Fechar» cabem (597 de 775 px); diante do pódio **não há botão de Ação**; diante da gaveta
+há, e ele abre o teclado. Console sem erro nem aviso novo.
+
+**Visto de passagem, sem conserto nesta fatia.**
+
+- Em 844 × 390 a página da lista, dentro da aba Caderno, pede 25 px de rolagem (322 de 297 px do
+  corpo do caderno, que rola). Com as quatro linhas a lápis de F5 vai rolar de qualquer jeito.
+- O aviso «Você pegou o caderno — Tab abre a planta, o catálogo e o arquivo.» não cita a lista,
+  que agora é a primeira aba. É verdade (as três estão lá), e §6.1 não muda essa chave.
+- `interactionWinner` responde «dispositivo, morto» para um id de foco que o conteúdo não tem. Não
+  acontece no jogo (a varredura só mira o que `aimableDevices` lista), e ficou como estava.

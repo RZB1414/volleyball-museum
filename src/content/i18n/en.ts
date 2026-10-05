@@ -45,6 +45,7 @@ export const en = {
   'journal.taken': 'You took the notebook',
   'journal.taken.keyboard': 'Tab opens the plan, the catalogue and the archive.',
   'journal.taken.touch': 'The notebook icon opens the plan, the catalogue and the archive.',
+  'journal.tab.notebook': 'Notebook',
   'radio.taken': 'You took the radio',
   'radio.taken.keyboard': 'R calls the porter, from any room.',
   'radio.taken.touch': 'The radio icon calls the porter, from any room.',
@@ -88,7 +89,7 @@ export const en = {
   'archive.filed': 'Filed in your notebook — Tab to re-read',
   'archive.filed.touch': 'Filed in your notebook — tap the notebook icon to re-read',
   'archive.filed.noJournal': "It will be filed in the curator's notebook, still on the office desk.",
-  'container.office.title': "Curator's locked drawer",
+  'container.office.title': "Otávio's drawer",
   'document.predecessor.title': 'Note from the previous curator',
   'document.predecessor.body':
     'If you are reading this you found the combination, which means you read the labels instead of walking past them. Good. The rest of the collection is in the vault beneath the atrium, and it does not open with numbers: it opens with three medals. One for each era you catalogue in full. Take your time. The museum reopens tomorrow, but it has been here a hundred and thirty years.',
@@ -141,15 +142,22 @@ export const en = {
   'notebook.welcome.letter':
     'Hello, new curator! Welcome to your new job.\n\n' +
     "This afternoon's storm knocked out the power across the whole museum, and you will have to bring it back room by room.\n\n" +
+    'The insurer will only clear the reopening once you have checked the inventory yourself, against the accession ledger of Otávio, the previous curator, which was left in the vault. Chin up!\n\n' +
     'We reopen tomorrow at 9. Good luck!',
   'notebook.welcome.signature': '— Helena, director',
   'notebook.welcome.postscript':
     'P.S. The previous curator left his things here. He locked everything with dates from volleyball history.',
   'notebook.todo.heading': 'Before 9 a.m.',
-  'notebook.todo.power': 'Restore the power: office, atrium and wings',
-  'notebook.todo.catalogue': 'Catalogue the collection',
+  'notebook.todo.power': 'Restore the power: office, atrium and Wing 1',
+  'notebook.todo.catalogue': 'Catalogue the collection: check it piece by piece',
+  // The vault under the hall. The iron safe in the office is "the iron
+  // safe", always with its metal: a bare "safe" would be either (D34).
   'notebook.todo.vault': 'The vault — only Otávio knew how to open it',
+  'notebook.todo.vault.note': 'not tonight: the basement flooded',
+  'notebook.counter': '{done} of {total}',
   'device.office-radio.title': "Porter's radio",
+  'device.atrium-podium.title': "The Founder's plinth",
+  'device.atrium-podium.notice': 'Closed off: the floor is being relaid.',
   'radio.speaker.porter': 'Jorge · porter',
   'radio.call.first.1': "Curator? It's Jorge, at the front desk. Over.",
   'radio.call.first.2':
@@ -377,6 +385,7 @@ export const en = {
   // Locks
   // ---------------------------------------------------------------------
   'lock.office-drawer.mapLabel': 'Combination drawer — 4 digits',
+  'lock.office-drawer.prompt': 'locked (a year)',
   'lock.hint.highlight': 'The right plaque has lit up.',
   'lock.hint.audio': 'The docent recording repeats the year.',
   'lock.hint.reveal': 'The dial has caught on the correct digit.',

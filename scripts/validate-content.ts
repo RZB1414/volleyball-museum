@@ -6,7 +6,9 @@
  * Exits non-zero on any error-severity issue. Warnings print but do not fail —
  * they flag design smells (a passive exhibit, a wing with no shortcut back)
  * that are judgement calls rather than bugs. Dated debts (`knownDebt.ts`)
- * print on every run and do not fail until the lot that pays them arrives.
+ * print on every run and do not fail until the lot that pays them arrives;
+ * so do the dated promises of the content itself (a line of the list with no
+ * box, a thing that only says why not), which fail when their lot comes.
  *
  * The content is also held to the graph the last lot wrote down as it closed
  * (`docs/releases`): with no snapshot to compare against, or one a whole lot
@@ -27,7 +29,7 @@ import { ptBR } from '../src/content/i18n/pt-BR.ts'
 import { CONTENT_LOT, debtOf } from '../src/content/knownDebt.ts'
 import { MUSEUM } from '../src/content/museum.ts'
 import { formatScript, simulateProgress } from '../src/content/simulate.ts'
-import { formatIssues, formatKnownDebt, validateContent } from '../src/content/validate.ts'
+import { datedPromises, formatIssues, formatKnownDebt, validateContent } from '../src/content/validate.ts'
 import { RELEASES_DIRECTORY, snapshotForGate, snapshotsIn } from './lib/graphSnapshots.ts'
 import { readMediaTexts } from './lib/mediaTexts.ts'
 import { lastLotPublished } from './lib/planLots.ts'
@@ -101,9 +103,10 @@ console.log('\nscript, by the exhaustive player:')
 console.log(formatScript(simulateProgress(MUSEUM).levels))
 
 // Before the verdict, so a green run still shows what it is letting through.
-if (debts.length > 0) {
+const promises = datedPromises(MUSEUM)
+if (debts.length + promises.length > 0) {
   console.log(`\nknown debt, content at L${CONTENT_LOT}: ${debts.length} dated line(s)`)
-  console.log(formatKnownDebt(issues))
+  console.log(formatKnownDebt(issues, promises))
 }
 
 if (errors.length + warnings.length === 0) {

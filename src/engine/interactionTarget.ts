@@ -16,9 +16,9 @@
  * and power controls) sit side by side, so between them the nearest wins.
  */
 
-import type { MuseumContent, RoomData } from '../content/schema'
+import type { DeviceData, MuseumContent, RoomData } from '../content/schema'
 import { isModalOpen, type MuseumStore } from '../state/store.ts'
-import { radioDevices, type RadioDevice } from './deviceRules.ts'
+import { aimableDevices, deviceInputOf, deviceIntent, deviceLive } from './deviceRules.ts'
 import { isRoomPowered } from './power.ts'
 
 /** How far each system's ray reaches. Shared with the headless proof. */
@@ -40,7 +40,18 @@ export const PROXY_MINIMUM = {
   notebook: [0.3, 0.14, 0.32],
   powerControl: [0.42, 0.48, 0.34],
   radio: [0.3, 0.32, 0.3],
+  /** Every other device the crosshair may rest on. */
+  device: [0.3, 0.2, 0.3],
 } as const
+
+/**
+ * The minimum a device's volume is padded to: the radio's own, which allows
+ * for its aerial, or the one every other device shares. Asked by the
+ * component that hangs the box and by the flood that measures it.
+ */
+export function deviceProxyMinimum(device: Pick<DeviceData, 'kind'>) {
+  return device.kind === 'radio' ? PROXY_MINIMUM.radio : PROXY_MINIMUM.device
+}
 
 /**
  * Two hits closer than this are a tie, broken by the old fixed order
@@ -54,7 +65,10 @@ export type InteractionKind = 'door' | 'exhibit' | 'container' | 'device' | 'pow
 export type InteractionWinner = {
   readonly kind: InteractionKind
   readonly id: string
-  /** False only for a dead radio: it may hold the prompt, never the key. */
+  /**
+   * False for a device that only answers (a dead radio, a notice): it may
+   * hold the prompt, never the key.
+   */
   readonly live: boolean
 }
 
@@ -90,8 +104,9 @@ export function interactionWinner(focus: FocusSnapshot): InteractionWinner | nul
     }
   }
 
-  // A radio without charge still answers the crosshair ("no charge"), but it
-  // never takes the key from anything that works, the lamp above all.
+  // A device that only answers still owns the crosshair (a radio says "no
+  // charge", the plinth says why it is roped off), but it never takes the key
+  // from anything that works, the lamp above all.
   if (focus.device) return { kind: 'device', id: focus.device.id, live: false }
   return null
 }
@@ -110,13 +125,20 @@ export type FocusState = Pick<
   | 'focusedDeviceDistance'
   | 'focusedPowerControl'
   | 'focusedPowerControlDistance'
-> & { readonly progress: { readonly roomsPowered: readonly string[] } }
+  | 'radio'
+> & {
+  readonly progress: {
+    readonly roomsPowered: readonly string[]
+    readonly devicesCarried?: readonly string[]
+  }
+}
 
 type InteractionContent = Pick<MuseumContent, 'rooms'>
 
 type Lookups = {
-  readonly rooms: ReadonlyMap<string, RoomData>
-  readonly radios: ReadonlyMap<string, RadioDevice>
+  readonly devices: ReadonlyMap<string, DeviceData>
+  /** A room by id, as a function: what a device's supply is looked up with. */
+  readonly room: (roomId: string) => RoomData | undefined
   readonly powerControls: ReadonlyMap<string, RoomData>
 }
 
@@ -127,9 +149,10 @@ const lookupsByContent = new WeakMap<InteractionContent, Lookups>()
 function lookupsFor(content: InteractionContent): Lookups {
   const cached = lookupsByContent.get(content)
   if (cached) return cached
+  const rooms = new Map(content.rooms.map((room) => [room.id as string, room]))
   const lookups: Lookups = {
-    rooms: new Map(content.rooms.map((room) => [room.id as string, room])),
-    radios: new Map(radioDevices(content).map((entry) => [entry.device.id, entry.device])),
+    room: (roomId) => rooms.get(roomId),
+    devices: new Map(aimableDevices(content).map((entry) => [entry.device.id, entry.device])),
     powerControls: new Map(
       content.rooms.flatMap((room) =>
         room.powerControl ? [[room.powerControl.id, room] as const] : [],
@@ -147,12 +170,13 @@ export function focusSnapshotOf(state: FocusState, content: InteractionContent):
 
   let device: FocusSnapshot['device'] = null
   if (state.focusedDevice) {
-    const radio = lookups.radios.get(state.focusedDevice)
-    const charger = radio ? lookups.rooms.get(radio.poweredBy) : undefined
+    // Whether E works it is the device's own rule to say, the one its prompt
+    // is worded by. An id the content does not have answers nothing.
+    const focused = lookups.devices.get(state.focusedDevice)
     device = {
       id: state.focusedDevice,
       distance: state.focusedDeviceDistance,
-      live: charger ? isRoomPowered(charger, restored) : false,
+      live: focused !== undefined && deviceLive(deviceIntent(focused, deviceInputOf(focused, state, lookups.room))),
     }
   }
 

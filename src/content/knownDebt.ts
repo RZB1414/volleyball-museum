@@ -140,20 +140,15 @@ export const KNOWN_DEBT: readonly KnownDebt[] = [
     note: 'H-01: the post socket is 2.4 m from the origin the view holds at 0.42 m; the view for large pieces brings it in, or it becomes a detail of the model',
   },
   // And with three pieces out of reach, the notebook's "catalogue everything"
-  // can never be ticked; the line about the vault never could.
+  // can never be ticked. (The line about the vault never could either, and
+  // is not a debt any more: it is a promise with a date and no box, held to
+  // its lot by `validateDeferred`.)
   {
     gate: 'validate:content',
     code: 'checklist-item-untickable',
     id: 'notebook.todo.catalogue',
     untilLot: 4,
     note: 'asks for all twelve pieces, and three cannot be catalogued (H-01)',
-  },
-  {
-    gate: 'validate:content',
-    code: 'checklist-item-untickable',
-    id: 'notebook.todo.vault',
-    untilLot: 3,
-    note: 'no `doneWhen`: in L3 it becomes a dated promise, a line with no box to tick (M32)',
   },
 
   // The text lint (L2) reads what the museum prints, and found two things

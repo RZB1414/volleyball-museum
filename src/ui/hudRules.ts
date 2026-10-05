@@ -9,7 +9,14 @@
 // Type imports only: the title screen imports this module, and a runtime
 // import here would pull its dependencies into the title screen's bundle.
 import type { TranslationKey } from '../content/i18n/pt-BR'
-import type { TransitionDoorPrompt } from '../state/store'
+import type { JournalTab, TransitionDoorPrompt } from '../state/store'
+
+/**
+ * The tab the notebook opens on, from Tab and from its icon: the director's
+ * list. It used to be the plan; the list is what the player comes back to
+ * between rooms, and the plan is one tab along.
+ */
+export const JOURNAL_HOME_TAB: JournalTab = 'notebook'
 
 /**
  * Where a document just read is said to be kept.

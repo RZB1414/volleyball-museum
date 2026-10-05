@@ -54,6 +54,8 @@ export const ptBR = {
   'journal.taken': 'Você pegou o caderno',
   'journal.taken.keyboard': 'Tab abre a planta, o catálogo e o arquivo.',
   'journal.taken.touch': 'O ícone do caderno abre a planta, o catálogo e o arquivo.',
+  // The notebook's own first tab: the director's list, alive.
+  'journal.tab.notebook': 'Caderno',
   'radio.taken': 'Você pegou o rádio',
   'radio.taken.keyboard': 'R chama a portaria, de qualquer sala.',
   'radio.taken.touch': 'O ícone do rádio chama a portaria, de qualquer sala.',
@@ -104,7 +106,10 @@ export const ptBR = {
   'archive.filed.touch': 'Arquivado no caderno — toque no ícone do caderno para reler',
   'archive.filed.noJournal':
     'Será arquivado no caderno do curador, que continua na mesa do escritório.',
-  'container.office.title': 'Gaveta trancada do curador',
+  // The name says whose it is, never that it is locked: that is the lock's
+  // to say while it is shut (`lock.office-drawer.prompt`), and stops being
+  // true the moment it opens.
+  'container.office.title': 'Gaveta do Otávio',
   'document.predecessor.title': 'Bilhete do curador anterior',
   'document.predecessor.body':
     'Se você está lendo isto, achou a combinação — o que significa que leu as placas em vez de passar por elas. Bom. O resto do acervo está no cofre, sob o átrio, e não abre com números: abre com três medalhas. Uma de cada era que você catalogar por inteiro. Não tenha pressa. O museu reabre amanhã, mas ele existe há cento e trinta anos.',
@@ -123,9 +128,12 @@ export const ptBR = {
 
   // The narrative alibi for everything: the dark, the torch, the drawers,
   // the catalogue, the office, the vault, the ending.
+  // Two safes, two names (D34): the «cofre de ferro» stands in the office,
+  // the «caixa-forte» is the Founder's vault under the hall. A bare «cofre»
+  // would be either (`test:opening-flow` holds every text to that).
   'intro.line1': 'Você é o novo curador.',
   'intro.line2': 'É a noite anterior à reabertura. A energia caiu.',
-  'intro.line3': 'Seu antecessor deixou alguma coisa no cofre.',
+  'intro.line3': 'Seu antecessor deixou alguma coisa na caixa-forte.',
 
   // ---------------------------------------------------------------------
   // Rooms
@@ -159,15 +167,28 @@ export const ptBR = {
   'notebook.welcome.letter':
     'Olá, novo curador! Bem-vindo ao seu novo trabalho.\n\n' +
     'A tempestade desta tarde derrubou a energia do museu inteiro, e você vai ter que religá-la sala por sala.\n\n' +
+    // Why the inventory matters tonight, and where the book it is checked
+    // against was left: the reason for the second and third lines of the list.
+    'A seguradora só libera a reabertura com o inventário conferido por você, contra o livro de tombo do Otávio, o antigo curador, que ficou na caixa-forte. Coragem!\n\n' +
     'Reabrimos amanhã às 9h. Bom trabalho!',
   'notebook.welcome.signature': '— Helena, diretora',
   'notebook.welcome.postscript':
     'P.S.: O antigo curador deixou as coisas dele por aqui. Ele trancava tudo com datas da história do vôlei.',
   'notebook.todo.heading': 'Antes das 9h',
-  'notebook.todo.power': 'Religar a energia: escritório, átrio e alas',
-  'notebook.todo.catalogue': 'Catalogar o acervo',
-  'notebook.todo.vault': 'Cofre — só o Otávio sabia abrir',
+  // The house has one wing tonight, and the line names it (D1): «alas» was a
+  // promise of rooms no lot had opened.
+  'notebook.todo.power': 'Religar a energia: escritório, átrio e Ala 1',
+  'notebook.todo.catalogue': 'Catalogar o acervo: conferir peça por peça',
+  'notebook.todo.vault': 'Caixa-forte — só o Otávio sabia abrir',
+  // Pencil, beside a line with no box: why not tonight.
+  'notebook.todo.vault.note': 'hoje não: o subsolo alagou',
+  // A count beside a line: «2 de 3», «Átrio 0 de 4».
+  'notebook.counter': '{done} de {total}',
   'device.office-radio.title': 'Rádio da portaria',
+  // The plinth in the middle of the hall: named, and roped off until the
+  // lot that gives it its medals (a dated promise, shown as «title — notice»).
+  'device.atrium-podium.title': 'Plinto do Fundador',
+  'device.atrium-podium.notice': 'Interditado: obra do piso.',
   'radio.speaker.porter': 'Jorge · portaria',
   'radio.call.first.1': 'Curador? Aqui é o Jorge, da portaria. Câmbio.',
   'radio.call.first.2':
@@ -443,6 +464,8 @@ export const ptBR = {
   // Locks
   // ---------------------------------------------------------------------
   'lock.office-drawer.mapLabel': 'Gaveta com segredo — 4 dígitos',
+  // After the drawer's name while it is shut: «Gaveta do Otávio — trancada (um ano)».
+  'lock.office-drawer.prompt': 'trancada (um ano)',
   'lock.hint.highlight': 'A placa correta acendeu.',
   'lock.hint.audio': 'A gravação do docente repete o ano.',
   'lock.hint.reveal': 'O disco travou no dígito certo.',

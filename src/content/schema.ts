@@ -169,11 +169,19 @@ export type ForbiddenPattern = {
 /** The four Tier-1 named keys. Seeing one tells the player three more exist. */
 export type BadgeId = 'indoor' | 'beach' | 'sitting' | 'snow'
 
-/** Tier-2 emblem set: three medallions slot into the atrium plinth. */
-export type MedallionId = 'founding' | 'olympic' | 'global'
+/**
+ * Tier-2 emblem set: three medallions slot into the atrium plinth, one from
+ * each part of the house as it stands (D2): the curator's own, the founding
+ * wing, and the lineage of the ball in the hall. They used to be named after
+ * eras the house does not have.
+ */
+export type MedallionId = 'curator' | 'founding' | 'lineage'
 
-/** Tier-3 traversal tools. */
-export type ToolId = 'service-key' | 'breaker-handle' | 'crate-dolly' | 'step-ladder'
+/**
+ * Tier-3 traversal tools. There is no handle for the breakers: each panel
+ * carries its own lever, and a tool no lock asks for is a key to nothing.
+ */
+export type ToolId = 'service-key' | 'crate-dolly' | 'step-ladder'
 
 /** The cross-cutting threads that make the map a spiral instead of a line. */
 export type ThreadId = 'ball' | 'net' | 'rules' | 'beach' | 'sitting'
@@ -209,6 +217,12 @@ type LockBase = {
   readonly id: string
   /** Auto-annotated on the map the moment the player touches the lock. */
   readonly mapLabelKey: string
+  /**
+   * What the prompt says of it while it is shut, after the name of what it
+   * holds shut: «Gaveta do Otávio — trancada (um ano)». The name itself
+   * never says "locked", or the thing would still be called that once open.
+   */
+  readonly promptKey?: string
   readonly onOpen?: readonly UnlockEffect[]
 }
 
@@ -377,10 +391,48 @@ export type ProgressCondition = {
 // Documents — the reading layer
 // ---------------------------------------------------------------------------
 
-/** One line of a notebook checklist; ticked by the game when `doneWhen` holds. */
+/**
+ * One count shown beside a line of the list: how many of these hold.
+ *
+ * Lists of positives only, each id named: a count of "every room" would grow
+ * its total the day a wing opens, under a line the player had finished.
+ */
+export type ChecklistCounter = {
+  /** What is being counted («Átrio 2 de 4»). Omitted: the count stands alone («2 de 3»). */
+  readonly titleKey?: string
+  readonly of: Pick<ProgressCondition, 'powered' | 'catalogued' | 'documentsRead' | 'locksOpened'>
+}
+
+/**
+ * One line of the notebook's list, as data: who wrote it, when it is on the
+ * page, what ticks it and what it counts (`engine/checklist.ts` reads it).
+ *
+ * Every line has a box to tick or the lot that will give it one, and the
+ * content gate refuses a line with neither or with both.
+ */
 export type ChecklistItem = {
+  /** The line, and its identity: the graph snapshot knows it by this key. */
   readonly labelKey: string
+  /** Ink is the director's; pencil is the curator's own, added as the night goes. */
+  readonly author: 'helena' | 'curator'
+  /** What the save has to hold for the line to be on the page. Omitted: there from the start. */
+  readonly appearsWhen?: ProgressCondition
+  /**
+   * What ticks it. Positive and with every id named, so that a later lot's
+   * room or piece does not untick it. Omitted only for a dated promise.
+   */
   readonly doneWhen?: ProgressCondition
+  readonly counters?: readonly ChecklistCounter[]
+  /**
+   * A dated promise: a line about something this build shows and does not
+   * yet let the player do. It has no box until this lot gives it one, and
+   * the gate fails once that lot has come (`deferred-overdue`).
+   */
+  readonly deferredUntilLot?: number
+  /** A pencil note beside the line. A dated promise has one: it is how the game says "not tonight". */
+  readonly noteKey?: string
+  /** Ids of the build this line sends the player to. */
+  readonly mentions?: readonly string[]
 }
 
 /**
@@ -803,6 +855,10 @@ type DevicePlacement = {
  * a clock needs `<part>__hand-hour|minute|second` and `<part>__dial`, every
  * lit device needs `<part>__led`, and a radio the player carries away needs
  * `<part>__handset` (with its `__handset-*` families) to leave its cradle.
+ * A notice asks nothing of its recipe: it is whatever stands there.
+ *
+ * A device is solid by whatever collider its recipe carries in the bake
+ * manifest, like a container or a power control.
  */
 export type DeviceData =
   | (DevicePlacement & {
@@ -833,6 +889,23 @@ export type DeviceData =
       readonly carriedOnUse?: boolean
       /** Without it, every call is answered with the bare hint. */
       readonly patience?: RadioPatience
+    })
+  | (DevicePlacement & {
+      /**
+       * Something the player sees and cannot use yet: it answers the
+       * crosshair with what it is and why not, and never takes the key.
+       *
+       * A dated promise about a thing of the world, as `deferredUntilLot` on
+       * a line of the list is one about a task. It is a device and not a
+       * field of a kit placement because furniture is instanced: it has no
+       * id and nothing to aim at.
+       */
+      readonly kind: 'notice'
+      readonly titleKey: string
+      /** What it says while it has no use: «Interditado: obra do piso.» */
+      readonly noticeKey: string
+      /** The lot that gives it its use. The gate fails once that lot has come. */
+      readonly deferredUntilLot: number
     })
 
 export type AudioEmitter = {

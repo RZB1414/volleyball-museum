@@ -38,8 +38,13 @@ import { MUSEUM } from '../../src/content/museum.ts'
 import type { MuseumContent, PowerControlData, RoomData, Vec3 } from '../../src/content/schema.ts'
 import { nearestWallFace } from '../../src/content/validate.ts'
 import { CollisionWorld, movePlayer, worldFromMeshes } from '../../src/engine/collision.ts'
-import { radioDevices } from '../../src/engine/deviceRules.ts'
-import { INTERACTION_REACH, PROXY_MINIMUM, type InteractionKind } from '../../src/engine/interactionTarget.ts'
+import { aimableDevices } from '../../src/engine/deviceRules.ts'
+import {
+  deviceProxyMinimum,
+  INTERACTION_REACH,
+  PROXY_MINIMUM,
+  type InteractionKind,
+} from '../../src/engine/interactionTarget.ts'
 import {
   DRAWER_PROXY,
   PROXY_MATERIAL_PROPS,
@@ -144,9 +149,9 @@ export function mountPlacements(room: RoomData, content: MuseumContent = MUSEUM)
 
 /**
  * Everything solid, placed as the runtime places it: the shells, then every
- * kit placement, container, power control and exhibit mount that the
+ * kit placement, container, power control, device and exhibit mount that the
  * manifest gives a collider. A recipe with no collider (a desk lamp, a
- * ceiling spot) adds nothing, exactly as in the game.
+ * ceiling spot, a wall clock) adds nothing, exactly as in the game.
  */
 export function buildMuseumWorld(
   content: MuseumContent = MUSEUM,
@@ -169,6 +174,10 @@ export function buildMuseumWorld(
     for (const placement of room.kit) addColliders(meshes, room, placement, bundles)
     for (const container of room.containers ?? []) addColliders(meshes, room, { ...container, scale: 1 }, bundles)
     if (room.powerControl) addColliders(meshes, room, room.powerControl, bundles)
+    // `Devices.tsx` registers a device's collider as `Containers.tsx` does a
+    // cabinet's: the plinth of the hall is solid as a device, as it was as
+    // furniture.
+    for (const device of room.devices ?? []) addColliders(meshes, room, { ...device, scale: 1 }, bundles)
     for (const mount of mountPlacements(room, content)) addColliders(meshes, room, mount, bundles)
   }
   return worldFromMeshes(meshes)
@@ -507,9 +516,11 @@ function bakedBounds(recipe: string, bundle: BakedBundle | undefined, owner: str
  *     its recipe stands for them, under the piece's position, turn and scale;
  *   - a cabinet by the chest-high `DRAWER_PROXY`, a notebook by its own
  *     bounds padded to the minimum (`Containers.tsx`);
- *   - a power control and a radio by their bounds padded to the minimum
- *     (`PowerControls.tsx`, `Devices.tsx`); a clock and a door reader answer
- *     to nothing and are not here;
+ *   - a power control by its bounds padded to the minimum
+ *     (`PowerControls.tsx`), and so is every device the crosshair may rest
+ *     on, by the minimum of its kind (`Devices.tsx`, `aimableDevices`): the
+ *     radio, and a thing that only says something. A clock and a door reader
+ *     answer to nothing and are not here;
  *   - a door by the box of its whole opening on the plane of the leaves
  *     (`TransitionDoors.tsx`), once from each of its two rooms.
  *
@@ -566,7 +577,7 @@ export function interactionVolumes(
     }
   }
 
-  for (const { room, device } of radioDevices(content)) {
+  for (const { room, device } of aimableDevices(content)) {
     volumes.push({
       kind: 'device',
       id: device.id,
@@ -574,7 +585,7 @@ export function interactionVolumes(
       reach: INTERACTION_REACH.device,
       mesh: boxUnder(
         placedIn(room, { position: device.position, rotationY: device.rotationY }),
-        paddedProxy(boxOf(bakedBounds(device.part, kit, device.id)), PROXY_MINIMUM.radio),
+        paddedProxy(boxOf(bakedBounds(device.part, kit, device.id)), deviceProxyMinimum(device)),
       ),
     })
   }

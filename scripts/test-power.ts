@@ -103,7 +103,7 @@ check(
 for (const effect of [
   { kind: 'power-room', roomId: 'effect-room' },
   { kind: 'open-lock', lockId: 'effect-lock' },
-  { kind: 'grant-credential', credential: { kind: 'tool', id: 'breaker-handle' } },
+  { kind: 'grant-credential', credential: { kind: 'tool', id: 'crate-dolly' } },
   { kind: 'reveal-document', documentId: 'effect-document' },
 ] as const) {
   useMuseum.getState().grant(effectGrant(effect, MUSEUM))
@@ -113,7 +113,7 @@ check('power-room unlock effects are applied', progress.roomsPowered.includes('e
 check('open-lock unlock effects are applied', progress.locksOpened.includes('effect-lock'))
 check(
   'grant-credential unlock effects use the lock graph key format',
-  progress.credentials.includes('tool:breaker-handle'),
+  progress.credentials.includes('tool:crate-dolly'),
 )
 check(
   'reveal-document unlock effects enter the archive progress',

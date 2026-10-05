@@ -12,7 +12,8 @@
  * So each lot that closes writes its graph down (`npm run graph:snapshot`,
  * `docs/releases/L<n>.graph.json`): every action the exhaustive player met,
  * with what it asked and gave; what each line of the notebook's list waits
- * for; every id a save can hold; every field of the save. And the content of
+ * for, or the lot it is promised for; every id a save can hold; every field
+ * of the save. And the content of
  * the next lot is compared with it on every run of the gate
  * (`validateAdditive`). Adding is free. Anything else is an accusation, and
  * the way past it is the one a save needs: an alias (`legacySave.ts`), a
@@ -124,8 +125,17 @@ export type GraphSnapshot = {
   readonly lot: number
   /** Every action the exhaustive player met: what it asks and what it gives, as atoms of plan §2.4. */
   readonly actions: readonly ActionRecord[]
-  /** Checklist items, with "all rooms" and "all catalogued" resolved to this lot's ids. Null for a line with no box to tick. */
-  readonly checklist: readonly { readonly id: string; readonly doneWhen: readonly string[] | null }[]
+  /**
+   * Checklist items, with "all rooms" and "all catalogued" resolved to this
+   * lot's ids. Null for a line with no box to tick; such a line carries the
+   * lot it is promised for when it has one, and only then, so the record of
+   * a lot from before dated promises reads and writes as itself.
+   */
+  readonly checklist: readonly {
+    readonly id: string
+    readonly doneWhen: readonly string[] | null
+    readonly deferredUntilLot?: number
+  }[]
   /** The terms the player signs. None until the lectern is one (L3). */
   readonly terms: readonly { readonly id: string; readonly when: readonly string[] }[]
   /** Every id a save can hold, by collection. */
@@ -174,7 +184,11 @@ function saveFieldsOf(): GraphSnapshot['saveFields'] {
 function checklistOf(content: MuseumContent): GraphSnapshot['checklist'] {
   return content.documents
     .flatMap((doc) => (doc.pages ?? []).flatMap((page) => page.items ?? []))
-    .map((item) => ({ id: item.labelKey, doneWhen: item.doneWhen ? conditionAtoms(item.doneWhen, content) : null }))
+    .map((item) => ({
+      id: item.labelKey,
+      doneWhen: item.doneWhen ? conditionAtoms(item.doneWhen, content) : null,
+      ...(item.deferredUntilLot === undefined ? {} : { deferredUntilLot: item.deferredUntilLot }),
+    }))
     .sort(byId)
 }
 
@@ -214,7 +228,14 @@ export function serialiseGraphSnapshot(snapshot: GraphSnapshot): string {
       '{',
       `  "lot": ${JSON.stringify(snapshot.lot)},`,
       `  "actions": ${rows(snapshot.actions.map(({ id, requires, grants }) => ({ id, requires, grants })))},`,
-      `  "checklist": ${rows(snapshot.checklist.map(({ id, doneWhen }) => ({ id, doneWhen })))},`,
+      `  "checklist": ${rows(
+        snapshot.checklist.map(({ id, doneWhen, deferredUntilLot }) => ({
+          id,
+          doneWhen,
+          // Written only where there is one: see `GraphSnapshot.checklist`.
+          ...(deferredUntilLot === undefined ? {} : { deferredUntilLot }),
+        })),
+      )},`,
       `  "terms": ${rows(snapshot.terms.map(({ id, when }) => ({ id, when })))},`,
       `  "ids": ${table(snapshot.ids)},`,
       `  "saveFields": ${table(snapshot.saveFields)}`,
@@ -368,6 +389,11 @@ export function validateAdditive(
     const now = checklist.get(item.id)
     if (now === undefined) {
       error('checklist-condition-changed', item.id, `Checklist item "${item.id}" is gone ${since}: a line a player ticked is no longer on the list.`)
+    } else if (before === null && now !== null && item.deferredUntilLot !== undefined) {
+      // The promise being paid: the record gave the line as dated, with no
+      // box, and the lot that builds the thing gives it one. Nobody had
+      // ticked it. A line with no box and no date on record is not that;
+      // it falls through, and gaining a box changes what it meant.
     } else if (!sameList(before, now)) {
       error(
         'checklist-condition-changed',

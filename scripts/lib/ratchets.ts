@@ -293,10 +293,26 @@ export const BUNDLE_BUDGETS = {
  *     outside any `try`, which a profile that blocks site data answers with
  *     an exception: one accessor names it now, for no bytes at all. The game
  *     and the document did not move (390,891 and 63,235).
+ *
+ * Raised by L3, slice by slice (the lot plan, §10, said it would be):
+ *   - `title` +410 bytes, on 30,313 measured (it was 30,050 on 29,913). The
+ *     dictionaries and the style sheet ship with the title screen, and the
+ *     first slice writes in both. Twelve keys in each language: the letter's
+ *     paragraph about the insurer and the ledger left in the vault, which is
+ *     most of it; the note beside a line with no box; the counter; the
+ *     notebook's own tab; what the drawer's lock says; the plinth's name and
+ *     notice. And the list's rules in the style sheet: a line of two rows,
+ *     ink and pencil, a count, a note. 400 bytes for a list that counts and
+ *     a hall whose largest object answers. The prompts' wording
+ *     (`promptRules.ts`) was written in `hudRules.ts` first, which the title
+ *     imports: 178 more bytes before the click for rules only the game's HUD
+ *     asks, so it has a module of its own. The game grew 1,151 bytes
+ *     (392,146, inside its ceiling: the list as rules, devices that answer
+ *     by one intent, the plinth as one) and the document none (63,237).
  */
 export const BUNDLE_PATH_CEILINGS = {
   document: 63_600,
-  title: 30_050,
+  title: 30_460,
   game: 392_700,
 } as const
 

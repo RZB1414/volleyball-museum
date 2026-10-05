@@ -31,6 +31,7 @@ import assert from 'node:assert/strict'
 import { readText } from './lib/readText.ts'
 import {
   journalLayoutProblems,
+  notebookLetterLayoutProblems,
   planPageLayoutProblems,
   planWiringProblems,
   type SourceReader,
@@ -677,6 +678,84 @@ await test('the plan gives way to its legend and to the locks under it, so the p
     /cuts off the top of a column taller than the screen/,
   )
   assert.match(problemsWith(/(\n\.title-panel \{[^}]*?)margin: auto;\n/, '$1'), /cuts off the top of a column taller than the screen/)
+})
+
+await test("the director's letter fits its page, postscript and all, at the height the lots measure at", () => {
+  // In the browser, at 1280 x 720, with the paragraph L3 added to the letter
+  // (the insurer, the ledger in the vault): 662 px of letter in a page of
+  // 589, and the postscript, which is the one lesson about locks the game
+  // gives, under the fold of a page nobody thinks to scroll. A letter is
+  // written to fit its page. No layout engine runs in Node, so the lines are
+  // counted: each paragraph wrapped at what a line of the sheet holds.
+  const letters = MUSEUM.documents
+    .flatMap((doc) => doc.pages ?? [])
+    .filter((page) => page.style === 'handwritten')
+    .flatMap((page) =>
+      ([['pt-BR', ptBR], ['en', en]] as const).map(([locale, dictionary]) => {
+        const text = (key: string | undefined) => (key ? (dictionary as Record<string, string>)[key] : undefined)
+        return {
+          locale,
+          paragraphs: (text(page.bodyKey) ?? '').split(/\n{2,}/),
+          signature: text(page.signatureKey) ?? null,
+          postscript: text(page.postscriptKey) ?? null,
+        }
+      }),
+    )
+  assert.equal(letters.length, 2, 'one handwritten page, in two languages')
+  assert.ok(letters.every((letter) => letter.paragraphs.length === 4 && letter.signature && letter.postscript))
+  assert.deepEqual(notebookLetterLayoutProblems(readSource, letters), [])
+
+  const styled =
+    (from: RegExp | string, to: string): SourceReader =>
+    (asked) => {
+      const source = readSource(asked)
+      if (asked !== 'styles/museum.css') return source
+      const next = source.replace(from, to)
+      assert.notEqual(next, source, 'the change found nothing to change')
+      return next
+    }
+  const problemsWith = (from: RegExp | string, to: string, read = letters) =>
+    notebookLetterLayoutProblems(styled(from, to), read).join('\n')
+  // Named groups: `$1` followed by a digit of the new value would read as another group.
+  const hand = /(?<rule>\n\.notebook-page\.is-handwritten \{[^}]*?line-height: )[\d.]+rem/
+  const ruling = /(?<rule>\n\.notebook-page\.is-handwritten \{[^}]*?transparent 0 )[\d.]+rem,(?<ink>\s*rgb\([^)]*\) )[\d.]+rem [\d.]+rem/
+  const gap = /(?<rule>\n\.notebook-page\.is-handwritten p \{\s*margin: 0 0 )[\d.]+rem/
+  // The page as it was ruled until L3: two rem to a line, and this letter does not fit it.
+  const ruledAtTwo = (source: string) =>
+    source.replace(hand, '$<rule>2rem').replace(ruling, '$<rule>1.93rem,$<ink>1.93rem 2rem').replace(gap, '$<rule>2rem')
+  const asItWas: SourceReader = (asked) => (asked === 'styles/museum.css' ? ruledAtTwo(readSource(asked)) : readSource(asked))
+  assert.notEqual(asItWas('styles/museum.css'), readSource('styles/museum.css'))
+  const tooLong = notebookLetterLayoutProblems(asItWas, letters)
+  assert.equal(tooLong.length, 2, tooLong.join('\n'))
+  assert.match(tooLong[0], /the letter \(pt-BR\) needs \d+ px of a page of \d+ at 720/)
+  // The letter L2 shipped, a paragraph shorter, did fit that page: the rule was right for its text.
+  const shorter = letters.map((letter) => ({ ...letter, paragraphs: letter.paragraphs.filter((_, index) => index !== 2) }))
+  assert.deepEqual(notebookLetterLayoutProblems(asItWas, shorter), [])
+  // And a longer letter than today's is caught on today's page.
+  const longer = letters.map((letter) => ({ ...letter, paragraphs: [...letter.paragraphs, letter.paragraphs[2]] }))
+  assert.equal(notebookLetterLayoutProblems(readSource, longer).length, 2)
+
+  // Text stays on the rules: the line, the ruling and the gap between two
+  // paragraphs are one measure, on the desk and on a phone held sideways.
+  assert.match(problemsWith(hand, '$<rule>1.9rem'), /ruled every [\d.]+rem under lines of 1\.9rem/)
+  assert.match(problemsWith(gap, '$<rule>1rem'), /paragraphs 1rem apart on lines of [\d.]+rem/)
+  // The sheet inside its backdrop, as the journal's panel is inside its own.
+  assert.match(
+    problemsWith(/(?<rule>\n\.notebook-sheet \{[^}]*?max-height: )90vh/, '$<rule>96vh'),
+    /96vh between two margins of 3vh, 102 in all/,
+  )
+  // What a line holds was counted for this sheet and this hand: another
+  // width, or another size of writing, asks for another count.
+  assert.match(
+    problemsWith(/(?<rule>\n\.notebook-sheet \{[^}]*?width: min\()30rem/, '$<rule>36rem'),
+    /count what a line of it holds again/,
+  )
+  assert.match(
+    problemsWith(/(?<rule>\n\.notebook-page\.is-handwritten \{\s*font-size: )1\.04rem/, '$<rule>1.2rem'),
+    /count what a line of it holds again/,
+  )
+  // A rule in a form the check cannot read is not a rule that passes.
+  assert.match(problemsWith(hand, '$<rule>170%'), /cannot count the lines/)
 })
 
 done('plan checks')

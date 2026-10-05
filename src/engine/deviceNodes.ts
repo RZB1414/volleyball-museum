@@ -63,17 +63,18 @@ export const DEVICE_NODE_PREFIX = 'device:'
 
 /**
  * The device a scanned node is the wrapper of, if the crosshair may aim at
- * it: a radio still on its desk. A radio in the player's hand has left its
- * desk — and scanning it would switch its hidden proxy back on for the ray.
+ * it: one of the devices that answer (`aimableDevices`), and still where it
+ * stands. A radio in the player's hand has left its desk — and scanning it
+ * would switch its hidden proxy back on for the ray.
  */
 export function aimableDeviceId(
   name: string,
-  radioIds: { has(id: string): boolean },
+  aimableIds: { has(id: string): boolean },
   carried: readonly string[],
 ): string | null {
   if (!name.startsWith(DEVICE_NODE_PREFIX)) return null
   const id = name.slice(DEVICE_NODE_PREFIX.length)
-  return radioIds.has(id) && !carried.includes(id) ? id : null
+  return aimableIds.has(id) && !carried.includes(id) ? id : null
 }
 
 /** The device a hit belongs to: the nearest wrapper above it, if any. */

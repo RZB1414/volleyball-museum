@@ -57,7 +57,7 @@ const FACTS = [
 const LOCKS = {
   drawer: { kind: 'knowledge', id: 'drawer', factId: 'the-year', digits: 4, mapLabelKey: 'lock.drawer', hints: HINTS, sourceExhibitId: 'portrait' },
   'staff-door': { kind: 'badge', id: 'staff-door', requires: 'indoor', mapLabelKey: 'lock.staff-door' },
-  plinth: { kind: 'medallion-plinth', id: 'plinth', requires: ['founding', 'olympic'], mapLabelKey: 'lock.plinth' },
+  plinth: { kind: 'medallion-plinth', id: 'plinth', requires: ['founding', 'lineage'], mapLabelKey: 'lock.plinth' },
   hatch: { kind: 'tool', id: 'hatch', requires: 'service-key', consumesTool: false, mapLabelKey: 'lock.hatch' },
   safe: { kind: 'tool', id: 'safe', requires: 'service-key', consumesTool: true, mapLabelKey: 'lock.safe' },
   shelf: { kind: 'ritual', id: 'shelf', puzzle: 'chronological-order', mapLabelKey: 'lock.shelf', hints: HINTS },
@@ -65,7 +65,7 @@ const LOCKS = {
 const ALL_LOCKS = Object.values(LOCKS)
 
 /** Every credential any of them asks for, in the save's spelling. */
-const KEYRING = ['badge:indoor', 'medallion:founding', 'medallion:olympic', 'tool:service-key']
+const KEYRING = ['badge:indoor', 'medallion:founding', 'medallion:lineage', 'tool:service-key']
 const TOUCH: Attempt = { kind: 'touch' }
 const code = (entry: string): Attempt => ({ kind: 'code', entry })
 const ATTEMPTS: readonly Attempt[] = [TOUCH, code('1896'), code('1895'), code('')]
@@ -85,6 +85,29 @@ const schemaLockKinds = (() => {
 await test('the suite has a lock of every kind the schema declares', () => {
   assert.deepEqual(schemaLockKinds, ['badge', 'knowledge', 'medallion-plinth', 'ritual', 'tool'])
   assert.deepEqual([...new Set(ALL_LOCKS.map((lock) => lock.kind))].sort(), schemaLockKinds)
+})
+
+await test('the keys the schema names are the ones the story has, and this suite asks for no other (D2)', () => {
+  // The suites are run by Node with their types stripped, so a retired id
+  // here would go on passing: the unions are read off the schema itself.
+  const schema = readText(resolve(ROOT, 'src/content/schema.ts'))
+  const union = (name: string) => {
+    const declared = new RegExp(`export type ${name} =([^\\n]+)`).exec(schema)?.[1] ?? ''
+    return [...declared.matchAll(/'([a-z-]+)'/g)].map((match) => match[1])
+  }
+  // Three medals for the three parts of the house: the curator's own, the
+  // founding wing, the lineage of the ball in the hall.
+  assert.deepEqual(union('MedallionId'), ['curator', 'founding', 'lineage'])
+  // No handle for the breakers: the panels have their own lever, and a tool
+  // nothing asks for is a key to nothing.
+  assert.deepEqual(union('ToolId'), ['service-key', 'crate-dolly', 'step-ladder'])
+  assert.deepEqual(union('BadgeId'), ['indoor', 'beach', 'sitting', 'snow'])
+  const named = new Set([
+    ...union('BadgeId').map((id) => `badge:${id}`),
+    ...union('MedallionId').map((id) => `medallion:${id}`),
+    ...union('ToolId').map((id) => `tool:${id}`),
+  ])
+  assert.deepEqual(KEYRING.filter((key) => !named.has(key)), [], 'a key of this suite that the schema does not name')
 })
 
 // ---------------------------------------------------------------------------
@@ -127,7 +150,7 @@ await test('a knowledge lock asks for its keypad, and opens with the fact and wi
 await test('a lock that takes a credential opens to whoever holds all of it, by touch', () => {
   const cases: [Lock, string[]][] = [
     [LOCKS['staff-door'], ['badge:indoor']],
-    [LOCKS.plinth, ['medallion:founding', 'medallion:olympic']],
+    [LOCKS.plinth, ['medallion:founding', 'medallion:lineage']],
     [LOCKS.hatch, ['tool:service-key']],
   ]
   for (const [lock, needs] of cases) {
@@ -146,7 +169,7 @@ await test('a lock that takes a credential opens to whoever holds all of it, by 
   assert.deepEqual(attempt(LOCKS.plinth, holding({ credentials: ['medallion:founding', 'badge:indoor'] }), TOUCH), {
     outcome: 'refused',
     reason: 'missing-credential',
-    missing: ['medallion:olympic'],
+    missing: ['medallion:lineage'],
     grant: seen(LOCKS.plinth),
   })
   // The kind is part of the key: a badge called "service-key" is not the tool.

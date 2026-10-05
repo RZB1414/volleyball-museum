@@ -71,6 +71,11 @@ export function roomObstacles(
   for (const container of room.containers ?? []) {
     add(`container:${container.id}`, container.part, kit, container.position, container.rotationY)
   }
+  // A device stands in the room like anything else: the plinth of the hall
+  // was an obstacle as furniture and is one as a device.
+  for (const device of room.devices ?? []) {
+    add(`device:${device.id}`, device.part, kit, device.position, device.rotationY)
+  }
   for (const exhibitId of room.exhibitIds) {
     const exhibit = content.exhibits.find((candidate) => candidate.id === exhibitId)
     if (!exhibit) continue

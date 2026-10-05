@@ -1,6 +1,7 @@
 /**
- * The working objects of a room: clocks, door readers, the porter's radio —
- * and, once it leaves the desk, the radio in the player's hand.
+ * The working objects of a room: clocks, door readers, the porter's radio,
+ * a thing that only has something to say — and, once it leaves the desk, the
+ * radio in the player's hand.
  *
  * Each device is a kit recipe cloned per placement — never instanced, because
  * every one carries its own state: a clock turns its own hands, a reader
@@ -23,16 +24,21 @@ import {
   type Object3D,
 } from 'three'
 
+import type { BakedBundle } from '../content/bake.generated'
 import { MUSEUM } from '../content/museum'
 import type { DeviceData, RoomData } from '../content/schema'
 import { contributeToSave, gameInPlay, isModalOpen, useMuseum } from '../state/store'
 import { museumAudio } from './audio'
 import { USE_DRACO, USE_MESHOPT } from './bundleCache'
 import { clockCount, type ClockStore } from './clockCount'
+import type { CollisionWorld } from './collision'
 import {
+  aimableDevices,
   clockHandAngles,
   clockTimeAfter,
-  deskRadioIntent,
+  deviceInputOf,
+  deviceIntent,
+  deviceLive,
   nextRadioCall,
   radioCallReady,
   radioDeliveryStep,
@@ -49,8 +55,8 @@ import {
   prepareHandset,
 } from './deviceNodes'
 import { PROXY_MATERIAL_PROPS, paddedProxy } from './interactionProxy'
-import { INTERACTION_REACH, interactionWinnerOf, PROXY_MINIMUM } from './interactionTarget'
-import { cloneKitPart, disposeKitPart } from './kitPart'
+import { deviceProxyMinimum, INTERACTION_REACH, interactionWinnerOf } from './interactionTarget'
+import { cloneKitPart, disposeKitPart, registerKitColliders } from './kitPart'
 import type { MaterialLibrary } from './materials'
 import { isRoomPowered } from './power'
 import { playerPosition } from './playerPosition'
@@ -66,7 +72,9 @@ const LATCH_AUDIBLE_DISTANCE = 10
 
 const ROOMS_BY_ID = new Map(MUSEUM.rooms.map((room) => [room.id as string, room] as const))
 const RADIOS = radioDevices(MUSEUM)
-const RADIOS_BY_ID = new Map(RADIOS.map((entry) => [entry.device.id, entry] as const))
+/** Every device the crosshair may rest on: the radio, and whatever only answers. */
+const AIMABLE_BY_ID = new Map(aimableDevices(MUSEUM).map((entry) => [entry.device.id, entry] as const))
+const roomById = (roomId: string) => ROOMS_BY_ID.get(roomId)
 
 function usePowered(roomId: string) {
   const restored = useMuseum((state) => state.progress.roomsPowered)
@@ -254,16 +262,41 @@ function RadioDeviceView({
   // Before paint, so the handset never flashes on the desk for a frame.
   useLayoutEffect(() => placeHandset(handset, carried), [carried, handset])
 
+  return null
+}
+
+// ---------------------------------------------------------------------------
+// The volume the crosshair finds
+// ---------------------------------------------------------------------------
+
+/**
+ * The invisible box of a device that answers the crosshair: its own bounds,
+ * padded to the minimum of its kind.
+ *
+ * One component for every such device. It was the radio's alone while the
+ * radio was the only device anybody could aim at; the plinth of the hall
+ * hangs the same box, and so will whatever answers next.
+ */
+function DeviceProxy({
+  device,
+  instance,
+  hidden,
+}: {
+  device: DeviceData
+  instance: Object3D
+  /** The device has left with the player: nothing is left here to aim at. */
+  hidden: boolean
+}) {
   const proxy = useMemo(() => {
     instance.updateMatrixWorld(true)
     // "Looking at the radio", not threading the crosshair through an antenna.
-    return paddedProxy(new Box3().setFromObject(instance), PROXY_MINIMUM.radio)
-  }, [instance])
+    return paddedProxy(new Box3().setFromObject(instance), deviceProxyMinimum(device))
+  }, [device, instance])
 
   return (
     // A group, not the mesh: targeting switches invisible meshes back on for
     // its ray layer, and rejects any hit under a hidden ancestor instead.
-    <group visible={!carried}>
+    <group visible={!hidden}>
       <mesh position={proxy.centre} visible={false}>
         <boxGeometry args={proxy.size} />
         <meshBasicMaterial {...PROXY_MATERIAL_PROPS} />
@@ -280,14 +313,36 @@ function Device({
   room,
   device,
   kit,
+  kitBundle,
   materials,
+  collision,
 }: {
   room: RoomData
   device: DeviceData
   kit: Group
+  kitBundle: BakedBundle
   materials: MaterialLibrary
+  collision: CollisionWorld | null
 }) {
   const instance = useDeviceInstance(kit, device.part, materials)
+  const carried = useCarried(device.id)
+
+  // A device is solid by whatever collider its recipe carries in the bake
+  // manifest; a recipe with none (the clock, the radio) registers nothing.
+  // The plinth of the hall was furniture until it had something to say, and
+  // `KitLayer` registered its collider: as a device it has to be solid here,
+  // or the capsule walks through the one landmark the hall is built round.
+  useEffect(
+    () =>
+      registerKitColliders(kit, device.part, kitBundle, collision, {
+        roomOrigin: room.origin,
+        position: device.position,
+        rotationY: device.rotationY,
+        scale: 1,
+      }),
+    [collision, device.part, device.position, device.rotationY, kit, kitBundle, room.origin],
+  )
+
   if (!instance) return null
 
   return (
@@ -308,20 +363,25 @@ function Device({
       {device.kind === 'radio' ? (
         <RadioDeviceView device={device} instance={instance} materials={materials} />
       ) : null}
+      {AIMABLE_BY_ID.has(device.id) ? (
+        <DeviceProxy device={device} instance={instance} hidden={carried} />
+      ) : null}
     </group>
   )
 }
 
 export function DeviceLayer({
   room,
-  kitUrl,
+  kitBundle,
   materials,
+  collision,
 }: {
   room: RoomData
-  kitUrl: string
+  kitBundle: BakedBundle
   materials: MaterialLibrary
+  collision: CollisionWorld | null
 }) {
-  const { scene } = useGLTF(kitUrl, USE_DRACO, USE_MESHOPT)
+  const { scene } = useGLTF(kitBundle.url, USE_DRACO, USE_MESHOPT)
   const devices = room.devices ?? []
   if (devices.length === 0) return null
 
@@ -333,7 +393,9 @@ export function DeviceLayer({
           room={room}
           device={device}
           kit={scene as Group}
+          kitBundle={kitBundle}
           materials={materials}
+          collision={collision}
         />
       ))}
     </>
@@ -345,21 +407,26 @@ export function DeviceLayer({
 // ---------------------------------------------------------------------------
 
 /**
- * E on a radio on its desk: pick it up if it is one the player carries away,
- * otherwise the same press as the call button — skip a line, or call him.
+ * E on a device: whatever its intent says, which is what its prompt says.
+ *
+ * A radio on its desk is picked up if it is one the player carries away,
+ * otherwise the same press as the call button — skip a line, or call him. A
+ * notice has said all it has to say in the prompt: it declines the press,
+ * and the key goes to whatever else is waiting for it.
  */
-function operateRadio(deviceId: string) {
-  const entry = RADIOS_BY_ID.get(deviceId)
-  const state = useMuseum.getState()
+function operateDevice(deviceId: string) {
+  const entry = AIMABLE_BY_ID.get(deviceId)
   if (!entry) return false
-  const intent = deskRadioIntent(entry.device, {
-    live: poweredNow(entry.device.poweredBy),
-    carried: state.progress.devicesCarried.includes(deviceId),
-    speaking: state.radio !== null,
-  })
-  if (intent === 'dead') return false
-  if (intent === 'take') return takeDeskRadio(deviceId)
-  return placeRadioCall(deviceId)
+  const intent = deviceIntent(entry.device, deviceInputOf(entry.device, useMuseum.getState(), roomById))
+  if (!deviceLive(intent)) return false
+  switch (intent.kind) {
+    case 'radio':
+      if (intent.intent === 'take') return takeDeskRadio(deviceId)
+      return placeRadioCall(deviceId)
+    case 'notice':
+    case 'none':
+      return false
+  }
 }
 
 /** Targets operable devices from the crosshair and works them on E. */
@@ -382,10 +449,11 @@ export function DeviceTargeting() {
     const interact = () => {
       const state = useMuseum.getState()
       // The same answer the prompt shows: nearest live desk target wins, and
-      // a radio without charge never takes the key from the lamp.
+      // a device that only answers (a radio without charge, a notice) never
+      // takes the key from the lamp.
       const winner = interactionWinnerOf(state, MUSEUM)
       if (winner?.kind !== 'device' || !winner.live) return false
-      return operateRadio(winner.id)
+      return operateDevice(winner.id)
     }
 
     const onKeyDown = (event: KeyboardEvent) => {
@@ -424,7 +492,7 @@ export function DeviceTargeting() {
       const targets: Object3D[] = []
       const carried = state.progress.devicesCarried
       scene.traverseVisible((object) => {
-        if (aimableDeviceId(object.name, RADIOS_BY_ID, carried)) targets.push(object)
+        if (aimableDeviceId(object.name, AIMABLE_BY_ID, carried)) targets.push(object)
       })
       targetsRef.current = targets
       // Same arrangement as the power controls: the proxy stays `visible` for

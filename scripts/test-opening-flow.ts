@@ -65,8 +65,12 @@ const { PRE_OPENING_SAVE } = await import('../src/content/legacySave.ts')
 const { MuseumAudio } = await import('../src/engine/audio.ts')
 const {
   advanceClockSeconds,
+  aimableDevices,
   CLOCK_MAX_STEP_SECONDS,
   clockTimeAfter,
+  deskRadioIntent,
+  deviceIntent,
+  deviceLive,
   dueRadioCalls,
   radioCallReady,
   radioDevices,
@@ -84,7 +88,7 @@ const {
   PROXY_MINIMUM,
   shouldCapturePointer,
 } = await import('../src/engine/interactionTarget.ts')
-const { journalUnlocked } = await import('../src/engine/notebook.ts')
+const { checklistPageOf, containerById, journalUnlocked } = await import('../src/engine/notebook.ts')
 const { isUnclaimedInteractKey } = await import('../src/engine/primaryAction.ts')
 const { progressConditionMet } = await import('../src/engine/progressCondition.ts')
 const {
@@ -101,6 +105,7 @@ const {
   archiveFiledKey,
   canSubmitCode,
   closeLabel,
+  JOURNAL_HOME_TAB,
   listGrew,
   lockKeyIntent,
   lookHintVisible,
@@ -108,6 +113,8 @@ const {
   shouldAnnounceJournal,
 } = await import('../src/ui/hudRules.ts')
 const { portalOpening } = await import('../src/ui/mapGeometry.ts')
+const { containerPrompt, devicePrompt } = await import('../src/ui/promptRules.ts')
+const { deviceWiringProblems } = await import('./lib/runtimeWiring.ts')
 
 type Progress = ReturnType<typeof migrateProgress>
 type StoreState = ReturnType<typeof useMuseum.getState>
@@ -315,6 +322,43 @@ test('opening a reader, a keypad or an exhibit closes the journal', () => {
   store.setJournalTab(null)
 })
 
+test('the notebook opens on the list, from the key and from the icon (L3)', () => {
+  assert.equal(JOURNAL_HOME_TAB, 'notebook')
+  const journal = source('ui/Journal.tsx').replace(/\s+/g, ' ')
+  const hud = source('ui/Hud.tsx').replace(/\s+/g, ' ')
+  assert.ok(
+    journal.includes('state.setJournalTab(state.journalTab ? null : JOURNAL_HOME_TAB)'),
+    'Tab opens the notebook on its home tab',
+  )
+  assert.ok(hud.includes('setJournalTab(journalTab ? null : JOURNAL_HOME_TAB)'), 'and so does the icon')
+  for (const [file, code] of [['ui/Journal.tsx', journal], ['ui/Hud.tsx', hud]] as const) {
+    assert.ok(!/setJournalTab\([^)]*'(?:map|catalogue|archive|credits|notebook)'\)/.test(code), `${file} opens the notebook on a tab of its own choosing`)
+  }
+  // The tab is the first of five and draws the list.
+  assert.ok(
+    /const tabs: [^=]*= \[ \{ id: 'notebook', labelKey: 'journal\.tab\.notebook' \}, \{ id: 'map', /.test(journal),
+    'the list is the first tab',
+  )
+  assert.ok(journal.includes("{openTab === 'notebook' ? <NotebookTab /> : null}"))
+  assert.equal(ptBR['journal.tab.notebook'], 'Caderno')
+  assert.equal(en['journal.tab.notebook'], 'Notebook')
+
+  // What it shows is the list as the content has it: the first page that is one.
+  const page = checklistPageOf(MUSEUM)
+  assert.equal(page?.style, 'checklist')
+  assert.equal(page?.headingKey, 'notebook.todo.heading')
+  assert.deepEqual(page?.items?.map((item) => item.labelKey), ['notebook.todo.power', 'notebook.todo.catalogue', 'notebook.todo.vault'])
+  assert.equal(checklistPageOf({ documents: MUSEUM.documents.filter((doc) => !doc.pages) }), null, 'a content with no list has none to show')
+  assert.ok(journal.includes('const page = checklistPageOf(MUSEUM)'), 'the tab asks the rule for its page')
+  assert.ok(journal.includes('<NotebookPageView page={page} />'), 'and draws it as the notebook does: alive')
+
+  // The store takes the tab, and it is a modal like the other four.
+  useMuseum.getState().setJournalTab(JOURNAL_HOME_TAB)
+  assert.equal(useMuseum.getState().journalTab, 'notebook')
+  assert.equal(isModalOpen(useMuseum.getState()), true)
+  useMuseum.getState().setJournalTab(null)
+})
+
 test('one E press lights the lamp without also taking the radio', () => {
   // The E listeners all run for the same event, each re-reading a store the
   // previous one may just have changed: the lamp's switch makes the radio live
@@ -413,6 +457,114 @@ test('a dead radio never takes the key from the lamp, but still says why', () =>
     powerControl: null,
   })
   assert.deepEqual(alone, { kind: 'device', id: 'office-radio', live: false })
+})
+
+test('a thing that only says something holds the prompt and never the key (L3)', () => {
+  const podium = aimableDevices(MUSEUM).find((entry) => entry.device.id === 'atrium-podium')
+  assert.ok(podium, "the hall's plinth is something the crosshair rests on")
+  assert.equal(podium.room.id, 'atrium')
+  assert.equal(podium.device.kind, 'notice')
+  // The crosshair rests on what answers it: the radio and the plinth. A clock
+  // and a door reader say nothing to E, and are not in the list.
+  assert.deepEqual(
+    aimableDevices(MUSEUM).map((entry) => `${entry.room.id}/${entry.device.id}`).sort(),
+    ['atrium/atrium-podium', 'office/office-radio'],
+  )
+
+  // Alone under the crosshair it owns the prompt, and E has nothing to do:
+  // dark or lit, with the radio in the pocket or not.
+  for (const progress of [
+    progressWith(),
+    progressWith({ roomsPowered: ['office', 'atrium', 'holyoke'], devicesCarried: ['office-radio'] }),
+  ]) {
+    const alone = focusState({ focusedDevice: 'atrium-podium', focusedDeviceDistance: 1.7, progress })
+    assert.deepEqual(interactionWinnerOf(alone, MUSEUM), { kind: 'device', id: 'atrium-podium', live: false })
+    assert.equal(interactionWinnerKey(alone, MUSEUM), 'device:dead:atrium-podium')
+  }
+  // With the hall's breaker along the same ray, however far behind, the key
+  // and the prompt are the breaker's: a notice never takes them from a thing
+  // that works. Once the hall is lit the breaker has nothing left to do.
+  const both = (progress: Progress) =>
+    interactionWinnerOf(
+      focusState({
+        focusedDevice: 'atrium-podium',
+        focusedDeviceDistance: 1.2,
+        focusedPowerControl: 'atrium-breaker',
+        focusedPowerControlDistance: 2.6,
+        progress,
+      }),
+      MUSEUM,
+    )
+  assert.deepEqual(both(progressWith({ roomsPowered: ['office'] })), { kind: 'power-control', id: 'atrium-breaker', live: true })
+  assert.deepEqual(both(progressWith({ roomsPowered: ['office', 'atrium'] })), { kind: 'device', id: 'atrium-podium', live: false })
+
+  // One answer for the prompt, the key and the touch button.
+  const notice = deviceIntent(podium.device, { powered: true, carried: false, speaking: false })
+  assert.deepEqual(notice, { kind: 'notice' })
+  assert.equal(deviceLive(notice), false)
+  assert.deepEqual(devicePrompt(podium.device, notice), {
+    form: 'notice',
+    titleKey: 'device.atrium-podium.title',
+    noticeKey: 'device.atrium-podium.notice',
+  })
+  assert.equal(`${ptBR['device.atrium-podium.title']} — ${ptBR['device.atrium-podium.notice']}`, 'Plinto do Fundador — Interditado: obra do piso.')
+  assert.equal(`${en['device.atrium-podium.title']} — ${en['device.atrium-podium.notice']}`, "The Founder's plinth — Closed off: the floor is being relaid.")
+  // A device of another kind handed a notice's intent draws nothing.
+  assert.equal(devicePrompt(radio, notice), null)
+  assert.equal(devicePrompt(podium.device, { kind: 'none' }), null)
+
+  // The radio goes through the same door and answers as it always did.
+  for (const powered of [false, true]) {
+    for (const carried of [false, true]) {
+      for (const speaking of [false, true]) {
+        const desk = deskRadioIntent(radio, { live: powered, carried, speaking })
+        const intent = deviceIntent(radio, { powered, carried, speaking })
+        assert.deepEqual(intent, { kind: 'radio', intent: desk })
+        assert.equal(deviceLive(intent), desk !== 'dead')
+        const view = devicePrompt(radio, intent)
+        assert.ok(view?.form === 'action')
+        assert.equal(view.key, deviceLive(intent), 'the key is drawn exactly when E does something')
+        assert.equal(view.titleKey, radio.titleKey)
+      }
+    }
+  }
+  assert.deepEqual(
+    (['dead', 'take', 'skip', 'call'] as const).map((intent) => devicePrompt(radio, { kind: 'radio', intent })),
+    [
+      { form: 'action', key: false, labelKey: 'prompt.radio.dead', titleKey: radio.titleKey },
+      { form: 'action', key: true, labelKey: 'prompt.radio.take', titleKey: radio.titleKey },
+      { form: 'action', key: true, labelKey: 'radio.skip', titleKey: radio.titleKey },
+      { form: 'action', key: true, labelKey: 'prompt.radio.call', titleKey: radio.titleKey },
+    ],
+  )
+  for (const device of MUSEUM.rooms.flatMap((room) => room.devices ?? [])) {
+    if (device.kind !== 'clock' && device.kind !== 'power-indicator') continue
+    const silent = deviceIntent(device, { powered: true, carried: false, speaking: false })
+    assert.deepEqual(silent, { kind: 'none' }, `${device.id} answers nothing`)
+    assert.equal(deviceLive(silent), false)
+  }
+
+  // And the components ask those rules: the scan, the proxy, E, the prompt
+  // and the touch button.
+  assert.deepEqual(deviceWiringProblems(source), [])
+  const changed = (path: string, from: string, to: string) => (asked: string) => {
+    if (asked !== path) return source(asked)
+    const next = source(asked).replace(from, to)
+    assert.notEqual(next, source(asked), `the refactor of ${path} found nothing to change`)
+    return next
+  }
+  const refactors: readonly (readonly [string, (path: string) => string])[] = [
+    ['a scan that aims at radios only', changed('engine/Devices.tsx', 'aimableDeviceId(object.name, AIMABLE_BY_ID, carried)', 'aimableDeviceId(object.name, RADIOS_BY_ID, carried)')],
+    ['a box to aim at for the radio alone', changed('engine/Devices.tsx', '{AIMABLE_BY_ID.has(device.id) ? (', "{device.kind === 'radio' ? (")],
+    ['E working a device whatever its intent', changed('engine/Devices.tsx', 'if (!deviceLive(intent)) return false', '')],
+    ['E deciding without the shared arbitration', changed('engine/Devices.tsx', "if (winner?.kind !== 'device' || !winner.live) return false", "if (winner?.kind !== 'device') return false")],
+    ['a device live by being in the sights', changed('engine/interactionTarget.ts', 'deviceLive(deviceIntent(focused,', 'Boolean(deviceIntent(focused,')],
+    ['a prompt the component words by itself', changed('ui/Hud.tsx', 'const view = devicePrompt(', 'const view = wordedHere(')],
+    ['a notice drawn with a key', changed('ui/Hud.tsx', "view.form === 'notice' ? (", "view.form === 'none' ? (")],
+    ['a touch button for whatever is in the sights', changed('ui/MobileControls.tsx', "(winner.kind === 'door' ? doorCanAct : winner.live)", "(winner.kind === 'door' ? doorCanAct : true)")],
+  ]
+  const uncaught = refactors.filter(([, reader]) => deviceWiringProblems(reader).length === 0).map(([name]) => name)
+  assert.deepEqual(uncaught, [], 'a refactor this check exists to catch went through')
 })
 
 test('doors and exhibits keep their precedence over desk targets', () => {
@@ -1265,6 +1417,87 @@ test('the museum has one name, everywhere it names itself', () => {
   // What the phone prints under the icon is the museum's own name too.
   assert.ok(root('index.html').includes('name="apple-mobile-web-app-title" content="Museu do Voleibol"'))
   assert.equal(JSON.parse(root('public/manifest.webmanifest')).short_name, 'Museu do Voleibol')
+})
+
+test('two safes, two names: the iron safe in the office, the vault under the hall (D34)', () => {
+  // The line of the list and the third line of the title speak of the vault,
+  // in the word each language keeps for it and for nothing else.
+  for (const key of ['notebook.todo.vault', 'intro.line3'] as const) {
+    assert.match(ptBR[key], /caixa-forte/i, `${key} (pt-BR) names the vault`)
+    assert.match(en[key], /\bvault\b/i, `${key} (en) names the vault`)
+  }
+  assert.equal(ptBR['notebook.todo.vault'], 'Caixa-forte — só o Otávio sabia abrir')
+  assert.equal(ptBR['intro.line3'], 'Seu antecessor deixou alguma coisa na caixa-forte.')
+  // The director's letter says why the inventory matters, and where the
+  // ledger it is checked against was left.
+  assert.match(ptBR['notebook.welcome.letter'], /seguradora[^\n]*livro de tombo do Otávio[^\n]*caixa-forte/)
+  assert.match(en['notebook.welcome.letter'], /insurer[^\n]*accession ledger of Otávio[^\n]*vault/)
+
+  // A bare «cofre», or a bare "safe", is a word for two different things:
+  // ticking it off the list on opening the wrong one would be false.
+  const BARE: Record<string, RegExp> = {
+    'pt-BR': /(?<![\p{L}-])cofres?(?![\p{L}-])(?!\s+de\s+ferro)/iu,
+    en: /(?<![\p{L}-])(?<!\biron\s)safes?(?![\p{L}-])/iu,
+  }
+  // One text is let off, by key: the predecessor's note, which the handover
+  // sheet replaces at the end of this lot. From then on the list is empty.
+  const LET_OFF = new Set(['document.predecessor.body'])
+  const bare: string[] = []
+  const needed = new Set<string>()
+  for (const [locale, dictionary] of LOCALES) {
+    for (const [key, text] of Object.entries(dictionary)) {
+      if (!BARE[locale].test(text)) continue
+      if (LET_OFF.has(key)) needed.add(key)
+      else bare.push(`${key} (${locale}): ${text}`)
+    }
+  }
+  assert.deepEqual(bare, [])
+  assert.deepEqual([...needed].sort(), [...LET_OFF].sort(), 'a text let off that no longer says it: take it off the list')
+  // The rule reads a compound as the name it is.
+  assert.ok(!BARE['pt-BR'].test('A chave do cofre de ferro.') && BARE['pt-BR'].test('Está no cofre, sob o átrio.'))
+  assert.ok(!BARE.en.test('The key to the iron safe.') && BARE.en.test('It is in the safe.') && !BARE.en.test('Keep it safely.'))
+})
+
+test('an open drawer is not called locked: the lock says it is shut, the name does not (L3)', () => {
+  const containers = MUSEUM.rooms.flatMap((room) => room.containers ?? [])
+  for (const container of containers) {
+    for (const [locale, dictionary] of LOCALES) {
+      assert.doesNotMatch(dictionary[container.titleKey], /trancad|locked/i, `${container.id} (${locale})`)
+    }
+  }
+  const drawer = containerById(MUSEUM, 'office-cabinet')
+  const lock = MUSEUM.locks.find((candidate) => candidate.id === drawer?.lockId)
+  assert.ok(drawer && lock)
+  assert.equal(ptBR['container.office.title'], 'Gaveta do Otávio')
+  assert.equal(en['container.office.title'], "Otávio's drawer")
+
+  // Shut: «title — what the lock says», and E still brings the keypad up.
+  assert.deepEqual(containerPrompt(drawer, lock, true), {
+    form: 'locked',
+    titleKey: 'container.office.title',
+    sayingKey: 'lock.office-drawer.prompt',
+  })
+  assert.equal(`${ptBR['container.office.title']} — ${ptBR['lock.office-drawer.prompt']}`, 'Gaveta do Otávio — trancada (um ano)')
+  assert.equal(`${en['container.office.title']} — ${en['lock.office-drawer.prompt']}`, "Otávio's drawer — locked (a year)")
+  // Open: «Ler — title», like any other drawer.
+  assert.deepEqual(containerPrompt(drawer, lock, false), {
+    form: 'read',
+    labelKey: 'prompt.read',
+    titleKey: 'container.office.title',
+  })
+  // A lock with nothing of its own to say keeps the plain word, and a
+  // container with no lock is read.
+  const { promptKey: _, ...mute } = lock
+  assert.deepEqual(containerPrompt(drawer, mute, true), { form: 'read', labelKey: 'prompt.locked', titleKey: 'container.office.title' })
+  const open = containerById(MUSEUM, 'holyoke-cabinet-a')
+  assert.ok(open)
+  assert.deepEqual(containerPrompt(open, undefined, false), { form: 'read', labelKey: 'prompt.read', titleKey: open.titleKey })
+
+  // The component draws what the rule says, and asks the lock rule whether it is shut.
+  const hud = source('ui/Hud.tsx').replace(/\s+/g, ' ')
+  assert.ok(hud.includes("lockStatus(container.lockId, { locksOpened }) === 'closed'"))
+  assert.ok(hud.includes('const view = containerPrompt(container, lock, isLocked)'), 'the prompt is worded by the rule')
+  assert.ok(hud.includes("view.form === 'locked' ? ("), 'and a shut lock is drawn in its own form')
 })
 
 test('every wall label fits in forty words, in both languages', () => {

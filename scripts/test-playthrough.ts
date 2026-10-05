@@ -91,6 +91,7 @@ import {
   type PlayerAction,
 } from '../src/content/simulate.ts'
 import { validateContent, type ValidationIssue } from '../src/content/validate.ts'
+import { checklistRows } from '../src/engine/checklist.ts'
 import {
   EXAMINE_HOLD_DISTANCE,
   EXAMINE_HOTSPOT_DOT,
@@ -468,11 +469,13 @@ await test('the script in levels: the lamp, the atrium, its light and Wing 1, th
   assert.match(printed[4], /^ {2}N4 +lock:office-drawer · doc:doc-predecessor$/)
 })
 
-await test('she accuses the museum of six things the old walk let through, and they are the six that are dated', () => {
+await test('she accuses the museum of five things the old walk let through, and they are the five that are dated', () => {
   const errors = played.issues.map((issue) => `${issue.severity} ${issue.code} ${issue.id}`)
+  // There were six. The line about the vault was a box nothing ever ticks;
+  // since L3 it is a promise with a date and no box, which is no accusation
+  // (`validateDeferred` holds it to its lot instead).
   assert.deepEqual(sorted(errors), [
     'error checklist-item-untickable notebook.todo.catalogue',
-    'error checklist-item-untickable notebook.todo.vault',
     'error exhibit-uncataloguable gym-suit',
     'error exhibit-uncataloguable net-1897',
     'error exhibit-uncataloguable photo-gym',
@@ -485,7 +488,7 @@ await test('she accuses the museum of six things the old walk let through, and t
   const owed = debtOf('validate:content').filter((line) =>
     ['exhibit-uncataloguable', 'checklist-item-untickable', 'hotspot-unreachable'].includes(line.code),
   )
-  assert.equal(owed.length, 6)
+  assert.equal(owed.length, 5)
   const settled = settleKnownDebt(played.issues, owed, CONTENT_LOT)
   assert.deepEqual(settled.filter((issue) => issue.severity === 'error'), [])
   assert.deepEqual(sorted(owed.map((line) => `${line.id} L${line.untilLot}`)), [
@@ -493,7 +496,6 @@ await test('she accuses the museum of six things the old walk let through, and t
     'net-1897 L4',
     'net-1897:socket L4',
     'notebook.todo.catalogue L4',
-    'notebook.todo.vault L3',
     'photo-gym L4',
   ])
   // Four details are out of a hand's reach, and each is named by exactly one
@@ -763,11 +765,35 @@ await test('each accusation, on a museum broken for the purpose', () => {
   // A list item with nothing to tick it, and one waiting for what no play reaches.
   const listed = (doneWhen: NonNullable<Document['pages']>[number]['items'] extends readonly (infer Item)[] | undefined ? Item : never) =>
     withDocuments((doc) => ({ ...doc, pages: doc.pages?.map((page) => ({ ...page, items: page.items ? [doneWhen] : undefined })) }))
-  proves('checklist-item-untickable', 'made.for.the.test', listed({ labelKey: 'made.for.the.test' }))
-  proves('checklist-item-untickable', 'made.for.the.test', listed({ labelKey: 'made.for.the.test', doneWhen: { catalogued: ['net-1897'] } }))
-  if (accused(simulateProgress(listed({ labelKey: 'made.for.the.test', doneWhen: { locksOpened: ['office-drawer'] } })).issues, 'checklist-item-untickable').length > 0) {
+  const line = { labelKey: 'made.for.the.test', author: 'helena' } as const
+  proves('checklist-item-untickable', 'made.for.the.test', listed(line))
+  proves('checklist-item-untickable', 'made.for.the.test', listed({ ...line, doneWhen: { catalogued: ['net-1897'] } }))
+  if (accused(simulateProgress(listed({ ...line, doneWhen: { locksOpened: ['office-drawer'] } })).issues, 'checklist-item-untickable').length > 0) {
     noisy.push('checklist-item-untickable accuses an item the play ticks')
   }
+  // A line that waits to appear for what no play reaches is never on the
+  // list, whatever would tick it; one that waits for what the play does
+  // reach is like any other.
+  const pencil = { ...line, author: 'curator', doneWhen: { locksOpened: ['office-drawer'] } } as const
+  proves('checklist-item-untickable', 'made.for.the.test', listed({ ...pencil, appearsWhen: { catalogued: ['net-1897'] } }))
+  if (accused(simulateProgress(listed({ ...pencil, appearsWhen: { documentsRead: ['doc-halstead'] } })).issues, 'checklist-item-untickable').length > 0) {
+    noisy.push('checklist-item-untickable accuses a line that appears and is ticked')
+  }
+  // A promise with a date is a line with no box: nothing ticks it, by
+  // design, and the play has no accusation to make of it. With a box as
+  // well it is neither one thing nor the other.
+  const promise = { ...line, deferredUntilLot: 12, noteKey: 'made.for.the.test.note' } as const
+  if (accused(simulateProgress(listed(promise)).issues, 'checklist-item-untickable').length > 0) {
+    noisy.push('checklist-item-untickable accuses a dated promise of having no box')
+  }
+  proves('checklist-deferred-with-box', 'made.for.the.test', listed({ ...promise, doneWhen: { locksOpened: ['office-drawer'] } }))
+  // What a line waits to appear for is a condition the content asks: a flag
+  // only it reads is read.
+  const flagged = simulateProgress({
+    ...listed({ ...pencil, appearsWhen: { flags: ['made-for-the-test'] } }),
+    triggers: [{ id: 'made-for-the-test', when: { roomsVisited: ['atrium'] }, effects: FLAG }],
+  })
+  if (accused(flagged.issues, 'flag-never-read').length > 0) noisy.push('flag-never-read accuses a flag a line of the list waits for')
 
   // A corridor longer than any script.
   const corridor = house(
@@ -799,6 +825,7 @@ await test('each accusation, on a museum broken for the purpose', () => {
       'one-way-trap',
       'lock-evidence-behind-lock',
       'checklist-item-untickable',
+      'checklist-deferred-with-box',
       'simulation-no-fixpoint',
       'transition-door-invalid',
       'no-start-room',
@@ -875,7 +902,9 @@ await test('a switch behind a keypad and a radio in the next room: a pass does n
 
 await test('a museum with its debts paid is accused of nothing, and all twelve pieces are catalogued', () => {
   // What the examine lot owes, done by hand: the three details brought within
-  // a hand's reach, and the line about the vault given something to wait for.
+  // a hand's reach. The line about the vault used to be given something to
+  // wait for here as well; it owes nothing now, being a promise with a date
+  // and no box (L3), which the play has no accusation to make of.
   const paid: MuseumContent = {
     ...MUSEUM,
     exhibits: MUSEUM.exhibits.map((exhibit) =>
@@ -883,16 +912,16 @@ await test('a museum with its debts paid is accused of nothing, and all twelve p
         ? { ...exhibit, scale: 1, hotspots: exhibit.hotspots.map((hotspot) => ({ ...hotspot, localPosition: [0, 0.05, 0.1] })) }
         : exhibit,
     ),
-    documents: MUSEUM.documents.map((doc) => ({
-      ...doc,
-      pages: doc.pages?.map((page) => ({
-        ...page,
-        items: page.items?.map((item) => (item.doneWhen ? item : { ...item, doneWhen: { locksOpened: ['office-drawer'] } })),
-      })),
-    })),
   }
   const result = simulateProgress(paid)
   assert.deepEqual(result.issues, [])
+  // Every line of the list that has a box is ticked at that end, and the one
+  // that has none is still the promise it was.
+  const list = MUSEUM.documents.flatMap((doc) => doc.pages ?? []).find((page) => page.style === 'checklist')
+  assert.deepEqual(
+    checklistRows(list?.items ?? [], result.final, paid).map((row) => `${row.labelKey}: ${row.done}`),
+    ['notebook.todo.power: true', 'notebook.todo.catalogue: true', 'notebook.todo.vault: null'],
+  )
   assert.equal(result.final.catalogued.length, 12)
   assert.equal(result.levels.length, 5, 'and it takes no longer')
 })
@@ -1393,32 +1422,45 @@ const NOW = graphSnapshot(MUSEUM, CONTENT_LOT)
 const additive = (previous: GraphSnapshot, content: MuseumContent, aliases: readonly SaveAlias[] = []) =>
   validateAdditive(previous, content, aliases).map((issue) => `${issue.code} ${issue.id}`)
 
-/** The museum with the notebook's two "all of them" written as the ids they mean today. */
-const NAMED_LISTS = withDocuments((doc) => ({
-  ...doc,
-  pages: doc.pages?.map((page) => ({
-    ...page,
-    items: page.items?.map((item) =>
-      item.doneWhen?.allRoomsPowered
-        ? { ...item, doneWhen: { powered: ['office', 'atrium', 'holyoke'] } }
-        : item.doneWhen?.allCatalogued
-          ? { ...item, doneWhen: { catalogued: MUSEUM.exhibits.map((exhibit) => exhibit.id) } }
-          : item,
-    ),
+type ListItem = NonNullable<NonNullable<Document['pages']>[number]['items']>[number]
+/** The museum with one line of the notebook's list rewritten. */
+const withListItem = (labelKey: string, patch: (item: ListItem) => ListItem, content: MuseumContent = MUSEUM): MuseumContent => ({
+  ...content,
+  documents: content.documents.map((doc) => ({
+    ...doc,
+    pages: doc.pages?.map((page) => ({
+      ...page,
+      items: page.items?.map((item) => (item.labelKey === labelKey ? patch(item) : item)),
+    })),
   })),
-}))
+})
+
+/**
+ * The museum with the notebook's two lists said the way they were until L3:
+ * "every room" and "every piece", which mean whatever the build holds. The
+ * authored list names its ids now (DL2-17, DL3-4); this is the list that
+ * moves when the museum grows, kept to show that it does.
+ */
+const ALL_OF_THEM = withListItem(
+  'notebook.todo.catalogue',
+  (item) => ({ ...item, doneWhen: { allCatalogued: true } }),
+  withListItem('notebook.todo.power', (item) => ({ ...item, doneWhen: { allRoomsPowered: true } })),
+)
 
 await test('the content against its own snapshot is accused of nothing', () => {
   assert.deepEqual(validateAdditive(NOW, MUSEUM), [])
   assert.equal(NOW.lot, CONTENT_LOT)
   assert.equal(NOW.actions.length, played.actions.length)
   assert.deepEqual(NOW.actions.map((entry) => entry.id), sorted(played.actions.map((entry) => entry.id)))
-  // "All rooms" and "all catalogued" are written as the ids they mean today.
+  // The list names its ids, and they are the atoms L2 wrote down when the
+  // two lines still said "all of them". The third has no box, and the lot
+  // that gives it one.
   assert.deepEqual(NOW.checklist, [
     { id: 'notebook.todo.catalogue', doneWhen: sorted(MUSEUM.exhibits.map((exhibit) => `cat:${exhibit.id}`)) },
     { id: 'notebook.todo.power', doneWhen: ['power:atrium', 'power:holyoke', 'power:office'] },
-    { id: 'notebook.todo.vault', doneWhen: null },
+    { id: 'notebook.todo.vault', doneWhen: null, deferredUntilLot: 12 },
   ])
+  assert.deepEqual(graphSnapshot(ALL_OF_THEM, CONTENT_LOT).checklist, NOW.checklist, '"all of them" is written as the ids it means today')
   assert.deepEqual(NOW.terms, [])
   assert.deepEqual(NOW.ids.rooms, ['atrium', 'holyoke', 'office'])
   assert.deepEqual(NOW.ids.doors, [SHORTCUT, 'atrium-to-holyoke', 'atrium-to-office'])
@@ -1454,18 +1496,18 @@ await test('adding is free: a room, a piece, a paper, a detail, a trigger and a 
       ),
       { ...MUSEUM.exhibits[0], id: 'new-piece' },
     ],
-    // The notebook's list with its ids named, as the next lot freezes it.
-    documents: [...NAMED_LISTS.documents, { ...MUSEUM.documents[0], id: 'doc-new', containerId: 'holyoke-cabinet-b' }],
+    // The notebook's list names its ids (frozen in L3), so a piece more is free.
+    documents: [...MUSEUM.documents, { ...MUSEUM.documents[0], id: 'doc-new', containerId: 'holyoke-cabinet-b' }],
     locks: MUSEUM.locks.map((lock) => ({ ...lock, onOpen: [{ kind: 'set-flag', flag: 'drawer-open' }] })),
     triggers: [{ id: 'new-trigger', when: { flags: ['drawer-open'] }, effects: [{ kind: 'reveal-document', documentId: 'doc-new' }] }],
   }
   assert.deepEqual(additive(NOW, grown), [])
-  // The one thing that is not free while the list still says "all of them":
+  // The one thing that was not free while the list still said "all of them":
   // a thirteenth piece changes what "catalogue everything" waits for. Which
-  // is why the lists get their ids named before the museum grows (the plan's
+  // is why the lists had their ids named before the museum grew (the plan's
   // DL2-17). The new room came with its lights on, so "light everything"
   // waits for what it did; a dark one is in the test after next.
-  assert.deepEqual(additive(NOW, { ...grown, documents: [...MUSEUM.documents, grown.documents[grown.documents.length - 1]] }), [
+  assert.deepEqual(additive(NOW, { ...grown, documents: [...ALL_OF_THEM.documents, grown.documents[grown.documents.length - 1]] }), [
     'checklist-condition-changed notebook.todo.catalogue',
   ])
   // A snapshot that knew less of the save than the table does now: also fine.
@@ -1556,15 +1598,15 @@ await test('on the real museum: a detail taken out, a door given a lock, a room 
     'id-renamed-without-alias documents:doc-predecessor',
   ])
 
-  // A room arrives, and "every room has power" now means four.
+  // A room arrives. The list names the three rooms it means, so nothing moves...
   const fourth: MuseumContent = {
     ...MUSEUM,
     rooms: [...MUSEUM.rooms, { ...MUSEUM.rooms[0], id: 'paris', portals: [], exhibitIds: [], containers: [], devices: [], powerControl: undefined }],
   }
-  assert.deepEqual(additive(NOW, fourth), ['checklist-condition-changed notebook.todo.power'])
-  // The same list with the three rooms named, as L3 freezes it: no change at all.
-  assert.deepEqual(additive(NOW, NAMED_LISTS), [])
-  assert.deepEqual(additive(NOW, { ...NAMED_LISTS, rooms: fourth.rooms }), [], 'a list with its ids named does not move when a room arrives')
+  assert.deepEqual(additive(NOW, fourth), [], 'a list with its ids named does not move when a room arrives')
+  // ...where the list that said "every room has power" would now mean four.
+  assert.deepEqual(additive(NOW, ALL_OF_THEM), [])
+  assert.deepEqual(additive(NOW, { ...ALL_OF_THEM, rooms: fourth.rooms }), ['checklist-condition-changed notebook.todo.power'])
 
   // And the gate applies it when it is handed a snapshot, and only then.
   const gate = (previousGraph?: GraphSnapshot) => validateContent(locked, undefined, undefined, undefined, previousGraph ? { previousGraph } : {})
@@ -1584,7 +1626,18 @@ await test('a renamed id with its aliases takes nothing away, in what is given a
 
   // A piece under a new id: its details, its entry and the actions named after it.
   const piece = withRooms((room) => ({ ...room, exhibitIds: room.exhibitIds.map((id) => (id === 'ball-improvised' ? 'ball-bladder' : id)) }))
-  const renamedPiece: MuseumContent = { ...piece, exhibits: MUSEUM.exhibits.map((exhibit) => (exhibit.id === 'ball-improvised' ? { ...exhibit, id: 'ball-bladder' } : exhibit)) }
+  const bladder = (ids: readonly string[] | undefined) => ids?.map((id) => (id === 'ball-improvised' ? 'ball-bladder' : id))
+  // A rename goes through every place the id is written, and the notebook's
+  // list names its pieces: in what ticks the line and in what it counts.
+  const renamedPiece: MuseumContent = withListItem(
+    'notebook.todo.catalogue',
+    (item) => ({
+      ...item,
+      doneWhen: { ...item.doneWhen, catalogued: bladder(item.doneWhen?.catalogued) },
+      counters: item.counters?.map((counter) => ({ ...counter, of: { ...counter.of, catalogued: bladder(counter.of.catalogued) } })),
+    }),
+    { ...piece, exhibits: MUSEUM.exhibits.map((exhibit) => (exhibit.id === 'ball-improvised' ? { ...exhibit, id: 'ball-bladder' } : exhibit)) },
+  )
   assert.deepEqual(additive(NOW, renamedPiece), [
     'node-removed catalogue:ball-improvised',
     'node-removed hotspot:ball-improvised:valve',
@@ -1593,6 +1646,17 @@ await test('a renamed id with its aliases takes nothing away, in what is given a
     // "Catalogue everything" names the piece too, by the id it had.
     'checklist-condition-changed notebook.todo.catalogue',
   ])
+  // Renamed in the museum and left under its old name in the list, the line
+  // would wait for a piece nobody can catalogue: the aliases carry the save
+  // forward, and the line has to come with it.
+  const forgotten: MuseumContent = { ...renamedPiece, documents: MUSEUM.documents }
+  assert.deepEqual(
+    additive(NOW, forgotten, [
+      { sinceLot: 3, field: 'catalogued', from: 'ball-improvised', to: 'ball-bladder' },
+      { sinceLot: 3, field: 'hotspots', from: 'ball-improvised:valve', to: 'ball-bladder:valve' },
+    ]),
+    ['checklist-condition-changed notebook.todo.catalogue'],
+  )
   assert.deepEqual(
     additive(NOW, renamedPiece, [
       { sinceLot: 3, field: 'catalogued', from: 'ball-improvised', to: 'ball-bladder' },
@@ -1600,6 +1664,65 @@ await test('a renamed id with its aliases takes nothing away, in what is given a
     ]),
     [],
   )
+})
+
+await test('a line with no box gains one only where the record gave it a date (DL3-5)', () => {
+  // The promise being paid: in the lot that builds the vault, its line gets
+  // a box to tick.
+  const paid = withListItem('notebook.todo.vault', ({ deferredUntilLot: _, noteKey: __, ...item }) => ({
+    ...item,
+    doneWhen: { locksOpened: ['office-drawer'] },
+  }))
+  // A record made for the test, without the date: the line had no box and
+  // nothing said it would ever have one. Giving it one changes its meaning.
+  const undated: GraphSnapshot = { ...NOW, checklist: NOW.checklist.map(({ deferredUntilLot: _, ...item }) => item) }
+  assert.deepEqual(additive(undated, paid), ['checklist-condition-changed notebook.todo.vault'])
+  assert.match(validateAdditive(undated, paid)[0].message, /it was a line with no box, and is now lock:office-drawer/)
+  // With the date on record, the same change is the promise kept.
+  assert.equal(NOW.checklist.find((item) => item.id === 'notebook.todo.vault')?.deferredUntilLot, 12)
+  assert.deepEqual(additive(NOW, paid), [])
+  // The other way is never free: a line a player may have ticked that turns
+  // into a promise unticks itself.
+  const unboxed = withListItem('notebook.todo.power', ({ doneWhen: _, counters: __, ...item }) => ({
+    ...item,
+    deferredUntilLot: 12,
+    noteKey: 'notebook.todo.vault.note',
+  }))
+  assert.deepEqual(additive(NOW, unboxed), ['checklist-condition-changed notebook.todo.power'])
+  // And dating a line that had no box takes nothing from anybody: it is
+  // what this lot does to the record of the lot before.
+  assert.deepEqual(additive(undated, MUSEUM), [])
+
+  // The date is written only where there is one, so a record from before
+  // dates reads and writes as itself, byte for byte.
+  const text = serialiseGraphSnapshot(NOW)
+  assert.ok(text.includes('{"id":"notebook.todo.vault","doneWhen":null,"deferredUntilLot":12}'))
+  assert.equal(text.split('deferredUntilLot').length - 1, 1, 'one dated line, one date')
+  assert.equal(serialiseGraphSnapshot(parseGraphSnapshot(text)), text)
+  const undatedText = serialiseGraphSnapshot(undated)
+  assert.ok(!undatedText.includes('deferredUntilLot'))
+  assert.equal(serialiseGraphSnapshot(parseGraphSnapshot(undatedText)), undatedText)
+  // L2's own file is such a record: read, not rewritten, and the content
+  // with its dated line takes nothing from it.
+  const l2 = snapshotsIn(resolve(ROOT, RELEASES_DIRECTORY)).find((snapshot) => snapshot.lot === 2)
+  assert.ok(l2, 'the record of L2 is on disk')
+  assert.ok(!l2.text.includes('deferredUntilLot'))
+  assert.equal(serialiseGraphSnapshot(parseGraphSnapshot(l2.text)), l2.text)
+  assert.deepEqual(validateAdditive(parseGraphSnapshot(l2.text), MUSEUM), [])
+})
+
+await test('the four balls of the hall are a touch table, outside the thread of the ball (D13)', () => {
+  const hall = MUSEUM.rooms.find((room) => room.id === 'atrium')
+  assert.ok(hall)
+  const onTheTable = MUSEUM.exhibits.filter((exhibit) => hall.exhibitIds.includes(exhibit.id))
+  assert.equal(onTheTable.length, 4)
+  assert.deepEqual(
+    onTheTable.map((exhibit) => `${exhibit.id}: ${exhibit.threads.join(',') || 'no thread'}`),
+    onTheTable.map((exhibit) => `${exhibit.id}: no thread`),
+  )
+  // The thread itself is still there, where its originals are: in the wing.
+  const onTheThread = MUSEUM.exhibits.filter((exhibit) => exhibit.threads.includes('ball'))
+  assert.ok(onTheThread.length > 0 && onTheThread.every((exhibit) => exhibit.era === 'holyoke' && !hall.exhibitIds.includes(exhibit.id)))
 })
 
 const PLAN = readText(resolve(ROOT, 'docs/PLANO-ATE-O-FINAL.md'))

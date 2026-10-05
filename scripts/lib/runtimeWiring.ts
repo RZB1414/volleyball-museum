@@ -528,6 +528,186 @@ export function planPageLayoutProblems(read: SourceReader): string[] {
 }
 
 /**
+ * What the fit of the director's letter is counted with.
+ *
+ * The page is counted in lines, and a line in glyphs: the one figure here
+ * that comes from a browser, and that only a browser can give again.
+ */
+export const LETTER_PAGE = {
+  /** The height the lots measure at, in CSS px: the shortest desktop window the game is checked in. */
+  viewportHeight: 720,
+  remPx: 16,
+  /**
+   * Glyphs of the director's hand on one line of the sheet, rounded down to
+   * the shortest full line the browser set (2026-10-05: «A tempestade desta
+   * tarde derrubou a energia do»). A line of narrow letters holds 52, so a
+   * letter this count passes has room to spare on the screen.
+   */
+  charsPerLine: 46,
+  /** What that count was made for: the sheet's width, its side margins, the hand and the postscript's. */
+  sheetWidthRem: 30,
+  sideMarginRem: 2.2,
+  fontRem: 1.04,
+  postscriptFontRem: 0.94,
+  /** The row of buttons under the page, in CSS px (59 measured). */
+  actionsPx: 60,
+} as const
+
+export type LetterText = {
+  readonly locale: string
+  readonly paragraphs: readonly string[]
+  readonly signature: string | null
+  readonly postscript: string | null
+}
+
+/** How many lines a paragraph takes at so many glyphs to a line, wrapped by the word. */
+function wrappedLines(text: string, glyphs: number) {
+  let lines = 0
+  let used = 0
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    const needed = used === 0 ? word.length : used + 1 + word.length
+    if (used > 0 && needed > glyphs) {
+      lines += 1
+      used = word.length
+    } else used = needed
+  }
+  return lines + (used > 0 ? 1 : 0)
+}
+
+/**
+ * The director's letter on its page (`styles/museum.css`).
+ *
+ * A letter is written to fit a page: the reader turns pages and never
+ * scrolls one. L3 added a paragraph to the letter (the insurer, and the
+ * ledger left in the vault), and at 1280 × 720 the page became 662 px of
+ * letter in 589 of sheet, with the postscript under the fold; and the
+ * postscript is the one lesson about locks the game gives. Nothing was
+ * red: no suite knew the letter had a page.
+ *
+ * So the page is added up, as the journal's panel is. The sheet may take
+ * what its backdrop leaves of the window. The writing sits on its rules:
+ * the line, the ruling and the gap between paragraphs are one measure. And
+ * the letter, counted in lines of that measure, fits the sheet at the
+ * height the lots measure at, in every language it is written in. The
+ * count of glyphs to a line is `LETTER_PAGE`'s, made in the browser for
+ * one sheet and one hand; change either and this asks for the count again
+ * rather than pass on a figure that no longer means anything.
+ */
+export function notebookLetterLayoutProblems(read: SourceReader, letters: readonly LetterText[]): string[] {
+  const css = read('styles/museum.css').replace(/\/\*[\s\S]*?\*\//g, ' ')
+  // The rule written for the selector at the top level; what a media query
+  // adds is indented, and `within` reads it there.
+  const body = (selector: string, within = css, indent = '') =>
+    new RegExp(`(?:^|\\n)${indent}${selector.replace(/[.>]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(within)?.[1] ?? ''
+  const cannot = (what: string) => [
+    `styles/museum.css no longer ${what}: the check that the letter fits its page cannot count the lines`,
+  ]
+  const rem = (declaration: string, rules: string) => {
+    const found = new RegExp(`\\b${declaration}:\\s*([\\d.]+)rem\\s*;`).exec(rules)
+    return found ? Number(found[1]) : null
+  }
+  const ruling = (rules: string) => {
+    const found =
+      /repeating-linear-gradient\(\s*to bottom,\s*transparent 0 ([\d.]+)rem,\s*rgb\([^)]*\) ([\d.]+)rem ([\d.]+)rem\s*\)/.exec(rules)
+    return found && found[1] === found[2] ? Number(found[3]) : null
+  }
+
+  const hand = body('.notebook-page.is-handwritten')
+  const line = rem('line-height', hand)
+  const font = rem('font-size', hand)
+  const ruled = ruling(hand)
+  if (line === null || font === null) return cannot('gives `.notebook-page.is-handwritten` a `line-height` and a `font-size` in rem')
+  if (ruled === null) return cannot('rules the handwritten page with a repeating gradient of one line')
+  const gap = /\bmargin:\s*0 0 ([\d.]+)rem\s*;/.exec(body('.notebook-page.is-handwritten p'))?.[1]
+  if (gap === undefined) return cannot('sets the paragraphs of the handwritten page apart as `margin: 0 0 <n>rem`')
+  const sheet = body('.notebook-sheet')
+  const sheetHeight = /\bmax-height:\s*([\d.]+)vh\s*;/.exec(sheet)?.[1]
+  const sheetWidth = /\bwidth:\s*min\(\s*([\d.]+)rem\s*,/.exec(sheet)?.[1]
+  if (sheetHeight === undefined || sheetWidth === undefined) {
+    return cannot('sizes `.notebook-sheet` as `min(<n>rem, …)` wide and `<n>vh` high at most')
+  }
+  const backdrop = /\bpadding:\s*([\d.]+)vh\s+[\d.]+vw\s*;/.exec(body('.notebook'))?.[1]
+  if (backdrop === undefined) return cannot('pads `.notebook` as `<n>vh <n>vw`')
+  const margins = /\bpadding:\s*([\d.]+)rem\s+([\d.]+)rem\s+([\d.]+)rem\s*;/.exec(body('.notebook-body'))
+  if (!margins) return cannot('pads `.notebook-body` as three figures in rem')
+  const postscriptFont = rem('font-size', body('.notebook-page .notebook-postscript'))
+  if (postscriptFont === null) return cannot('gives the postscript a `font-size` in rem')
+
+  const problems: string[] = []
+
+  // --- the writing on its rules, on the desk and on a phone ------------------
+  const onItsRules = (where: string, lineRem: number, ruledRem: number | null, gapRem: number | null) => {
+    if (ruledRem !== lineRem) {
+      problems.push(
+        `the letter's page${where} is ruled every ${ruledRem ?? '?'}rem under lines of ${lineRem}rem: the writing walks off its rules`,
+      )
+    }
+    if (gapRem !== lineRem) {
+      problems.push(
+        `the letter's page${where} sets its paragraphs ${gapRem ?? '?'}rem apart on lines of ${lineRem}rem: the paragraph after sits between two rules`,
+      )
+    }
+  }
+  onItsRules('', line, ruled, Number(gap))
+  // Every block written for a phone held sideways, together.
+  const phone = [...css.matchAll(/@media \(max-height: 420px\) \{([\s\S]*?)\n\}/g)].map((block) => block[1]).join('\n')
+  const phoneHand = body('.notebook-page.is-handwritten', phone, ' {2}')
+  const phoneLine = rem('line-height', phoneHand)
+  if (phoneLine !== null) {
+    onItsRules(
+      ' on a phone held sideways',
+      phoneLine,
+      ruling(phoneHand),
+      rem('margin-bottom', body('.notebook-page.is-handwritten p', phone, ' {2}')),
+    )
+  }
+
+  // --- the sheet inside its backdrop ------------------------------------------
+  const down = Number(sheetHeight) + 2 * Number(backdrop)
+  if (down > 100) {
+    problems.push(
+      `the notebook's sheet asks for ${sheetHeight}vh between two margins of ${backdrop}vh, ${down} in all: ` +
+        `on a short window its buttons are under the bottom edge`,
+    )
+  }
+
+  // --- the letter, counted in lines -------------------------------------------
+  const made = LETTER_PAGE
+  if (
+    Number(sheetWidth) !== made.sheetWidthRem ||
+    Number(margins[2]) !== made.sideMarginRem ||
+    font !== made.fontRem ||
+    postscriptFont !== made.postscriptFontRem
+  ) {
+    problems.push(
+      `the notebook's sheet is ${sheetWidth}rem wide with margins of ${margins[2]}rem, in a hand of ${font}rem (postscript ${postscriptFont}rem); ` +
+        `the ${made.charsPerLine} glyphs to a line were counted for ${made.sheetWidthRem}rem, ${made.sideMarginRem}rem, ${made.fontRem}rem and ${made.postscriptFontRem}rem: ` +
+        `count what a line of it holds again, in the browser, and write it in LETTER_PAGE (scripts/lib/runtimeWiring.ts)`,
+    )
+    return problems
+  }
+  const room = (Number(sheetHeight) / 100) * made.viewportHeight - made.actionsPx
+  for (const letter of letters) {
+    const lines =
+      letter.paragraphs.reduce((sum, paragraph) => sum + wrappedLines(paragraph, made.charsPerLine), 0) +
+      (letter.signature ? 1 : 0) +
+      // The postscript is in a smaller hand: more glyphs to the same line.
+      (letter.postscript ? wrappedLines(letter.postscript, Math.floor((made.charsPerLine * font) / postscriptFont)) : 0)
+    // A line's worth of gap under every paragraph and under the signature;
+    // the postscript, which closes the page, has none.
+    const gaps = letter.paragraphs.length + (letter.signature ? 1 : 0)
+    const needed = (lines + gaps) * line * made.remPx + (Number(margins[1]) + Number(margins[3])) * made.remPx
+    if (needed > room) {
+      problems.push(
+        `the letter (${letter.locale}) needs ${Math.round(needed)} px of a page of ${Math.round(room)} at ${made.viewportHeight} px of window ` +
+          `(${lines} lines and ${gaps} gaps of ${line}rem): its last lines, the postscript among them, are under the fold of a page nobody scrolls`,
+      )
+    }
+  }
+  return problems
+}
+
+/**
  * The volumes the flood measures (M15). `test:navigation` proves that a
  * player can stand in front of every interactive with the eye within its
  * ray's reach and outside its volume, and it builds each volume itself
@@ -606,14 +786,39 @@ export function interactionVolumeWiringProblems(read: SourceReader): string[] {
   )
 
   const devices = squeezed(read('engine/Devices.tsx'))
-  need('engine/Devices.tsx', devices, 'const REACH = INTERACTION_REACH.device', 'the radio is reached by a number the flood does not read')
-  need('engine/Devices.tsx', devices, 'instance.far = REACH', 'the ray at a radio no longer stops at its reach')
+  need('engine/Devices.tsx', devices, 'const REACH = INTERACTION_REACH.device', 'a device is reached by a number the flood does not read')
+  need('engine/Devices.tsx', devices, 'instance.far = REACH', 'the ray at a device no longer stops at its reach')
+  // One box for every device that answers, padded by the minimum of its kind:
+  // the flood builds each with the same function.
   need(
     'engine/Devices.tsx',
     devices,
-    'return paddedProxy(new Box3().setFromObject(instance), PROXY_MINIMUM.radio)',
-    'the radio is aimed at by a box other than its own bounds padded to the minimum',
+    'return paddedProxy(new Box3().setFromObject(instance), deviceProxyMinimum(device))',
+    'a device is aimed at by a box other than its own bounds padded to the minimum of its kind',
   )
+  need(
+    'engine/interactionTarget.ts',
+    squeezed(read('engine/interactionTarget.ts')),
+    "return device.kind === 'radio' ? PROXY_MINIMUM.radio : PROXY_MINIMUM.device",
+    "a device's minimum is no longer the radio's own for a radio and the shared one for every other",
+  )
+  need(
+    'engine/Devices.tsx',
+    devices,
+    'name={`device:${device.id}`} position={device.position as unknown as [number, number, number]} rotation={[0, device.rotationY ?? 0, 0]}',
+    'a device is placed by something other than its position and turn',
+  )
+  // A device is solid where the suites place it (`buildMuseumWorld`): the
+  // plinth of the hall left the furniture, whose layer registered it.
+  need(
+    'engine/Devices.tsx',
+    devices,
+    'registerKitColliders(kit, device.part, kitBundle, collision, { roomOrigin: room.origin, position: device.position, rotationY: device.rotationY, scale: 1, })',
+    'a device is no longer solid where the suites place it, and the capsule walks through the plinth of the hall',
+  )
+  if (!/<DeviceLayer\b(?:(?!\/>).)*\bcollision=\{collision\}/.test(scene)) {
+    problems.push('scenes/MuseumScene.tsx no longer hands the collision world to DeviceLayer: no device is solid')
+  }
 
   // Every padded target hangs its box at the padded centre, at the padded size.
   for (const [path, component] of [
@@ -655,6 +860,80 @@ export function interactionVolumeWiringProblems(read: SourceReader): string[] {
     doors,
     'return registerTransitionDoorGate(collision, spec)',
     'a shut door no longer stops the capsule, and the eye walks into its box',
+  )
+  return problems
+}
+
+/**
+ * A device answers the crosshair by one rule (L3): what the prompt says, what
+ * E does and whether the touch button shows are `deviceIntent` and
+ * `deviceLive`, proved in `test:opening-flow`. A thing that only says
+ * something (the plinth of the hall) holds the prompt and never the key;
+ * that is only true in the game if each of the five places that used to ask
+ * the radio's own rule now asks the shared one.
+ */
+export function deviceWiringProblems(read: SourceReader): string[] {
+  const problems: string[] = []
+  const need = (path: string, fragment: string, without: string) => {
+    if (!squeezed(read(path)).includes(fragment)) problems.push(`${path} no longer has \`${fragment}\`: ${without}`)
+  }
+
+  // The scan and the box: every device the content says answers, not the radios alone.
+  need(
+    'engine/Devices.tsx',
+    'const AIMABLE_BY_ID = new Map(aimableDevices(MUSEUM).map((entry) => [entry.device.id, entry] as const))',
+    'what the crosshair may rest on is a list of the component\'s own',
+  )
+  need(
+    'engine/Devices.tsx',
+    'if (aimableDeviceId(object.name, AIMABLE_BY_ID, carried)) targets.push(object)',
+    'the scan no longer aims at every device that answers: a notice is never under the crosshair',
+  )
+  need(
+    'engine/Devices.tsx',
+    '{AIMABLE_BY_ID.has(device.id) ? ( <DeviceProxy device={device} instance={instance} hidden={carried} /> ) : null}',
+    'a device that answers hangs no box to aim at',
+  )
+
+  // E: the shared arbitration decides whose the key is, the device's intent what it does.
+  need(
+    'engine/Devices.tsx',
+    "if (winner?.kind !== 'device' || !winner.live) return false return operateDevice(winner.id)",
+    'E works a device the arbitration did not give the key to: a notice would take it from the lamp',
+  )
+  need(
+    'engine/Devices.tsx',
+    'const intent = deviceIntent(entry.device, deviceInputOf(entry.device, useMuseum.getState(), roomById)) if (!deviceLive(intent)) return false',
+    'E no longer acts on the intent the prompt is worded by',
+  )
+  need(
+    'engine/interactionTarget.ts',
+    'live: focused !== undefined && deviceLive(deviceIntent(focused, deviceInputOf(focused, state, lookups.room))),',
+    'whether a device takes the key is no longer its own rule: a notice, or a radio without charge, would',
+  )
+
+  // The prompt is worded by the same intent, and a notice is drawn with no key.
+  need(
+    'ui/Hud.tsx',
+    'const view = devicePrompt(device, deviceIntent(device, deviceInputOf(device, { progress, radio }, roomOf)))',
+    'the prompt of a device is worded by the component, apart from what E does',
+  )
+  need(
+    'ui/Hud.tsx',
+    "{view.form === 'notice' ? ( <> <span className=\"prompt-title\">{t(view.titleKey as never)}</span> <span className=\"prompt-label\">— {t(view.noticeKey as never)}</span> </> ) : (",
+    'a notice is no longer drawn as its name and what it says, with no key',
+  )
+  need(
+    'ui/Hud.tsx',
+    '{view.key ? <span className="prompt-key">E</span> : null}',
+    'the key is drawn for a device whether or not E does anything',
+  )
+
+  // Touch: the Action button shows for a live winner and for nothing else.
+  need(
+    'ui/MobileControls.tsx',
+    "(winner.kind === 'door' ? doorCanAct : winner.live)",
+    'the touch button shows for a thing E does nothing to',
   )
   return problems
 }

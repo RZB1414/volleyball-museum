@@ -789,20 +789,24 @@
   font-size: 0.9rem;
 }
 
-/* Ruled paper, handwritten lines sitting on the rules. */
+/* Ruled paper, handwritten lines sitting on the rules: the line, the ruling
+   and the gap between two paragraphs are one measure. It was 2rem until the
+   director's letter gained a paragraph and ran to 662 px in a page of 589 at
+   1280 x 720, its postscript under the fold; at 1.7rem the letter fits the
+   page again in both languages. `npm run test:map` counts the lines. */
 .notebook-page.is-handwritten {
   font-size: 1.04rem;
   font-style: italic;
-  line-height: 2rem;
+  line-height: 1.7rem;
   background-image: repeating-linear-gradient(
     to bottom,
-    transparent 0 1.93rem,
-    rgb(80 110 150 / 24%) 1.93rem 2rem
+    transparent 0 1.63rem,
+    rgb(80 110 150 / 24%) 1.63rem 1.7rem
   );
 }
 
 .notebook-page.is-handwritten p {
-  margin: 0 0 2rem;
+  margin: 0 0 1.7rem;
 }
 
 .notebook-signature {
@@ -829,15 +833,47 @@
   border-bottom: 1px solid rgb(80 110 150 / 22%);
 }
 
+/* The width of a box whether one is drawn or not: a line with no box (a
+   promise with a date) starts where the others do. */
 .notebook-box {
   flex: none;
+  width: 1em;
   color: #6e1f2a;
   font-style: normal;
 }
 
-.notebook-checklist li.is-done span:last-child {
+.notebook-line {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.1rem 0.9rem;
+}
+
+.notebook-label {
+  flex: 1 1 100%;
+}
+
+.notebook-checklist li.is-done .notebook-label {
   color: #7a6a52;
   text-decoration: line-through;
+}
+
+/* The curator's own lines and every note are in pencil; the director's are
+   in ink. */
+.notebook-checklist li.is-curator .notebook-label,
+.notebook-note {
+  color: #5d6066;
+}
+
+.notebook-count,
+.notebook-note {
+  font-size: 0.86em;
+}
+
+.notebook-count {
+  color: #6e1f2a;
+  font-style: normal;
 }
 
 .notebook-actions {

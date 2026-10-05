@@ -36,7 +36,7 @@ import { EXAMINE_MIN_CONE_DEGREES, examineReach } from '../engine/examineReach.t
 import { attemptLock, lockCredentialKeys } from '../engine/lockRules.ts'
 import { isContainerTaken } from '../engine/notebook.ts'
 import { isRoomPowered } from '../engine/power.ts'
-import { credentialKey, progressConditionMet } from '../engine/progressCondition.ts'
+import { conditionClass, credentialKey, progressConditionMet } from '../engine/progressCondition.ts'
 import { containerGrant, doorGrant, hotspotGrant } from '../engine/progressGrants.ts'
 import {
   buildTransitionDoorSpecs,
@@ -792,7 +792,11 @@ function conditionsOf(content: MuseumContent, topology: Topology): readonly Prog
   const conditions: ProgressCondition[] = topology.triggers.map((trigger) => trigger.when)
   for (const doc of content.documents) {
     for (const page of doc.pages ?? []) {
-      for (const item of page.items ?? []) if (item.doneWhen) conditions.push(item.doneWhen)
+      for (const item of page.items ?? []) {
+        if (item.doneWhen) conditions.push(item.doneWhen)
+        // What puts a line on the page is asked of the save like what ticks it.
+        if (item.appearsWhen) conditions.push(item.appearsWhen)
+      }
     }
   }
   for (const room of content.rooms) {
@@ -971,11 +975,41 @@ export function simulateProgress(content: MuseumContent, from: Progress = emptyP
   for (const doc of content.documents) {
     for (const page of doc.pages ?? []) {
       for (const item of page.items ?? []) {
+        // A line that waits for something to be on the page, and no play
+        // gets there: nobody ever reads it. Asked only of what stays true
+        // once it is: a line may wait for an absence, and the end of the
+        // play says nothing of what was absent on the way.
+        if (
+          item.appearsWhen &&
+          conditionClass(item.appearsWhen) === 'positive' &&
+          !progressConditionMet(item.appearsWhen, final, content)
+        ) {
+          error(
+            'checklist-item-untickable',
+            item.labelKey,
+            `Checklist item "${item.labelKey}" waits to appear for something no play reaches: it is never on the list.`,
+          )
+          continue
+        }
+        // A promise with a date has no box, on purpose: there is nothing in
+        // this build to tick it, and it says so (`validateDeferred` holds it
+        // to its lot). With a box as well it is neither.
+        if (item.deferredUntilLot !== undefined) {
+          if (item.doneWhen) {
+            error(
+              'checklist-deferred-with-box',
+              item.labelKey,
+              `Checklist item "${item.labelKey}" is a promise dated for L${item.deferredUntilLot} and has a \`doneWhen\`: ` +
+                `a line is a task with a box or a promise without one. Drop the date when the lot pays it.`,
+            )
+          }
+          continue
+        }
         if (!item.doneWhen) {
           error(
             'checklist-item-untickable',
             item.labelKey,
-            `Checklist item "${item.labelKey}" has no \`doneWhen\`: it is a box nothing ever ticks.`,
+            `Checklist item "${item.labelKey}" has no \`doneWhen\` and no date: it is a box nothing ever ticks.`,
           )
         } else if (!progressConditionMet(item.doneWhen, final, content)) {
           error(

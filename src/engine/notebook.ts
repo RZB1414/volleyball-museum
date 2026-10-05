@@ -34,6 +34,20 @@ export function isNotebook(container: ContainerData | undefined) {
 }
 
 /**
+ * The list the journal opens on: the first checklist page of the content, or
+ * null for a content that has none. One list for the whole museum; where the
+ * player first read it is the notebook on the desk, and the journal carries
+ * the same page, alive.
+ */
+export function checklistPageOf(content: Pick<MuseumContent, 'documents'>): NotebookPage | null {
+  for (const doc of content.documents) {
+    const page = (doc.pages ?? []).find((candidate) => candidate.style === 'checklist')
+    if (page) return page
+  }
+  return null
+}
+
+/**
  * Whether the container's object has left its furniture with the player.
  *
  * Only a journal-carrying container is ever taken, and only once everything

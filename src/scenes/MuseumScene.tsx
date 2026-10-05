@@ -487,7 +487,12 @@ function CachedRoomDetail({
           materials={materials}
           collision={collision}
         />
-        <DeviceLayer room={room} kitUrl={KIT_URL} materials={materials} />
+        <DeviceLayer
+          room={room}
+          kitBundle={KIT_BUNDLE}
+          materials={materials}
+          collision={collision}
+        />
         <KitLayer
           room={room}
           kitBundle={KIT_BUNDLE}

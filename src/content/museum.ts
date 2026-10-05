@@ -155,6 +155,9 @@ const LOCKS = [
     factId: 'springfield-renaming',
     digits: 4,
     mapLabelKey: 'lock.office-drawer.mapLabel',
+    // Said after the drawer's name while it is shut. The name used to be
+    // «Gaveta trancada do curador», and stayed that with the drawer open.
+    promptKey: 'lock.office-drawer.prompt',
     hints: STANDARD_HINTS,
     // The answer is on the Morgan portrait: its frame plaque gives 1896, and
     // the title of the Springfield document repeats it — both in the Holyoke
@@ -176,6 +179,12 @@ const LOCKS = [
  * These are deliberately unbranded reconstructions: the preserved references
  * teach panel construction, materials and wear without turning protected
  * wordmarks into reusable game assets.
+ *
+ * A touch table (D13): handling replicas, which is why all four declare no
+ * thread. The thread of the ball runs through the pieces of the wings, where
+ * the originals are; four copies in the hall that carried it too would make
+ * the thread begin in a room that belongs to no era. They are catalogued like
+ * any piece, and count for the hall's own medal (the Lineage, L11).
  */
 const ATRIUM_EXHIBITS = [
   {
@@ -191,7 +200,7 @@ const ATRIUM_EXHIBITS = [
     titleKey: 'exhibit.atrium-ball-laced.title',
     labelKey: 'exhibit.atrium-ball-laced.label',
     catalogueKey: 'exhibit.atrium-ball-laced.catalogue',
-    threads: ['ball'],
+    threads: [],
     hotspots: [
       {
         id: 'lacing',
@@ -218,7 +227,7 @@ const ATRIUM_EXHIBITS = [
     titleKey: 'exhibit.atrium-ball-tokyo-1964.title',
     labelKey: 'exhibit.atrium-ball-tokyo-1964.label',
     catalogueKey: 'exhibit.atrium-ball-tokyo-1964.catalogue',
-    threads: ['ball'],
+    threads: [],
     hotspots: [
       {
         id: 'panel-trio',
@@ -245,7 +254,7 @@ const ATRIUM_EXHIBITS = [
     titleKey: 'exhibit.atrium-ball-colour-1998.title',
     labelKey: 'exhibit.atrium-ball-colour-1998.label',
     catalogueKey: 'exhibit.atrium-ball-colour-1998.catalogue',
-    threads: ['ball'],
+    threads: [],
     hotspots: [
       {
         id: 'colour-sequence',
@@ -272,7 +281,7 @@ const ATRIUM_EXHIBITS = [
     titleKey: 'exhibit.atrium-ball-eight-panel-2008.title',
     labelKey: 'exhibit.atrium-ball-eight-panel-2008.label',
     catalogueKey: 'exhibit.atrium-ball-eight-panel-2008.catalogue',
-    threads: ['ball'],
+    threads: [],
     hotspots: [
       {
         id: 'spiral-panels',
@@ -537,6 +546,37 @@ const HOLYOKE_EXHIBITS = [
 // Documents
 // ---------------------------------------------------------------------------
 
+/**
+ * The house on the night of the Posse: three rooms and twelve pieces, each
+ * written out.
+ *
+ * The notebook's list used to ask for "every room" and "every piece", which
+ * mean whatever the build holds: the wing a later lot opens would untick
+ * «Religar a energia» for a player who had lit all there was (D1). Frozen
+ * lists are not derived from the rooms and exhibits below, on purpose; a
+ * piece added to the hall is not thereby added to what the director asked
+ * for that night. These are the ids the record of L2 wrote down when the two
+ * lines still said "all of them" (`docs/releases/L2.graph.json`).
+ */
+const HOUSE_ROOMS = ['office', 'atrium', 'holyoke'] as const
+const HALL_PIECES = [
+  'atrium-ball-laced',
+  'atrium-ball-tokyo-1964',
+  'atrium-ball-colour-1998',
+  'atrium-ball-eight-panel-2008',
+] as const
+const WING_PIECES = [
+  'ball-improvised',
+  'ball-spalding',
+  'net-1897',
+  'handbook-1897',
+  'guide-1916',
+  'gym-suit',
+  'portrait-morgan',
+  'photo-gym',
+] as const
+const HOUSE_PIECES = [...HALL_PIECES, ...WING_PIECES] as const
+
 const DOCUMENTS = [
   {
     id: 'doc-invention-date',
@@ -580,6 +620,12 @@ const DOCUMENTS = [
    * letter gives the night its one rule (power, room by room) and its deadline,
    * and the checklist is the quest log that ticks itself. The postscript is
    * the tutorial for knowledge locks, delivered before the first one exists.
+   *
+   * The list is in the director's ink. Its first two lines name what they
+   * wait for and count it, room by room; the third is about the vault under
+   * the hall, which this build shows on the office plan and has not built.
+   * It is a promise with a date: no box, and a pencil note that says why not
+   * tonight. (The gate held it as a box nothing ticks until L3.)
    */
   {
     id: 'doc-welcome',
@@ -600,9 +646,30 @@ const DOCUMENTS = [
         style: 'checklist',
         headingKey: 'notebook.todo.heading',
         items: [
-          { labelKey: 'notebook.todo.power', doneWhen: { allRoomsPowered: true } },
-          { labelKey: 'notebook.todo.catalogue', doneWhen: { allCatalogued: true } },
-          { labelKey: 'notebook.todo.vault' },
+          {
+            labelKey: 'notebook.todo.power',
+            author: 'helena',
+            doneWhen: { powered: HOUSE_ROOMS },
+            counters: [{ of: { powered: HOUSE_ROOMS } }],
+            mentions: HOUSE_ROOMS,
+          },
+          {
+            labelKey: 'notebook.todo.catalogue',
+            author: 'helena',
+            doneWhen: { catalogued: HOUSE_PIECES },
+            counters: [
+              { titleKey: 'room.atrium.title', of: { catalogued: HALL_PIECES } },
+              { titleKey: 'room.holyoke.title', of: { catalogued: WING_PIECES } },
+            ],
+            mentions: HOUSE_PIECES,
+          },
+          {
+            labelKey: 'notebook.todo.vault',
+            author: 'helena',
+            // The Founder's vault is L12's room; until then nothing ticks this.
+            deferredUntilLot: 12,
+            noteKey: 'notebook.todo.vault.note',
+          },
         ],
       },
     ],
@@ -924,6 +991,38 @@ const OFFICE_DEVICES = [
   },
 ] as const satisfies readonly DeviceData[]
 
+/**
+ * The medallion plinth, dead centre of the hall.
+ *
+ * The hub needs one strong landmark you orient by and pass repeatedly — the
+ * direct analogue of the Goddess Statue in the RPD main hall. Without it the
+ * atrium is an empty eighteen-metre box, which is exactly how it read the
+ * first time anyone walked into it.
+ *
+ * Three medallions slot into it to open the vault. Nothing does yet, and
+ * until L3 nothing said so: the largest object in the building answered the
+ * crosshair with silence. It is a notice now, a promise with a date. It says
+ * what it is and why it is roped off, takes no key, and the gate fails in
+ * the lot that was to give it its sockets if it is still only this.
+ *
+ * A device rather than a kit placement because furniture is instanced: it
+ * has no id and nothing to aim at. Its five nodes are drawn once either way,
+ * and it is solid by the collider of its recipe, as it was in the kit.
+ */
+const ATRIUM_DEVICES = [
+  {
+    kind: 'notice',
+    id: 'atrium-podium',
+    part: 'atrium-central-podium',
+    position: [0, 0, 0],
+    rotationY: Math.PI / 2,
+    titleKey: 'device.atrium-podium.title',
+    noticeKey: 'device.atrium-podium.notice',
+    // Medals and the house lights (L11) are what it is for.
+    deferredUntilLot: 11,
+  },
+] as const satisfies readonly DeviceData[]
+
 // ---------------------------------------------------------------------------
 // Rooms
 // ---------------------------------------------------------------------------
@@ -1018,20 +1117,12 @@ const ROOMS = [
       },
     ],
     /**
-     * The medallion plinth, dead centre.
-     *
-     * The hub needs one strong landmark you orient by and pass repeatedly —
-     * the direct analogue of the Goddess Statue in the RPD main hall. Without
-     * it the atrium is an empty eighteen-metre box, which is exactly how it
-     * read the first time anyone walked into it.
-     *
-     * Three medallions slot into it to open the vault. Nothing does yet; the
-     * object exists first so the space has a centre and the later gate has
-     * somewhere to live.
+     * Dead centre stands the medallion plinth, which is a device now and not
+     * furniture (`ATRIUM_DEVICES`): what the kit keeps of it is the inlay
+     * under it and the ring of barriers round it.
      */
     kit: [
       { part: 'atrium-floor-inlay', position: [0, 0, 0] },
-      { part: 'atrium-central-podium', position: [0, 0, 0], rotationY: Math.PI / 2 },
 
       // The low, repeated segments describe one circular object without closing
       // the floor into a square pen. The open visual rhythm keeps every route
@@ -1233,6 +1324,7 @@ const ROOMS = [
       'atrium-ball-eight-panel-2008',
     ],
     documentIds: [],
+    devices: ATRIUM_DEVICES,
     audio: [
       {
         id: 'atrium-hum',

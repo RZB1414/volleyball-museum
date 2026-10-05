@@ -1,7 +1,8 @@
 /**
- * The curator's journal: map, catalogue, archive and credits.
+ * The curator's journal: the director's list, map, catalogue, archive and
+ * credits.
  *
- * One screen with four tabs rather than four separate menus, because the
+ * One screen with five tabs rather than five separate menus, because the
  * diegetic container is a single thing the curator carries — a gallery guide
  * with the floorplan on the front and the accession notes in the back. It also
  * means one keybinding to learn.
@@ -18,15 +19,32 @@ import { useEffect, useState } from 'react'
 
 import { formatCreditEntry } from '../content/credit'
 import { MUSEUM } from '../content/museum'
-import { journalUnlocked } from '../engine/notebook'
+import { checklistPageOf, journalUnlocked } from '../engine/notebook'
 import { useTranslate } from '../i18n'
 import { useMuseum, type JournalTab } from '../state/store'
-import { closeLabel } from './hudRules'
+import { closeLabel, JOURNAL_HOME_TAB } from './hudRules'
 import { MuseumMap } from './MuseumMap'
 import { NotebookPageView } from './Notebook'
 import { useCoarsePointer } from './useCoarsePointer'
 
 type Tab = JournalTab
+
+/**
+ * The director's list, as it stands now: the page the player read on the
+ * desk, drawn by the same component, so it ticks and counts here as it does
+ * there. It is the notebook's first tab because it is what the player comes
+ * back for between rooms: what is left to do before nine.
+ */
+function NotebookTab() {
+  const page = checklistPageOf(MUSEUM)
+  if (!page) return null
+
+  return (
+    <div className="notebook-sheet is-inline">
+      <NotebookPageView page={page} />
+    </div>
+  )
+}
 
 function CatalogueTab() {
   const catalogued = useMuseum((state) => state.progress.catalogued)
@@ -175,7 +193,7 @@ export function Journal() {
         // time — and never before the notebook has been picked up.
         if (state.examining || state.openedContainer || state.activeLock) return
         if (!journalUnlocked(MUSEUM, state.progress.documentsRead)) return
-        state.setJournalTab(state.journalTab ? null : 'map')
+        state.setJournalTab(state.journalTab ? null : JOURNAL_HOME_TAB)
         if (document.pointerLockElement) document.exitPointerLock()
       }
 
@@ -193,6 +211,7 @@ export function Journal() {
   if (!openTab) return null
 
   const tabs: { id: Tab; labelKey: string }[] = [
+    { id: 'notebook', labelKey: 'journal.tab.notebook' },
     { id: 'map', labelKey: 'map.title' },
     { id: 'catalogue', labelKey: 'catalogue.title' },
     { id: 'archive', labelKey: 'archive.title' },
@@ -220,6 +239,7 @@ export function Journal() {
         </nav>
 
         <div className="journal-body">
+          {openTab === 'notebook' ? <NotebookTab /> : null}
           {openTab === 'map' ? <MuseumMap /> : null}
           {openTab === 'catalogue' ? <CatalogueTab /> : null}
           {openTab === 'archive' ? <ArchiveTab /> : null}

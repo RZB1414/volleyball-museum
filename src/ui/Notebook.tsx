@@ -12,8 +12,8 @@ import { useEffect } from 'react'
 
 import { MUSEUM } from '../content/museum'
 import type { NotebookPage } from '../content/schema'
+import { checklistRows, counterText } from '../engine/checklist'
 import { containerById, notebookPagesFor } from '../engine/notebook'
-import { progressConditionMet } from '../engine/progressCondition'
 import { useTranslate } from '../i18n'
 import { useMuseum } from '../state/store'
 
@@ -28,23 +28,33 @@ export function NotebookPageView({ page }: { page: NotebookPage }) {
   const text = (key: string | undefined) => (key ? t(key as never) : '')
 
   if (page.style === 'checklist') {
+    // What the list shows is `checklistRows`' to say: which lines are on the
+    // page, which have a box, what each counts. This only draws it.
+    const rows = checklistRows(page.items ?? [], progress, MUSEUM)
     return (
       <div className="notebook-page is-checklist">
         {page.headingKey ? <h3>{text(page.headingKey)}</h3> : null}
         <ul className="notebook-checklist">
-          {(page.items ?? []).map((item) => {
-            const done = item.doneWhen
-              ? progressConditionMet(item.doneWhen, progress, MUSEUM)
-              : false
-            return (
-              <li key={item.labelKey} className={done ? 'is-done' : ''}>
-                <span className="notebook-box" aria-hidden="true">
-                  {done ? '☑' : '☐'}
-                </span>
-                <span>{text(item.labelKey)}</span>
-              </li>
-            )
-          })}
+          {rows.map((row) => (
+            // Ink for the director's lines, pencil for the curator's own.
+            <li key={row.labelKey} className={`is-${row.author}${row.done ? ' is-done' : ''}`}>
+              {/* A promise with a date has no box: an empty one beside «not
+                  tonight» would sit there unticked for good. */}
+              <span className="notebook-box" aria-hidden="true">
+                {row.done === null ? '' : row.done ? '☑' : '☐'}
+              </span>
+              <span className="notebook-line">
+                <span className="notebook-label">{text(row.labelKey)}</span>
+                {row.counters.map((counter, index) => (
+                  <span key={index} className="notebook-count">
+                    {counter.titleKey ? `${text(counter.titleKey)} ` : ''}
+                    {counterText(t('notebook.counter'), counter.done, counter.of)}
+                  </span>
+                ))}
+                {row.noteKey ? <span className="notebook-note">{text(row.noteKey)}</span> : null}
+              </span>
+            </li>
+          ))}
         </ul>
       </div>
     )

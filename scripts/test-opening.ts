@@ -29,7 +29,15 @@ import {
 import { MUSEUM } from '../src/content/museum.ts'
 import type { ExhibitMount, MuseumContent, RoomData } from '../src/content/schema.ts'
 import { simulateProgress } from '../src/content/simulate.ts'
-import { validateContent, validateOpening, type ValidationIssue } from '../src/content/validate.ts'
+import {
+  datedPromises,
+  formatKnownDebt,
+  validateContent,
+  validateDeferred,
+  validateOpening,
+  type ValidationIssue,
+} from '../src/content/validate.ts'
+import { checklistNews, checklistRows, conditionTally, counterText } from '../src/engine/checklist.ts'
 import {
   clockHandAngles,
   clockTimeAfter,
@@ -207,24 +215,187 @@ test('a content set without a notebook keeps the journal available', () => {
   assert.equal(journalUnlocked(withoutCarrier, []), true)
 })
 
-test('the checklist ticks itself as the night goes on', () => {
+/**
+ * The list as the notebook draws it, in one language: what each line says of
+ * itself, whether it has a box and whether the box is ticked, the pencil note
+ * beside it and its counts as they are printed.
+ */
+function listAsRead(
+  items: Parameters<typeof checklistRows>[0],
+  save: Save,
+  content: Pick<MuseumContent, 'rooms' | 'exhibits'> = MUSEUM,
+  dictionary: Record<string, string> = ptBR,
+) {
+  return checklistRows(items, save, content).map((row) => ({
+    line: row.labelKey,
+    done: row.done,
+    note: row.noteKey,
+    counts: row.counters.map((counter) =>
+      [
+        ...(counter.titleKey ? [dictionary[counter.titleKey]] : []),
+        counterText(dictionary['notebook.counter'], counter.done, counter.of),
+      ].join(' '),
+    ),
+  }))
+}
+
+test('the list is data: every line has a box or a date, and counts what is done (L3)', () => {
   const [, , checklist] = notebookPagesFor(MUSEUM, 'office-notebook')
-  const [power, catalogue, vault] = checklist.items ?? []
-  assert.ok(power?.doneWhen && catalogue?.doneWhen && vault)
+  const items = checklist.items ?? []
+  assert.deepEqual(
+    items.map((item) => item.labelKey),
+    ['notebook.todo.power', 'notebook.todo.catalogue', 'notebook.todo.vault'],
+  )
+  for (const item of items) {
+    // A line with neither is a box nothing ever ticks; one with both is a
+    // promise that pretends to be a task.
+    assert.ok(
+      (item.doneWhen === undefined) !== (item.deferredUntilLot === undefined),
+      `${item.labelKey} has a box to tick or the lot that gives it one, and not both`,
+    )
+    assert.equal(item.author, 'helena', `${item.labelKey} is in the director's ink`)
+  }
+  const [power, catalogue, vault] = items
+  assert.ok(power.doneWhen && catalogue.doneWhen)
 
+  // The night begins: three boxes' worth of nothing, counted room by room.
   const save = freshSave()
-  assert.equal(progressConditionMet(power.doneWhen, save, MUSEUM), false)
+  assert.deepEqual(listAsRead(items, save), [
+    { line: 'notebook.todo.power', done: false, note: null, counts: ['0 de 3'] },
+    {
+      line: 'notebook.todo.catalogue',
+      done: false,
+      note: null,
+      counts: ['Átrio 0 de 4', 'Ala 1 · Holyoke 0 de 8'],
+    },
+    { line: 'notebook.todo.vault', done: null, note: 'notebook.todo.vault.note', counts: [] },
+  ])
+  assert.deepEqual(
+    listAsRead(items, save, MUSEUM, en).map((row) => row.counts),
+    [['0 of 3'], ['Atrium 0 of 4', 'Wing 1 · Holyoke 0 of 8'], []],
+  )
+
+  // Line 1 counts up and ticks with the three rooms of the house.
   save.roomsPowered = ['office', 'atrium']
-  assert.equal(progressConditionMet(power.doneWhen, save, MUSEUM), false, 'one wing still dark')
-  save.roomsPowered = MUSEUM.rooms.map((room) => room.id)
-  assert.equal(progressConditionMet(power.doneWhen, save, MUSEUM), true)
+  assert.deepEqual(listAsRead(items, save)[0], {
+    line: 'notebook.todo.power',
+    done: false,
+    note: null,
+    counts: ['2 de 3'],
+  })
+  save.roomsPowered = ['office', 'atrium', 'holyoke']
+  assert.deepEqual(listAsRead(items, save)[0].counts, ['3 de 3'])
+  assert.equal(listAsRead(items, save)[0].done, true)
 
-  save.catalogued = MUSEUM.exhibits.slice(1).map((exhibit) => exhibit.id)
-  assert.equal(progressConditionMet(catalogue.doneWhen, save, MUSEUM), false)
+  // Frozen: the line names the rooms it means. A wing a later lot opens, dark,
+  // does not untick what the player lit, and is not counted either (D1).
+  const grown: MuseumContent = {
+    ...MUSEUM,
+    rooms: [
+      ...MUSEUM.rooms,
+      { ...atrium, id: 'paris', portals: [], exhibitIds: [], containers: [], devices: [], powerControl: undefined },
+    ],
+    exhibits: [...MUSEUM.exhibits, { ...MUSEUM.exhibits[0], id: 'a-thirteenth-piece' }],
+  }
+  assert.equal(progressConditionMet(power.doneWhen, save, grown), true, 'a fourth room does not untick line 1')
+  assert.deepEqual(listAsRead(items, save, grown)[0], {
+    line: 'notebook.todo.power',
+    done: true,
+    note: null,
+    counts: ['3 de 3'],
+  })
+
+  // Line 2 counts each room's pieces apart, and ticks with the twelve of the house.
+  const inTheHall = atrium.exhibitIds
+  const inTheWing = roomById('holyoke').exhibitIds
+  assert.deepEqual([inTheHall.length, inTheWing.length], [4, 8])
+  save.catalogued = [...inTheHall, inTheWing[0]]
+  assert.deepEqual(listAsRead(items, save)[1], {
+    line: 'notebook.todo.catalogue',
+    done: false,
+    note: null,
+    counts: ['Átrio 4 de 4', 'Ala 1 · Holyoke 1 de 8'],
+  })
   save.catalogued = MUSEUM.exhibits.map((exhibit) => exhibit.id)
-  assert.equal(progressConditionMet(catalogue.doneWhen, save, MUSEUM), true)
+  assert.deepEqual(listAsRead(items, save)[1].counts, ['Átrio 4 de 4', 'Ala 1 · Holyoke 8 de 8'])
+  assert.equal(listAsRead(items, save)[1].done, true)
+  assert.equal(listAsRead(items, save, grown)[1].done, true, 'a thirteenth piece does not untick line 2')
 
-  assert.equal(vault.doneWhen, undefined, 'the vault stays open until the vault exists')
+  // Line 3 is a promise with a date: no box whatever the save holds, and the
+  // pencil note that says why. Nothing the player does tonight ticks it.
+  assert.equal(vault.deferredUntilLot, 12)
+  assert.equal(vault.noteKey, 'notebook.todo.vault.note')
+  const everything = { ...save, locksOpened: MUSEUM.locks.map((lock) => lock.id), documentsRead: MUSEUM.documents.map((doc) => doc.id) }
+  assert.deepEqual(listAsRead(items, everything)[2], {
+    line: 'notebook.todo.vault',
+    done: null,
+    note: 'notebook.todo.vault.note',
+    counts: [],
+  })
+  for (const [locale, dictionary] of [['pt-BR', ptBR], ['en', en]] as const) {
+    assert.ok(dictionary['notebook.todo.vault.note'].length > 0, `${locale}: the note is written`)
+  }
+
+  // What a line counts is what ticks it: the counts of a line, together,
+  // name exactly the ids its box waits for.
+  for (const item of items) {
+    if (!item.doneWhen || !item.counters) continue
+    const waited = [...(item.doneWhen.powered ?? []), ...(item.doneWhen.catalogued ?? [])].sort()
+    const counted = item.counters.flatMap((counter) => [...(counter.of.powered ?? []), ...(counter.of.catalogued ?? [])]).sort()
+    assert.deepEqual(counted, waited, `${item.labelKey} counts what ticks it`)
+  }
+
+  // And the page draws those rows, deciding nothing of its own: a tick or a
+  // box worked out in the component is a list no suite reads.
+  const page = squeezed(readText(new URL('../src/ui/Notebook.tsx', import.meta.url)))
+  assert.ok(page.includes('const rows = checklistRows(page.items ?? [], progress, MUSEUM)'), 'the page asks checklistRows for its lines')
+  assert.ok(!page.includes('progressConditionMet('), 'the page decides a tick by itself')
+  assert.ok(page.includes("{row.done === null ? '' : row.done ? '☑' : '☐'}"), 'a line with no box is drawn with none')
+  assert.ok(page.includes("counterText(t('notebook.counter'), counter.done, counter.of)"), 'a count is printed in the dictionary\'s own sentence')
+  assert.ok(page.includes('{row.noteKey ? <span className="notebook-note">{text(row.noteKey)}</span> : null}'), 'the note is drawn beside its line')
+})
+
+test('a count is asked of the same rule that ticks, and a pencil line is news once', () => {
+  const save = freshSave()
+  // A room that never lost its power counts as lit, as it does for the tick.
+  const lit: Pick<MuseumContent, 'rooms' | 'exhibits'> = {
+    exhibits: MUSEUM.exhibits,
+    rooms: MUSEUM.rooms.map((room) => (room.id === 'holyoke' ? { ...room, startsPowered: true } : room)),
+  }
+  const rooms = { powered: ['office', 'atrium', 'holyoke'] } as const
+  assert.deepEqual(conditionTally(rooms, save, MUSEUM), { done: 0, of: 3 })
+  assert.deepEqual(conditionTally(rooms, save, lit), { done: 1, of: 3 })
+  assert.equal(progressConditionMet({ powered: ['holyoke'] }, save, lit), true)
+  // Every list a counter may hold is added up, each id once.
+  save.documentsRead = ['doc-welcome']
+  save.locksOpened = ['office-drawer']
+  assert.deepEqual(
+    conditionTally(
+      { documentsRead: ['doc-welcome', 'doc-halstead'], locksOpened: ['office-drawer'], catalogued: ['ball-spalding'] },
+      save,
+      MUSEUM,
+    ),
+    { done: 2, of: 4 },
+  )
+  assert.equal(counterText('{done} de {total}', 2, 4), '2 de 4')
+  assert.equal(counterText('{total}: {done}', 2, 4), '4: 2', 'a language may put them the other way round')
+
+  // A line that waits to appear is not on the list until its moment, and the
+  // curator's own are announced the first time they are: never the director's.
+  const items = [
+    { labelKey: 'ink', author: 'helena', doneWhen: { powered: ['office'] } },
+    { labelKey: 'ink.later', author: 'helena', appearsWhen: { locksOpened: ['office-drawer'] }, doneWhen: { powered: ['atrium'] } },
+    { labelKey: 'pencil', author: 'curator', appearsWhen: { locksOpened: ['office-drawer'] }, doneWhen: { powered: ['atrium'] } },
+    { labelKey: 'pencil.always', author: 'curator', doneWhen: { powered: ['atrium'] } },
+  ] as const
+  const before = freshSave()
+  const after = { ...freshSave(), locksOpened: ['office-drawer'] }
+  assert.deepEqual(checklistRows(items, before, MUSEUM).map((row) => row.labelKey), ['ink', 'pencil.always'])
+  assert.deepEqual(checklistRows(items, after, MUSEUM).map((row) => row.labelKey), ['ink', 'ink.later', 'pencil', 'pencil.always'])
+  assert.deepEqual(checklistRows(items, after, MUSEUM).map((row) => row.author), ['helena', 'helena', 'curator', 'curator'])
+  assert.deepEqual(checklistNews(items, before, after, MUSEUM), ['pencil'])
+  assert.deepEqual(checklistNews(items, after, after, MUSEUM), [], 'a line already on the list is not news')
+  assert.deepEqual(checklistNews(items, after, before, MUSEUM), [], 'and a save that shrank announces nothing')
 })
 
 test('opening a container always starts a notebook on its first page', () => {
@@ -297,8 +468,8 @@ test('a door powered from beyond itself is a soft-lock the gate catches', () => 
     .map((issue) => issue.id)
   assert.deepEqual(unreachable.sort(), ['atrium', 'holyoke'], 'the atrium is unreachable from the office')
   // The authored museum is accused of nothing the debt table has not dated
-  // (three pieces a hand cannot be counted on to catalogue, the two list
-  // items that follow from them, and one optional detail out of reach):
+  // (three pieces a hand cannot be counted on to catalogue, the list item
+  // that follows from them, and one optional detail out of reach):
   // every room is reached and every lock opens.
   const authored = simulateProgress(MUSEUM)
   const owed = debtOf('validate:content').filter((line) =>
@@ -1061,6 +1232,107 @@ test('each validator the gate lacked fails a museum broken on purpose', () => {
 
   assert.deepEqual(quiet, [], 'every broken museum is caught')
   assert.deepEqual(noisy, [], 'and the authored one is not accused of what it does not do')
+})
+
+test('a dated promise has no box, says so in the game, and falls due with its lot (L3)', () => {
+  // What the house shows and does not let the player use yet, each with the
+  // lot that pays it and the words the game says meanwhile.
+  const promises = datedPromises(MUSEUM)
+  assert.deepEqual(
+    promises.map((promise) => `${promise.kind} ${promise.id} L${promise.untilLot} ${promise.noticeKey}`),
+    [
+      'device atrium-podium L11 device.atrium-podium.notice',
+      'checklist notebook.todo.vault L12 notebook.todo.vault.note',
+    ],
+  )
+  for (const promise of promises) {
+    assert.ok(promise.untilLot > CONTENT_LOT, `${promise.id} is dated ahead`)
+    for (const dictionary of [ptBR, en] as readonly Record<string, string>[]) {
+      assert.ok(dictionary[promise.noticeKey ?? '']?.length > 0, `${promise.id} says something in every language`)
+    }
+  }
+  assert.deepEqual(validateDeferred(MUSEUM, CONTENT_LOT), [])
+  // Asked with no lot, nothing can be overdue; the rest is still asked.
+  assert.deepEqual(validateDeferred(MUSEUM), [])
+
+  type Item = NonNullable<NonNullable<MuseumContent['documents'][number]['pages']>[number]['items']>[number]
+  const withVault = (patch: (item: Item) => Item): MuseumContent => ({
+    ...MUSEUM,
+    documents: MUSEUM.documents.map((doc) => ({
+      ...doc,
+      pages: doc.pages?.map((page) => ({
+        ...page,
+        items: page.items?.map((item) => (item.labelKey === 'notebook.todo.vault' ? patch(item) : item)),
+      })),
+    })),
+  })
+  const withPodium = (patch: Record<string, unknown>): MuseumContent =>
+    withRoom('atrium', (room) => ({
+      devices: (room.devices ?? []).map((device) => (device.id === 'atrium-podium' ? ({ ...device, ...patch } as typeof device) : device)),
+    }))
+
+  // The lot arrives and the thing is still only a promise: the date was one.
+  assert.deepEqual(accused(validateDeferred(MUSEUM, 10), 'deferred-overdue'), [])
+  assert.deepEqual(accused(validateDeferred(MUSEUM, 11), 'deferred-overdue'), ['atrium-podium'])
+  assert.deepEqual(accused(validateDeferred(MUSEUM, 12), 'deferred-overdue').sort(), ['atrium-podium', 'notebook.todo.vault'])
+  // And the gate asks it with the lot the debt table is judged at.
+  const settledAt = (lot: number) =>
+    validateContent(MUSEUM, BAKED_BUNDLES, DICTIONARY_KEYS, undefined, {
+      dictionaries: DICTIONARIES,
+      keysCitedByCode: KEYS_CITED_BY_CODE,
+      knownDebt: { lines: debtOf('validate:content'), lot },
+    })
+  assert.deepEqual(accused(settledAt(CONTENT_LOT), 'deferred-overdue'), [])
+  assert.deepEqual(accused(settledAt(11), 'deferred-overdue'), ['atrium-podium'])
+
+  // A promise the game does not say: the player meets a thing with no answer.
+  assert.deepEqual(
+    accused(gate(withVault(({ noteKey: _, ...item }) => item)), 'deferred-without-notice'),
+    ['notebook.todo.vault'],
+  )
+  assert.deepEqual(accused(gate(withPodium({ noticeKey: '' })), 'deferred-without-notice'), ['atrium-podium'])
+  assert.deepEqual(accused(gate(MUSEUM), 'deferred-without-notice'), [])
+
+  // A promise with a box: it would sit unticked beside its own "not tonight".
+  assert.deepEqual(
+    accused(gate(withVault((item) => ({ ...item, doneWhen: { powered: ['office'] } }))), 'checklist-deferred-with-box'),
+    ['notebook.todo.vault'],
+  )
+  assert.deepEqual(accused(gate(MUSEUM), 'checklist-deferred-with-box'), [])
+  // And a line with neither is what it always was: a box nothing ever ticks.
+  assert.deepEqual(
+    accused(gate(withVault(({ deferredUntilLot: _, ...item }) => item)), 'checklist-item-untickable').filter(
+      (id) => id === 'notebook.todo.vault',
+    ),
+    ['notebook.todo.vault'],
+  )
+  // A line that waits to appear for something no play reaches is never read.
+  assert.ok(
+    accused(
+      gate(withVault((item) => ({ ...item, appearsWhen: { catalogued: ['net-1897'] } }))),
+      'checklist-item-untickable',
+    ).includes('notebook.todo.vault'),
+    'a line that never appears is accused',
+  )
+  // What it waits for is checked like any other condition.
+  assert.deepEqual(
+    accused(gate(withVault((item) => ({ ...item, appearsWhen: { locksOpened: ['no-such-lock'] } }))), 'condition-lock-missing'),
+    ['no-such-lock'],
+  )
+  assert.deepEqual(
+    accused(
+      gate(withVault((item) => ({ ...item, counters: [{ of: { catalogued: ['no-such-piece'] } }] }))),
+      'condition-exhibit-missing',
+    ),
+    ['no-such-piece'],
+  )
+
+  // The gate prints them on every run, soonest first, beside what is owed.
+  const printed = formatKnownDebt([], promises).split('\n').filter((line) => /until L/.test(line))
+  assert.equal(printed.length, 2)
+  assert.match(printed[0], /until L11 +atrium-podium +device\.atrium-podium\.notice/)
+  assert.match(printed[1], /until L12 +notebook\.todo\.vault +notebook\.todo\.vault\.note/)
+  assert.equal(formatKnownDebt([]), '', 'with nothing owed and nothing promised, nothing is printed')
 })
 
 test('a condition, an effect or a trigger that points at nothing fails the gate (L2)', () => {

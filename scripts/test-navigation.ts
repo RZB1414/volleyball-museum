@@ -41,8 +41,8 @@ import { MUSEUM } from '../src/content/museum.ts'
 import type { MuseumContent, RoomData } from '../src/content/schema.ts'
 import type { ValidationIssue } from '../src/content/validate.ts'
 import { movePlayer, worldFromMeshes } from '../src/engine/collision.ts'
-import { radioDevices } from '../src/engine/deviceRules.ts'
-import { INTERACTION_REACH, PROXY_MINIMUM } from '../src/engine/interactionTarget.ts'
+import { aimableDevices, radioDevices } from '../src/engine/deviceRules.ts'
+import { deviceProxyMinimum, INTERACTION_REACH, PROXY_MINIMUM } from '../src/engine/interactionTarget.ts'
 import { isNotebook } from '../src/engine/notebook.ts'
 import { MOUNT_PARTS } from '../src/engine/runtimePlacedParts.ts'
 import { TRANSITION_DOOR_GATE_DEPTH } from '../src/engine/transitionDoorCollision.ts'
@@ -198,6 +198,12 @@ function collectSolidFootprints() {
       footprints.push(
         ...footprintsFor(room, `${room.id}/power:${room.powerControl.id}`, room.powerControl),
       )
+    }
+
+    // A device is solid by whatever collider its recipe carries: the plinth
+    // of the hall is one since it left the furniture to answer the crosshair.
+    for (const device of room.devices ?? []) {
+      footprints.push(...footprintsFor(room, `${room.id}/device:${device.id}`, { ...device, scale: 1 }))
     }
 
     for (const exhibitId of room.exhibitIds) {
@@ -1183,6 +1189,30 @@ function furnished(roomId: string, kit: RoomData['kit']): MuseumContent {
     )
   }
 
+  // A device that is no radio: the plinth of the hall, larger than the
+  // minimum of its kind on every axis, so its box is its own bounds and no
+  // more, turned with it.
+  const plinth = aimableDevices(MUSEUM).find((entry) => entry.device.kind !== 'radio')
+  if (!plinth) throw new Error('no device but the radio is left to prove the other minimum with')
+  const plinthOwn = boundsOf(plinth.device.part, 'kit')
+  const plinthMinimum = deviceProxyMinimum(plinth.device)
+  const onTop = (placed: Placed, x: number, z: number) => from(plinth.room.origin, placed, [x, plinthOwn.max[1] - 0.01, z])
+  check(
+    `${plinth.device.id}: a device that is no radio is aimed at through its own bounds, by the minimum of its kind`,
+    plinthMinimum === PROXY_MINIMUM.device &&
+      deviceProxyMinimum(radio.device) === PROXY_MINIMUM.radio &&
+      [0, 1, 2].every((axis) => plinthOwn.max[axis] - plinthOwn.min[axis] > plinthMinimum[axis]) &&
+      inside(plinth.device.id, onTop(plinth.device, plinthOwn.max[0] - 0.005, 0)) &&
+      !inside(plinth.device.id, onTop(plinth.device, plinthOwn.max[0] + 0.005, 0)) &&
+      inside(plinth.device.id, onTop(plinth.device, 0, plinthOwn.max[2] - 0.005)) &&
+      !inside(plinth.device.id, onTop(plinth.device, 0, plinthOwn.max[2] + 0.005)) &&
+      // Longer one way than the other, and placed a quarter turn round: the
+      // same point of an unturned box is past its side.
+      plinthOwn.max[0] > plinthOwn.max[2] + 0.05 &&
+      !inside(plinth.device.id, onTop({ position: plinth.device.position }, plinthOwn.max[0] - 0.005, 0)),
+    `its recipe is ${[0, 1, 2].map((axis) => (plinthOwn.max[axis] - plinthOwn.min[axis]).toFixed(2)).join(' × ')} m, the minimum ${plinthMinimum.join(' × ')}`,
+  )
+
   // A door: the whole opening on the plane of the leaves, the same box from
   // either room, and nothing on the line of the wall it was authored on.
   for (const door of buildTransitionDoorSpecs(MUSEUM.rooms)) {
@@ -1241,6 +1271,50 @@ function furnished(roomId: string, kit: RoomData['kit']): MuseumContent {
   )
 }
 
+/**
+ * A device is solid by the collider of its recipe. The plinth of the hall
+ * was furniture until it had something to say (L3); as a device it leaves
+ * the list `KitLayer` registers colliders from, and a device layer that
+ * registered none would let the capsule walk through the one landmark the
+ * hall is composed round. Walked at from inside its ring of barriers: with
+ * the device in the world the capsule stops at its face, and in a world
+ * without it, it carries on through the place the plinth stands.
+ */
+{
+  const entry = aimableDevices(MUSEUM).find(({ device }) => device.id === 'atrium-podium')
+  const collider = entry ? colliderPartsOf(entry.device.part)[0]?.collider : undefined
+  if (!entry || !collider) throw new Error('the plinth of the hall is a device with a collider, or this check is about nothing')
+  const turn = entry.device.rotationY ?? 0
+  // Half the collider along the world's x, turned with the device.
+  const half = Math.abs(collider.halfExtents[0] * Math.cos(turn)) + Math.abs(collider.halfExtents[2] * Math.sin(turn))
+  const centre = roomPoint(entry.room.id, entry.device.position[0], entry.device.position[2])
+  const start = centre.clone().add(new Vector3(half + CAPSULE.radius + 0.25, 0, 0))
+  const west = new Vector3(-1, 0, 0)
+  const without = buildMuseumWorld({
+    ...MUSEUM,
+    rooms: MUSEUM.rooms.map((room) => ({
+      ...room,
+      devices: (room.devices ?? []).filter((device) => device.id !== entry.device.id),
+    })),
+  })
+  const stopped = walkUntilStopped(world, start, west, 2)
+  const through = walkUntilStopped(without, start, west, 2)
+  const face = centre.x + half + CAPSULE.radius
+  check(
+    'the plinth of the hall is solid as a device: the capsule stops against it',
+    Math.abs(collider.centre[0]) < 1e-6 &&
+      Math.abs(collider.centre[2]) < 1e-6 &&
+      Math.abs(stopped.x - face) < 0.02 &&
+      through.x < centre.x - 0.3,
+    `stopped at x ${stopped.x.toFixed(2)} (its face is at ${face.toFixed(2)}); with no device in the world, at ${through.x.toFixed(2)}`,
+  )
+  check(
+    'and no piece of furniture stands in for it: the plinth is in the list of devices, once',
+    MUSEUM.rooms.every((room) => room.kit.every((placement) => placement.part !== entry.device.part)) &&
+      MUSEUM.rooms.flatMap((room) => room.devices ?? []).filter((device) => device.part === entry.device.part).length === 1,
+  )
+}
+
 {
   const started = performance.now()
   const survey = surveyStanding()
@@ -1276,17 +1350,46 @@ function furnished(roomId: string, kit: RoomData['kit']): MuseumContent {
       (sum, room) => sum + room.exhibitIds.length + (room.containers?.length ?? 0) + (room.powerControl ? 1 : 0),
       0,
     ) +
-    radioDevices(MUSEUM).length +
+    aimableDevices(MUSEUM).length +
     2 * buildTransitionDoorSpecs(MUSEUM.rooms).length
   const judged = new Set(survey.verdicts.map((verdict) => verdict.volume.id))
   const byKind = new Map<string, number>()
   for (const { volume } of survey.verdicts) byKind.set(volume.kind, (byKind.get(volume.kind) ?? 0) + 1)
   check(
-    'the flood judges every piece, container, power control and radio, and both sides of every door',
+    'the flood judges every piece, container, power control and device that answers, and both sides of every door',
     survey.verdicts.length === expected &&
       judged.size === expected &&
       MUSEUM.exhibits.every((exhibit) => judged.has(exhibit.id)),
     `${survey.verdicts.length} judged, ${expected} in the content`,
+  )
+  // The list of devices is the content's, not this suite's: whatever the
+  // crosshair may rest on is walked up to, the radio and every thing that
+  // only says something (the plinth of the hall is the first).
+  const aimable = aimableDevices(MUSEUM)
+  const unjudged = aimable.filter(
+    ({ room, device }) =>
+      !survey.verdicts.some(
+        ({ volume }) => volume.kind === 'device' && volume.id === device.id && volume.roomId === room.id,
+      ),
+  )
+  check(
+    'every device the crosshair may rest on is a target the flood judged',
+    aimable.length > radioDevices(MUSEUM).length && unjudged.length === 0 && judged.has('atrium-podium'),
+    `${aimable.length} device(s) answer, ${radioDevices(MUSEUM).length} of them a radio; not judged: ` +
+      `${unjudged.map(({ device }) => device.id).join(', ') || 'none'}`,
+  )
+  const beforeThePlinth = survey.verdicts.find(({ volume }) => volume.id === 'atrium-podium')
+  check(
+    "the hall's plinth is read from a place in the hall, within the device ray's reach and outside its box",
+    Boolean(
+      beforeThePlinth?.usable &&
+        beforeThePlinth.usable.distance > 0 &&
+        beforeThePlinth.usable.distance <= INTERACTION_REACH.device &&
+        roomContaining(beforeThePlinth.usable.point)?.id === 'atrium',
+    ),
+    beforeThePlinth?.usable
+      ? `the eye is ${beforeThePlinth.usable.distance.toFixed(2)} m from it, of ${INTERACTION_REACH.device}`
+      : 'no place to read it from',
   )
   console.log(`  note  ${[...byKind].map(([kind, count]) => `${count} ${kind}`).join(', ')}`)
   for (const kind of byKind.keys()) {
@@ -1428,8 +1531,10 @@ function furnished(roomId: string, kit: RoomData['kit']): MuseumContent {
     ['a container reached by a number of its own', changed('engine/Containers.tsx', 'INTERACTION_REACH.container', '3')],
     ['a control with no padding', changed('engine/PowerControls.tsx', 'return paddedProxy(new Box3().setFromObject(instance), PROXY_MINIMUM.powerControl)', 'return paddedProxy(new Box3().setFromObject(instance), [0, 0, 0])')],
     ['a control whose ray has no end', changed('engine/PowerControls.tsx', 'instance.far = REACH', 'instance.far = Infinity')],
-    ['a radio padded by a number of its own', changed('engine/Devices.tsx', 'PROXY_MINIMUM.radio', '[0.6, 0.6, 0.6]')],
-    ['a radio whose box is not the padded one', changed('engine/Devices.tsx', '<boxGeometry args={proxy.size} />', '<boxGeometry args={[1, 1, 1]} />')],
+    ['a device padded by a number of its own', changed('engine/Devices.tsx', 'deviceProxyMinimum(device)', '[0.6, 0.6, 0.6]')],
+    ['every device padded to the radio\'s minimum', changed('engine/interactionTarget.ts', "device.kind === 'radio' ? PROXY_MINIMUM.radio : PROXY_MINIMUM.device", 'PROXY_MINIMUM.radio')],
+    ['a device whose box is not the padded one', changed('engine/Devices.tsx', '<boxGeometry args={proxy.size} />', '<boxGeometry args={[1, 1, 1]} />')],
+    ['a device hung a metre off its placement', changed('engine/Devices.tsx', 'position={device.position as unknown as [number, number, number]}', 'position={[device.position[0] + 1, device.position[1], device.position[2]]}')],
     ['a piece reached by the container\'s number', changed('engine/Interaction.tsx', 'INTERACTION_REACH.exhibit', 'INTERACTION_REACH.container')],
     ['a piece drawn at twice its scale', changed('scenes/MuseumScene.tsx', 'scale={exhibit.scale ?? 1}', 'scale={(exhibit.scale ?? 1) * 2}')],
     // What is solid in the suites' world is put there by the suites (`buildMuseumWorld`).
@@ -1439,6 +1544,8 @@ function furnished(roomId: string, kit: RoomData['kit']): MuseumContent {
     ['the base under a mounted piece solid five metres away', changed('scenes/MuseumScene.tsx', 'position: [exhibit.position[0], 0, exhibit.position[2]],\n        rotationY: exhibit.rotationY,', 'position: [exhibit.position[0] + 5, 0, exhibit.position[2]],\n        rotationY: exhibit.rotationY,')],
     ['a cabinet no longer solid', changed('engine/Containers.tsx', 'registerKitColliders(kit, container.part, kitBundle, collision,', 'registerNothing(')],
     ['the furniture of a room no longer solid', changed('engine/RoomFurniture.tsx', 'registerKitColliders(kit, placement.part, kitBundle, collision,', 'registerNothing(')],
+    ['a device no longer solid', changed('engine/Devices.tsx', 'registerKitColliders(kit, device.part, kitBundle, collision,', 'registerNothing(')],
+    ['the devices of a room handed no collision world', changed('scenes/MuseumScene.tsx', /(<DeviceLayer\b[^>]*?)\s+collision=\{collision\}/, '$1')],
   ]
   const uncaught = refactors
     .filter(([, reader]) => interactionVolumeWiringProblems(reader).length === 0)

@@ -302,5 +302,66 @@ check(
     : 'office metrics missing',
 )
 
+/**
+ * What each room draws by data: the kit, and beside it everything a room
+ * places one by one.
+ *
+ * The ceilings above count the kit alone, and a thing leaves the kit the day
+ * it has something to say: the plinth of the hall became a device in L3 (and
+ * the lectern, the telephone and the safe follow it). Furniture is instanced,
+ * one draw for every copy of a node; a container, a device and a power
+ * control are cloned, one draw for each node of each one. So a room that
+ * moves a piece from one list to the other draws the same, and a room that
+ * keeps it in both draws it twice, with every kit ceiling still green.
+ * These hold the sum to what was measured before the first piece moved.
+ */
+function drawnByData(room: (typeof MUSEUM.rooms)[number]) {
+  const nodesOf = (recipe: string) =>
+    kitBundle!.parts.filter((part) => part.name === recipe || part.name.startsWith(`${recipe}__`)).map((part) => part.name)
+  const kit = new Set(room.kit.flatMap((placement) => nodesOf(placement.part))).size
+  const containers = (room.containers ?? []).reduce((sum, container) => sum + nodesOf(container.part).length, 0)
+  const devices = (room.devices ?? []).reduce((sum, device) => sum + nodesOf(device.part).length, 0)
+  const control = room.powerControl ? nodesOf(room.powerControl.part).length : 0
+  return { kit, containers, devices, control, total: kit + containers + devices + control }
+}
+
+const DRAWN_BY_DATA_CEILING: Readonly<Record<string, number>> = { atrium: 59, holyoke: 33, office: 74 }
+for (const room of MUSEUM.rooms) {
+  const drawn = drawnByData(room)
+  const ceiling = DRAWN_BY_DATA_CEILING[room.id]
+  console.log(
+    `  PERF  ${room.id.padEnd(8)} drawn by data ${String(drawn.total).padStart(2)} ` +
+      `(kit ${drawn.kit}, containers ${drawn.containers}, devices ${drawn.devices}, control ${drawn.control})`,
+  )
+  check(
+    `${room.id} draws at most ${ceiling} nodes by data: kit, containers, devices and its power control`,
+    ceiling !== undefined && drawn.total <= ceiling,
+    ceiling === undefined ? 'a room with no ceiling' : `${drawn.total} nodes`,
+  )
+}
+
+// The plinth is in the atrium's count once, as a device: its five nodes left
+// the kit, which stands at 51 batches under its ceiling of 56.
+const atriumRoom = MUSEUM.rooms.find((room) => room.id === 'atrium')
+if (!atriumRoom) throw new Error('The atrium is required for the draw budgets.')
+const atriumDrawn = drawnByData(atriumRoom)
+check(
+  'the plinth of the hall is drawn once, as a device, and no longer by the kit',
+  atriumDrawn.kit === 51 && atriumDrawn.devices === 5,
+  `kit ${atriumDrawn.kit}, devices ${atriumDrawn.devices}`,
+)
+// And the ceiling bites the mistake it exists for: the plinth left in the
+// furniture as well as in the devices is five draws more, under every kit
+// ceiling above.
+const twice = drawnByData({
+  ...atriumRoom,
+  kit: [...atriumRoom.kit, { part: 'atrium-central-podium', position: [0, 0, 0] }],
+})
+check(
+  'a piece kept in the kit and in the devices breaks the ceiling by data, and not the kit\'s',
+  twice.total > DRAWN_BY_DATA_CEILING.atrium && twice.kit <= 56,
+  `${twice.total} nodes by data, ${twice.kit} kit batches`,
+)
+
 console.log(`\n${passed} passed, ${failed} failed`)
 if (failed > 0) process.exitCode = 1

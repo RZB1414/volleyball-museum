@@ -11,6 +11,7 @@
  * broken content edit fails loudly instead of at runtime.
  */
 
+import { devicePowerRoom } from '../engine/deviceRules.ts'
 import { conditionClasses, credentialKey } from '../engine/progressCondition.ts'
 import { MOUNT_PARTS, mountPartNames, transitionDoorPartNames } from '../engine/runtimePlacedParts.ts'
 import { buildRoomSignageLayout } from '../engine/signageLayout.ts'
@@ -762,7 +763,14 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
         error('notebook-page-empty', `${where} has neither a heading nor a body.`)
       }
       for (const item of page.items ?? []) {
-        if (item.doneWhen) checkCondition(item.doneWhen, `${where} item "${item.labelKey}"`)
+        // Whatever a line asks of the save, wherever it asks it: what ticks
+        // it, what puts it on the page, what it counts.
+        const line = `${where} item "${item.labelKey}"`
+        if (item.doneWhen) checkCondition(item.doneWhen, line)
+        if (item.appearsWhen) checkCondition(item.appearsWhen, `${line} (to appear)`)
+        for (const [position, counter] of (item.counters ?? []).entries()) {
+          checkCondition(counter.of, `${line}, count ${position + 1}`)
+        }
       }
     }
   }
@@ -809,13 +817,10 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
         error('device-outside-room', `Device "${device.id}" is outside room "${room.id}".`)
       }
 
-      const watched =
-        device.kind === 'clock'
-          ? device.runsWithPowerOf
-          : device.kind === 'power-indicator'
-            ? device.showsPowerOf
-            : device.poweredBy
-      if (!roomIds.has(watched)) {
+      // The room that feeds it, by the runtime's own rule; a device fed by
+      // none (a notice) watches nothing.
+      const watched = devicePowerRoom(device)
+      if (watched !== null && !roomIds.has(watched)) {
         error('device-room-missing', `Device "${device.id}" watches unknown room "${watched}".`)
       }
 
@@ -1000,6 +1005,101 @@ export function validateSaveAliases(
       },
     ]
   })
+}
+
+// ---------------------------------------------------------------------------
+// Dated promises
+// ---------------------------------------------------------------------------
+
+/**
+ * Something the build shows and does not yet let the player do: a line of
+ * the list with no box, a thing in a room that only says why not.
+ */
+export type DatedPromise = {
+  readonly kind: 'checklist' | 'device'
+  /** The line's key, or the device's id. */
+  readonly id: string
+  /** The lot that pays it. */
+  readonly untilLot: number
+  /** The dictionary key of what the game says meanwhile; null when it says nothing. */
+  readonly noticeKey: string | null
+}
+
+/** Every promise the content makes, soonest first. */
+export function datedPromises(content: Pick<MuseumContent, 'documents' | 'rooms'>): DatedPromise[] {
+  const promises: DatedPromise[] = []
+  for (const doc of content.documents) {
+    for (const page of doc.pages ?? []) {
+      for (const item of page.items ?? []) {
+        if (item.deferredUntilLot === undefined) continue
+        promises.push({
+          kind: 'checklist',
+          id: item.labelKey,
+          untilLot: item.deferredUntilLot,
+          noticeKey: item.noteKey || null,
+        })
+      }
+    }
+  }
+  for (const room of content.rooms) {
+    for (const device of room.devices ?? []) {
+      if (device.kind !== 'notice') continue
+      promises.push({
+        kind: 'device',
+        id: device.id,
+        untilLot: device.deferredUntilLot,
+        noticeKey: device.noticeKey || null,
+      })
+    }
+  }
+  return promises.sort((a, b) => a.untilLot - b.untilLot || a.id.localeCompare(b.id))
+}
+
+/**
+ * A promise is kept, and is said.
+ *
+ * The game used to promise by leaving things unanswered: a line about a
+ * vault with a box nothing ticked, a plinth in the middle of the hall that
+ * said nothing to the crosshair. A dated promise is the honest form of both.
+ * It names the lot that pays it, and it is held to two rules.
+ *
+ *   - `deferred-overdue`: that lot has come and the thing is still only a
+ *     promise. As with the debt table, a date is not moved to make the gate
+ *     pass. Asked only when the gate knows which lot the content stands at.
+ *   - `deferred-without-notice`: the game does not say it. A promise the
+ *     player cannot read is a thing with no answer, which is what it replaced.
+ */
+export function validateDeferred(
+  content: Pick<MuseumContent, 'documents' | 'rooms'>,
+  lot?: number,
+): ValidationIssue[] {
+  const issues: ValidationIssue[] = []
+  for (const promise of datedPromises(content)) {
+    const what = promise.kind === 'checklist' ? 'Checklist item' : 'Device'
+    if (lot !== undefined && promise.untilLot <= lot) {
+      issues.push({
+        severity: 'error',
+        code: 'deferred-overdue',
+        id: promise.id,
+        message:
+          `${what} "${promise.id}" was promised for L${promise.untilLot} and the content is at L${lot}: ` +
+          `give it what it was promised, or it is a thing the player meets and cannot use, with the date gone by.`,
+      })
+    }
+    if (promise.noticeKey === null) {
+      issues.push({
+        severity: 'error',
+        code: 'deferred-without-notice',
+        id: promise.id,
+        message:
+          `${what} "${promise.id}" is a promise for L${promise.untilLot} that the game does not say: ` +
+          (promise.kind === 'checklist'
+            ? 'a dated line needs a `noteKey`, the pencil note that says why not tonight.'
+            : 'a notice needs a `noticeKey`, what it answers the crosshair with.'),
+      })
+    }
+  }
+  return issues
 }
 
 // ---------------------------------------------------------------------------
@@ -1259,13 +1359,16 @@ export function validateBake(
         continue
       }
       // A carried radio leaves its cradle by hiding the handset's own nodes;
-      // without them the whole charger would vanish, or nothing would.
+      // without them the whole charger would vanish, or nothing would. A
+      // notice animates and relights nothing: it is whatever stands there.
       const required =
-        device.kind === 'clock'
-          ? ['__dial', '__hand-hour', '__hand-minute', '__hand-second']
-          : device.kind === 'radio' && device.carriedOnUse
-            ? ['__led', '__handset']
-            : ['__led']
+        device.kind === 'notice'
+          ? []
+          : device.kind === 'clock'
+            ? ['__dial', '__hand-hour', '__hand-minute', '__hand-second']
+            : device.kind === 'radio' && device.carriedOnUse
+              ? ['__led', '__handset']
+              : ['__led']
       for (const suffix of required) {
         if (!partNames.has(`${device.part}${suffix}`)) {
           issues.push({
@@ -1966,6 +2069,7 @@ export function validateContent(
     ...validateAttribution(content),
     ...simulateProgress(content).issues,
     ...validateOpening(content),
+    ...validateDeferred(content, extras.knownDebt?.lot),
     ...validateTriggers(content),
     ...validatePortals(content),
     ...validateWallMounts(content),
@@ -1993,27 +2097,44 @@ export function formatIssues(issues: readonly ValidationIssue[]): string {
 }
 
 /**
- * The table of what is owed, soonest first. Printed on every run of the gate,
- * so a debt cannot be forgotten by being quiet.
+ * The table of what is owed, soonest first, and under it the table of what
+ * is promised. Printed on every run of the gate, so neither a debt nor a
+ * promise can be forgotten by being quiet.
+ *
+ * A debt is an accusation with a date; a promise accuses nothing until its
+ * lot comes (`validateDeferred`). They are printed apart for that reason,
+ * each promise with the key of what the game says of it meanwhile.
  */
-export function formatKnownDebt(issues: readonly ValidationIssue[]): string {
+export function formatKnownDebt(
+  issues: readonly ValidationIssue[],
+  promises: readonly DatedPromise[] = [],
+): string {
   const owed = issues.flatMap((issue) => (issue.severity === 'debt' && issue.debt ? [{ issue, debt: issue.debt }] : []))
-  if (owed.length === 0) return ''
   const sorted = [...owed].sort(
     (a, b) =>
       a.debt.untilLot - b.debt.untilLot ||
       a.issue.code.localeCompare(b.issue.code) ||
       (a.issue.id ?? '').localeCompare(b.issue.id ?? ''),
   )
-  const codeWidth = Math.max(...sorted.map(({ issue }) => issue.code.length))
-  const idWidth = Math.max(...sorted.map(({ issue }) => (issue.id ?? '').length))
-  return sorted
-    .map(
-      ({ issue, debt }) =>
-        `  until L${String(debt.untilLot).padEnd(2)}  ${issue.code.padEnd(codeWidth)}  ` +
-        `${(issue.id ?? '').padEnd(idWidth)}  ${debt.note}`,
+  const codeWidth = Math.max(0, ...sorted.map(({ issue }) => issue.code.length))
+  const idWidth = Math.max(0, ...sorted.map(({ issue }) => (issue.id ?? '').length))
+  const lines = sorted.map(
+    ({ issue, debt }) =>
+      `  until L${String(debt.untilLot).padEnd(2)}  ${issue.code.padEnd(codeWidth)}  ` +
+      `${(issue.id ?? '').padEnd(idWidth)}  ${debt.note}`,
+  )
+  if (promises.length > 0) {
+    const promiseWidth = Math.max(...promises.map((promise) => promise.id.length))
+    lines.push(
+      `  dated promises: ${promises.length}, each said in the game by the key beside it`,
+      ...promises.map(
+        (promise) =>
+          `  until L${String(promise.untilLot).padEnd(2)}  ${promise.id.padEnd(promiseWidth)}  ` +
+          (promise.noticeKey ?? '(says nothing)'),
+      ),
     )
-    .join('\n')
+  }
+  return lines.join('\n')
 }
 
 export type { RoomData }

@@ -5,7 +5,8 @@
  * `Devices.tsx` only feeds these the save, the clock and the elapsed time.
  */
 
-import type { DeviceData, MuseumContent, ProgressCondition, RadioCall } from '../content/schema'
+import type { DeviceData, EraId, MuseumContent, ProgressCondition, RadioCall, RoomData } from '../content/schema'
+import { isRoomPowered } from './power.ts'
 import { progressConditionMet, type ConditionProgress } from './progressCondition.ts'
 
 export type RadioDevice = Extract<DeviceData, { kind: 'radio' }>
@@ -240,6 +241,129 @@ export function deskRadioIntent(
   if (!input.live) return 'dead'
   if (device.carriedOnUse && !input.carried) return 'take'
   return input.speaking ? 'skip' : 'call'
+}
+
+// ---------------------------------------------------------------------------
+// One answer for every device: the prompt, the key and the touch button
+// ---------------------------------------------------------------------------
+
+/**
+ * The room a device takes its electricity from, or null for one that takes
+ * none. A switch over every kind, so a kind added to the schema has to say
+ * here what feeds it before the build goes on.
+ */
+export function devicePowerRoom(device: DeviceData): EraId | null {
+  switch (device.kind) {
+    case 'clock':
+      return device.runsWithPowerOf
+    case 'power-indicator':
+      return device.showsPowerOf
+    case 'radio':
+      return device.poweredBy
+    case 'notice':
+      return null
+  }
+}
+
+/** What a device's intent is asked with. */
+export type DeviceInput = {
+  /** The room that feeds it has power; always true of a device fed by none. */
+  readonly powered: boolean
+  /** The player has taken it along. */
+  readonly carried: boolean
+  /** A transmission is on air. */
+  readonly speaking: boolean
+}
+
+/** The store, as far as a device's intent reads it. */
+export type DeviceWorld = {
+  readonly progress: {
+    readonly roomsPowered: readonly string[]
+    readonly devicesCarried?: readonly string[]
+  }
+  readonly radio: object | null
+}
+
+/** A device's input, read off the save and the air as they are now. */
+export function deviceInputOf(
+  device: DeviceData,
+  world: DeviceWorld,
+  roomById: (roomId: string) => Pick<RoomData, 'id' | 'startsPowered'> | undefined,
+): DeviceInput {
+  const supply = devicePowerRoom(device)
+  const room = supply === null ? undefined : roomById(supply)
+  return {
+    // A supply the content does not have feeds nothing.
+    powered: supply === null ? true : room !== undefined && isRoomPowered(room, world.progress.roomsPowered),
+    carried: world.progress.devicesCarried?.includes(device.id) ?? false,
+    speaking: world.radio !== null,
+  }
+}
+
+/**
+ * What a device answers the crosshair with, and so what its prompt says and
+ * what E does to it.
+ *
+ * Each system used to ask a radio's own rule and nothing else was a device
+ * anybody could aim at. With the plinth of the hall (a thing that only says
+ * something) there are two kinds, and more come with the lot: one question,
+ * asked by the targeting, the HUD and the touch button, so that a prompt can
+ * never name what the key does not work.
+ */
+export type DeviceIntent =
+  /** Nothing to aim at: a clock that only shows the time, a door reader. */
+  | { readonly kind: 'none' }
+  /** It says its notice, and never takes the key. */
+  | { readonly kind: 'notice' }
+  | { readonly kind: 'radio'; readonly intent: DeskRadioIntent }
+
+export function deviceIntent(device: DeviceData, input: DeviceInput): DeviceIntent {
+  switch (device.kind) {
+    case 'clock':
+    case 'power-indicator':
+      return { kind: 'none' }
+    case 'notice':
+      return { kind: 'notice' }
+    case 'radio':
+      return {
+        kind: 'radio',
+        intent: deskRadioIntent(device, { live: input.powered, carried: input.carried, speaking: input.speaking }),
+      }
+  }
+}
+
+/**
+ * Whether E does anything to it. False for whatever only answers: a notice,
+ * a radio with no charge. Those may hold the prompt and never the key, and
+ * the touch button does not show for them.
+ */
+export function deviceLive(intent: DeviceIntent): boolean {
+  switch (intent.kind) {
+    case 'none':
+    case 'notice':
+      return false
+    case 'radio':
+      return intent.intent !== 'dead'
+  }
+}
+
+/**
+ * Every device the crosshair may rest on, with its room: the ones whose
+ * intent is ever anything but `none`. Read by the targeting scan, by the
+ * arbitration, by the HUD and by the flood that walks up to each of them.
+ */
+export function aimableDevices(
+  content: Pick<MuseumContent, 'rooms'>,
+): readonly { readonly room: RoomData; readonly device: DeviceData }[] {
+  return content.rooms.flatMap((room) =>
+    (room.devices ?? []).flatMap((device) =>
+      // Asked of the rule itself, with the house lit: what a kind answers
+      // may change with power, but whether it answers at all does not.
+      deviceIntent(device, { powered: true, carried: false, speaking: false }).kind === 'none'
+        ? []
+        : [{ room, device }],
+    ),
+  )
 }
 
 /**

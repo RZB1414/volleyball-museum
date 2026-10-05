@@ -273,7 +273,8 @@ export type TransitionDoorPrompt = {
   /** Why a blocked door will not open, so the prompt can say so. */
   readonly blockedBy?: TransitionDoorBlock
 }
-export type JournalTab = 'map' | 'catalogue' | 'archive' | 'credits'
+/** The notebook's tabs. `notebook` is the director's list, and the one it opens on. */
+export type JournalTab = 'notebook' | 'map' | 'catalogue' | 'archive' | 'credits'
 /** What the radio is saying right now: one line at a time, in order. */
 export type RadioTransmission = {
   /** Unique per transmission, so a repeated hint restarts its own timing. */

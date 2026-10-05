@@ -16,7 +16,7 @@ import { MUSEUM } from '../content/museum'
 import type { ExhibitData } from '../content/schema'
 import type { TranslationKey } from '../content/i18n/pt-BR'
 import { museumAudio } from '../engine/audio'
-import { deskRadioIntent, radioDevices, radioLineSeconds } from '../engine/deviceRules'
+import { aimableDevices, deviceInputOf, deviceIntent, radioLineSeconds } from '../engine/deviceRules'
 import {
   interactionWinnerKey,
   parseInteractionWinnerKey,
@@ -31,6 +31,7 @@ import { useTranslate } from '../i18n'
 import {
   archiveFiledKey,
   closeLabel,
+  JOURNAL_HOME_TAB,
   listGrew,
   lookHintVisible,
   radioHeld,
@@ -43,11 +44,14 @@ import {
 import { LockPanel } from './LockPanel'
 import { MobileControls } from './MobileControls'
 import { NotebookPanel } from './Notebook'
+import { containerPrompt, devicePrompt } from './promptRules'
 import { useCoarsePointer } from './useCoarsePointer'
 import { useDocumentHidden } from './useDocumentHidden'
 import { isModalOpen, useMuseum } from '../state/store'
 
-const radiosById = new Map(radioDevices(MUSEUM).map((entry) => [entry.device.id, entry.device]))
+/** Every device the crosshair may rest on, by id: the ones a prompt is drawn for. */
+const devicesById = new Map(aimableDevices(MUSEUM).map((entry) => [entry.device.id, entry.device]))
+const roomOf = (roomId: string) => MUSEUM.rooms.find((room) => room.id === roomId)
 /**
  * The room each one-way door opens from, by the door's id (the portal that
  * declares the leaf): the room its toast names. Read off the content rather
@@ -107,6 +111,10 @@ function InteractionPrompt() {
  * Deliberately worded "Ler" rather than "Abrir": the reward is the document,
  * and telling the player they are about to read something is what makes the
  * optional layer legible as optional depth rather than as another lock.
+ *
+ * While its lock is shut the prompt leads with the name and lets the lock
+ * say the rest («Gaveta do Otávio — trancada (um ano)»); how it is worded is
+ * `containerPrompt`'s to decide, where a suite can ask it.
  */
 function ContainerPrompt() {
   const focusedContainer = useWinner('container')?.id ?? null
@@ -124,12 +132,23 @@ function ContainerPrompt() {
   const inside = MUSEUM.documents.filter((doc) => doc.containerId === focusedContainer)
   const allRead = inside.length > 0 && inside.every((doc) => read.includes(doc.id))
   const isLocked = container.lockId !== undefined && lockStatus(container.lockId, { locksOpened }) === 'closed'
+  const lock = MUSEUM.locks.find((candidate) => candidate.id === container.lockId)
+  const view = containerPrompt(container, lock, isLocked)
 
   return (
     <div className="prompt" role="status">
       <span className="prompt-key">E</span>
-      <span className="prompt-label">{isLocked ? t('prompt.locked') : t('prompt.read')}</span>
-      <span className="prompt-title">{t(container.titleKey as never)}</span>
+      {view.form === 'locked' ? (
+        <>
+          <span className="prompt-title">{t(view.titleKey as never)}</span>
+          <span className="prompt-label">— {t(view.sayingKey as never)}</span>
+        </>
+      ) : (
+        <>
+          <span className="prompt-label">{t(view.labelKey)}</span>
+          <span className="prompt-title">{t(view.titleKey as never)}</span>
+        </>
+      )}
       {allRead ? <span className="prompt-done">✓</span> : null}
     </div>
   )
@@ -184,37 +203,39 @@ function TransitionDoorPrompt() {
   )
 }
 
-const DESK_RADIO_LABEL = {
-  dead: 'prompt.radio.dead',
-  take: 'prompt.radio.take',
-  skip: 'radio.skip',
-  call: 'prompt.radio.call',
-} as const satisfies Record<ReturnType<typeof deskRadioIntent>, TranslationKey>
-
 /**
- * The porter's radio on its desk: live once its charger has power, and taken
- * on the first press. The label is the same intent E acts on.
+ * A device under the crosshair, worded by the intent E acts on.
+ *
+ * The porter's radio on its desk is live once its charger has power and is
+ * taken on the first press. A thing that only says something (the plinth of
+ * the hall, until the lot that gives it its use) is drawn as its name and
+ * its notice, with no key: there is nothing to press.
  */
 function DevicePrompt() {
-  const winner = useWinner('device')
-  const focused = winner?.id ?? null
-  const speaking = useMuseum((state) => state.radio !== null)
-  const carried = useMuseum(
-    (state) => focused !== null && state.progress.devicesCarried.includes(focused),
-  )
+  const focused = useWinner('device')?.id ?? null
+  const progress = useMuseum((state) => state.progress)
+  const radio = useMuseum((state) => state.radio)
   const t = useTranslate()
 
-  if (!focused) return null
-  const radio = radiosById.get(focused)
-  if (!radio) return null
-  const live = winner?.live ?? false
-  const intent = deskRadioIntent(radio, { live, carried, speaking })
+  const device = focused === null ? undefined : devicesById.get(focused)
+  if (!device) return null
+  const view = devicePrompt(device, deviceIntent(device, deviceInputOf(device, { progress, radio }, roomOf)))
+  if (!view) return null
 
   return (
     <div className="prompt" role="status">
-      {intent !== 'dead' ? <span className="prompt-key">E</span> : null}
-      <span className="prompt-label">{t(DESK_RADIO_LABEL[intent])}</span>
-      <span className="prompt-title">{t(radio.titleKey as never)}</span>
+      {view.form === 'notice' ? (
+        <>
+          <span className="prompt-title">{t(view.titleKey as never)}</span>
+          <span className="prompt-label">— {t(view.noticeKey as never)}</span>
+        </>
+      ) : (
+        <>
+          {view.key ? <span className="prompt-key">E</span> : null}
+          <span className="prompt-label">{t(view.labelKey)}</span>
+          <span className="prompt-title">{t(view.titleKey as never)}</span>
+        </>
+      )}
     </div>
   )
 }
@@ -713,7 +734,7 @@ function HudTools() {
           aria-pressed={journalTab !== null}
           onClick={() => {
             if (document.pointerLockElement) document.exitPointerLock()
-            setJournalTab(journalTab ? null : 'map')
+            setJournalTab(journalTab ? null : JOURNAL_HOME_TAB)
           }}
           onPointerDown={(event) => event.stopPropagation()}
         >
