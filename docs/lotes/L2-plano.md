@@ -1,0 +1,1290 @@
+# L2 — Trilhos: plano do lote
+
+Escrito em 2026-10-04, sobre o commit `1725721` (`main`, igual a `origin/main`). É o passo 1 de §9.1
+de `docs/PLANO-ATE-O-FINAL.md` para o lote L2: cada tarefa com o arquivo e a linha de hoje, a
+mudança exata, o teste que a prova (e por que ele reprova o estado de hoje), as formas de dado em
+TypeScript, os casos de migração com o save antes e depois, os textos finais em pt-BR e em inglês,
+as dívidas datadas e as fatias de implementação. **Este arquivo não muda código.** As linhas citadas
+são as de `1725721`; o plano mestre cita as de `82756c4`.
+
+Os números marcados **[medido]** saíram de uma simulação em Node feita para este plano com o código
+real (a matemática do exame, a cápsula e a colisão de `scripts/lib/museumWorld.ts`, os dois
+dicionários). Os marcados **[previsto]** são conta; quem os confirma é a fatia que implementa.
+
+## 0. Resumo
+
+O que muda para o jogador:
+
+- **o save não se perde mais.** Um save de produção carrega inteiro; um campo que este build não
+  conhece (gravado por um lote mais novo, numa outra aba) fica no save em vez de ser descartado;
+- **o atalho da Ala 1 fica aberto.** Depois da primeira saída por ele, abre dos dois lados, para
+  sempre, com o aviso «Atalho destrancado». Do saguão, antes disso, o `E` responde com o som de
+  porta trancada em vez de silêncio;
+- **a planta não entrega o prédio.** Só desenha a sala visitada; a vizinha é um toco com «?»; o
+  atalho só aparece depois de aberto; a tranca só é listada depois de tocada; o marcador tem seta e
+  a planta tem norte; os três estados de sala diferem por padrão e por cor.
+
+O que não muda: nenhuma história nova, nenhuma sala, nenhuma textura, nenhum modelo, nenhuma
+dependência. Nenhuma sala desenha nada diferente: os dez pontos de referência não são medidos de
+novo e o `BROWSER_RECORD` continua o de L1 (vale até L3). O jogo continua com o fecho honesto de L1.
+
+O que o lote instala e o jogador não vê: a tabela de campos do save, `progress.contentLot`, os
+gatilhos de disparo único, `attemptLock`, a simulação que substitui `validateSolvability`, o robô
+de 500 ordens, a navegação por inundação, o lint de numerais e o primeiro instantâneo do grafo.
+
+## 1. Escopo conferido
+
+| Origem | O que pede em L2 | Tarefa | Fatia |
+|---|---|---|---|
+| M2; S12, S30; EN-A20 | `SAVE_VERSION` em 1; `contentLot`; tabela de campos; campos desconhecidos preservados; migradores; aliases | T1, T2 | F1 |
+| HANDOFF §10.10, item 1 | corpus de saves de L1; congelar `l1` e `l1-review` | T3 | F1 |
+| M5; S11; EN-A21; CN16 | condições v2; gatilhos de disparo único; `Lock.onOpen`; o store sem conteúdo (registro de regras) | T4, T5 | F2 |
+| M6a; S1; EN-A1; EN-A6, H-33 | `lockRules.ts`: `lockStatus`, `attemptLock` como único caminho; `progress.locksSeen` | T6 | F2 |
+| ÁT-G1, H-29, CN17, P25; I-15 | `progress.doorsReleased`; som no `E` bloqueado; toast; item 14 da frente 7 (o estado salvo) | T7 | F3 |
+| ÁT-I1; ÁT-A5 (planta); EN-A6 | `mapModel(progress)`; seta e norte; três estados por padrão e cor | T8 | F3 |
+| HANDOFF §10.10, item 2 | pagar `map.legend`; `CONTENT_LOT` passa a 2 | T8 | F3 |
+| M4a | `examineReach` puro; reprova `net-1897`, `gym-suit`, `photo-gym` | T9 | F4 |
+| M10; S3; EN-A3 | `simulateProgress` no lugar de `validateSolvability`; roteiro em níveis | T10 | F4 |
+| M10 | robô de partida: `test:playthrough` com 500 ordens | T11 | F4 |
+| M39; R1 | `validateAdditive`, `graph:snapshot`, primeiro instantâneo | T12 | F4 |
+| M15; ÁT-H3 (o que L1 deixou) | alcance por inundação de todo interativo das três salas | T13 | F5 |
+| M11 (lint); H-22, CN13, EN-A7; D14 | `numeral-exclusivity`, `counted-pattern`, `text-ages` | T14 | F5 |
+
+Fora de L2, por decisão do plano mestre, e que este lote não toca: `porter-shortcut` (a chamada do
+Jorge ao abrir o atalho, L3); a barra antipânico e a placa «SERVIÇO» (H-30, L14; ÁT-F3, L9); o
+teclado de N dígitos e a escada de dicas (M6b, L4); `consume-credential` e o cofre (M6b, L3);
+soquetes e fios nas condições (L11, L17); a lista do caderno como dado e as listas congeladas (M32,
+L3); o Acervo em três estados e o ponto da planta com nome (H-34, L4); a aba Planta pelo folheto
+(L9); as travessias derivadas de todo par de portais (M15, L17).
+
+Do Anexo E do plano mestre (o que conferir no navegador antes de virar tarefa), nenhum item é
+marcado para L2. O que este plano mediu foi em Node, com o código real: os cones do exame (T9), a
+inundação das três salas (T13), os numerais e as palavras dos dois dicionários (T14) e a igualdade
+de `src/state` entre a produção e a árvore de hoje (DL2-18).
+
+## 2. Decisões deste plano
+
+| # | Ponto | Decisão | Por quê |
+|---|---|---|---|
+| DL2-1 | o que entra em `doorsReleased` | o id da **porta física** (`TransitionDoorSpec.id`): `atrium-from-holyoke-shortcut` | é o id que o runtime, a colisão e os testes já usam para a folha; o portal recíproco se chama `holyoke-shortcut` e é o que o plano mestre escreve em I-15 (`door:holyoke-shortcut`). O átomo é o mesmo; o nome no save é o da porta. O validador confere todo id de `doorsReleased` numa condição contra as portas |
+| DL2-2 | quando a porta é liberada | no `E` aceito do lado de `opensFrom` (a barra foi empurrada), não na travessia | quem aperta e desiste já destrancou; e um reload no meio da abertura não desfaz. O plano mestre diz «depois da primeira abertura» |
+| DL2-3 | a migração de `doorsReleased` | nenhuma inferência: save antigo carrega com a lista vazia | nenhum save de produção prova que o jogador saiu pelo atalho; inventar o átomo calaria o `porter-shortcut` de L3 para quem nunca o achou. Nada se perde: esse jogador nunca teve a porta nos dois sentidos |
+| DL2-4 | a migração de `locksSeen` | `locksSeen ⊇ locksOpened`: tranca aberta foi tocada | é a única coisa que o save prova. A gaveta fechada de `production-drawer-closed` some da planta até o primeiro toque |
+| DL2-5 | save de outra versão | continua não sendo lido (`store.ts:234` fica); `SAVE_VERSION` fica em 1 e um teste diz por quê | nenhum build escreveu nem escreverá outra versão: o que muda de lote para lote é `contentLot`. Ler campos de um formato que ninguém definiu seria adivinhar. A armadilha que S12 descreve (subir a versão e apagar todo mundo) fica fechada por teste e pelo corpus |
+| DL2-6 | o migrador do lote N roda quando | para todo save com `contentLot ≤ N`, e recebe o `contentLot` do save | um lote sai em fatias; a fatia que traz um reparo tem de alcançar o save que a fatia anterior já carimbou. Reparo é idempotente e só acrescenta. O que marca «save anterior a N» olha `savedLot < N` e entra na primeira fatia publicada do lote |
+| DL2-7 | de onde sai o carimbo | `contentLot = max(o do save, CONTENT_LOT)`; a constante passa a morar em `src/content/contentLot.ts` | `knownDebt.ts` é só do portão (`test:facts`), e o store precisa do número. `knownDebt.ts` reexporta; quem já importa não muda |
+| DL2-8 | aliases de id | dado em `legacySave.ts` (`SAVE_ALIASES`), aplicado em toda carga; o alias **acrescenta** o id novo e mantém o velho | o módulo já guarda os ids da migração de abertura e o validador já o confere; manter o velho é o que deixa o código do lote anterior ler o save sem perder nada. Vazio em L2 |
+| DL2-9 | o registro de regras | o store guarda só `settle(progress)`; gatilhos, condições e conteúdo ficam do lado do canvas | é o menor contrato que mantém o caminho do título sem motor nem conteúdo. Aliases não passam por ele (DL2-8) |
+| DL2-10 | como um verbo grava | função pura devolve uma **concessão** (`ProgressGrant`); o store tem uma porta, `grant`; a consequência é gatilho | um `set`, uma notificação, um ponto fixo. O jogo, o robô e a simulação chamam a mesma função |
+| DL2-11 | trancas sem painel neste lote | `attemptLock` abre por credencial (`badge`, `medallion-plinth`, `tool` sem consumo) e devolve `refused: 'unsupported'` para `tool` com consumo e `ritual` | consumo é a exceção de V3 e chega com o cofre (L3); ritual, com os painéis (L17). O validador `lock-host-kind-unsupported` continua proibindo esses hospedeiros no conteúdo. O que fecha S1 é o runtime: nenhum caminho abre modal para tranca sem painel |
+| DL2-12 | a régua de `examineReach` em L2 | a regra de hoje (`HOLD_DISTANCE` 0,42 m, `HOTSPOT_DOT` 0,55), com cone mínimo de 5° de meio-ângulo | separa o que a produção cataloga do que não cataloga (tabela em T9): a Spalding tem 8,5° e está catalogada em save de produção; `photo-gym` tem 1,5° e nenhum save honesto a tem. Os 4% de H-01 valem para o rig novo (L4); com eles, hoje, a Spalding e o retrato reprovariam |
+| DL2-13 | a planta e a porta de mão única | não desenha de nenhum dos dois lados antes de liberada; depois, porta comum | é o «atalho depois de aberto» de 8.7. Não há estado de «porta vista» e não vale criar um |
+| DL2-14 | a moldura da planta | fixa, sobre todas as salas do build (como hoje) | escala estável; o que a moldura vazia revela é só que há prédio além, e o toco com «?» já diz |
+| DL2-15 | texto de acervo para `text-ages`, até L8 | as chaves citadas por `exhibits`, `facts`, `signage` e `documents` (título e corpo); página de caderno e fala de rádio são voz | `claims` e `surface` chegam em L8 e substituem esta regra. O bilhete do Otávio é documento e fica como dívida datada (L3), não como exceção |
+| DL2-16 | onde ficam as dívidas de «Caixa-forte» | `checklist-item-untickable` de `notebook.todo.vault` datada para **L3**, não L12 | L3 transforma a linha em promessa datada sem caixa de riscar (M32, `deferredUntilLot`), e aí a acusação some. O Anexo C dizia L12, que é quando a promessa é paga |
+| DL2-17 | o instantâneo e os «todos» | `graph:snapshot` grava as condições `allRoomsPowered` e `allCatalogued` **resolvidas** nos ids do lote | L3 congela as listas (M32) sem que `validateAdditive` acuse mudança; e quem deixar um «todos» numa lista quando chegar uma sala é pego por `checklist-condition-changed` |
+| DL2-18 | o corpus de L1 | um save tirado do navegador, no servidor de desenvolvimento, **antes da primeira edição** de F1 | `git diff 842750f..1725721 -- src/state` é vazio [medido]: a árvore de hoje escreve o mesmo save que o build publicado (`f0fb5a3`, Cloudflare `1d3a4554`). Depois de F1 o servidor deixa de escrever saves de L1 |
+
+## 3. Formas de dado
+
+### 3.1 O save (`src/state/progressFields.ts`, novo)
+
+```ts
+/** Never bumped: a lot changes `contentLot`, and a save of another version is not ours to read. */
+export const SAVE_VERSION = 1
+
+export type Progress = {
+  version: number
+  /** The lot of the build that last wrote this save. It only grows. */
+  contentLot: number
+  catalogued: string[]
+  hotspots: string[]
+  documentsRead: string[]
+  factsKnown: string[]
+  credentials: string[]
+  roomsVisited: string[]
+  roomsPowered: string[]
+  locksOpened: string[]
+  /** Locks the player has touched, open or not: what the plan may name. (F2) */
+  locksSeen: string[]
+  /** One-way doors opened once from their own side; from then on, both. (F3) */
+  doorsReleased: string[]
+  /** Story flags, set by triggers and by migrations. (F2) */
+  flags: string[]
+  /** Triggers that have fired; each fires once. (F2) */
+  triggersFired: string[]
+  radioCalls: string[]
+  clockSeconds: Record<string, number>
+  hintsShown: string[]
+  devicesCarried: string[]
+  radioMemory: Record<string, RadioMemory>
+  lastRoom: string
+}
+
+type FieldSpec<T> = {
+  /** A fresh default, so no two saves share a list. */
+  readonly fresh: () => T
+  /** A valid value out of whatever the save holds; null when it holds none. */
+  readonly read: (raw: unknown) => T | null
+  /** Whether a non-empty value is something "New game" would erase. */
+  readonly counts: boolean
+}
+
+export const PROGRESS_FIELDS = { /* one row per field, below */ } satisfies {
+  readonly [K in Exclude<keyof Progress, 'version'>]: FieldSpec<Progress[K]>
+}
+
+export type ListField = {
+  [K in keyof Progress]: Progress[K] extends string[] ? K : never
+}[keyof Progress]
+
+/** What a verb of the player adds to the save. Lists only: progress grows. */
+export type ProgressGrant = { readonly [K in ListField]?: readonly string[] }
+
+export function emptyProgress(): Progress
+/** Field by field from the table; every key the table does not know is carried over untouched. */
+export function sanitiseProgress(raw: Readonly<Record<string, unknown>>): Progress
+/** The same object when the grant adds nothing. */
+export function grantProgress(progress: Progress, grant: ProgressGrant): Progress
+```
+
+A tabela de campos, como fica no fim do lote (um campo novo é uma linha aqui e uma no tipo; a falta
+de qualquer das duas é erro de compilação):
+
+| Campo | Tipo | Padrão | Sanitizador | Conta como progresso | Entra em |
+|---|---|---|---|---|---|
+| `version` | `1` | `1` | não é campo da tabela: lido como porteira (DL2-5), escrito sempre `1` | — | existe |
+| `contentLot` | inteiro ≥ 1 | `CONTENT_LOT` em jogo novo; `1` quando o save não traz | inteiro finito ≥ 1, senão `1`; na carga vira `max(save, CONTENT_LOT)` | não | F1 |
+| `catalogued`, `hotspots`, `documentsRead`, `factsKnown`, `credentials`, `roomsPowered`, `locksOpened`, `radioCalls`, `devicesCarried` | `string[]` | `[]` | `stringList`: fica o que é string, na ordem; não-lista vira o padrão | sim | existe |
+| `roomsVisited` | `string[]` | `[]` | `stringList` | sim, se houver sala além da de partida (regra própria, como hoje) | existe |
+| `locksSeen` | `string[]` | `[]` | `stringList` | sim | F2 |
+| `flags` | `string[]` | `[]` | `stringList` | sim | F2 |
+| `triggersFired` | `string[]` | `[]` | `stringList` | não | F2 |
+| `doorsReleased` | `string[]` | `[]` | `stringList` | sim | F3 |
+| `hintsShown` | `string[]` | `[]` | `stringList` | não | existe |
+| `clockSeconds` | `Record<string, number>` | `{}` | só valor finito ≥ 0; o resto sai (como `store.ts:239-245`) | não | existe |
+| `radioMemory` | `Record<string, RadioMemory>` | `{}` | `sanitiseRadioMemory` (`store.ts:128-149`): entrada com número inválido sai inteira; **subcampo desconhecido de entrada válida fica** | não | existe |
+| `lastRoom` | `string` | `SPAWN.room` | string, senão o padrão | não | existe |
+
+Regras do save, cada uma com teste em `test:save`:
+
+1. **Campo desconhecido fica.** Toda chave própria do `progress` salvo que a tabela não conhece é
+   copiada como está, por espalhamento (nunca por atribuição: uma chave `__proto__` num save
+   adulterado tem de continuar sendo dado). Sobrevive a toda ação, porque toda ação espalha o
+   `progress`; some no «Novo jogo».
+2. **Campo nunca muda de tipo.** Significado novo é campo novo. É o que deixa o código do lote
+   anterior ler o save deste.
+3. **Nada encolhe.** Sanitizar, migrar, conceder e disparar gatilho só acrescentam (V1).
+4. **`contentLot` nunca baixa.**
+
+### 3.2 Migração (`src/state/saveMigrations.ts`, novo) e aliases (`src/content/legacySave.ts`)
+
+```ts
+export type SaveMigration = {
+  /** Runs for every save stamped with this lot or an earlier one (DL2-6). */
+  readonly lot: number
+  /** Pure, idempotent, and it only adds. */
+  readonly migrate: (
+    progress: Progress,
+    save: { readonly raw: Readonly<Record<string, unknown>>; readonly savedLot: number },
+  ) => Progress
+}
+
+export const SAVE_MIGRATIONS: readonly SaveMigration[] = [
+  // The opening scene (2 October): `store.ts:250-279` moved here word for word.
+  { lot: 1, migrate: preOpening },
+  // F2. A lock that is open was touched.
+  { lot: 2, migrate: (progress) => grantProgress(progress, { locksSeen: progress.locksOpened }) },
+]
+
+/** version gate → table → migrations → aliases → stamp. Null, a non-object or another version: a new game. */
+export function migrateProgress(raw: unknown): Progress
+
+// legacySave.ts
+export type SaveAlias = {
+  /** The lot that renamed it: a record, not a condition. */
+  readonly sinceLot: number
+  readonly field: ListField
+  readonly from: string
+  readonly to: string
+}
+/** Where a save holds `from`, it also holds `to`. The old id stays (DL2-8). */
+export const SAVE_ALIASES: readonly SaveAlias[] = []
+```
+
+`migrateProgress` continua exportado por `store.ts` (reexporta), junto de `Progress`,
+`EMPTY_PROGRESS`, `SAVE_VERSION`, `hasSavedProgress`, `sanitiseRadioMemory`, `FRESH_RADIO_MEMORY` e
+`RadioMemory`: nenhum importador de hoje muda.
+
+### 3.3 Condições, efeitos e gatilhos (`src/content/schema.ts`)
+
+```ts
+export type ProgressCondition = {
+  // as of today: powered, unpowered, locksOpened, locksClosed, documentsRead,
+  // documentsUnread, carried, allRoomsPowered, allCatalogued
+  readonly catalogued?: readonly string[]
+  /** `${exhibitId}:${hotspotId}`, as the save keeps them. */
+  readonly hotspotsSeen?: readonly string[]
+  readonly credentials?: readonly Credential[]
+  readonly flags?: readonly string[]
+  readonly roomsVisited?: readonly EraId[]
+  /** Ids of physical doors (the portal that declares the leaf). */
+  readonly doorsReleased?: readonly string[]
+  /** At least one of these holds; every other requirement still must. */
+  readonly anyOf?: readonly ProgressCondition[]
+}
+
+export type UnlockEffect =
+  | /* the four of today */
+  | { readonly kind: 'set-flag'; readonly flag: string }
+
+/** A consequence: when the save answers `when`, the effects happen, once. */
+export type Trigger = {
+  readonly id: string
+  readonly when: ProgressCondition
+  readonly effects: readonly UnlockEffect[]
+}
+
+// every variant of Lock:  + readonly onOpen?: readonly UnlockEffect[]
+// MuseumContent:          + readonly triggers?: readonly Trigger[]
+```
+
+Classes de condição (R2), usadas por `gate-uses-negative-condition` e `gate-uses-all-condition`:
+**positivas** `powered`, `locksOpened`, `documentsRead`, `carried`, `catalogued`, `hotspotsSeen`,
+`credentials`, `flags`, `roomsVisited`, `doorsReleased` e `anyOf` de positivas; **negativas**
+`unpowered`, `locksClosed`, `documentsUnread`; **«todos»** `allRoomsPowered`, `allCatalogued`.
+Guarda (o `when` de um gatilho) só aceita as positivas. `socketsFilled`, `threadsClosed`,
+`threadsClosedAtLeast` e `locksSeen` como condição entram com o estado e o consumidor deles (L11,
+L17, L3).
+
+### 3.4 O registro de regras (`src/state/progressRules.ts`, novo) e os gatilhos (`src/engine/triggers.ts`, novo)
+
+```ts
+// state/progressRules.ts — no runtime import at all.
+/**
+ * What the content knows and the store must not import. Built from the museum
+ * behind the button and handed over once (`engine/contentRegistry.ts`).
+ */
+export type ProgressRules = {
+  /** Every due trigger, run to the fixed point. Its own argument when nothing fired. */
+  readonly settle: (progress: Progress) => Progress
+}
+export function registerProgressRules(rules: ProgressRules): void
+export function progressRules(): ProgressRules | null
+export function onProgressRulesRegistered(listener: () => void): () => void
+
+// engine/triggers.ts — pure.
+export const TRIGGER_PASS_LIMIT = 64
+/** `content.triggers`, plus `exhibit:<id>:catalogued` for every `unlocks` and `lock:<id>:opened` for every `onOpen`. */
+export function compileTriggers(content: TriggerContent): readonly Trigger[]
+/** Not fired yet and `when` holds, in authored order. */
+export function dueTriggers(triggers: readonly Trigger[], progress: Progress, content: ConditionContent): readonly Trigger[]
+/** One effect, as a grant: list-growing, so applying it twice is applying it once. */
+export function effectGrant(effect: UnlockEffect, content: TriggerContent): ProgressGrant
+export function settleTriggers(
+  progress: Progress,
+  triggers: readonly Trigger[],
+  content: TriggerContent,
+  limit?: number,
+): { readonly progress: Progress; readonly fired: readonly string[]; readonly exhausted: boolean }
+
+// engine/contentRegistry.ts — imports the museum; imported for its effect by MuseumCanvas.tsx.
+export function progressRulesFor(content: MuseumContent): ProgressRules
+registerProgressRules(progressRulesFor(MUSEUM))
+```
+
+`effectGrant`: `grant-credential` → `credentials`; `open-lock` → `locksOpened` e `locksSeen`;
+`power-room` → `roomsPowered`; `reveal-document` → `documentsRead` e o `factsKnown` que o documento
+revela; `set-flag` → `flags`.
+
+### 3.5 Os verbos (`src/engine/progressGrants.ts`, novo) e as trancas (`src/engine/lockRules.ts`, novo)
+
+```ts
+// progressGrants.ts — pure; what each verb of the player records.
+/** The detail, the fact it reveals and, with every required detail seen, the catalogue entry. */
+export function hotspotGrant(exhibit: ExhibitData, hotspotId: string, hotspotsSeen: readonly string[]): ProgressGrant
+/** Every document in the container, and the facts they reveal. */
+export function containerGrant(content: Pick<MuseumContent, 'documents'>, containerId: string): ProgressGrant
+/** A one-way door opened from its own side stays unlatched; null when there is nothing to record. (F3) */
+export function doorGrant(door: TransitionDoorSpec, currentRoom: string, released: readonly string[]): ProgressGrant | null
+
+// lockRules.ts — pure.
+export type LockPanelKind = 'keypad'
+export type LockAttempt = { readonly kind: 'touch' } | { readonly kind: 'code'; readonly entry: string }
+export type LockOutcome =
+  | { readonly outcome: 'open' }
+  | { readonly outcome: 'ask'; readonly panel: LockPanelKind; readonly grant: ProgressGrant }
+  | { readonly outcome: 'opened'; readonly grant: ProgressGrant }
+  | {
+      readonly outcome: 'refused'
+      readonly reason: 'wrong-code' | 'missing-credential' | 'unsupported'
+      /** Credential keys still missing, `kind:id`. */
+      readonly missing?: readonly string[]
+      readonly grant: ProgressGrant
+    }
+
+export function lockStatus(lockId: string, progress: Pick<Progress, 'locksOpened'>): 'open' | 'closed'
+/** The panel this lot has for a kind of lock; null is "no modal, ever". */
+export function lockPanel(lock: Lock): LockPanelKind | null
+export function attemptLock(
+  lock: Lock,
+  facts: readonly Fact[],
+  progress: Pick<Progress, 'locksOpened' | 'credentials'>,
+  attempt: LockAttempt,
+): LockOutcome
+/** Touched and still shut, in content order: what the plan lists. */
+export function pendingLocks(locks: readonly Lock[], progress: Pick<Progress, 'locksOpened' | 'locksSeen'>): readonly Lock[]
+```
+
+Tabela de `attemptLock` (toda saída que não é `open` concede `locksSeen: [lock.id]`):
+
+| Tranca | `touch` | `code` |
+|---|---|---|
+| já aberta | `open` | `open` |
+| `knowledge` | `ask`, painel `keypad` | igual a `fact.value` → `opened` (`locksOpened`); senão `refused: 'wrong-code'` |
+| `badge`, `medallion-plinth`, `tool` com `consumesTool: false` | todas as credenciais → `opened`; senão `refused: 'missing-credential'` com `missing` | como `touch` |
+| `tool` com `consumesTool: true`; `ritual` | `refused: 'unsupported'` (DL2-11) | idem |
+
+### 3.6 Portas (`src/engine/transitionDoorTopology.ts`)
+
+```ts
+/** Whether this side may operate the door: its own side always, the other once released. */
+export function canOpenTransitionDoor(door: TransitionDoorSpec, currentRoom: string, released: readonly string[]): boolean
+export function transitionDoorBlock(
+  door: TransitionDoorSpec,
+  currentRoom: string,
+  isPowered: (roomId: string) => boolean,
+  released: readonly string[],
+): 'other-side' | 'unpowered' | null
+```
+
+O quarto parâmetro é **obrigatório**: um valor padrão devolveria o comportamento antigo a quem
+esquecesse de passá-lo, e o compilador não diria nada.
+
+### 3.7 A planta (`src/ui/mapModel.ts`, novo)
+
+```ts
+export type MapRoomState = 'unpowered' | 'partial' | 'complete'
+
+/** Pattern AND colour: no two states share either. */
+export const MAP_STATE_STYLE: Record<MapRoomState, { readonly pattern: 'dashed' | 'hatched' | 'solid'; readonly colour: string }>
+
+export type MapModel = {
+  readonly width: number
+  readonly height: number
+  /** Visited rooms only. */
+  readonly rooms: readonly {
+    readonly id: string
+    readonly titleKey: string
+    readonly x: number; readonly y: number; readonly width: number; readonly height: number
+    readonly state: MapRoomState
+    readonly current: boolean
+    /** Pieces of this room not yet catalogued, where they stand. */
+    readonly pips: readonly { readonly id: string; readonly x: number; readonly y: number }[]
+  }[]
+  /** One per physical opening with a visited side; a one-way door only once released. */
+  readonly doors: readonly {
+    readonly key: string
+    readonly gap: MapSegment
+    readonly jambs: readonly [MapSegment, MapSegment]
+    /** The neighbour has not been visited: a short stub outwards, marked "?". */
+    readonly stub: { readonly line: MapSegment; readonly x: number; readonly y: number } | null
+  }[]
+  /** Touched and still shut. */
+  readonly locks: readonly { readonly id: string; readonly labelKey: string }[]
+  /** Degrees clockwise from north, for an SVG `rotate`. */
+  readonly player: { readonly x: number; readonly y: number; readonly headingDegrees: number }
+  readonly north: { readonly x: number; readonly y: number }
+}
+
+export function mapModel(
+  content: Pick<MuseumContent, 'rooms' | 'exhibits' | 'locks'>,
+  progress: Pick<Progress, 'roomsVisited' | 'roomsPowered' | 'catalogued' | 'documentsRead' | 'locksOpened' | 'locksSeen' | 'doorsReleased'>,
+  player: { readonly x: number; readonly z: number; readonly yaw: number; readonly room: string },
+): MapModel
+```
+
+Norte é −Z (`museum.ts:13`) e o SVG tem y = z do mundo, então o norte fica para cima. O yaw 0 olha
+para −Z; `headingDegrees = -yaw × 180 / π` (yaw π/2 olha para −X, oeste: −90°).
+
+### 3.8 Fatos e lint (`schema.ts`, F5)
+
+```ts
+/** A count or a measure that is a lock's answer, and how it must not be said. */
+export type ForbiddenPattern = {
+  /** The numeral as it may be written, in any language: '14', 'catorze', 'fourteen'. */
+  readonly forms: readonly string[]
+  /** Word stems that give it its meaning: 'federaç', 'fundador', 'federation'. */
+  readonly near: readonly string[]
+}
+
+// Fact:
+//   + printedIn?: readonly string[]      keys allowed to print the code; required when usedAsCode
+//   + exception?: 'tutorial' | 'counted' | 'geometry'
+//   + forbiddenPatterns?: readonly ForbiddenPattern[]   required with 'counted' and 'geometry'
+```
+
+Em L2 só `springfield-renaming` usa: `printedIn: ['hotspot.portrait-morgan.date.label',
+'document.halstead.title']`, `exception: 'tutorial'`. Nenhum fato contado existe antes de L18; a
+regra `counted-pattern` é provada com fatos feitos para o teste.
+
+### 3.9 O instantâneo (`docs/releases/L2.graph.json`, gerado)
+
+```ts
+type GraphSnapshot = {
+  readonly lot: number
+  /** Every action of `simulateProgress`: what it asks and what it gives, as atoms of plan §2.4. */
+  readonly actions: readonly { readonly id: string; readonly requires: readonly string[]; readonly grants: readonly string[] }[]
+  /** Checklist items, with "all rooms" and "all catalogued" resolved to this lot's ids (DL2-17). */
+  readonly checklist: readonly { readonly id: string; readonly doneWhen: readonly string[] | null }[]
+  readonly terms: readonly { readonly id: string; readonly when: readonly string[] }[]
+  /** Every id a save can hold, by collection. */
+  readonly ids: Readonly<Record<'rooms' | 'exhibits' | 'hotspots' | 'documents' | 'locks' | 'doors' | 'facts' | 'radioCalls' | 'devices' | 'triggers', readonly string[]>>
+  /** The save's field table: name and kind of every field this lot knows. */
+  readonly saveFields: Readonly<Record<string, 'list' | 'number' | 'record' | 'string'>>
+}
+```
+
+Tudo ordenado; gerar de novo sem mudança não altera um byte.
+
+## 4. Tarefas
+
+Formato: **hoje** (arquivo:linha), **mudança**, **teste** (o que prova) e **vermelho hoje** (como o
+teste reprova o estado atual antes do conserto, §9.1 passo 2).
+
+### T1 — A tabela de campos e o campo que este build não conhece (M2; S12, S30; EN-A20) · F1
+
+**Hoje.**
+
+- `src/state/store.ts:57-85` (`Progress`), `:164-180` (`EMPTY_PROGRESS`), `:183-200`
+  (`emptyProgress`), `:204-216` (`LIST_FIELDS`), `:231-281` (`migrateProgress`), `:289-302`
+  (`hasSavedProgress`): um campo novo é escrito em cinco lugares, e esquecer um deles o apaga na
+  carga sem erro nenhum.
+- `store.ts:236-248`: o save é **reconstruído** só com os campos que este build conhece. O que
+  outro build gravou a mais some na primeira escrita.
+- `store.ts:28-33`: o comentário de `SAVE_VERSION` manda subir a versão «quando a forma mudar»; com
+  `:234`, isso apaga o save de todo jogador.
+
+**Mudança.**
+
+1. `src/state/progressFields.ts` (novo, 3.1): tipo, tabela, `emptyProgress`, `sanitiseProgress`,
+   `grantProgress`, `stringList`, `sanitiseRadioMemory`, `FRESH_RADIO_MEMORY`. Importa só
+   `SPAWN` e `CONTENT_LOT`. Em F1 a tabela tem os campos de hoje e `contentLot`.
+2. `store.ts`: saem `Progress`, `RadioMemory`, `EMPTY_PROGRESS`, `emptyProgress`, `LIST_FIELDS`,
+   `stringList`, `sanitiseRadioMemory` e `migrateProgress`; entram os reexportes (3.2).
+   `hasSavedProgress` passa a ler a coluna `counts` (mais a regra de `roomsVisited`). O comentário
+   de `SAVE_VERSION` é reescrito: nunca sobe.
+3. `sanitiseRadioMemory` mantém os subcampos que não conhece de uma entrada válida.
+
+**Teste.** `npm run test:save` (novo, `scripts/test-save.ts`), sobre o store real carregado como o
+navegador carrega (o molde de `scripts/test-qa-save.ts:30-76`):
+
+- «todo campo da tabela faz ida e volta»: um valor de amostra por campo, declarado no teste com
+  `satisfies Record<keyof typeof PROGRESS_FIELDS, unknown>` (campo sem amostra não compila);
+  serializa, carrega, compara; e o save vazio também;
+- «todo sanitizador devolve o padrão para lixo e nunca lança»: `null`, número, string, lista
+  mista, objeto aninhado, `NaN`, para cada campo;
+- «um campo que este build não conhece atravessa carga, toda ação que grava e escrita»: um save com
+  `termsSigned: ['termo-posse']` e `socketsFilled: ['curator']`; depois de cada ação do store que
+  toca o `progress`, os dois continuam lá; «Novo jogo» os apaga;
+- «uma chave `__proto__` no save é dado, não protótipo»;
+- «`hasSavedProgress` é a tabela»: a tabela-verdade de `scripts/test-opening-flow.ts:753-761`
+  continua valendo, e todo campo com `counts` basta sozinho;
+- «`SAVE_VERSION` é 1», com a razão na mensagem; «um save de outra versão é um jogo novo» (DL2-5);
+- «o store e o que ele importa de forma estática não chegam ao conteúdo»: caminhando os `import`
+  de `src/state/store.ts` (sem os `import type`), só aparecem `zustand`, `content/legacySave.ts`,
+  `content/spawn.ts`, `content/contentLot.ts`, `state/progressFields.ts`,
+  `state/saveMigrations.ts` e `state/progressRules.ts`;
+- «um save deste lote lido pelo código de L1 não perde nada que L1 conhece»: cada campo da tabela
+  com a sua amostra, gravado pelo store, lido por `scripts/lib/frozen/sanitiseProgress.L1.ts` (a
+  cópia literal de `migrateProgress` e dos seus auxiliares em `f0fb5a3`, com as três constantes
+  embutidas e o hash do arquivo preso no teste): todo campo que L1 conhece sai igual.
+
+**Vermelho hoje.** O terceiro caso reprova (`termsSigned` some em `store.ts:236`). O primeiro e o
+quinto não importam (não há tabela). O último nasce verde, porque prende o futuro; prova-se por
+mutação: mudar o tipo de `clockSeconds` na tabela o reprova.
+
+### T2 — `progress.contentLot`, migradores e aliases (M2; S30) · F1
+
+**Hoje.** Não existe. `store.ts:250-279` é a única migração e vive dentro de `migrateProgress`;
+`src/content/knownDebt.ts:49` guarda `CONTENT_LOT`, que só o portão pode importar
+(`scripts/test-facts.ts:737-748`).
+
+**Mudança.**
+
+1. `src/content/contentLot.ts` (novo, sem importações): `export const CONTENT_LOT = 1` com o
+   comentário de `knownDebt.ts:45-48`; `knownDebt.ts` passa a `export { CONTENT_LOT } from
+   './contentLot.ts'`. `scripts/test-docs.ts:480` cita o arquivo novo na mensagem.
+2. `src/state/saveMigrations.ts` (novo, 3.2): `migrateProgress` na ordem porteira de versão →
+   tabela → migradores com `savedLot ≤ lot` → aliases → carimbo. A migração de abertura entra como
+   `{ lot: 1 }`, palavra por palavra, recebendo o `raw` (ela pergunta `'radioCalls' in saved` e
+   `stringList(saved.hintsShown) === null`, que são perguntas sobre o save cru).
+3. `src/content/legacySave.ts`: `SaveAlias` e `SAVE_ALIASES = []`. `validate.ts`
+   (`validateOpening`, junto de `:1083-1109`): `legacy-save-alias`, quando o `to` de um alias não
+   é id do conteúdo no campo que ele nomeia.
+
+**Teste.** `test:save`:
+
+- «save sem `contentLot` é produção de hoje»: carrega como lote 1 e sai carimbado com `CONTENT_LOT`;
+- «aba velha não rebaixa»: um save com `contentLot: 7` carregado, mexido e regravado continua 7;
+- «`contentLot` com lixo vale como ausente»: `'x'`, `-3`, `2.5`, `null`;
+- «o migrador do lote N roda para save com `contentLot ≤ N` e não roda acima», com uma lista feita
+  para o teste; «todo migrador é idempotente e só acrescenta»: rodar duas vezes é rodar uma, e
+  nenhuma lista encolhe (inclusive os reais, sobre cada fixture);
+- «um alias acrescenta o id novo e mantém o velho», com uma lista feita para o teste;
+- os casos de 5 (antes e depois), um a um.
+
+`test:qa-save`, `test:opening-flow` e `test:radio` continuam verdes sem mudança: provam que a
+migração de abertura não mudou de comportamento ao mudar de arquivo.
+
+**Vermelho hoje.** «Aba velha não rebaixa»: `contentLot` não sobrevive à carga.
+
+### T3 — O que L1 deixou: o corpus de L1 e as capturas congeladas (HANDOFF §10.10) · F1
+
+**Hoje.** `src/content/saveFixtures.ts` tem os cinco saves de produção; nenhum de L1.
+`scripts/lib/captureManifest.mjs:113-152`: `l1` e `l1-review` com `frozen: false`, o segundo com
+`commit: '047f3bb+'`. `scripts/test-capture-manifest.ts:184` prende `frozen === false`.
+
+**Mudança.**
+
+1. **Antes de editar qualquer arquivo de `src/`** (DL2-18): reiniciar o servidor `museum-dev`,
+   abrir `http://localhost:5201/` com o save limpo e jogar a rota de L1 até o fim (luminária,
+   caderno, rádio, quadro do saguão, quadro da Ala 1, saída pelo atalho, o retrato do Morgan
+   inclinado, a gaveta com o ano); ler `localStorage.getItem('volleyball-museum:v1')` e gravar o
+   objeto, como está, em `saveFixtures.ts` sob `'l1-route-end'`, com `from: 'l1-f0fb5a3'` e o
+   comentário dizendo a versão Cloudflare (`1d3a4554`) e que foi escrito pelo servidor de
+   desenvolvimento sobre a árvore publicada. Se o navegador não puder ser dirigido, **não se
+   inventa o save**: registra-se a segunda saída de HANDOFF §10.10 (L1 não muda o que um save
+   guarda; L2 parte de `production-drawer-open`) e a fatia devolve o item como não feito.
+2. `scripts/test-qa-save.ts:142-161`: a lista de saves que nunca saem ganha `l1-route-end`.
+3. `captureManifest.mjs`: `l1` com `frozen: true` e `digest:
+   'af2dd6fea65c18c090fd0f7369f2274f6eb8cd7d8ac15807211b2c268067d063'`; `l1-review` com `commit:
+   '513ec09'`, `frozen: true` e `digest:
+   'f29cbd37e1cd571df6cf99d012daefd12bd428969b7f2e6d1d432116fe170394'` [medido: são os `digest`
+   dos dois `manifest.json` de hoje]; os dois comentários deixam de dizer «not frozen yet».
+   `npm run captures:manifest` reescreve os dois manifestos (só o cabeçalho muda).
+4. `test-capture-manifest.ts:183-185`: o conjunto da revisão é congelado e nomeia `513ec09`.
+
+**Teste.** `test:qa-save` (o save novo passa pelas mesmas checagens dos outros: carrega sem perder
+nada, só cita ids que existem, é um estado alcançável) e `test:captures` (conjunto congelado bate
+com o digest; conjunto congelado não tem `+`).
+
+**Vermelho hoje.** `test:qa-save`: a lista pede um save que não existe. `test:captures`: com
+`frozen: true` e o `+` no commit, reprova «a frozen set never carries the plus».
+
+### T4 — Condições v2 e efeitos (M5) · F2
+
+**Hoje.** `src/content/schema.ts:289-310` (nove campos); `src/engine/progressCondition.ts:14-21`
+(`ConditionProgress`) e `:34-83`; `schema.ts:212-216` (quatro efeitos);
+`src/content/validate.ts:951-971` (`checkCondition` conhece só os campos de hoje).
+
+**Mudança.** `schema.ts` como em 3.3. `progressCondition.ts`: `ConditionProgress` ganha
+`hotspots`, `credentials`, `flags`, `roomsVisited` e `doorsReleased`, todos opcionais como
+`devicesCarried` (quem pergunta sem eles recebe «não»); `progressConditionMet` responde aos campos
+novos e a `anyOf`; exporta `conditionClass(condition): 'positive' | 'negative' | 'all'` (a pior
+classe que aparece, olhando dentro de `anyOf`). `validate.ts`: `checkCondition` confere cada id
+novo (`condition-exhibit-missing`, `condition-hotspot-missing`, `condition-door-missing`,
+`condition-credential-missing`), desce em `anyOf` e passa a ser chamada também para
+`content.triggers`.
+
+**Teste.** `test:triggers` (T5), bloco de condições: cada campo novo, sozinho e combinado; `anyOf`
+vazio nunca vale; um campo que o save não tem responde «não»; `conditionClass`. `test:opening`:
+conteúdo quebrado de propósito levanta cada código novo.
+
+**Vermelho hoje.** Uma condição `{ catalogued: ['ball-spalding'] }` vale para um save vazio: o
+avaliador ignora o campo que não conhece. É o caso do teste.
+
+### T5 — Gatilhos de disparo único e o store sem conteúdo (M5; S11; EN-A21; CN16) · F2
+
+**Hoje.**
+
+- `src/engine/Interaction.tsx:363-397`: a cada detalhe novo, com os obrigatórios completos, grava
+  o catálogo e **reaplica** `exhibit.unlocks` (`:395`). Achar depois um detalhe opcional dispara
+  tudo outra vez. Hoje é inofensivo (nenhum conteúdo usa `unlocks`, e os efeitos são idempotentes);
+  deixa de ser com consumo, toast e chamada.
+- O executor vive num `useFrame`: nenhum teste em Node o alcança. `store.ts:851-867`
+  (`applyUnlockEffect`) faz um `set` por efeito.
+- `store.ts:629-632` (`mutateProgress`), `:636-646` (`endRadio`), `:660-668` (`start`),
+  `:673-687` (`setCurrentRoom`) e `:868-873` (`resetProgress`) escrevem o `progress` por cinco
+  caminhos.
+
+**Mudança.**
+
+1. `src/state/progressRules.ts`, `src/engine/triggers.ts`, `src/engine/contentRegistry.ts`,
+   `src/engine/progressGrants.ts` (3.4, 3.5). `src/scenes/MuseumCanvas.tsx` ganha
+   `import '../engine/contentRegistry'`.
+2. `store.ts`: um caminho só, `commitProgress(update, session?)`: aplica `update`, passa por
+   `settle` (o das regras registradas, ou identidade), e só faz `set` e `persist` se o objeto
+   mudou; `session` leva junto o que tem de sair na mesma notificação (`previousRoom` e
+   `currentRoom` em `setCurrentRoom`; `radio` e `radioHungUpUntil` em `endRadio`). Os cinco
+   caminhos de hoje passam por ele.
+3. `store.ts`: ação nova `grant(grant: ProgressGrant)`. `applyUnlockEffect` sai: o efeito tem
+   uma implementação só, `effectGrant`, e quem o aplica é `settleTriggers`
+   (`scripts/test-power.ts:99-118` passa a provar os quatro efeitos por
+   `grant(effectGrant(…))`). As ações `record*`, `powerRoom`, `openLock` e `grantCredential`
+   ficam, sobre `commitProgress`, porque as suítes as usam.
+4. A passada «na carga»: o store assina `onProgressRulesRegistered` e, quando o conteúdo se
+   registra, faz `commitProgress((progress) => progress)`; um store criado **depois** do registro
+   (recarga a quente; o robô) assenta o `progress` inicial na criação.
+5. `Interaction.tsx:375-397`: no lugar das três gravações e do laço de efeitos, uma chamada:
+   `state.grant(hotspotGrant(exhibit, hotspot.id, state.progress.hotspots))`.
+6. Tabela: `flags` e `triggersFired`. `validate.ts`: `trigger-duplicate`, `effect-target-missing`
+   (para `set-flag` não há alvo; para as outras quatro, o id), `gate-uses-negative-condition`,
+   `gate-uses-all-condition` sobre o `when` de todo gatilho compilado.
+7. `scripts/lib/runtimeWiring.ts`: `progressWiringProblems(read)` — `Interaction.tsx` chama
+   `hotspotGrant(` e `.grant(` e não contém `applyUnlockEffect`, `recordCatalogued(` nem
+   `recordFact(`; `MuseumCanvas.tsx` importa `contentRegistry`; `state/store.ts` não importa nada
+   de `content/museum` nem de `engine/`.
+
+**Teste.** `npm run test:triggers` (novo, `scripts/test-triggers.ts`), com conteúdo feito para o
+teste registrado por `progressRulesFor`, sobre o store real:
+
+- «dispara uma vez»: a ação que torna o `when` verdadeiro dispara; a seguinte, não; o id entra uma
+  vez em `triggersFired`;
+- «um detalhe opcional achado depois não repete o efeito» (S11), por `hotspotGrant` e `grant`;
+- «a cadeia fecha num `commit` só»: credencial → tranca → flag, uma notificação do store;
+- «a ordem não importa»: 200 ordens sorteadas das mesmas ações chegam ao mesmo conjunto de átomos;
+- «recarga no meio»: serializa, carrega num store novo, continua, e o fim é o mesmo;
+- «o save que já cumpria a condição dispara quando o conteúdo se registra» (R3): é o trilho da
+  chave de L3 (a gaveta já aberta que passa a conceder);
+- «limite do ponto fixo»: mais gatilhos encadeados que `TRIGGER_PASS_LIMIT` devolvem
+  `exhausted: true`, e o resto dispara no `commit` seguinte;
+- «efeito aplicado duas vezes é efeito aplicado uma; nenhuma lista encolhe» (V1), sobre sequências
+  sorteadas;
+- «toda ação do store que grava assenta»: depois de cada uma (`start`, `setCurrentRoom`, o fim de
+  uma chamada de rádio, `grant`, cada `record*`, `powerRoom`, `openLock`, `resetProgress`),
+  `dueTriggers` é vazio;
+- «sem regras registradas nada quebra» (a tela de título), e «uma concessão que não acrescenta nada
+  não notifica ninguém»;
+- «um id de gatilho que o conteúdo não conhece fica em `triggersFired`» (save de lote mais novo);
+- a fiação (item 7), provada aplicando em memória o refactor que ela existe para pegar.
+
+`test:opening` ganha os códigos novos contra conteúdo quebrado de propósito.
+
+**Vermelho hoje.** Com `hotspotGrant` extraído nos valores de hoje (devolve os efeitos sempre que
+os obrigatórios estão completos), «um detalhe opcional achado depois não repete» reprova; a fiação
+reprova (`Interaction.tsx:395` chama `applyUnlockEffect`).
+
+### T6 — `attemptLock` como único caminho e `progress.locksSeen` (M6a; S1; EN-A1; EN-A6, H-33) · F2
+
+**Hoje.**
+
+- `src/engine/Containers.tsx:265-269`: container com tranca fechada faz `setActiveLock`, qualquer
+  que seja o tipo. `src/engine/PowerControls.tsx:244-250`: o mesmo para `powerLockId`.
+  `src/ui/LockPanel.tsx:107`: devolve `null` para o que não é `knowledge`. Resultado: um modal sem
+  nada desenhado, com o ponteiro solto e o mundo surdo ao `E`.
+- `LockPanel.tsx:112-125` compara a digitação, abre a tranca e grava os documentos, mas **não** os
+  fatos que eles revelam; `Containers.tsx:271-275` grava os dois. Dois caminhos, dois resultados.
+- `src/ui/MuseumMap.tsx:216-221`: a planta lista toda tranca fechada, tocada ou não.
+- `src/ui/Hud.tsx:112`: o prompt decide «Trancado» com uma conta própria.
+
+**Mudança.**
+
+1. `src/engine/lockRules.ts` (3.5). Tabela: `locksSeen`. Migrador `{ lot: 2 }` (3.2).
+2. `Containers.tsx:261-281`: tranca fechada → `attemptLock(lock, MUSEUM.facts, state.progress,
+   { kind: 'touch' })`; concede o `grant`; `ask` solta o ponteiro e faz `setActiveLock`;
+   `refused` toca `museumAudio.lockDenied()` e consome a tecla; `open` e `opened` seguem para o
+   conteúdo. O conteúdo é `state.grant(containerGrant(MUSEUM, containerId))` e
+   `setOpenedContainer`.
+3. `PowerControls.tsx:241-252`: a mesma sequência antes de `powerRoom`.
+4. `LockPanel.tsx:109-132`: `submit` chama `attemptLock(…, { kind: 'code', entry })`; `opened`
+   concede, fecha o painel e abre o container pelo mesmo `containerGrant`; `refused` conta a
+   tentativa como hoje.
+5. `MuseumMap.tsx:216-234`: `LockList` lista `pendingLocks(MUSEUM.locks, progress)`. (T8 leva a
+   lista para dentro de `mapModel`.)
+6. `Hud.tsx:112`: `lockStatus(container.lockId, progress) === 'closed'`.
+7. `runtimeWiring.ts`: `Containers.tsx`, `PowerControls.tsx` e `LockPanel.tsx` chamam
+   `attemptLock(`; `setActiveLock(` com valor só aparece depois de `outcome === 'ask'`; nenhum
+   componente chama `openLock(` nem compara `locksOpened.includes(` para decidir abrir;
+   `Containers.tsx` e `LockPanel.tsx` gravam por `containerGrant(`.
+
+**Teste.** `npm run test:locks` (novo, `scripts/test-locks.ts`), v1:
+
+- a tabela de 3.5, linha por linha, com trancas feitas para o teste e a real (`office-drawer`);
+- «nenhum tipo de tranca sem painel devolve `ask`» (S1), para todo tipo do schema;
+- «tocar grava que foi vista; abrir grava as duas listas»; `locksOpened ⊆ locksSeen` depois de
+  qualquer sequência sorteada de tentativas e efeitos;
+- «código de tamanho errado ou errado não abre nem custa nada» (V4: sem limite de tentativas);
+- «a planta lista a tranca tocada e fechada, e só ela»: `pendingLocks`;
+- «abrir pelo teclado grava o mesmo que abrir a gaveta já destrancada»: documentos **e** fatos;
+- «`Lock.onOpen` vira gatilho»: dispara ao abrir e, num save que já tinha a tranca aberta, quando
+  o conteúdo se registra;
+- os saves do corpus: `production-drawer-open` carrega com `locksSeen: ['office-drawer']`; os
+  outros, com a lista vazia;
+- a fiação (item 7), por mutação.
+
+**Vermelho hoje.** Com a regra extraída nos valores de hoje (toda tranca fechada abre modal),
+«nenhum tipo sem painel devolve `ask`» reprova para `badge`, `tool`, `medallion-plinth` e
+`ritual`; `pendingLocks` com a regra de hoje lista a gaveta nunca tocada.
+
+### T7 — O atalho que fica aberto (ÁT-G1, H-29, CN17, P25; I-15) · F3
+
+**Hoje.**
+
+- `src/engine/transitionDoorTopology.ts:182-190` e `:200-208`: quem pode operar a porta é decisão
+  só de topologia. Sair pelo atalho e virar-se: «Abre pelo outro lado», para sempre.
+- `src/engine/TransitionDoors.tsx:359-366`: no bloqueio `other-side` o `E` não faz nada, nem som.
+  `:371-376`, `:433` e `:593-599` são as três consultas.
+- `src/ui/MobileControls.tsx:246-252`: o botão de Ação some diante da porta bloqueada pelo outro
+  lado.
+- `scripts/test-transition-door.ts:426-447` prende exatamente o defeito («a completed shortcut
+  cycle does not make its one-way authorisation permanent»).
+
+**Mudança.**
+
+1. Tabela: `doorsReleased`. `transitionDoorTopology.ts` como em 3.6; `doorGrant` em
+   `progressGrants.ts`.
+2. `TransitionDoors.tsx`: as três consultas passam `museum.progress.doorsReleased`. No `interact`
+   aceito (`:382`, antes de mexer no estado da folha):
+   `const release = doorGrant(runtime.spec, museum.currentRoom, museum.progress.doorsReleased)`;
+   se houver, `museum.grant(release)`. Em `:359-366`, todo bloqueio responde com
+   `museumAudio.lockDenied()` e consome a tecla.
+3. `src/ui/hudRules.ts`: `doorActionAvailable(focused)` (porta bloqueada também responde ao
+   toque; abrindo ou armada, não); `MobileControls.tsx:246-252` passa a chamá-la.
+4. `src/ui/Hud.tsx`: `DoorReleasedToast`, no molde de `PowerToast` (`:428-459`): quando
+   `doorsReleased` cresce na sessão (`listGrew`), mostra «Atalho destrancado — <título da sala de
+   `opensFrom`>» por 3,2 s e toca `museumAudio.lockRelease()`. Entra na pilha de `:735-740`.
+5. `scripts/lib/museumWorld.ts:165-213`: `arrivals` não muda (a primeira chegada continua sendo
+   pela porta principal); o comentário diz por quê.
+6. `runtimeWiring.ts`: `TransitionDoors.tsx` chama `doorGrant(` e passa
+   `museum.progress.doorsReleased` às duas funções em todo uso.
+
+**Teste.**
+
+- `test:transition-door`: «depois de liberada, o lado do saguão abre»; «antes, não»; «porta sem
+  `opensFrom` não se libera»; «liberar é do lado certo: `doorGrant` do saguão é `null`»; «a
+  máquina de estados da folha não guarda nada; quem guarda é o save» (o caso de `:426-447`
+  reescrito); «o save antigo carrega com a lista vazia» e «a liberação sobrevive a serializar e
+  carregar»; a fiação.
+- `test:opening` (`scripts/test-opening.ts:260-266`): o atalho mantém a própria regra, agora nos
+  dois estados.
+- `test:mobile-controls`: `doorActionAvailable` nos cinco estados do prompt.
+- `test:navigation`: a travessia `atrium → Holyoke (shortcut)` entra em `CROSSINGS`
+  (`scripts/test-navigation.ts:325-366`), ao lado da que já existe no outro sentido.
+- `test:opening-flow`: `listGrew` já cobre a regra do toast; uma asserção de fonte prende que o
+  toast lê `doorsReleased`.
+
+**Vermelho hoje.** `transitionDoorBlock(shortcut, 'atrium', everything,
+['atrium-from-holyoke-shortcut'])` devolve `'other-side'` (a função ignora o quarto argumento);
+`doorsReleased` não sobrevive à carga. A travessia nova de `test:navigation` nasce verde (o vão é
+o mesmo nos dois sentidos, e o mundo do teste não tem folha): guarda contra mobiliar a chegada.
+
+### T8 — A planta sem spoiler, com seta e norte (ÁT-I1; ÁT-A5; EN-A6) · F3
+
+**Hoje.** `src/ui/MuseumMap.tsx:103-158` desenha o contorno de toda sala (a não visitada,
+tracejada); `:165-187`, toda porta, o atalho inclusive; `:189-191`, um círculo sem direção;
+`:194-204`, uma legenda sem título (`map.legend` existe e ninguém a mostra: dívida
+`i18n-key-unused`, `src/content/knownDebt.ts:93`). `map.state.partial` diz «Peças por catalogar»
+do escritório, que não tem peça. O yaw do jogador não é publicado (`src/engine/playerPosition.ts`
+tem só a posição).
+
+**Mudança.**
+
+1. `src/ui/mapModel.ts` (3.7), puro, com `portalOpening` de `mapGeometry.ts`. Regras: sala só
+   visitada; porta só com um lado visitado, uma por vão; vizinha não visitada vira toco de 1,2 m
+   para fora do vão com «?»; porta com `opensFrom` só depois de liberada, e aí porta comum;
+   estados `unpowered` (visitada, sem luz), `partial` (acesa, falta peça ou documento), `complete`;
+   trancas por `pendingLocks`; marcador com `headingDegrees`; rosa no canto superior direito.
+2. `playerPosition.ts`: `export const playerHeading = { yaw: 0 }`, com o mesmo comentário da
+   posição (fora do store de propósito). `src/engine/PlayerController.tsx:533`: grava
+   `playerHeading.yaw = camera.rotation.y` junto da posição.
+3. `MuseumMap.tsx`: só desenha o modelo. Marcador: triângulo com `rotate(headingDegrees)` e
+   `aria-label` «Você está aqui»; rosa: seta e «N»; legenda com o título `map.legend` e os três
+   estados por padrão e cor (`<pattern>` de hachura para `partial`, traço para `unpowered`, cheio
+   para `complete`); toco com `<title>` «Sala ainda não visitada».
+4. `src/styles/museum.css:1096-1200`: saem `.map-portal-oneway`, `.map-portal.is-oneway` e
+   `.swatch.is-unvisited`; entram o toco, a seta, a rosa e as três amostras com padrão.
+5. Textos de 6. `knownDebt.ts`: sai a linha de `map.legend`. `contentLot.ts`: `CONTENT_LOT = 2`.
+6. `runtimeWiring.ts`: `MuseumMap.tsx` chama `mapModel(` e não lê `MUSEUM.locks.filter(` nem
+   `portal.oneWay`; `PlayerController.tsx` grava `playerHeading.yaw`.
+
+**Teste.** `npm run test:map` (novo, `scripts/test-map.ts`):
+
+- «jogo novo: uma sala e um toco»; «saguão visitado: duas salas, a porta do escritório sem toco, a
+  da Ala 1 com toco, o atalho ausente»; «três salas, atalho fechado: duas portas»; «atalho
+  liberado: três portas, nenhuma diferente das outras»;
+- «nada de sala não visitada aparece no modelo»: para os oito subconjuntos de salas visitadas, o
+  JSON do modelo não contém o id, a chave de título nem a coordenada de canto de sala fora deles;
+- os três estados, com o escritório (sem peça, com documento atrás da gaveta) e a Ala 1;
+- «tranca: nunca tocada, ausente; tocada, pelo nome; aberta, some»;
+- «o marcador recebe o yaw»: 0 → 0°, π/2 → −90°, −π/2 → 90°, π → ±180°; a posição é a de
+  `toX`/`toY`; o norte fica acima do centro;
+- «nenhum par de estados divide padrão ou cor» (`MAP_STATE_STYLE`);
+- a fiação, por mutação.
+
+`validate:content` deixa de acusar `map.legend`; `test:docs` aceita `CONTENT_LOT` um à frente do
+plano.
+
+**Vermelho hoje.** Com a regra de hoje posta no modelo (todas as salas, todas as portas, todas as
+trancas fechadas), reprovam «uma sala e um toco», «o atalho ausente», «nada de sala não visitada»
+e «nunca tocada, ausente».
+
+### T9 — `examineReach` (M4a) · F4
+
+**Hoje.** `src/engine/Interaction.tsx:166-169` (`HOLD_DISTANCE`, `HOTSPOT_DOT`) e `:364-383`: a
+origem da peça vai a 0,42 m da câmera, e um detalhe conta quando o vetor origem→detalhe faz mais de
+0,55 de cosseno com o vetor detalhe→câmera. Para um detalhe a ρ metros da origem (já com a escala
+da peça), o cosseno é `(d·cos θ − ρ) / √(d² + ρ² − 2dρ·cos θ)`, com `d = 0,42`: acima de 0,42 m o
+detalhe nunca acende.
+
+[medido] com os dados de hoje:
+
+| Peça | Detalhe | Obrigatório | ρ (m) | Meio-ângulo do cone |
+|---|---|---|---:|---:|
+| as quatro bolas do saguão | os oito | 4 de 8 | 0,103–0,107 | 44,4°–44,8° |
+| `ball-improvised` | `valve` | sim | 0,099 | 45,3° |
+| `ball-spalding` (escala 2,65) | `lacing` | sim | 0,375 | 8,5° |
+| `ball-spalding` | `maker` | sim | 0,292 | 21,2° |
+| `handbook-1897` | `innings` | sim | 0,064 | 49,3° |
+| `guide-1916` | `credit` | sim | 0,041 | 51,9° |
+| `portrait-morgan` | `date` | sim | 0,282 | 22,6° |
+| `photo-gym` | `apparatus` | sim | 0,413 | **1,5°** |
+| `gym-suit` | `knit` | sim | 1,206 | **0°** |
+| `net-1897` | `tape` | sim | 1,980 | **0°** |
+
+**Mudança.** `src/engine/examineReach.ts` (novo, puro): `EXAMINE_HOLD_DISTANCE = 0.42`,
+`EXAMINE_HOTSPOT_DOT = 0.55`, `EXAMINE_MIN_CONE_DEGREES = 5` e
+`examineReach(exhibit, hotspot): { reachable: boolean; coneDegrees: number }`, pela forma fechada
+acima. `Interaction.tsx:166-169` passa a importar as duas constantes (uma régua só);
+`runtimeWiring.ts` prende a importação.
+
+**Teste.** `test:playthrough` (T11), bloco próprio: a tabela acima (cada cone a ±0,1°); «as três
+que nenhum save honesto tem são as três que a régua reprova»: `net-1897`, `gym-suit`, `photo-gym`;
+«toda peça catalogada num save de produção é alcançável pela régua» (o corpus contra a regra); o
+limite: ρ = 0 dá 56,6°, ρ ≥ 0,42 dá 0°.
+
+**Vermelho hoje.** O módulo não existe; o que reprova o conteúdo é T10 (`exhibit-uncataloguable`
+nas três peças, que entram como dívida datada).
+
+### T10 — `simulateProgress` no lugar de `validateSolvability` (M10; S3; EN-A3) · F4
+
+**Hoje.** `src/content/validate.ts:538-771`: uma caminhada própria, que não usa nenhuma função do
+runtime. Ignora a mão única («expressa pela ausência de portal recíproco», `:632-636`: os dois
+lados declaram o portal, então o atalho é tratado como porta comum), dá toda peça como catalogável,
+abre ritual ao alcançar a sala, só colhe credencial de `exhibit.unlocks` e só confere a fonte de
+um código para tranca de portal (`:730-752`).
+
+**Mudança.** `src/content/simulate.ts` (novo, só do portão; entra na lista de
+`scripts/test-facts.ts:737-748`):
+
+```ts
+export type PlayerAction =
+  | { readonly kind: 'power'; readonly roomId: string }
+  | { readonly kind: 'door'; readonly doorId: string; readonly from: string; readonly to: string }
+  | { readonly kind: 'hotspot'; readonly exhibitId: string; readonly hotspotId: string }
+  | { readonly kind: 'container'; readonly containerId: string }
+  | { readonly kind: 'code'; readonly lockId: string; readonly entry: string }
+  | { readonly kind: 'take'; readonly deviceId: string }
+
+/** What a player standing in `room` with this save can do that the rules allow. */
+export function availableActions(content: MuseumContent, progress: Progress, room: string): readonly PlayerAction[]
+/** The action, as the grant the runtime's own verbs give it. */
+export function actionGrant(content: MuseumContent, progress: Progress, action: PlayerAction): ProgressGrant
+
+export type SimulationResult = {
+  readonly issues: readonly ValidationIssue[]
+  /** Everything reachable, at the fixed point. */
+  readonly final: Progress
+  /** Atoms by the pass on which they first appear: the script in levels. */
+  readonly levels: readonly (readonly string[])[]
+  /** Every action met on the way, with what it asked and gave (the snapshot's source). */
+  readonly actions: readonly { readonly id: string; readonly requires: readonly string[]; readonly grants: readonly string[] }[]
+}
+export function simulateProgress(content: MuseumContent, from?: Progress): SimulationResult
+```
+
+A jogadora exaustiva: em cada passada, de cada sala alcançável, toma toda ação disponível e assenta
+os gatilhos, até nada mudar. Usa `transitionDoorBlock` (com `doorsReleased`), `isRoomPowered`,
+`attemptLock`, `containerGrant`, `hotspotGrant` (só para detalhe com `examineReach().reachable`),
+`doorGrant`, `progressConditionMet` e `settleTriggers`: as funções do jogo, não cópias. Um código
+só é digitado com o fato conhecido (I-12).
+
+Erros em L2 (os demais códigos de 6.4 entram com a mecânica de cada um: termos, promessas datadas,
+dicas, papéis de colocação, fios, consumo):
+
+| Código | Acusa |
+|---|---|
+| `room-unreachable`, `lock-unopenable`, `document-unreadable`, `exhibit-uncataloguable` | conteúdo fora do ponto fixo |
+| `credential-unobtainable`, `credential-orphan` (vira erro) | chave sem fonte, ou sem fechadura |
+| `trigger-never-fires`, `flag-never-set`, `flag-never-read` | fiação solta |
+| `no-return-path`, `one-way-trap` | V5, no primeiro estado em que cada sala fica alcançável |
+| `lock-evidence-behind-lock` | a fonte de um código só alcançável com a tranca aberta, em qualquer hospedeiro (substitui `lock-source-behind-lock`) |
+| `checklist-item-untickable` | item sem `doneWhen`, ou com condição fora do ponto fixo |
+| `simulation-no-fixpoint` | não convergiu (substitui `solvability-no-fixpoint`) |
+
+`validate.ts:2061`: `validateContent` chama `simulateProgress(content).issues`;
+`validateSolvability` sai. `scripts/validate-content.ts` imprime o roteiro em níveis depois da
+linha do bake.
+
+O roteiro de hoje [previsto]: `N0` luminária · `N1` saguão · `N2` luz do saguão, Ala 1 · `N3` luz
+da Ala 1, o ano (retrato ou arquivo A), 9 peças, o atalho liberado · `N4` gaveta, bilhete. O estado
+máximo: três salas acesas e visitadas, cinco documentos, quatro fatos, 9 de 12 peças, `office-drawer`
+aberta e vista, `atrium-from-holyoke-shortcut` liberada, nenhuma credencial.
+
+**Teste.** `test:playthrough` (T11), bloco da simulação: o estado máximo acima, átomo por átomo; os
+níveis; cada código contra conteúdo quebrado de propósito (a porta alimentada do outro lado de
+`scripts/test-opening.ts:268-288` continua dando `room-unreachable`; uma ala cuja única volta é o
+atalho dá `one-way-trap`; o fato da gaveta revelado só pelo documento da própria gaveta dá
+`lock-evidence-behind-lock`; um gatilho com `when` impossível, `trigger-never-fires`). `test:opening`
+troca a importação (`:35`, `:284-288`).
+
+**Vermelho hoje.** Contra o conteúdo de hoje, `simulateProgress` acusa cinco coisas que
+`validateSolvability` deixa passar: `exhibit-uncataloguable` em `net-1897`, `gym-suit` e
+`photo-gym`, e `checklist-item-untickable` em `notebook.todo.catalogue` e `notebook.todo.vault`.
+As cinco entram em `KNOWN_DEBT` no mesmo commit (7).
+
+### T11 — O robô de partida (M10) · F4
+
+**Hoje.** Nenhuma suíte joga o jogo. `test:opening-flow` e `test:radio` dirigem o store ação por
+ação, na ordem que quem escreveu o teste escolheu.
+
+**Mudança.** `scripts/test-playthrough.ts` e `scripts/lib/playthrough.ts` (novos): o robô lê
+`availableActions` do `progress` do **store real**, sorteia uma (gerador com semente, `mulberry32`)
+e a executa pelas ações do store (`grant(actionGrant(…))`, `powerRoom`, `setCurrentRoom`,
+`carryDevice`), com o conteúdo registrado como o jogo registra (`contentRegistry.ts`). Entre as
+úteis, sorteia inúteis: código errado, reler, religar, ir e voltar, lanterna, abrir e fechar o
+caderno. Em passos sorteados serializa `{ settings, progress }`, grava sob a chave do save e
+continua num store novo, carregado pelo caminho real (`import('../src/state/store.ts?run=N')`).
+
+**Teste.** `npm run test:playthrough`:
+
+1. a rota canônica (a de 2.4: I-01, I-07, I-08, I-09, I-10, I-11a, I-15, I-12) termina no estado
+   máximo de `simulateProgress(MUSEUM).final`;
+2. **500 sementes** de ordem embaralhada, com recargas, terminam no mesmo estado, comparado como
+   conjuntos. A semente que reprovar é impressa; `SEED=<n> npm run test:playthrough` a repete;
+3. o perfil que **pula tudo** (nunca lê o caderno, nunca pega o rádio, nunca acende a lanterna)
+   chega ao mesmo estado, menos os átomos que são os próprios passos pulados (`doc-welcome`, o
+   rádio): nada do resto depende deles (V7);
+4. o perfil que digita o ano sem ter lido (o atalho indevido de 1.4) só adianta a gaveta: o fim é
+   o mesmo;
+5. cada save do corpus é carregado e jogado até o ponto fixo: nenhum átomo do save se perde e o
+   fim contém o estado máximo;
+6. «o atalho abre do saguão depois da primeira saída e continua aberto depois de recarregar», como
+   passo do robô;
+7. o robô e a simulação concordam: nenhuma ação que o store aceitou está fora de
+   `availableActions`, e o conjunto final é igual.
+
+**Vermelho hoje.** O item 6 (sem `doorsReleased`) e o item 5 com o save de produção de gaveta
+aberta (sem `locksSeen`) reprovam contra a árvore de antes de F2 e F3; em F4 o que nasce vermelho é
+a concordância com a simulação enquanto as três peças não estiverem fora de `availableActions`
+(T9).
+
+### T12 — `validateAdditive` e o primeiro instantâneo (M39; R1) · F4
+
+**Hoje.** Nada compara o conteúdo de um lote com o do anterior. Trocar um id perde o progresso de
+quem o tinha, em silêncio; endurecer uma guarda cria beco em save antigo.
+
+**Mudança.**
+
+1. `src/content/additive.ts` (novo, só do portão): `graphSnapshot(content, lot): GraphSnapshot`
+   (3.9, a partir de `simulateProgress(content).actions`, do conteúdo e de `PROGRESS_FIELDS`) e
+   `validateAdditive(previous: GraphSnapshot, content): ValidationIssue[]`.
+2. `scripts/graph-snapshot.ts` e `npm run graph:snapshot`: grava
+   `docs/releases/L<CONTENT_LOT>.graph.json`.
+3. `scripts/validate-content.ts`: lê o instantâneo mais novo de `docs/releases/` e passa a
+   `validateContent` (`extras.previousGraph`); reprova se o mais novo for de um lote anterior a
+   `CONTENT_LOT − 1` (a regra de idade do `BROWSER_RECORD`).
+4. Rodar `npm run graph:snapshot` no fim da fatia e commitar `docs/releases/L2.graph.json`. O
+   fecho do lote o gera de novo, sobre o que for publicado.
+
+| Código | Acusa |
+|---|---|
+| `node-removed` | uma ação do instantâneo que o conteúdo não tem mais |
+| `guard-strengthened` | uma ação que passou a exigir um átomo a mais |
+| `grant-removed` | uma ação que deixou de conceder um átomo |
+| `id-renamed-without-alias` | um id que um save pode ter (qualquer coleção de `ids`) sumiu sem linha em `SAVE_ALIASES` |
+| `term-condition-changed`, `checklist-condition-changed` | condição de termo ou de item de lista diferente da gravada |
+| `save-field-changed` | um campo do save mudou de tipo ou saiu da tabela |
+
+**Teste.** `test:playthrough`, bloco próprio: o conteúdo contra o próprio instantâneo não acusa
+nada; acrescentar ação, sala, peça ou concessão não acusa; cada código com um par feito para o
+teste; por mutação sobre o conteúdo real: tirar `portrait-morgan:date` dá `node-removed` e
+`id-renamed-without-alias`; dar `requiresPower: 'holyoke'` à porta principal da Ala 1 dá
+`guard-strengthened`; o arquivo commitado é o que `graphSnapshot` escreveria (byte a byte).
+
+**Vermelho hoje.** Não há instantâneo: o portão de T12.3 reprova até o arquivo existir.
+
+### T13 — Navegação por inundação (M15; ÁT-H3) · F5
+
+**Hoje.** `scripts/test-navigation.ts` prova o alcance de três coisas: os dois quadros de parede
+(`:468-489`) e a rota do escritório (`:621-636`). As doze peças, os quatro containers, o rádio e as
+portas não têm prova de que o jogador chega a um ponto de onde o `E` os alcança. L1 entregou
+ÁT-H3 só para os quadros (HANDOFF §10.7).
+
+**Mudança.** `scripts/lib/flood.ts` (novo) e um bloco em `test-navigation.ts`:
+
+- `floodFrom(world, start, cell = 0.25)`: a partir do spawn real, anda a cápsula real
+  (`movePlayer`, `PLAYER_CAPSULE`) do centro de uma célula ao da vizinha (quatro vizinhas); a
+  célula entra se a cápsula chega a menos de 5 cm do centro sem cair. Devolve os pontos de pé.
+- `museumWorld.ts`: o mundo ganha os suportes de peça que têm colisor (`MOUNT_PARTS`); as peças
+  continuam fora (não têm colisor: H-31). Exporta o volume de mira de cada interativo como o
+  runtime o monta: a caixa da receita para peça (com posição, giro e escala), `DRAWER_PROXY` ou a
+  caixa acolchoada para container, a caixa acolchoada para quadro e rádio, a caixa da folha para
+  porta, dos dois lados.
+- Para cada interativo: (a) existe um ponto de pé, na sala dele, com o olho (`PLAYER_EYE_HEIGHT`)
+  fora do volume e a menos de `INTERACTION_REACH` dele; (b) o ponto de pé **mais próximo** do alvo
+  também tem o olho fora do volume e dentro do alcance (é o «de onde a cápsula para» que L1 deixou).
+
+[medido] com o conteúdo de hoje: 6.405 células em 0,44 s; os 26 alvos (12 peças, 4 containers, 3
+quadros, 1 rádio, 3 portas × 2 lados) passam em (a); em (b) reprova **um**: `net-1897`, que não
+tem colisor e deixa o olho entrar na própria caixa. Distâncias do melhor ponto: bolas do saguão
+0,88 m; `ball-spalding` 0,64 m; vitrine corrida 1,03 a 1,38 m; arquivos 0,16 m; caderno 1,20 m;
+luminária 0,70 m; rádio 0,69 m; quadros 0,25 e 0,30 m; portas 0,22 e 0,43 m.
+
+`KNOWN_DEBT`: `{ gate: 'test:navigation', code: 'standing-point-inside-target', id: 'net-1897',
+untilLot: 14 }` (H-31: a rede ganha lâmina de colisão).
+
+**Teste.** `test:navigation`: «todo interativo tem um ponto de pé ligado ao spawn, dentro do
+alcance e fora do próprio volume»; «do ponto de pé mais próximo, idem, fora o que a tabela de
+dívidas data»; «a inundação cobre as três salas» (cada sala com pontos, e a volta ao saguão de
+toda sala).
+
+**Vermelho hoje.** A acusação de `net-1897` (fora da tabela até a linha entrar). O resto nasce
+verde; prova-se por mutação, dentro do próprio teste: sem o colisor de `breaker-panel` no
+manifesto, o olho do ponto mais próximo entra no volume do `atrium-breaker` (é ÁT-A1 voltando);
+com uma `partition` atravessada na faixa do escritório, `office-cabinet` fica sem ponto de pé.
+
+### T14 — Lint de numerais e do que envelhece (M11; H-22, CN13, EN-A7; D14) · F5
+
+**Hoje.** Nenhuma regra lê os números do texto. `scripts/test-opening-flow.ts` conta as chaves com
+`1896` (a asserção de L1), para esse código só. [medido]: `1896` aparece em duas chaves por
+dicionário (`hotspot.portrait-morgan.date.label`, `document.halstead.title`), em nenhum crédito de
+mídia e em nenhum dos dois SVG autorais.
+
+**Mudança.** `src/content/textLint.ts` (novo, só do portão) e `schema.ts` (3.8):
+
+- `printedTexts`: todo texto que o jogador lê e que se pode ler sem abrir imagem — os dois
+  dicionários, por chave; os `<text>` dos SVG de `media` (lidos pelo script do portão e passados
+  em `extras`); a linha de crédito de cada mídia nas duas línguas.
+- `numeral-exclusivity`: token é sequência máxima de dígitos (`1895–1915` tem dois, nenhum é
+  `15`); hora (`16h47`, `8h55`, `9h`) é um token de classe `clock` e não se compara com código.
+  O token igual ao valor de um fato `usedAsCode` só pode estar nas chaves de `printedIn`, nas
+  duas línguas; `printedIn` tem uma chave, salvo `exception: 'tutorial'`. Mais
+  `fact-code-without-printed-in` e `numeral-printed-in-missing` (chave autorizada que não traz o
+  número em alguma língua).
+- `counted-pattern`: para fato com `forbiddenPatterns`, reprova uma das `forms` a até seis
+  palavras de um dos radicais de `near`, na mesma frase, fora das chaves de `printedIn`.
+- `text-ages`, sobre o texto de acervo (DL2-15): em pt-BR «há N anos» (N em algarismo ou por
+  extenso), «até hoje», «hoje», «N títulos», «maior», «melhor», «único», «recorde»; em inglês
+  “N years ago”, “for N years”, “to this day”, “today”, “N titles”, “biggest”, “largest”,
+  “greatest”, “best”, “the only”, “world record”, “record-breaking”, “all-time” (*record* sozinho
+  não entra: é a palavra do museu para a ficha).
+- `speech-night-state-unconditional`: fala de rádio que diz chuva, tempestade, apagão ou escuro
+  (pt-BR: «chuva», «chovendo», «tempestade», «temporal», «apagão», «acabou a luz», «sem luz»,
+  «escuro»; inglês: “rain”, “storm”, “blackout”, “power's out”, “power is out”, “the dark”) sem um
+  `when` não vazio em quem a diz (chamada ou dica).
+- `museum.ts:77-99`: `springfield-renaming` ganha `printedIn` e `exception: 'tutorial'`.
+
+**Teste.** `npm run test:lints` (novo, `scripts/test-text-lint.ts`): o tokenizador (intervalo com
+travessão, `18960`, hora, número por extenso); as duas línguas divergindo; `counted-pattern` com o
+catorze e com o baú («com 14 nações» e «8 × 16» reprovam; «oito gomos» e «16h47» não); cada
+palavra de `text-ages` nas duas línguas e os falsos positivos conhecidos (*the collection record*);
+o conteúdo real limpo fora o que a tabela de dívidas data. `test:opening-flow` mantém a asserção de
+L1 e passa a ler as duas chaves de `printedIn`.
+
+**Vermelho hoje.** O lint de exclusividade nasce verde (L1 já limpou o texto, DL1-7): prova-se com
+o texto de antes de L1, guardado no teste (`exhibit.handbook-1897.catalogue` e
+`exhibit.photo-gym.catalogue` com o ano). `text-ages` acusa `document.predecessor.body` («existe
+há cento e trinta anos») e `speech-night-state-unconditional` acusa `radio.patience.t4.dark`,
+`radio.patience.t5.soap.2` e `radio.deadAir.rain` [previsto, pela varredura feita para este
+plano]: entram em `KNOWN_DEBT` no mesmo commit.
+
+## 5. Migração: o save antes e depois
+
+Só os campos que mudam; todo o resto sai idêntico ao que entrou. «Antes» é o `progress` sob a
+chave `volleyball-museum:v1`; «depois» é o que `migrateProgress` devolve no fim do lote.
+
+| # | Save | Antes | Depois |
+|---|---|---|---|
+| A | `production-drawer-open` | sem `contentLot`, `locksSeen`, `doorsReleased`, `flags`, `triggersFired`; `locksOpened: ['office-drawer']` | `contentLot: 2`, `locksSeen: ['office-drawer']`, `doorsReleased: []`, `flags: []`, `triggersFired: []` |
+| B | `production-drawer-closed`, `production-catalogued-unturned`, `production-radio-on-desk` | idem, `locksOpened: []` | `contentLot: 2` e as quatro listas vazias. A gaveta sai da planta até ser tocada (DL2-4); o atalho pede mais uma saída (DL2-3) |
+| C | `production-pre-opening` | sem `radioCalls`, `clockSeconds`, `hintsShown`, `devicesCarried`, `radioMemory` | como hoje (`doc-welcome` concedido, `porter-first-call` ouvida, `journal-taken` em `hintsShown`), mais `contentLot: 2` e as quatro listas vazias |
+| D | de um lote futuro: `{ version: 1, contentLot: 7, termsSigned: ['termo-posse'], socketsFilled: ['curator'], locksSeen: ['office-drawer', 'holyoke-hero-seal'], … }` | — | `contentLot: 7`; `termsSigned` e `socketsFilled` como vieram; `locksSeen` com os dois ids, mesmo o que este build não conhece. Igual depois de qualquer ação e de regravar |
+| E | de L2, lido pelo código de L1 (`sanitiseProgress.L1.ts`) | `contentLot: 2`, `locksSeen: ['office-drawer']`, `doorsReleased: ['atrium-from-holyoke-shortcut']` | todo campo que L1 conhece, igual; os cinco campos novos somem (é o código de L1 que não os copia). Voltando a L2: `contentLot` ausente → 1 → o migrador refaz `locksSeen` a partir de `locksOpened`; `doorsReleased` não volta. **É a perda de um rollback, registrada no HANDOFF** |
+| F | lixo: `contentLot: 'x'`, `doorsReleased: 'abc'`, `locksSeen: [1, 'office-drawer', null]` | — | `contentLot: 2`, `doorsReleased: []`, `locksSeen: ['office-drawer']` |
+| G | `{ version: 99, catalogued: ['x'] }`, `null`, `'texto'` | — | jogo novo (DL2-5) |
+| H | jogo novo | — | `emptyProgress()`: `contentLot: 2`, tudo vazio, `lastRoom: 'office'` |
+
+## 6. Textos (pt-BR é a fonte; `en.ts` é tipado contra ele)
+
+| Chave | pt-BR | inglês | Onde aparece |
+|---|---|---|---|
+| `door.released` (nova) | «Atalho destrancado» | “Shortcut unlocked” | toast, seguido de « — » e do título da sala (`room.holyoke.title`) |
+| `map.legend` (existe; passa a ser usada) | «Legenda» | “Legend” | título da legenda da planta |
+| `map.state.unlit` (não muda) | «Sem energia» | “No power” | legenda, amostra tracejada |
+| `map.state.partial` (muda) | «Acesa, falta conferir» | “Lit, something left to check” | legenda, amostra hachurada. Dizia «Peças por catalogar», falso para o escritório |
+| `map.state.complete` (muda) | «Completa» | “Complete” | legenda, amostra cheia. Dizia «Catalogada» |
+| `map.unknown` (nova) | «Sala ainda não visitada» | “A room not visited yet” | `<title>` do toco; o sinal desenhado é «?» |
+| `map.north` (nova) | «Norte» | “North” | `aria-label` da rosa; a letra desenhada é «N» nas duas línguas |
+| `map.you` (nova) | «Você está aqui» | “You are here” | `aria-label` do marcador |
+
+Nenhuma traz algarismo, hora nem palavra de `text-ages`. «Norte» não é fala de rádio
+(`speech-uses-cardinal` só lê falas). Nenhuma fala do Jorge muda: `porter-shortcut` é de L3.
+`claims` e `mentions` (campos de L8 e L3): nenhuma destas chaves afirma fato; `door.released`
+menciona `atrium-from-holyoke-shortcut`.
+
+## 7. Dívidas datadas
+
+### 7.1 Fecha em L2
+
+| Portão | Código | Id | Como |
+|---|---|---|---|
+| `validate:content` | `i18n-key-unused` | `map.legend` | a legenda ganha título (T8); a linha sai de `KNOWN_DEBT` no commit que move `CONTENT_LOT` para 2 |
+
+### 7.2 Abre em L2 (cada validador novo entra com as suas linhas, no mesmo commit)
+
+| Portão | Código | Id | Até | Por quê | Fatia |
+|---|---|---|---|---|---|
+| `validate:content` | `exhibit-uncataloguable` | `net-1897`, `gym-suit`, `photo-gym` | L4 | H-01: o detalhe obrigatório fica a mais de 0,42 m da origem, ou num cone de 1,5° | F4 |
+| `validate:content` | `checklist-item-untickable` | `notebook.todo.catalogue` | L4 | a condição pede as doze; três não catalogam | F4 |
+| `validate:content` | `checklist-item-untickable` | `notebook.todo.vault` | L3 | sem `doneWhen`; em L3 vira promessa datada sem caixa de riscar (DL2-16) | F4 |
+| `test:navigation` | `standing-point-inside-target` | `net-1897` | L14 | H-31: sem colisor, o olho entra na caixa da rede | F5 |
+| `validate:content` | `text-ages` | `document.predecessor.body` | L3 | H-23: «há cento e trinta anos»; o bilhete dá lugar a `doc-otavio-handover` | F5 |
+| `validate:content` | `speech-night-state-unconditional` | `radio.patience.t4.dark`, `radio.patience.t5.soap.2`, `radio.deadAir.rain` | L3 | falha 66 do plano: resposta do Jorge não tem `when` até M9 (`RadioReply.when`) | F5 |
+
+Do Anexo C, as linhas de L2 ficam assim: `exhibit-uncataloguable` e `checklist-item-untickable`
+abrem aqui, como previsto; as quatro de texto são novas e entram no Anexo C pelo fecho do lote. Um
+validador de L2 que acuse algo fora desta tabela reprova a fatia: ou o conteúdo é consertado, ou a
+linha entra aqui com data.
+
+## 8. Testes
+
+### 8.1 Suítes
+
+| Suíte | Estado | Entra | Fatia |
+|---|---|---|---|
+| `test:save` | nova | T1, T2 | F1 (cresce em F2 e F3 com os campos) |
+| `test:qa-save`, `test:captures` | ganham casos | T3 | F1 |
+| `test:triggers` | nova | T4, T5 | F2 |
+| `test:locks` | nova | T6 | F2 |
+| `test:opening` | ganha casos | códigos novos contra conteúdo quebrado (T4, T5); o atalho nos dois estados (T7); `simulateProgress` (T10) | F2, F3, F4 |
+| `test:transition-door`, `test:mobile-controls`, `test:navigation` (travessia) | ganham casos | T7 | F3 |
+| `test:map` | nova | T8 | F3 |
+| `test:playthrough` | nova | T9 a T12 | F4 |
+| `test:navigation` (inundação) | ganha casos | T13 | F5 |
+| `test:lints` | nova | T14 | F5 |
+| `test:facts` | ganha itens | a lista de módulos só do portão: `simulate.ts`, `additive.ts`, `textLint.ts` | F4, F5 |
+| `test:bundle` | — | os tetos de 9 | F1, F2, F3 |
+
+`package.json`: `test:save`, `test:triggers`, `test:locks`, `test:map`, `test:playthrough`,
+`test:lints` e `graph:snapshot`. No `check`: `test:lints` depois de `validate:content`; `test:save`
+depois de `test:qa-save`; `test:triggers`, `test:locks` e `test:map` depois de `test:radio`;
+`test:playthrough` depois de `test:navigation`; `test:bundle` continua no fim. Sem dependência
+nova: tudo é `node --experimental-strip-types`.
+
+### 8.2 Testes que mudam de sentido (plano, 6.5; aviso no HANDOFF)
+
+| Teste | Prendia | Passa a prender | Fatia |
+|---|---|---|---|
+| `scripts/test-capture-manifest.ts:183-185` | `l1-review` aberto, sobre árvore de trabalho | congelado, em `513ec09` | F1 |
+| `scripts/test-qa-save.ts:142-161` | cinco saves que nunca saem | seis, com `l1-route-end` | F1 |
+| `scripts/test-opening-flow.ts:218-220`, `scripts/test-radio.ts:811` | save de outra versão vira jogo novo | **igual** (DL2-5); só a razão muda de «descartar é mais barato» para «ninguém escreveu esse formato» | — |
+| `scripts/test-power.ts:99-118` | os quatro efeitos aplicados por `store.applyUnlockEffect` | os mesmos quatro, no mesmo formato de chave, por `effectGrant` e `grant` | F2 |
+| `scripts/test-transition-door.ts:426-447` | o atalho não fica aberto: nada grava a liberação | a folha não grava nada; o save grava, e aí o saguão abre | F3 |
+| `scripts/test-transition-door.ts:419-423`, `scripts/test-opening.ts:253-265` | as duas regras com dois e três argumentos | com a lista de portas liberadas | F3 |
+| `scripts/test-navigation.ts:325-366` | o atalho num sentido | nos dois | F3 |
+| `scripts/test-opening.ts:284-288` | `validateSolvability` | `simulateProgress` | F4 |
+| `scripts/test-facts.ts:737-748` | seis módulos só do portão | nove | F4, F5 |
+
+`scripts/test-navigation.ts:385` (`reciprocalPairs.size === 3`) não muda: L2 não acrescenta vão.
+
+## 9. Bundle e catracas
+
+Hoje (HANDOFF §10.3): documento 63.235 bytes de gzip (teto 63.600), título 28.353 (teto 28.500),
+jogo 388.248 (teto 390.200). **A folga do título é de 147 bytes.**
+
+| Caminho | O que entra | Previsto | Fatia |
+|---|---|---|---|
+| título | `progressFields.ts`, `saveMigrations.ts`, `contentLot.ts`, `SAVE_ALIASES` (o store é importado pela tela de título) | +0,5 a +0,8 kB | F1 |
+| título | `progressRules.ts` e `commitProgress`; duas linhas da tabela | +0,2 kB | F2 |
+| título | as quatro chaves novas e as duas mudadas de 6, nas duas línguas (os dicionários viajam com o título) | +0,2 kB | F3 |
+| jogo | `triggers.ts`, `contentRegistry.ts`, `progressGrants.ts`, `lockRules.ts` | +1,5 a +2 kB | F2 |
+| jogo | `mapModel.ts`, o toast, `doorGrant` | +1 kB | F3 |
+| jogo | `examineReach.ts` | +0,2 kB | F4 |
+
+Tudo [previsto]. Cada teto sobe **no commit da fatia que precisa**, para o medido mais meio por
+cento, com o motivo escrito em `BUNDLE_PATH_CEILINGS` (`scripts/lib/ratchets.ts:237-241`), como a
+revisão de L1 fez. Os dois orçamentos do papel (250 kB antes do clique, 600 kB no total) ficam
+longe: 91,6 e 479,8 kB hoje. `simulate.ts`, `additive.ts`, `textLint.ts` e tudo em `scripts/` não
+entram no bundle. `CONTENT_SENTINELS` continua provando que o título não carrega conteúdo; T1
+acrescenta a prova pela fonte, que diz **qual** importação quebrou a regra.
+
+**Receitas tocadas: nenhuma.** Nenhum gerador, material ou colisor muda, `npm run bake` não roda
+neste lote, e o delta de draws e de triângulos por sala é zero nas três.
+
+Nenhuma outra catraca se move: `kit.glb`, textura residente, programas e draws não mudam, e o
+`BROWSER_RECORD` (lote 1) tem a idade que `test:ratchets` aceita com `CONTENT_LOT` em 2.
+
+## 10. Rota do L2 no navegador (passo 6)
+
+Servidor `museum-dev` (porta 5201), **reiniciado** depois da última edição. 1280 × 720 e depois
+844 × 390 com os botões de toque; em pt-BR e em inglês. Console sem erro nem aviso novo.
+
+**A. `?qaSave=production-drawer-open`.** Continuar. Planta: três salas, nenhuma tranca listada (a
+gaveta está aberta), duas portas (o atalho não aparece), legenda com título e três padrões, seta
+do marcador acompanhando a câmera (girar 90° e reabrir), «N» no alto. No saguão, mirar o atalho:
+«Abre pelo outro lado»; `E` dá o som de trinco e nada mais. Ir à Ala 1, sair pelo atalho: toast
+«Atalho destrancado — Ala 1 · Holyoke». Virar-se: «Abrir porta», e abre. Planta: três portas.
+Recarregar **sem** o parâmetro: do saguão o atalho abre.
+
+**B. `?qaSave=production-drawer-closed`.** Planta: nenhuma tranca. Tocar a gaveta (o teclado
+abre), `Esc`. Planta: «Gaveta com segredo — 4 dígitos». Digitar o ano: a gaveta abre, o bilhete
+aparece, a tranca sai da planta.
+
+**C. Jogo novo.** Luminária, caderno. Planta: só o escritório e um toco com «?» na porta. Entrar
+no saguão: duas salas, o toco passa para a porta da Ala 1.
+
+**D. `?qaSave=production-pre-opening`** (em inglês): carrega, nada se perde, a planta em inglês.
+
+**E. `?qaSave=l1-route-end`:** o save de L1 carrega e a rota A se repete a partir dele.
+
+**F. Toque (844 × 390).** O botão de Ação aparece diante do atalho bloqueado e dá o som; a planta
+cabe e a legenda se lê; o toast não cobre o prompt.
+
+**Aceite manual do plano mestre:** nenhum item visual neste lote. O que só o navegador mostra e os
+testes não: a seta acompanhando a câmera e a hachura legível no telefone.
+
+## 11. Fatias
+
+Cada fatia passa pelos passos 2 a 4 de §9.1 e termina com `npm run check` e `npm run build` verdes
+e um commit local só com os arquivos dela. Nenhuma concede, cita ou lista algo cujo consumidor não
+esteja nela: o campo do save entra com quem o escreve e com quem o lê.
+
+| Fatia | Tarefas | O jogador vê | Depende de |
+|---|---|---|---|
+| **F1 — O save que não se perde** | T1, T2, T3 | nada | — |
+| **F2 — Uma porta só para o progresso** | T4, T5, T6 | a planta só lista a tranca tocada | F1 |
+| **F3 — O atalho aberto e a planta sem spoiler** | T7, T8 (com `map.legend` e `CONTENT_LOT = 2`) | o atalho, o toast, a planta | F2 |
+| **F4 — A prova de que se joga** | T9, T10, T11, T12 | nada | F2, F3 |
+| **F5 — O espaço e os números** | T13, T14 | nada | nenhuma; vem por último para não disputar `validate.ts`, `knownDebt.ts` e `museumWorld.ts` com F2 a F4 |
+
+Por que esta ordem: M5 pede M2 (o gatilho grava em campo da tabela); M6a pede M5 (`Lock.onOpen`);
+M10 pede M5, M6a e M4a e modela `doorsReleased`, que é de F3; M39 pede M10. `CONTENT_LOT` passa a 2
+na fatia que paga a única dívida que vence em L2, e todos os migradores de lote 2 já estão na
+árvore nesse commit (DL2-6 cobre o save carimbado antes).
+
+## 12. Riscos
+
+| Risco | Como aparece | Resposta |
+|---|---|---|
+| o store executa gatilhos no caminho de todo `E` | uma regra errada grava no save de todo mundo | em L2 o conteúdo real compila **zero** gatilhos; o limite do ponto fixo; `test:triggers`; o robô com 500 ordens e recargas |
+| a migração muda de arquivo | um save de produção perde átomo | os cinco fixtures passam por `test:qa-save` sem mudança no teste; os casos de 5; a migração de abertura copiada palavra por palavra |
+| rollback para antes de L2 | `doorsReleased` some; a planta volta a listar tudo | registrado (caso E); nada do que L1 conhece se perde, e `locksSeen` se refaz |
+| o teto do título estoura | `test:bundle` vermelho em F1 | previsto em 9; sobe no commit, com o motivo |
+| a régua de 5° de `examineReach` | uma peça de cone estreito vira «incatalogável» sem ser | a régua é a de hoje e o corpus a confere; L4 troca as duas |
+| a planta esconde demais | o jogador vê uma porta no saguão que a planta não desenha | é a decisão de 8.7 (DL2-13); o toco com «?» cobre a porta principal. Conferir na rota A e levar ao dono se incomodar |
+| o som no `E` bloqueado soa como defeito | «Abre pelo outro lado» com zumbido de fechadura elétrica | é o som que existe (`lockDenied`); o som próprio de trinco é de L16 |
+| o instantâneo gravado antes do fecho | a revisão muda o conteúdo depois | mudança aditiva passa; o fecho gera de novo |
+| o save de L1 não pôde ser tirado do navegador | corpus sem L1 | a segunda saída de HANDOFF §10.10, declarada; nunca um save inventado |
+| falso positivo do lint em inglês | *record*, *only*, *best* em sentido comum | listas por frase, não por palavra solta; cada falso positivo conhecido tem caso no teste |
+
+## 13. O que fica para o fecho do lote (passos 5 a 12 de §9.1)
+
+- revisão adversarial (passo 5) e a rota de 10 no navegador (passo 6);
+- `npm run graph:snapshot` de novo, sobre o que for publicado;
+- corpus: um save de L2 tirado do navegador no fim da rota A (`l2-shortcut-released`), coberto em
+  `test:qa-save`;
+- `docs/HANDOFF.md`, seção nova: o que mudou, as medições de bundle, os testes de 8.2, as dívidas de
+  7.2, **a perda do rollback (caso E)** e as lições; o Anexo C do plano mestre ganha as quatro
+  linhas de texto; a seção L2 do plano ganha o «Feito em»;
+- revisor, push, deploy e fumaça (passos 8 a 11), que este plano não autoriza por si.
