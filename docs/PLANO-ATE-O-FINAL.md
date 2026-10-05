@@ -2697,8 +2697,9 @@ dono e continua pendente. Não trava L1; trava o livro-caixa de L6.
 - **Risco.** Médio: o store passa a executar gatilhos no caminho de todo `E`; a migração muda. Um
   rollback para antes de L2 perde campos novos (registrado no HANDOFF).
 - **Passagem.** Trilhos prontos; nada de história nova.
-- **Feito em 2026-10-05**, em commits locais na `main` (de `1ecc2cb` a `d299df8`, mais o do
-  fecho): as cinco fatias do plano do lote (`docs/lotes/L2-plano.md`, §14), o conserto que a rota
+- **Feito em 2026-10-05 e publicado** (até `2dc7b23`, versão Cloudflare `b6c1e51b`), em commits
+  na `main` (de `1ecc2cb` a `d299df8`, o do fecho, os das duas revisões e o da reconferência): as
+  cinco fatias do plano do lote (`docs/lotes/L2-plano.md`, §14), o conserto que a rota
   de toque pediu (no telefone o painel do caderno saía pela borda direita da tela) e o fecho.
   `npm run check` e `npm run build` verdes. A rota do lote foi feita no navegador de
   desenvolvimento a partir do save de L1, dos saves de produção e de um jogo novo, em pt-BR e em

@@ -61,10 +61,9 @@ da reconferência do conserto, §11; a lista completa das suítes e o que cada u
 
 O único aviso é o preexistente `react(only-export-components)` em `src/main.tsx:17`.
 Deploy de produção: `https://volleyball-museum.renanbuiatti14.workers.dev`, versão
-Cloudflare `1d3a4554-c21a-457a-9bf3-7d5bfc594ae4` (2026-10-04: P0 e L1 do plano, até
-`f0fb5a3`; §10). A anterior era `0027afaa` (2026-10-03, a rodada de §9). **L2 está fechado,
-revisado e ainda não publicado** (commits locais até o da reconferência do conserto; §11): o
-que está no ar é L1.
+Cloudflare `b6c1e51b-af79-4fff-aff4-0c365fa6821a` (2026-10-05: L2 do plano, até `2dc7b23`;
+§11). As anteriores: `1d3a4554` (2026-10-04, P0 e L1, até `f0fb5a3`; §10) e `0027afaa`
+(2026-10-03, a rodada de §9).
 
 Bake atual:
 
@@ -1590,17 +1589,19 @@ aplicadas e o que saiu diferente do planejado (§14 dele). Saiu em commits locai
 | `8bb26d9` | os quatro achados do revisor antes do push (11.13): duas abas em salas diferentes que não paravam de gravar, o ajuste que este build não sabe usar, o ajuste que não é valor simples, o storage que nem se deixa nomear |
 | o da reconferência | os quatro achados de quem reconferiu `8bb26d9` (11.14): o relógio do escritório, que entrava no jogo recomeçado com o tempo do jogo apagado (e, achada na mesma conferência, a chamada do rádio que estava no ar); o ajuste desfeito por uma aba de L1, registrado; as abas vivas com as regras de cada uma; o ajuste que o disco não traz, preso num caso |
 
-**Estado: fechado e revisado em 2026-10-05, não publicado.** Dos passos de §9.1 do plano estão
+**Estado: publicado em 2026-10-05**, até `2dc7b23`, versão Cloudflare `b6c1e51b`. Fumaça em
+produção feita: um save no formato de L1 com um campo que este build não conhece carregou
+inteiro, o campo voltou ao disco depois de jogar (`contentLot` 2, `version` 1), a cena montou e o
+console ficou limpo. Dos passos de §9.1 do plano estão
 feitos o 1 (plano do lote), o 2 (teste primeiro, fatia por fatia, no fecho e nas revisões), o 3,
 o 4 (portão verde), o 5 (revisão adversarial por quem não implementou: 11.12), o 6 (rota do
 lote: 11.8) e o 12 (este registro, o instantâneo, o corpus e as capturas). O 7 não se aplica
 (não é lote de arte: nenhuma sala desenha nada diferente). O 8 (revisor antes do push) rodou uma
 vez e devolveu um bloqueio e três defeitos, consertados em 11.13; dois verificadores
 reconferiram esse conserto e devolveram um defeito e três notas, fechados em 11.14.
-**Faltam** o 9 ao 11 (push, deploy e fumaça em produção) e o 13 (playtest). Quem publicar anota
-a versão Cloudflare em §2 e aqui, e troca, na seção L2 do plano, «Feito em 2026-10-05» pela
-forma que diz que o lote foi publicado: é essa frase que solta o instantâneo de acompanhar o
-conteúdo (11.10).
+O 9 ao 11 (push, deploy e fumaça em produção) foram feitos em 2026-10-05, e a seção L2 do plano
+passou a dizer «Feito em 2026-10-05 e publicado», a frase que solta o instantâneo de acompanhar
+o conteúdo (11.10). **Falta** o 13 (playtest) e a medição em aparelho real (P0, item 6).
 
 ### 11.1 O que mudou para o jogador
 
