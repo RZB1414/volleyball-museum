@@ -1,0 +1,988 @@
+/**
+ * The exhaustive player: proof that the museum can be played to its end.
+ *
+ * The check this replaces walked the lock graph with rules of its own. It
+ * treated the one-way shortcut as an ordinary door, took every piece for
+ * cataloguable, opened a ritual by arriving in its room and never asked where
+ * a code is learnt unless the lock stood on a doorway. It proved a museum,
+ * but not the one the runtime plays: three pieces it counted cannot be
+ * catalogued by anybody.
+ *
+ * Here the player is moved by the game's own functions and nothing else: the
+ * door rule with the save's released doors (`transitionDoorTopology.ts`), the
+ * lock rule (`lockRules.ts`), the verbs (`progressGrants.ts`), the ruler of
+ * the examine view (`examineReach.ts`), the conditions and the triggers. From
+ * every room she can stand in she takes every action the rules allow, pass
+ * after pass, until a pass adds nothing. What is outside that fixed point
+ * cannot be reached by any order of play, because the save only grows.
+ *
+ * Two readers besides the gate. The playthrough robot asks `availableActions`
+ * what the real store may be made to do, and is held to this player's final
+ * state (`npm run test:playthrough`). The graph snapshot (`additive.ts`)
+ * writes down every action she met, with what it asked and gave, so that the
+ * next lot can be shown to have taken nothing away.
+ *
+ * Gate-only, like `validate.ts`: nothing the game ships imports it
+ * (`test:facts` checks).
+ */
+
+import { deskRadioIntent, radioIsLive } from '../engine/deviceRules.ts'
+import { examineReach } from '../engine/examineReach.ts'
+import { attemptLock, lockCredentialKeys } from '../engine/lockRules.ts'
+import { isContainerTaken } from '../engine/notebook.ts'
+import { isRoomPowered } from '../engine/power.ts'
+import { credentialKey, progressConditionMet } from '../engine/progressCondition.ts'
+import { containerGrant, doorGrant, hotspotGrant } from '../engine/progressGrants.ts'
+import {
+  buildTransitionDoorSpecs,
+  transitionDoorBlock,
+  transitionDoorEndpointMap,
+  type TransitionDoorSpec,
+} from '../engine/transitionDoorTopology.ts'
+import { compileTriggers, effectGrant, settleTriggers } from '../engine/triggers.ts'
+import {
+  emptyProgress,
+  grantProgress,
+  type ListField,
+  type Progress,
+  type ProgressGrant,
+} from '../state/progressFields.ts'
+import type {
+  ContainerData,
+  DeviceData,
+  ExhibitData,
+  Lock,
+  MuseumContent,
+  ProgressCondition,
+  RoomData,
+  Trigger,
+} from './schema'
+import type { ValidationIssue } from './validate.ts'
+
+// ---------------------------------------------------------------------------
+// Atoms
+// ---------------------------------------------------------------------------
+
+/**
+ * How each list of the save is spelt as an atom of the plan's graph (§2.4):
+ * `power:office`, `doc:doc-welcome`, `cat:ball-spalding`. Null for a list no
+ * verb of this player writes.
+ *
+ * Typed by the save's own lists, so a lot that adds one has to say here how
+ * it is spelt, or that it is not played, before the build goes on. In the
+ * order a level of the script is read in: where she got to, what came on,
+ * what opened, what she read and learnt, what she catalogued.
+ */
+export const ATOM_PREFIX = {
+  roomsVisited: 'room',
+  roomsPowered: 'power',
+  doorsReleased: 'door',
+  locksOpened: 'lock',
+  locksSeen: 'seen',
+  documentsRead: 'doc',
+  factsKnown: 'fact',
+  catalogued: 'cat',
+  hotspots: 'detail',
+  credentials: 'cred',
+  flags: 'flag',
+  triggersFired: 'fired',
+  devicesCarried: 'carried',
+  // What the porter said and which lessons the HUD gave are told to the
+  // player, not done by her: no rule of progress reads either.
+  radioCalls: null,
+  hintsShown: null,
+} as const satisfies Record<ListField, string | null>
+
+const ATOM_FIELDS = (Object.entries(ATOM_PREFIX) as [ListField, string | null][]).flatMap(([field, prefix]) =>
+  prefix === null ? [] : [[field, prefix] as const],
+)
+
+/** Everything a save holds that the graph speaks of, as atoms. */
+export function atomsOf(progress: Readonly<Partial<Record<ListField, readonly string[]>>>): string[] {
+  return ATOM_FIELDS.flatMap(([field, prefix]) => {
+    const list = progress[field]
+    // A later build's save may hold something that is not a list here.
+    return Array.isArray(list) ? list.map((id: string) => `${prefix}:${id}`) : []
+  })
+}
+
+const sortedUnique = (items: readonly string[]) => [...new Set(items)].sort()
+
+// ---------------------------------------------------------------------------
+// The actions of a player
+// ---------------------------------------------------------------------------
+
+/** One press of E, or one walk through a doorway, with what it is aimed at. */
+export type PlayerAction =
+  | { readonly kind: 'power'; readonly roomId: string }
+  | { readonly kind: 'door'; readonly doorId: string; readonly from: string; readonly to: string }
+  | { readonly kind: 'hotspot'; readonly exhibitId: string; readonly hotspotId: string }
+  | { readonly kind: 'container'; readonly containerId: string }
+  | { readonly kind: 'code'; readonly lockId: string; readonly entry: string }
+  | { readonly kind: 'take'; readonly deviceId: string }
+
+/** What an action asks of the save and gives to it, as atoms. */
+export type ActionRecord = {
+  readonly id: string
+  readonly requires: readonly string[]
+  readonly grants: readonly string[]
+}
+
+type LockHost = {
+  readonly lockId: string
+  readonly roomId: string
+  /** The container or the power control that carries the lock. */
+  readonly hostId: string
+}
+
+/** What the rules read of a content, looked up once. */
+type Topology = {
+  readonly rooms: ReadonlyMap<string, RoomData>
+  readonly exhibits: ReadonlyMap<string, ExhibitData>
+  readonly locks: ReadonlyMap<string, Lock>
+  readonly doors: readonly TransitionDoorSpec[]
+  /** `room:portal` to the door that stands in that opening, from either side. */
+  readonly doorAt: ReadonlyMap<string, TransitionDoorSpec>
+  /** Why the doors could not be built, when they could not. */
+  readonly doorProblem: string | null
+  readonly hosts: readonly LockHost[]
+  readonly triggers: readonly Trigger[]
+}
+
+const TOPOLOGIES = new WeakMap<MuseumContent, Topology>()
+
+function topologyOf(content: MuseumContent): Topology {
+  const cached = TOPOLOGIES.get(content)
+  if (cached) return cached
+
+  let doors: TransitionDoorSpec[] = []
+  let doorProblem: string | null = null
+  try {
+    doors = buildTransitionDoorSpecs(content.rooms)
+  } catch (error) {
+    // The runtime builds the same list as it starts, and would stop there.
+    doorProblem = error instanceof Error ? error.message : String(error)
+  }
+  const endpoints = transitionDoorEndpointMap(doors)
+  const doorsById = new Map(doors.map((door) => [door.id, door]))
+  const doorAt = new Map<string, TransitionDoorSpec>()
+  for (const [endpoint, doorId] of endpoints) {
+    const door = doorsById.get(doorId)
+    if (door) doorAt.set(endpoint, door)
+  }
+
+  const topology: Topology = {
+    rooms: new Map(content.rooms.map((room) => [room.id as string, room])),
+    exhibits: new Map(content.exhibits.map((exhibit) => [exhibit.id, exhibit])),
+    locks: new Map(content.locks.map((lock) => [lock.id, lock])),
+    doors,
+    doorAt,
+    doorProblem,
+    hosts: content.rooms.flatMap((room): LockHost[] => [
+      ...(room.powerControl && room.powerLockId
+        ? [{ lockId: room.powerLockId, roomId: room.id, hostId: room.powerControl.id }]
+        : []),
+      ...(room.containers ?? []).flatMap((container) =>
+        container.lockId ? [{ lockId: container.lockId, roomId: room.id, hostId: container.id }] : [],
+      ),
+    ]),
+    triggers: compileTriggers(content),
+  }
+  TOPOLOGIES.set(content, topology)
+  return topology
+}
+
+const poweredIn = (topology: Topology, progress: Pick<Progress, 'roomsPowered'>) => (roomId: string) => {
+  const room = topology.rooms.get(roomId)
+  return room ? isRoomPowered(room, progress.roomsPowered) : false
+}
+
+function merged(...grants: readonly ProgressGrant[]): ProgressGrant {
+  const sum: { [K in ListField]?: string[] } = {}
+  for (const grant of grants) {
+    for (const [field, ids] of Object.entries(grant) as [ListField, readonly string[]][]) {
+      sum[field] = [...(sum[field] ?? []), ...ids]
+    }
+  }
+  return sum
+}
+
+/**
+ * What a press on something that carries a lock writes: the lock's answer,
+ * and what is behind it once the lock is, or has just become, open.
+ *
+ * The same three lines stand in `Containers.tsx` and `PowerControls.tsx`: a
+ * touch is always recorded, and only an open lock lets the press through.
+ */
+function hostPress(
+  topology: Topology,
+  content: MuseumContent,
+  progress: Progress,
+  lockId: string | undefined,
+  behind: ProgressGrant,
+): ProgressGrant {
+  if (!lockId) return behind
+  const lock = topology.locks.get(lockId)
+  // A lock the content does not have: the component refuses and writes nothing.
+  if (!lock) return {}
+  const attempt = attemptLock(lock, content.facts, progress, { kind: 'touch' })
+  if (attempt.outcome === 'open') return behind
+  return attempt.outcome === 'opened' ? merged(attempt.grant, behind) : attempt.grant
+}
+
+/** Whether a press on the carrier of this lock gets through to what is behind it. */
+function hostOpens(topology: Topology, content: MuseumContent, progress: Progress, lockId: string | undefined) {
+  if (!lockId) return true
+  const lock = topology.locks.get(lockId)
+  if (!lock) return false
+  const outcome = attemptLock(lock, content.facts, progress, { kind: 'touch' }).outcome
+  return outcome === 'open' || outcome === 'opened'
+}
+
+/** The container the keypad opens when its lock gives: the first that carries it, as `LockPanel.tsx` finds it. */
+function containerBehind(content: MuseumContent, lockId: string): ContainerData | undefined {
+  return content.rooms.flatMap((room) => room.containers ?? []).find((container) => container.lockId === lockId)
+}
+
+/**
+ * What a player standing in `room` with this save can do that the rules
+ * answer.
+ *
+ * A press on a shut drawer is in the list: the rules answer it (the keypad
+ * comes up, or the lock buzzes) and record that the lock was touched. A press
+ * the rules ignore is not: a door barred from this side, a switch whose room
+ * already has power, a detail already seen, a detail no hand can turn to the
+ * camera, a notebook that has left its desk, a radio without charge.
+ *
+ * A code is in the list only for a player who has had the keypad in front of
+ * her and knows the fact it asks for. The keypad itself compares digits and
+ * would take the year from anybody; an honest proof does not guess.
+ */
+export function availableActions(content: MuseumContent, progress: Progress, room: string): readonly PlayerAction[] {
+  const topology = topologyOf(content)
+  const here = topology.rooms.get(room)
+  if (!here) return []
+  const actions: PlayerAction[] = []
+
+  if (here.powerControl && !isRoomPowered(here, progress.roomsPowered)) {
+    actions.push({ kind: 'power', roomId: here.id })
+  }
+
+  const powered = poweredIn(topology, progress)
+  for (const portal of here.portals) {
+    const door = topology.doorAt.get(`${here.id}:${portal.id}`)
+    if (door && transitionDoorBlock(door, here.id, powered, progress.doorsReleased) !== null) continue
+    // An opening with no leaf in it is walked through.
+    actions.push({ kind: 'door', doorId: door?.id ?? portal.id, from: here.id, to: portal.toRoom })
+  }
+
+  for (const exhibitId of here.exhibitIds) {
+    const exhibit = topology.exhibits.get(exhibitId)
+    for (const hotspot of exhibit?.hotspots ?? []) {
+      // The view skips a detail the save already holds, and a hand cannot
+      // show one whose cone is narrower than the ruler allows.
+      if (progress.hotspots.includes(`${exhibitId}:${hotspot.id}`)) continue
+      if (!exhibit || !examineReach(exhibit, hotspot).reachable) continue
+      actions.push({ kind: 'hotspot', exhibitId, hotspotId: hotspot.id })
+    }
+  }
+
+  for (const container of here.containers ?? []) {
+    // A notebook that was read left the desk with the player.
+    if (isContainerTaken(content, container, progress.documentsRead)) continue
+    actions.push({ kind: 'container', containerId: container.id })
+  }
+
+  for (const lockId of new Set(topology.hosts.filter((host) => host.roomId === here.id).map((host) => host.lockId))) {
+    const lock = topology.locks.get(lockId)
+    // `ask` is the rule saying this lock is shut and has a panel to type at.
+    if (!lock || attemptLock(lock, content.facts, progress, { kind: 'touch' }).outcome !== 'ask') continue
+    const fact = lock.kind === 'knowledge' ? content.facts.find((candidate) => candidate.id === lock.factId) : undefined
+    if (!fact || !progress.locksSeen.includes(lock.id) || !progress.factsKnown.includes(fact.id)) continue
+    actions.push({ kind: 'code', lockId: lock.id, entry: fact.value })
+  }
+
+  for (const device of here.devices ?? []) {
+    if (device.kind !== 'radio') continue
+    const intent = deskRadioIntent(device, {
+      live: radioIsLive(content, device.id, progress.roomsPowered),
+      carried: progress.devicesCarried.includes(device.id),
+      speaking: false,
+    })
+    if (intent === 'take') actions.push({ kind: 'take', deviceId: device.id })
+  }
+
+  return actions
+}
+
+/** The action, as the grant the runtime's own verbs give it in this save. */
+export function actionGrant(content: MuseumContent, progress: Progress, action: PlayerAction): ProgressGrant {
+  const topology = topologyOf(content)
+  switch (action.kind) {
+    case 'power': {
+      const room = topology.rooms.get(action.roomId)
+      return room ? hostPress(topology, content, progress, room.powerLockId, { roomsPowered: [room.id] }) : {}
+    }
+    case 'door': {
+      const door = topology.doors.find((candidate) => candidate.id === action.doorId)
+      const release = door ? doorGrant(door, action.from, progress.doorsReleased) : null
+      return merged(release ?? {}, { roomsVisited: [action.to] })
+    }
+    case 'hotspot': {
+      const exhibit = topology.exhibits.get(action.exhibitId)
+      return exhibit ? hotspotGrant(exhibit, action.hotspotId, progress.hotspots) : {}
+    }
+    case 'container': {
+      const container = content.rooms
+        .flatMap((room) => room.containers ?? [])
+        .find((candidate) => candidate.id === action.containerId)
+      return container
+        ? hostPress(topology, content, progress, container.lockId, containerGrant(content, container.id))
+        : {}
+    }
+    case 'code': {
+      const lock = topology.locks.get(action.lockId)
+      if (!lock) return {}
+      const attempt = attemptLock(lock, content.facts, progress, { kind: 'code', entry: action.entry })
+      if (attempt.outcome === 'open') return {}
+      if (attempt.outcome !== 'opened') return attempt.grant
+      // The keypad shows what was inside at once (`LockPanel.tsx`).
+      const container = containerBehind(content, lock.id)
+      return container ? merged(attempt.grant, containerGrant(content, container.id)) : attempt.grant
+    }
+    case 'take':
+      return { devicesCarried: [action.deviceId] }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The same actions, written down
+// ---------------------------------------------------------------------------
+
+const atom = (field: Exclude<keyof typeof ATOM_PREFIX, 'radioCalls' | 'hintsShown'>, id: string) =>
+  `${ATOM_PREFIX[field]}:${id}`
+
+const grantAtoms = (grant: ProgressGrant) => atomsOf(grant)
+
+/** A room's power as a requirement: none for a room that never lost it. */
+function powerRequired(topology: Topology, roomId: string): string[] {
+  return topology.rooms.get(roomId)?.startsPowered ? [] : [atom('roomsPowered', roomId)]
+}
+
+/**
+ * What each field of a condition asks, as atoms.
+ *
+ * A field for every field of the schema, by type: a condition a later lot
+ * adds cannot be left out of the snapshot without the build saying so.
+ * "All rooms" and "all catalogued" are written as the ids they mean in this
+ * content (the plan's DL2-17): a lot that adds a room changes what they ask,
+ * and that has to show. A negative asks for an absence, and a choice between
+ * branches is one atom that spells the branches out.
+ */
+const CONDITION_ATOMS: {
+  readonly [K in keyof Required<ProgressCondition>]: (
+    asked: NonNullable<ProgressCondition[K]>,
+    content: MuseumContent,
+  ) => readonly string[]
+} = {
+  powered: (rooms, content) => rooms.flatMap((id) => powerRequired(topologyOf(content), id)),
+  unpowered: (rooms) => rooms.map((id) => `not(${atom('roomsPowered', id)})`),
+  locksOpened: (locks) => locks.map((id) => atom('locksOpened', id)),
+  locksClosed: (locks) => locks.map((id) => `not(${atom('locksOpened', id)})`),
+  documentsRead: (documents) => documents.map((id) => atom('documentsRead', id)),
+  documentsUnread: (documents) => documents.map((id) => `not(${atom('documentsRead', id)})`),
+  carried: (devices) => devices.map((id) => atom('devicesCarried', id)),
+  allRoomsPowered: (asked, content) =>
+    asked ? content.rooms.flatMap((room) => powerRequired(topologyOf(content), room.id)) : [],
+  allCatalogued: (asked, content) => (asked ? content.exhibits.map((exhibit) => atom('catalogued', exhibit.id)) : []),
+  catalogued: (exhibits) => exhibits.map((id) => atom('catalogued', id)),
+  hotspotsSeen: (details) => details.map((key) => atom('hotspots', key)),
+  credentials: (credentials) => credentials.map((credential) => atom('credentials', credentialKey(credential))),
+  flags: (flags) => flags.map((id) => atom('flags', id)),
+  roomsVisited: (rooms) => rooms.map((id) => atom('roomsVisited', id)),
+  doorsReleased: (doors) => doors.map((id) => atom('doorsReleased', id)),
+  anyOf: (branches, content) => [
+    `any(${branches
+      .map((branch) => conditionAtoms(branch, content).join('+'))
+      .sort()
+      .join('|')})`,
+  ],
+}
+
+/** A condition as the atoms it asks for, sorted. */
+export function conditionAtoms(condition: ProgressCondition, content: MuseumContent): string[] {
+  const atoms: string[] = []
+  for (const field of Object.keys(CONDITION_ATOMS) as (keyof ProgressCondition)[]) {
+    const asked = condition[field]
+    if (asked === undefined) continue
+    const spell = CONDITION_ATOMS[field] as (asked: unknown, content: MuseumContent) => readonly string[]
+    atoms.push(...spell(asked, content))
+  }
+  return sortedUnique(atoms)
+}
+
+/**
+ * What the carrier of a lock asks of whoever presses it, and what the press
+ * gives besides what is behind.
+ *
+ * Asked of the lock rule itself: a lock a touch opens for whoever holds what
+ * it asks for is opened by the press, so the press asks for the credentials.
+ * Every other lock has to be open already, by its keypad or by a trigger.
+ */
+function lockGuard(topology: Topology, content: MuseumContent, lockId: string | undefined) {
+  if (!lockId) return { requires: [] as string[], grants: [] as string[] }
+  const lock = topology.locks.get(lockId)
+  const keys = lock ? lockCredentialKeys(lock) : []
+  const opensByTouch =
+    lock !== undefined &&
+    keys.length > 0 &&
+    attemptLock(lock, content.facts, { locksOpened: [], credentials: [...keys] }, { kind: 'touch' }).outcome === 'opened'
+  return opensByTouch
+    ? {
+        requires: keys.map((key) => atom('credentials', key)),
+        grants: [atom('locksSeen', lockId), atom('locksOpened', lockId)],
+      }
+    : { requires: [atom('locksOpened', lockId)], grants: [] as string[] }
+}
+
+const record = (id: string, requires: readonly string[], grants: readonly string[]): ActionRecord => ({
+  id,
+  requires: sortedUnique(requires),
+  grants: sortedUnique(grants),
+})
+
+const doorRecordId = (doorId: string, from: string, to: string) => `door:${doorId}:${from}>${to}`
+
+function powerRecord(topology: Topology, content: MuseumContent, room: RoomData): ActionRecord {
+  const guard = lockGuard(topology, content, room.powerLockId)
+  return record(
+    `power:${room.id}`,
+    [atom('roomsVisited', room.id), ...guard.requires],
+    [atom('roomsPowered', room.id), ...guard.grants],
+  )
+}
+
+function containerRecord(topology: Topology, content: MuseumContent, room: RoomData, container: ContainerData) {
+  const guard = lockGuard(topology, content, container.lockId)
+  return record(
+    `container:${container.id}`,
+    [atom('roomsVisited', room.id), ...guard.requires],
+    [...grantAtoms(containerGrant(content, container.id)), ...guard.grants],
+  )
+}
+
+/** A press on the carrier of a shut lock: all it gives is that the lock was touched. */
+const touchRecord = (host: LockHost) =>
+  record(`touch:${host.hostId}`, [atom('roomsVisited', host.roomId)], [atom('locksSeen', host.lockId)])
+
+function codeRecord(content: MuseumContent, host: LockHost, factId: string): ActionRecord {
+  const container = containerBehind(content, host.lockId)
+  return record(
+    `code:${host.lockId}`,
+    [atom('roomsVisited', host.roomId), atom('locksSeen', host.lockId), atom('factsKnown', factId)],
+    [atom('locksOpened', host.lockId), ...(container ? grantAtoms(containerGrant(content, container.id)) : [])],
+  )
+}
+
+function doorRecord(topology: Topology, room: RoomData, portal: RoomData['portals'][number]): ActionRecord {
+  const door = topology.doorAt.get(`${room.id}:${portal.id}`)
+  const id = doorRecordId(door?.id ?? portal.id, room.id, portal.toRoom)
+  const here = atom('roomsVisited', room.id)
+  const there = atom('roomsVisited', portal.toRoom)
+  if (!door) return record(id, [here], [there])
+  const ownSide = door.opensFrom === room.id
+  const barred = door.opensFrom !== null && !ownSide
+  return record(
+    id,
+    [
+      here,
+      ...(door.requiresPower ? powerRequired(topology, door.requiresPower) : []),
+      // From the side the bar is on, it has to have been lifted already.
+      ...(barred ? [atom('doorsReleased', door.id)] : []),
+    ],
+    [there, ...(ownSide ? [atom('doorsReleased', door.id)] : [])],
+  )
+}
+
+function hotspotRecord(room: RoomData, exhibit: ExhibitData, hotspot: ExhibitData['hotspots'][number]): ActionRecord {
+  return record(
+    `hotspot:${exhibit.id}:${hotspot.id}`,
+    [atom('roomsVisited', room.id)],
+    [
+      atom('hotspots', `${exhibit.id}:${hotspot.id}`),
+      ...(hotspot.revealsFactId ? [atom('factsKnown', hotspot.revealsFactId)] : []),
+    ],
+  )
+}
+
+/**
+ * The catalogue entry, as what follows from the details: every required one,
+ * or any one at all for a piece that requires none (`hotspotGrant`).
+ *
+ * Written apart from the details because which detail completes a piece
+ * depends on the order they were found in, and a record must not.
+ */
+function catalogueRecord(exhibit: ExhibitData): ActionRecord | null {
+  const detail = (id: string) => atom('hotspots', `${exhibit.id}:${id}`)
+  const required = exhibit.hotspots.filter((hotspot) => hotspot.requiredForCatalogue)
+  const every = exhibit.hotspots.map((hotspot) => detail(hotspot.id))
+  if (every.length === 0) return null
+  const requires =
+    required.length > 0
+      ? required.map((hotspot) => detail(hotspot.id))
+      : every.length === 1
+        ? every
+        : [`any(${[...every].sort().join('|')})`]
+  return record(`catalogue:${exhibit.id}`, requires, [atom('catalogued', exhibit.id)])
+}
+
+/** A radio taken off its charger, which has to have power for the handset to answer. */
+function takeRecord(topology: Topology, room: RoomData, device: Extract<DeviceData, { readonly kind: 'radio' }>) {
+  return record(
+    `take:${device.id}`,
+    [atom('roomsVisited', room.id), ...powerRequired(topology, device.poweredBy)],
+    [atom('devicesCarried', device.id)],
+  )
+}
+
+function triggerRecord(content: MuseumContent, trigger: Trigger): ActionRecord {
+  return record(`trigger:${trigger.id}`, conditionAtoms(trigger.when, content), [
+    atom('triggersFired', trigger.id),
+    ...trigger.effects.flatMap((effect) => grantAtoms(effectGrant(effect, content))),
+  ])
+}
+
+/**
+ * Every action the content offers, with what it asks and gives, whether or
+ * not this player ever gets to it: the table the next lot's content is
+ * compared against (`additive.ts`).
+ *
+ * A detail no hand can turn to the camera is not offered, so it is not here.
+ * A consequence (a catalogue entry, a trigger) is here beside the presses,
+ * because taking one away takes something from the player just the same.
+ */
+export function contentActions(content: MuseumContent): readonly ActionRecord[] {
+  const topology = topologyOf(content)
+  const records: ActionRecord[] = []
+  for (const room of content.rooms) {
+    if (room.powerControl) records.push(powerRecord(topology, content, room))
+    for (const portal of room.portals) records.push(doorRecord(topology, room, portal))
+    for (const exhibitId of room.exhibitIds) {
+      const exhibit = topology.exhibits.get(exhibitId)
+      for (const hotspot of exhibit?.hotspots ?? []) {
+        if (exhibit && examineReach(exhibit, hotspot).reachable) records.push(hotspotRecord(room, exhibit, hotspot))
+      }
+    }
+    for (const container of room.containers ?? []) records.push(containerRecord(topology, content, room, container))
+    for (const device of room.devices ?? []) {
+      if (device.kind === 'radio' && device.carriedOnUse) records.push(takeRecord(topology, room, device))
+    }
+  }
+  for (const host of topology.hosts) {
+    records.push(touchRecord(host))
+    const lock = topology.locks.get(host.lockId)
+    if (lock?.kind === 'knowledge') records.push(codeRecord(content, host, lock.factId))
+  }
+  for (const exhibit of content.exhibits) {
+    const catalogue = catalogueRecord(exhibit)
+    if (catalogue) records.push(catalogue)
+  }
+  for (const trigger of topology.triggers) records.push(triggerRecord(content, trigger))
+  return records
+}
+
+/**
+ * The record a press realises, made in `room` with this save. The carrier of
+ * a shut lock answers with the lock, so its press is the touch and not what
+ * is behind. Null for a press aimed at nothing the room has.
+ */
+export function actionRecord(
+  content: MuseumContent,
+  progress: Progress,
+  roomId: string,
+  action: PlayerAction,
+): ActionRecord | null {
+  const topology = topologyOf(content)
+  const room = topology.rooms.get(roomId)
+  if (!room) return null
+  switch (action.kind) {
+    case 'power': {
+      const host = topology.hosts.find((candidate) => candidate.hostId === room.powerControl?.id)
+      return host && !hostOpens(topology, content, progress, room.powerLockId)
+        ? touchRecord(host)
+        : powerRecord(topology, content, room)
+    }
+    case 'door': {
+      const portal = room.portals.find(
+        (candidate) =>
+          candidate.toRoom === action.to &&
+          (topology.doorAt.get(`${room.id}:${candidate.id}`)?.id ?? candidate.id) === action.doorId,
+      )
+      return portal ? doorRecord(topology, room, portal) : null
+    }
+    case 'hotspot': {
+      const exhibit = topology.exhibits.get(action.exhibitId)
+      const hotspot = exhibit?.hotspots.find((candidate) => candidate.id === action.hotspotId)
+      return exhibit && hotspot ? hotspotRecord(room, exhibit, hotspot) : null
+    }
+    case 'container': {
+      const container = (room.containers ?? []).find((candidate) => candidate.id === action.containerId)
+      if (!container) return null
+      const host = topology.hosts.find((candidate) => candidate.hostId === container.id)
+      return host && !hostOpens(topology, content, progress, container.lockId)
+        ? touchRecord(host)
+        : containerRecord(topology, content, room, container)
+    }
+    case 'code': {
+      const host = topology.hosts.find((candidate) => candidate.lockId === action.lockId && candidate.roomId === room.id)
+      const lock = topology.locks.get(action.lockId)
+      return host && lock?.kind === 'knowledge' ? codeRecord(content, host, lock.factId) : null
+    }
+    case 'take': {
+      const device = (room.devices ?? []).find((candidate) => candidate.id === action.deviceId)
+      return device?.kind === 'radio' ? takeRecord(topology, room, device) : null
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// The play
+// ---------------------------------------------------------------------------
+
+/**
+ * Passes the play may take. Each one is a level of the script, and the whole
+ * game is planned at twenty; a content that needs more than this is not
+ * deeper, it is a chain that feeds itself.
+ */
+export const SIMULATION_PASS_LIMIT = 64
+
+type ReturnProblem = { readonly roomId: string; readonly code: 'no-return-path' | 'one-way-trap' }
+
+type Play = {
+  readonly progress: Progress
+  readonly reachable: ReadonlySet<string>
+  readonly levels: readonly (readonly string[])[]
+  readonly met: readonly ActionRecord[]
+  readonly returnProblems: readonly ReturnProblem[]
+  readonly converged: boolean
+}
+
+/**
+ * Whether the player who has just walked into `roomId` can walk back to where
+ * the night begins, with the doors as they stand in that save (V5).
+ *
+ * `no-return-path` when nothing leads back. `one-way-trap` when something
+ * does, but only through a door that opens from one side: a one-way door is
+ * always one way more, never the only one.
+ */
+function returnProblem(topology: Topology, progress: Progress, roomId: string, home: string): ReturnProblem['code'] | null {
+  const powered = poweredIn(topology, progress)
+  const leadsHome = (twoWayOnly: boolean) => {
+    const seen = new Set([roomId])
+    const queue = [roomId]
+    while (queue.length > 0) {
+      const room = topology.rooms.get(queue.shift() as string)
+      if (!room) continue
+      for (const portal of room.portals) {
+        const door = topology.doorAt.get(`${room.id}:${portal.id}`)
+        if (door) {
+          if (twoWayOnly && door.opensFrom !== null) continue
+          if (transitionDoorBlock(door, room.id, powered, progress.doorsReleased) !== null) continue
+        }
+        if (seen.has(portal.toRoom)) continue
+        seen.add(portal.toRoom)
+        queue.push(portal.toRoom)
+      }
+    }
+    return seen.has(home)
+  }
+  if (!leadsHome(false)) return 'no-return-path'
+  return leadsHome(true) ? null : 'one-way-trap'
+}
+
+/**
+ * Plays from a save to the fixed point.
+ *
+ * What a pass may do is decided against the save as the pass began, from the
+ * rooms she could stand in then; what each action gives is asked of the save
+ * as it stands, with the triggers settled after every one, as the store
+ * settles them after every write. So a pass is a level of the script: what
+ * could be done with what the level before left.
+ *
+ * A session always begins at the spawn, whatever the save says of where the
+ * player stopped.
+ */
+function play(content: MuseumContent, topology: Topology, from: Progress): Play {
+  const home: string = content.spawn.room
+  const settle = (progress: Progress) => settleTriggers(progress, topology.triggers, content).progress
+  const records = new Map(contentActions(content).map((entry) => [entry.id, entry]))
+
+  const met = new Map<string, ActionRecord>()
+  /** The consequences that came with the last step: catalogue entries and triggers. */
+  const meetConsequences = (before: Progress, after: Progress) => {
+    for (const exhibitId of after.catalogued) {
+      const entry = records.get(`catalogue:${exhibitId}`)
+      if (entry && !before.catalogued.includes(exhibitId)) met.set(entry.id, entry)
+    }
+    for (const triggerId of after.triggersFired) {
+      const entry = records.get(`trigger:${triggerId}`)
+      if (entry && !before.triggersFired.includes(triggerId)) met.set(entry.id, entry)
+    }
+  }
+
+  // Entering is the store's `start`, and a save may be owed something as it loads.
+  let progress = settle(grantProgress(from, { roomsVisited: [home] }))
+  meetConsequences(from, progress)
+
+  const reachable = new Set([home])
+  const returnProblems: ReturnProblem[] = []
+  const levels: string[][] = []
+  let known = new Set(atomsOf(from))
+  let converged = false
+
+  for (let pass = 0; pass < SIMULATION_PASS_LIMIT; pass += 1) {
+    const began = progress
+    const entered: string[] = []
+
+    for (const roomId of [...reachable]) {
+      const room = topology.rooms.get(roomId)
+      if (!room) continue
+      for (const action of availableActions(content, began, roomId)) {
+        const entry = actionRecord(content, progress, roomId, action)
+        if (entry) met.set(entry.id, entry)
+
+        const before = progress
+        progress = settle(grantProgress(progress, actionGrant(content, progress, action)))
+        meetConsequences(before, progress)
+
+        if (action.kind !== 'door' || reachable.has(action.to) || entered.includes(action.to)) continue
+        entered.push(action.to)
+        // With the save the pass began with and nothing this pass did: doors
+        // only open further, so the way back is asked at its narrowest.
+        const arrival = grantProgress(began, actionGrant(content, began, action))
+        const problem = returnProblem(topology, arrival, action.to, home)
+        if (problem) returnProblems.push({ roomId: action.to, code: problem })
+      }
+    }
+    for (const roomId of entered) reachable.add(roomId)
+
+    const gained = atomsOf(progress).filter((entry) => !known.has(entry))
+    if (gained.length === 0 && entered.length === 0) {
+      converged = true
+      break
+    }
+    known = new Set([...known, ...gained])
+    levels.push(gained)
+  }
+
+  return { progress, reachable, levels, met: [...met.values()], returnProblems, converged }
+}
+
+// ---------------------------------------------------------------------------
+// What the play proves
+// ---------------------------------------------------------------------------
+
+/** Every condition the content asks, wherever it is written, each branch of a choice counted as one. */
+function conditionsOf(content: MuseumContent, topology: Topology): readonly ProgressCondition[] {
+  const conditions: ProgressCondition[] = topology.triggers.map((trigger) => trigger.when)
+  for (const doc of content.documents) {
+    for (const page of doc.pages ?? []) {
+      for (const item of page.items ?? []) if (item.doneWhen) conditions.push(item.doneWhen)
+    }
+  }
+  for (const room of content.rooms) {
+    for (const device of room.devices ?? []) {
+      if (device.kind !== 'radio') continue
+      conditions.push(...device.calls.map((call) => call.when), ...device.hints.map((hint) => hint.when))
+    }
+  }
+  // A branch asks like any other condition.
+  const withBranches = (condition: ProgressCondition): ProgressCondition[] => [
+    condition,
+    ...(condition.anyOf ?? []).flatMap(withBranches),
+  ]
+  return conditions.flatMap(withBranches)
+}
+
+export type SimulationResult = {
+  readonly issues: readonly ValidationIssue[]
+  /** Everything reachable, at the fixed point. */
+  readonly final: Progress
+  /** Atoms by the pass on which they first appear: the script in levels. */
+  readonly levels: readonly (readonly string[])[]
+  /** Every action met on the way, with what it asked and gave (the snapshot's source). */
+  readonly actions: readonly ActionRecord[]
+}
+
+/**
+ * Plays the content from a save (a new game when none is given) and says what
+ * the play could not reach.
+ *
+ * Every accusation carries the id it is about, so a lot that cannot pay one
+ * yet can date it (`knownDebt.ts`).
+ */
+export function simulateProgress(content: MuseumContent, from: Progress = emptyProgress()): SimulationResult {
+  const issues: ValidationIssue[] = []
+  const error = (code: string, id: string, message: string) => issues.push({ severity: 'error', code, id, message })
+  const topology = topologyOf(content)
+  const home: string = content.spawn.room
+
+  if (!topology.rooms.has(home)) {
+    error('no-start-room', home, `The museum has no "${home}" room to start from.`)
+    return { issues, final: from, levels: [], actions: [] }
+  }
+  if (topology.doorProblem) {
+    // Every opening is then walked as if it had no leaf, so that one bad door
+    // does not also accuse every room behind it.
+    error(
+      'transition-door-invalid',
+      'doors',
+      `The doors cannot be built, and the runtime builds them as it starts: ${topology.doorProblem}`,
+    )
+  }
+
+  const { progress: final, reachable, levels, met, returnProblems, converged } = play(content, topology, from)
+
+  if (!converged) {
+    error(
+      'simulation-no-fixpoint',
+      'play',
+      `The play was still finding something new after ${SIMULATION_PASS_LIMIT} passes: a chain that feeds itself, or a museum deeper than any script.`,
+    )
+  }
+
+  // --- content outside the fixed point ---------------------------------------
+  for (const room of content.rooms) {
+    if (!reachable.has(room.id)) {
+      error('room-unreachable', room.id, `Room "${room.id}" is never reachable, even by a player who does everything.`)
+    }
+  }
+  for (const lock of content.locks) {
+    if (final.locksOpened.includes(lock.id)) continue
+    error(
+      'lock-unopenable',
+      lock.id,
+      `Lock "${lock.id}" can never be opened: what it asks for is out of reach, or nothing the player can press carries it.`,
+    )
+    // Is what it asks for behind it? Opened by force, the play goes on, and
+    // if the fact turns up then, the only place it is taught is past the lock.
+    if (lock.kind !== 'knowledge' || final.factsKnown.includes(lock.factId)) continue
+    const forced = play(content, topology, grantProgress(final, { locksOpened: [lock.id], locksSeen: [lock.id] }))
+    if (forced.progress.factsKnown.includes(lock.factId)) {
+      error(
+        'lock-evidence-behind-lock',
+        lock.id,
+        `Lock "${lock.id}" opens with fact "${lock.factId}", and the only places that teach it are reached with the lock already open.`,
+      )
+    }
+  }
+  for (const doc of content.documents) {
+    if (!final.documentsRead.includes(doc.id)) {
+      error('document-unreadable', doc.id, `Document "${doc.id}" can never be read: nothing the player reaches holds it open.`)
+    }
+  }
+  for (const exhibit of content.exhibits) {
+    if (final.catalogued.includes(exhibit.id)) continue
+    const out = exhibit.hotspots
+      .filter((hotspot) => hotspot.requiredForCatalogue && !examineReach(exhibit, hotspot).reachable)
+      .map((hotspot) => `"${hotspot.id}" (a cone of ${examineReach(exhibit, hotspot).coneDegrees.toFixed(1)}°)`)
+    error(
+      'exhibit-uncataloguable',
+      exhibit.id,
+      `Exhibit "${exhibit.id}" can never be catalogued: ` +
+        (out.length > 0
+          ? `no hand can turn its required detail ${out.join(', ')} to the camera.`
+          : 'no required detail of it is ever seen.'),
+    )
+  }
+
+  // --- keys ------------------------------------------------------------------
+  const conditions = conditionsOf(content, topology)
+  const effects = topology.triggers.flatMap((trigger) => trigger.effects)
+  const asked = new Set([
+    ...content.locks.flatMap(lockCredentialKeys),
+    ...conditions.flatMap((condition) => (condition.credentials ?? []).map(credentialKey)),
+  ])
+  for (const key of new Set(content.locks.flatMap(lockCredentialKeys))) {
+    if (!final.credentials.includes(key)) {
+      error('credential-unobtainable', key, `A lock asks for "${key}", and no play ever holds it.`)
+    }
+  }
+  const handedOut = new Set(
+    effects.flatMap((effect) => (effect.kind === 'grant-credential' ? [credentialKey(effect.credential)] : [])),
+  )
+  for (const key of handedOut) {
+    if (!asked.has(key)) {
+      error('credential-orphan', key, `The content hands out "${key}", and no lock or condition ever asks for it.`)
+    }
+  }
+
+  // --- loose wiring ----------------------------------------------------------
+  for (const trigger of topology.triggers) {
+    if (!final.triggersFired.includes(trigger.id)) {
+      error('trigger-never-fires', trigger.id, `Trigger "${trigger.id}" never fires: no play ever meets its condition.`)
+    }
+  }
+  const flagsSet = new Set(effects.flatMap((effect) => (effect.kind === 'set-flag' ? [effect.flag] : [])))
+  const flagsRead = new Set(conditions.flatMap((condition) => condition.flags ?? []))
+  for (const flag of flagsRead) {
+    if (!flagsSet.has(flag)) error('flag-never-set', flag, `A condition waits for flag "${flag}", and no effect sets it.`)
+  }
+  for (const flag of flagsSet) {
+    if (!flagsRead.has(flag)) error('flag-never-read', flag, `An effect sets flag "${flag}", and no condition ever asks for it.`)
+  }
+
+  // --- the way back (V5) -----------------------------------------------------
+  for (const problem of returnProblems) {
+    error(
+      problem.code,
+      problem.roomId,
+      problem.code === 'no-return-path'
+        ? `Room "${problem.roomId}" can be walked into and not out of: nothing leads back to "${home}" with the doors as they stand on arrival.`
+        : `Room "${problem.roomId}" leads back to "${home}" only through a door that opens from one side. A one-way door is one way more, never the only one.`,
+    )
+  }
+
+  // --- the notebook's list ---------------------------------------------------
+  for (const doc of content.documents) {
+    for (const page of doc.pages ?? []) {
+      for (const item of page.items ?? []) {
+        if (!item.doneWhen) {
+          error(
+            'checklist-item-untickable',
+            item.labelKey,
+            `Checklist item "${item.labelKey}" has no \`doneWhen\`: it is a box nothing ever ticks.`,
+          )
+        } else if (!progressConditionMet(item.doneWhen, final, content)) {
+          error(
+            'checklist-item-untickable',
+            item.labelKey,
+            `Checklist item "${item.labelKey}" asks for something no play reaches: it stays unticked for good.`,
+          )
+        }
+      }
+    }
+  }
+
+  return { issues, final, levels, actions: met }
+}
+
+/** Atoms that fill a level without telling its story: counted, not listed. */
+const SCRIPT_COUNTED: Readonly<Record<string, string>> = { detail: 'details', seen: 'locks touched', fired: 'triggers' }
+
+/**
+ * The script, one level to a line, for the gate to print: what a player can
+ * have done after so many rounds of doing everything in reach.
+ */
+export function formatScript(levels: readonly (readonly string[])[]): string {
+  return levels
+    .map((level, index) => {
+      const told = level.filter((entry) => !Object.hasOwn(SCRIPT_COUNTED, entry.slice(0, entry.indexOf(':'))))
+      const counted = Object.entries(SCRIPT_COUNTED).flatMap(([prefix, name]) => {
+        const count = level.filter((entry) => entry.startsWith(`${prefix}:`)).length
+        return count > 0 ? [`(${count} ${name})`] : []
+      })
+      return `  N${String(index).padEnd(2)} ${[...told, ...counted].join(' · ')}`
+    })
+    .join('\n')
+}

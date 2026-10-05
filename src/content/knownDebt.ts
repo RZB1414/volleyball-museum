@@ -114,6 +114,38 @@ export const KNOWN_DEBT: readonly KnownDebt[] = [
     note: 'ÁT-B4: a 2.4 m pilot 1.06 m from the Holyoke wing (the reach comes down to 0.8 m)',
   },
 
+  // The exhaustive player that replaced the solvability walk (L2) is moved by
+  // the game's own rules, the ruler of the examine view among them, and found
+  // what the walk took for granted. The view holds a piece by its origin, and
+  // the required detail of each of these three is at the hold distance or
+  // beyond it, or shows inside a cone a hand does not find: no save has them.
+  // The examine lot gives large pieces a view of their own.
+  ...(
+    [
+      ['net-1897', 'H-01: the tape is 1.98 m from the origin the view holds at 0.42 m, so it is always behind the camera'],
+      ['gym-suit', 'H-01: the knit is 1.21 m from the origin the view holds at 0.42 m, so it is always behind the camera'],
+      ['photo-gym', 'H-01: the apparatus shows inside a cone of 1.5°, against the 5° a hand finds'],
+    ] as const
+  ).map(
+    ([id, note]): KnownDebt => ({ gate: 'validate:content', code: 'exhibit-uncataloguable', id, untilLot: 4, note }),
+  ),
+  // And with three pieces out of reach, the notebook's "catalogue everything"
+  // can never be ticked; the line about the vault never could.
+  {
+    gate: 'validate:content',
+    code: 'checklist-item-untickable',
+    id: 'notebook.todo.catalogue',
+    untilLot: 4,
+    note: 'asks for all twelve pieces, and three cannot be catalogued (H-01)',
+  },
+  {
+    gate: 'validate:content',
+    code: 'checklist-item-untickable',
+    id: 'notebook.todo.vault',
+    untilLot: 3,
+    note: 'no `doneWhen`: in L3 it becomes a dated promise, a line with no box to tick (M32)',
+  },
+
   // Moving the Holyoke breaker to the far wall made it a lighthouse, and put
   // the interpretation kiosk square across the straight line to it: a player
   // who walks at the red light comes to rest against the kiosk's long face,

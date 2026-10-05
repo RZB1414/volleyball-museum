@@ -23,7 +23,7 @@
  */
 
 import assert from 'node:assert/strict'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { dirname, relative, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -733,7 +733,9 @@ test('nothing the game ships carries the capture record', () => {
   // bank, the excerpts and the hashes are the gate's; a shipped module that
   // imported them would put every page's excerpt in the bundle. The debt
   // table is the gate's for the same reason: a list of what is still wrong
-  // is not something a player downloads.
+  // is not something a player downloads. Nor are the exhaustive player and
+  // the graph snapshot (L2): they are the proof that the game can be played,
+  // and the game is played without them.
   const gateOnly = [
     'factCapture.ts',
     'facts.bank.ts',
@@ -741,16 +743,42 @@ test('nothing the game ships carries the capture record', () => {
     'facts.manual.ts',
     'validate.ts',
     'knownDebt.ts',
+    'simulate.ts',
+    'additive.ts',
   ]
+  const importsTheGate = (source: string) =>
+    /(?:from|import)\s*\(?\s*['"][^'"]*(?:factCapture|facts\.bank|facts\.generated|facts\.manual|content\/validate|\.\/validate|knownDebt|(?:content|\.)\/(?:simulate|additive)(?:\.ts)?(?=['"]))[^'"]*['"]/.test(
+      source,
+    )
   const offenders = sourceFiles(resolve(ROOT, 'src'), /\.(?:ts|tsx)$/)
     .filter((path) => !gateOnly.some((name) => path.endsWith(`content${path.includes('\\') ? '\\' : '/'}${name}`)))
-    .filter((path) =>
-      /(?:from|import)\s*\(?\s*['"][^'"]*(?:factCapture|facts\.bank|facts\.generated|facts\.manual|content\/validate|\.\/validate|knownDebt)[^'"]*['"]/.test(
-        readFileSync(path, 'utf8'),
-      ),
-    )
+    .filter((path) => importsTheGate(readFileSync(path, 'utf8')))
     .map((path) => relative(ROOT, path))
   assert.deepEqual(offenders, [], 'a shipped module imports the capture record or the gate')
+  // Every module of the list is one, and is where the list says.
+  for (const name of gateOnly) assert.ok(existsSync(resolve(ROOT, 'src/content', name)), `src/content/${name} is gone from the tree`)
+
+  // The rule itself, on imports written for the purpose: each way a shipped
+  // module could reach a gate-only one, and the neighbours it must not take
+  // for one.
+  for (const reaching of [
+    "import { simulateProgress } from '../content/simulate.ts'",
+    "import { availableActions } from '../content/simulate'",
+    "import { validateAdditive } from './additive'",
+    "const { graphSnapshot } = await import('../content/additive.ts')",
+    "import { validateContent } from './validate.ts'",
+    "import { KNOWN_DEBT } from '../content/knownDebt'",
+  ]) {
+    assert.ok(importsTheGate(reaching), `not seen as reaching the gate: ${reaching}`)
+  }
+  for (const harmless of [
+    "import { examineReach } from './examineReach'",
+    "import { MUSEUM } from '../content/museum'",
+    "import { simulateStep } from './simulateStep.ts'",
+    "import { additiveBlend } from '../engine/additiveBlend'",
+  ]) {
+    assert.ok(!importsTheGate(harmless), `taken for the gate: ${harmless}`)
+  }
 })
 
 console.log(`\n${passed} fact source checks passed.\n`)

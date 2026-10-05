@@ -25,6 +25,7 @@ import { MUSEUM } from '../content/museum'
 import './bvhSetup'
 import type { ExhibitData } from '../content/schema'
 import { isModalOpen, useMuseum } from '../state/store'
+import { EXAMINE_HOLD_DISTANCE, EXAMINE_HOTSPOT_DOT } from './examineReach'
 import { INTERACTION_REACH, interactionWinnerOf } from './interactionTarget'
 import { isUnclaimedInteractKey, subscribePrimaryAction } from './primaryAction'
 import { hotspotGrant } from './progressGrants'
@@ -164,10 +165,11 @@ export function InteractionTargeting() {
 // Examine view
 // ---------------------------------------------------------------------------
 
-const HOLD_DISTANCE = 0.42
+// How far the piece is held and how squarely a detail must face the camera
+// are `EXAMINE_HOLD_DISTANCE` and `EXAMINE_HOTSPOT_DOT`, in `examineReach.ts`:
+// the content gate judges every piece by the same two numbers, so they are
+// written once, there. `npm run test:playthrough` holds this file to them.
 const ROTATE_SPEED = 0.008
-/** How close to a hotspot's facing the camera must be to count as "seen". */
-const HOTSPOT_DOT = 0.55
 
 // Scratch vectors, reused every frame. Each one has a single meaning — an
 // earlier version shared one between the camera and the object and had to
@@ -332,7 +334,7 @@ export function ExamineView() {
     // Hold it in front of the camera, in world space.
     camera.getWorldPosition(cameraWorld)
     camera.getWorldDirection(holdOffset)
-    held.position.copy(cameraWorld).addScaledVector(holdOffset, HOLD_DISTANCE)
+    held.position.copy(cameraWorld).addScaledVector(holdOffset, EXAMINE_HOLD_DISTANCE)
 
     // --- rotation -----------------------------------------------------------
     const drag = dragDeltaRef.current
@@ -372,7 +374,7 @@ export function ExamineView() {
       // which every artefact in this museum is.
       outward.copy(hotspotWorld).sub(objectWorld).normalize()
 
-      if (outward.dot(toCamera) > HOTSPOT_DOT) {
+      if (outward.dot(toCamera) > EXAMINE_HOTSPOT_DOT) {
         seenRef.current.add(hotspot.id)
         // The detail, the fact it reveals and, with every required detail
         // seen, the catalogue entry: one write, decided by a pure function.

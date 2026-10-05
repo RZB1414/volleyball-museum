@@ -29,12 +29,8 @@ import {
 } from '../src/content/knownDebt.ts'
 import { MUSEUM } from '../src/content/museum.ts'
 import type { ExhibitMount, MuseumContent, RoomData } from '../src/content/schema.ts'
-import {
-  validateContent,
-  validateOpening,
-  validateSolvability,
-  type ValidationIssue,
-} from '../src/content/validate.ts'
+import { simulateProgress } from '../src/content/simulate.ts'
+import { validateContent, validateOpening, type ValidationIssue } from '../src/content/validate.ts'
 import {
   clockHandAngles,
   clockTimeAfter,
@@ -294,12 +290,28 @@ test('a door powered from beyond itself is a soft-lock the gate catches', () => 
           },
     ),
   }
-  const codes = validateSolvability(broken).map((issue) => issue.code)
-  assert.ok(codes.includes('room-unreachable'), 'the atrium is unreachable from the office')
-  assert.ok(
-    !validateSolvability(MUSEUM).some((issue) => issue.severity === 'error'),
-    'the authored lock is solvable',
+  // Asked of the exhaustive player (`simulate.ts`), who is stopped by the
+  // door's own rule: the atrium, and the wing beyond it, are never reached.
+  const unreachable = simulateProgress(broken)
+    .issues.filter((issue) => issue.code === 'room-unreachable')
+    .map((issue) => issue.id)
+  assert.deepEqual(unreachable.sort(), ['atrium', 'holyoke'], 'the atrium is unreachable from the office')
+  // The authored museum is accused of nothing the debt table has not dated
+  // (three pieces no hand can catalogue, and the two list items that follow
+  // from them): every room is reached and every lock opens.
+  const authored = simulateProgress(MUSEUM)
+  const owed = debtOf('validate:content').filter((line) =>
+    ['exhibit-uncataloguable', 'checklist-item-untickable'].includes(line.code),
   )
+  assert.deepEqual(
+    settleKnownDebt(authored.issues, owed, CONTENT_LOT)
+      .filter((issue) => issue.severity === 'error')
+      .map((issue) => `${issue.code} ${issue.id ?? ''}`),
+    [],
+    'the authored museum is playable',
+  )
+  assert.deepEqual([...authored.final.roomsVisited].sort(), ['atrium', 'holyoke', 'office'])
+  assert.deepEqual(authored.final.locksOpened, ['office-drawer'])
 })
 
 // ---------------------------------------------------------------------------

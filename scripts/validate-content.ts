@@ -7,6 +7,10 @@
  * they flag design smells (a passive exhibit, a wing with no shortcut back)
  * that are judgement calls rather than bugs. Dated debts (`knownDebt.ts`)
  * print on every run and do not fail until the lot that pays them arrives.
+ *
+ * The content is also held to the graph the last lot wrote down as it closed
+ * (`docs/releases`): with no snapshot to compare against, or one a whole lot
+ * out of date, the gate fails rather than pass a rule it did not apply.
  */
 
 import { fileURLToPath } from 'node:url'
@@ -20,7 +24,9 @@ import { en } from '../src/content/i18n/en.ts'
 import { ptBR } from '../src/content/i18n/pt-BR.ts'
 import { CONTENT_LOT, debtOf } from '../src/content/knownDebt.ts'
 import { MUSEUM } from '../src/content/museum.ts'
+import { formatScript, simulateProgress } from '../src/content/simulate.ts'
 import { formatIssues, formatKnownDebt, validateContent } from '../src/content/validate.ts'
+import { newestSnapshot, RELEASES_DIRECTORY, snapshotForGate } from './lib/graphSnapshots.ts'
 import { KEY_NAMED_NOT_USED, keysCitedIn, readSourceTree } from './lib/translationUsage.ts'
 
 // The committed record of what each source held, never the network: the gate
@@ -38,11 +44,19 @@ const keysCitedByCode = keysCitedIn(
   readSourceTree(fileURLToPath(new URL('../src', import.meta.url)), KEY_NAMED_NOT_USED),
 )
 
-const issues = validateContent(MUSEUM, BAKED_BUNDLES, translationKeys, captures, {
-  dictionaries: { 'pt-BR': ptBR, en },
-  keysCitedByCode,
-  knownDebt: { lines: debtOf('validate:content'), lot: CONTENT_LOT },
-})
+// What the lot before this one gave its players, as it wrote it down.
+const snapshot = newestSnapshot(fileURLToPath(new URL(`../${RELEASES_DIRECTORY}`, import.meta.url)))
+const previous = snapshotForGate(snapshot, CONTENT_LOT)
+
+const issues = [
+  ...validateContent(MUSEUM, BAKED_BUNDLES, translationKeys, captures, {
+    dictionaries: { 'pt-BR': ptBR, en },
+    keysCitedByCode,
+    knownDebt: { lines: debtOf('validate:content'), lot: CONTENT_LOT },
+    ...(previous.graph ? { previousGraph: previous.graph } : {}),
+  }),
+  ...previous.issues,
+]
 const errors = issues.filter((issue) => issue.severity === 'error')
 const warnings = issues.filter((issue) => issue.severity === 'warning')
 const debts = issues.filter((issue) => issue.severity === 'debt')
@@ -62,6 +76,16 @@ console.log(
   `bake:    ${BAKED_BUNDLES.length} bundles · ${(BAKE_TOTALS.bytes / 1024).toFixed(0)} KB · ` +
     `${BAKE_TOTALS.triangles.toLocaleString('en-US')} triangles`,
 )
+console.log(
+  previous.graph
+    ? `graph:   held to L${previous.graph.lot}'s snapshot · ${previous.graph.actions.length} actions it gave`
+    : 'graph:   no snapshot to hold the content to',
+)
+
+// The script: what a player who does everything in reach has done, round by
+// round. Printed on every run so that a level that moved is seen to move.
+console.log('\nscript, by the exhaustive player:')
+console.log(formatScript(simulateProgress(MUSEUM).levels))
 
 // Before the verdict, so a green run still shows what it is letting through.
 if (debts.length > 0) {

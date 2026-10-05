@@ -32,6 +32,7 @@ import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { CONTENT_LOT } from '../src/content/knownDebt.ts'
+import { lastLotDone } from './lib/planLots.ts'
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const inRepo = (...segments: string[]) => resolve(ROOT, ...segments)
@@ -452,24 +453,8 @@ test('the preparation lot points to its baseline record', () => {
 // The lot the content stands at
 // ---------------------------------------------------------------------------
 
-/**
- * The highest lot whose section of the plan carries a dated «Feito em», or 0.
- *
- * A heading may cover a range (`### L18 a L22 —`); the range counts as done,
- * up to its last lot, when its section says so.
- */
-function lastLotDone(planText: string): number {
-  const headings = [...planText.matchAll(/^### L(\d+)(?: a L(\d+))? — /gm)]
-  let done = 0
-  headings.forEach((heading, index) => {
-    const start = heading.index ?? 0
-    const next = planText.indexOf('\n### ', start + 1)
-    const end = index + 1 < headings.length ? (headings[index + 1].index ?? planText.length) : planText.length
-    const section = planText.slice(start, next < 0 ? end : Math.min(end, next))
-    if (/Feito em \d{4}-\d{2}-\d{2}/.test(section)) done = Math.max(done, Number(heading[2] ?? heading[1]))
-  })
-  return done
-}
+// Which lot the plan says is done is `lastLotDone`, in `lib/planLots.ts`: the
+// playthrough suite asks the same question of a graph snapshot.
 
 /** Why `CONTENT_LOT` and the plan disagree, or null when they do not. */
 function contentLotProblem(planText: string, contentLot: number): string | null {

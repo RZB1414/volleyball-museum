@@ -15,7 +15,9 @@ import { load } from './lib/repo.mjs'
 const THREE = await import('three')
 const { Vector3, Quaternion, Matrix4, Euler } = THREE
 const { MUSEUM } = await load('src/content/museum.ts')
-const HOLD = 0.42, DOT = 0.55, EYE = 1.62
+// The view's own two numbers, from the one place they are written.
+const { EXAMINE_HOLD_DISTANCE: HOLD, EXAMINE_HOTSPOT_DOT: DOT } = await load('src/engine/examineReach.ts')
+const EYE = 1.62
 function seenAtPickup(exhibit, room, camPos) {
   const centre = new Vector3(room.origin[0] + exhibit.position[0], exhibit.position[1], room.origin[2] + exhibit.position[2])
   const dir = centre.clone().sub(camPos).normalize()

@@ -287,6 +287,42 @@ export function doorReleaseWiringProblems(read: SourceReader): string[] {
 }
 
 /**
+ * One ruler for the examine view (M4a): how far a piece is held and how
+ * squarely a detail must face the camera are two numbers, and the content
+ * gate judges every piece of the museum by them (`engine/examineReach.ts`).
+ * If the view kept numbers of its own, the gate would go on proving pieces
+ * cataloguable by a ruler the player is not held to.
+ */
+export function examineWiringProblems(read: SourceReader): string[] {
+  const problems: string[] = []
+  const view = squeezed(read('engine/Interaction.tsx'))
+
+  // Not squeezed: the reader of imports works on the source as written.
+  const imported = /import \{([^}]*)\} from '\.\/examineReach(?:\.ts)?'/.exec(read('engine/Interaction.tsx'))?.[1] ?? ''
+  for (const constant of ['EXAMINE_HOLD_DISTANCE', 'EXAMINE_HOTSPOT_DOT']) {
+    if (!new RegExp(`\\b${constant}\\b`).test(imported)) {
+      problems.push(`engine/Interaction.tsx no longer imports ${constant} from engine/examineReach: the view and the gate measure with two rulers`)
+    }
+  }
+  if (!view.includes('addScaledVector(holdOffset, EXAMINE_HOLD_DISTANCE)')) {
+    problems.push('engine/Interaction.tsx no longer holds the piece at EXAMINE_HOLD_DISTANCE')
+  }
+  if (!view.includes('outward.dot(toCamera) > EXAMINE_HOTSPOT_DOT')) {
+    problems.push('engine/Interaction.tsx no longer counts a detail as seen above EXAMINE_HOTSPOT_DOT')
+  }
+  // A number of its own under either name, old or new, is the second ruler.
+  for (const declared of view.match(/\bconst (?:EXAMINE_)?(?:HOLD_DISTANCE|HOTSPOT_DOT) = [^;\n ]+/g) ?? []) {
+    problems.push(`engine/Interaction.tsx declares \`${declared}\`: the ruler has one home, engine/examineReach.ts`)
+  }
+
+  const ruler = read('engine/examineReach.ts')
+  for (const specifier of [...staticSpecifiers(ruler), ...dynamicSpecifiers(ruler)]) {
+    problems.push(`engine/examineReach.ts imports "${specifier}": the ruler is arithmetic, or the gate cannot ask it`)
+  }
+  return problems
+}
+
+/**
  * The plan without spoilers (ÁT-I1): what the plan shows is decided by
  * `mapModel`, which `test:map` proves; the component only draws it. A room,
  * a door or a lock the component draws from the content by itself is one the

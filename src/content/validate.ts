@@ -11,12 +11,11 @@
  * broken content edit fails loudly instead of at runtime.
  */
 
-import { lockCredentialKeys } from '../engine/lockRules.ts'
 import { conditionClasses, credentialKey } from '../engine/progressCondition.ts'
 import { MOUNT_PARTS, mountPartNames, transitionDoorPartNames } from '../engine/runtimePlacedParts.ts'
 import { buildRoomSignageLayout } from '../engine/signageLayout.ts'
 import { compileTriggers } from '../engine/triggers.ts'
-import type { ListField } from '../state/progressFields.ts'
+import { doorIdsOf, saveIdsByField, validateAdditive, type GraphSnapshot } from './additive.ts'
 import { validateFactCaptures, type FactCaptureSet } from './factCapture.ts'
 import { settleKnownDebt, type KnownDebt } from './knownDebt.ts'
 import { PRE_OPENING_SAVE, SAVE_ALIASES, type SaveAlias } from './legacySave.ts'
@@ -29,6 +28,7 @@ import type {
   RoomData,
   UnlockEffect,
 } from './schema'
+import { simulateProgress } from './simulate.ts'
 
 export type ValidationIssue = {
   /**
@@ -182,8 +182,8 @@ function validateReferences(content: MuseumContent): ValidationIssue[] {
 /**
  * Where each lock lives, and whether the runtime can open it there.
  *
- * `validateSolvability` proves a lock CAN be opened; nothing asked whether
- * the player ever meets the lock, or what happens when they do. Each rule
+ * The simulation (`simulate.ts`) proves a lock CAN be opened; nothing asked
+ * whether the player ever meets the lock, or what happens when they do. Each rule
  * here is a way the two disagreed in silence: a lock in the list that no
  * object carries, a keypad that is not as long as its own answer, a code
  * resting on a fact nobody certified as one, a note that claims to be free
@@ -486,255 +486,14 @@ export function validateAttribution(content: MuseumContent): ValidationIssue[] {
 }
 
 // ---------------------------------------------------------------------------
-// Lock-graph solvability
+// Whether the museum can be played to its end
 // ---------------------------------------------------------------------------
-
-/**
- * The check worth more than every other test in the project.
- *
- * Simulates a maximally thorough player: repeatedly walk everything currently
- * reachable, collect every credential and every fact it yields, then walk again
- * with the larger keyring. If the fixpoint does not cover the whole museum,
- * something is gated behind itself.
- *
- * Also enforces the design rule that makes knowledge locks fair: the exhibit
- * that teaches a code must be reachable strictly BEFORE the lock that demands
- * it, never behind it.
- */
-export function validateSolvability(content: MuseumContent): ValidationIssue[] {
-  const issues: ValidationIssue[] = []
-  // Keyed by plain string: the traversal works with ids pulled off portals and
-  // out of the queue, and narrowing every one of those back to EraId buys
-  // nothing here — the referential-integrity pass already proved they resolve.
-  const roomsById = new Map<string, RoomData>(content.rooms.map((room) => [room.id, room]))
-  const locksById = new Map(content.locks.map((lock) => [lock.id, lock]))
-  const exhibitsById = new Map(content.exhibits.map((exhibit) => [exhibit.id, exhibit]))
-  const START_ROOM: string = content.spawn.room
-
-  if (!roomsById.has(START_ROOM)) {
-    return [{
-      severity: 'error',
-      code: 'no-start-room',
-      message: `The museum has no "${START_ROOM}" room to start from.`,
-    }]
-  }
-
-  /**
-   * Electric locks, keyed by both portal endpoints of the one opening. A door
-   * is authored on one side only, so the requirement has to bind the
-   * reciprocal portal too — otherwise the walk would simply leave by it — but
-   * only that one: a second doorway between the same two rooms stays free.
-   * The reciprocal is matched exactly as the runtime topology matches it.
-   */
-  const endpointKey = (roomId: string, portalId: string) => `${roomId}:${portalId}`
-  const powerLockedPortals = new Map<string, string>()
-  for (const room of content.rooms) {
-    for (const portal of room.portals) {
-      const required = portal.transitionDoor?.requiresPower
-      if (!required) continue
-      powerLockedPortals.set(endpointKey(room.id, portal.id), required)
-
-      const target = roomsById.get(portal.toRoom)
-      const reciprocal = target?.portals.find(
-        (candidate) =>
-          candidate.toRoom === room.id &&
-          Math.abs(candidate.width - portal.width) < 1e-6 &&
-          Math.abs(candidate.height - portal.height) < 1e-6 &&
-          Math.hypot(
-            target.origin[0] + candidate.position[0] - (room.origin[0] + portal.position[0]),
-            target.origin[1] + candidate.position[1] - (room.origin[1] + portal.position[1]),
-            target.origin[2] + candidate.position[2] - (room.origin[2] + portal.position[2]),
-          ) < 0.35,
-      )
-      if (target && reciprocal) {
-        powerLockedPortals.set(endpointKey(target.id, reciprocal.id), required)
-      }
-    }
-  }
-
-  const heldCredentials = new Set<string>()
-  const knownFacts = new Set<string>()
-  const reachableRooms = new Set<string>()
-  /** roomId -> the pass number on which it first became reachable. */
-  const roomDiscoveredOn = new Map<string, number>()
-
-  const lockIsOpen = (lockId: string | undefined): boolean => {
-    if (!lockId) return true
-    const lock = locksById.get(lockId)
-    if (!lock) return false
-
-    if (lock.kind === 'knowledge') return knownFacts.has(lock.factId)
-    // Ritual locks are solved by in-room manipulation, so reaching the room is
-    // sufficient for a reachability proof.
-    if (lock.kind === 'ritual') return true
-
-    return lockCredentialKeys(lock).every((key) => heldCredentials.has(key))
-  }
-
-  const walk = (pass: number) => {
-    const queue: string[] = [START_ROOM]
-    const seen = new Set<string>([START_ROOM])
-
-    // A room has power once the player can stand at its control: reached, and
-    // with any lock on that control opened.
-    const hasPower = (roomId: string) => {
-      const room = roomsById.get(roomId)
-      if (!room) return false
-      if (room.startsPowered) return true
-      return (seen.has(roomId) || reachableRooms.has(roomId)) && lockIsOpen(room.powerLockId)
-    }
-
-    while (queue.length > 0) {
-      const roomId = queue.shift() as string
-      if (!reachableRooms.has(roomId)) {
-        reachableRooms.add(roomId)
-        roomDiscoveredOn.set(roomId, pass)
-      }
-
-      const room = roomsById.get(roomId)
-      if (!room) continue
-
-      for (const portal of room.portals) {
-        // One-way-ness is expressed by the ABSENCE of a reciprocal portal in
-        // the target room, not by blocking this direction: the shortcut is
-        // barred from the hub side and opens from inside the wing, which is
-        // the direction declared here.
-        if (!lockIsOpen(portal.lockId)) continue
-        const required = powerLockedPortals.get(endpointKey(roomId, portal.id))
-        if (required && !hasPower(required)) continue
-        if (seen.has(portal.toRoom)) continue
-        seen.add(portal.toRoom)
-        queue.push(portal.toRoom)
-      }
-    }
-  }
-
-  const harvest = (): number => {
-    let gained = 0
-
-    for (const roomId of reachableRooms) {
-      const room = roomsById.get(roomId)
-      if (!room) continue
-
-      for (const exhibitId of room.exhibitIds) {
-        const exhibit = exhibitsById.get(exhibitId)
-        if (!exhibit) continue
-
-        for (const hotspot of exhibit.hotspots) {
-          if (hotspot.revealsFactId && !knownFacts.has(hotspot.revealsFactId)) {
-            knownFacts.add(hotspot.revealsFactId)
-            gained += 1
-          }
-        }
-
-        for (const effect of exhibit.unlocks ?? []) {
-          if (effect.kind === 'grant-credential') {
-            const key = credentialKey(effect.credential)
-            if (!heldCredentials.has(key)) {
-              heldCredentials.add(key)
-              gained += 1
-            }
-          }
-        }
-      }
-
-      for (const documentId of room.documentIds) {
-        const doc = content.documents.find((candidate) => candidate.id === documentId)
-        if (!doc) continue
-        if (!lockIsOpen(doc.lockId)) continue
-        if (doc.revealsFactId && !knownFacts.has(doc.revealsFactId)) {
-          knownFacts.add(doc.revealsFactId)
-          gained += 1
-        }
-      }
-    }
-
-    return gained
-  }
-
-  // Fixpoint: walk, harvest, repeat until a pass yields nothing new.
-  const MAX_PASSES = 32
-  let pass = 0
-  for (; pass < MAX_PASSES; pass += 1) {
-    const before = reachableRooms.size
-    walk(pass)
-    const gained = harvest()
-    if (reachableRooms.size === before && gained === 0) break
-  }
-
-  if (pass >= MAX_PASSES) {
-    issues.push({
-      severity: 'error',
-      code: 'solvability-no-fixpoint',
-      message: `Lock graph did not converge in ${MAX_PASSES} passes — likely a dependency cycle.`,
-    })
-  }
-
-  for (const room of content.rooms) {
-    if (!reachableRooms.has(room.id)) {
-      issues.push({
-        severity: 'error',
-        code: 'room-unreachable',
-        message: `Room "${room.id}" is never reachable, even by a player who examines everything.`,
-      })
-    }
-  }
-
-  for (const lock of content.locks) {
-    if (!lockIsOpen(lock.id)) {
-      issues.push({
-        severity: 'error',
-        code: 'lock-unopenable',
-        message: `Lock "${lock.id}" can never be opened — its credential or fact is unobtainable.`,
-      })
-    }
-  }
-
-  // Show the lock long before the key: the exhibit teaching a code must be
-  // reachable no later than the room the lock gates. Reverse foreshadowing
-  // turns exploration into a brute-force sweep.
-  for (const lock of content.locks) {
-    if (lock.kind !== 'knowledge') continue
-    const source = exhibitsById.get(lock.sourceExhibitId)
-    if (!source) continue
-
-    const sourceRoom = content.rooms.find((room) => room.exhibitIds.includes(source.id))
-    const gatedRooms = content.rooms.filter((room) =>
-      room.portals.some((portal) => portal.lockId === lock.id),
-    )
-    if (!sourceRoom) continue
-
-    const sourcePass = roomDiscoveredOn.get(sourceRoom.id) ?? Number.POSITIVE_INFINITY
-    for (const gated of gatedRooms) {
-      const gatedPass = roomDiscoveredOn.get(gated.id) ?? Number.POSITIVE_INFINITY
-      if (sourcePass > gatedPass) {
-        issues.push({
-          severity: 'error',
-          code: 'lock-source-behind-lock',
-          message: `Knowledge lock "${lock.id}" is taught by exhibit "${source.id}" in room "${sourceRoom.id}", which is only reachable after the room it gates.`,
-        })
-      }
-    }
-  }
-
-  // An unmatched credential is bookkeeping the player will never resolve.
-  const consumedCredentials = new Set(content.locks.flatMap(lockCredentialKeys))
-  for (const exhibit of content.exhibits) {
-    for (const effect of exhibit.unlocks ?? []) {
-      if (effect.kind !== 'grant-credential') continue
-      const key = credentialKey(effect.credential)
-      if (!consumedCredentials.has(key)) {
-        issues.push({
-          severity: 'warning',
-          code: 'credential-orphan',
-          message: `Exhibit "${exhibit.id}" grants "${key}" but no lock requires it.`,
-        })
-      }
-    }
-  }
-
-  return issues
-}
+//
+// This file used to answer that with a walk of its own over the lock graph,
+// which shared no rule with the runtime: it took the one-way shortcut for an
+// ordinary door and every piece for cataloguable. The answer is now the
+// exhaustive player of `simulate.ts`, moved by the functions the game is
+// played with, and `validateContent` below reads her issues.
 
 // ---------------------------------------------------------------------------
 // The opening: spawn, devices, notebooks and the conditions they ask
@@ -1211,61 +970,6 @@ export function validateTriggers(content: MuseumContent): ValidationIssue[] {
     }
   }
   return issues
-}
-
-/**
- * The ids of the physical doors: a door is the portal that declares the leaf.
- * The portal facing it across the same opening has an id too, and is not a
- * door: no condition may ask for it and the save never holds it.
- */
-function doorIdsOf(content: Pick<MuseumContent, 'rooms'>): ReadonlySet<string> {
-  return new Set(
-    content.rooms.flatMap((room) => room.portals.flatMap((portal) => (portal.transitionDoor ? [portal.id] : []))),
-  )
-}
-
-/**
- * The ids each list of the save holds, as the content defines them; null for
- * a list whose ids the content does not define.
- *
- * Typed by the save's own lists: a lot that adds one has to say here what its
- * ids are, or the build stops.
- */
-function saveIdsByField(content: MuseumContent): Record<ListField, ReadonlySet<string> | null> {
-  const rooms = new Set<string>(content.rooms.map((room) => room.id))
-  const devices = content.rooms.flatMap((room) => room.devices ?? [])
-  const locks = new Set(content.locks.map((lock) => lock.id))
-  const triggers = compileTriggers(content)
-  const effects = triggers.flatMap((trigger) => trigger.effects)
-  return {
-    catalogued: new Set(content.exhibits.map((exhibit) => exhibit.id)),
-    hotspots: new Set(
-      content.exhibits.flatMap((exhibit) => exhibit.hotspots.map((hotspot) => `${exhibit.id}:${hotspot.id}`)),
-    ),
-    documentsRead: new Set(content.documents.map((doc) => doc.id)),
-    factsKnown: new Set(content.facts.map((fact) => fact.id)),
-    // What a lock asks for and what an effect hands out, in the store's own spelling.
-    credentials: new Set([
-      ...content.locks.flatMap(lockCredentialKeys),
-      ...effects.flatMap((effect) => (effect.kind === 'grant-credential' ? [credentialKey(effect.credential)] : [])),
-    ]),
-    roomsVisited: rooms,
-    roomsPowered: rooms,
-    locksOpened: locks,
-    locksSeen: locks,
-    doorsReleased: doorIdsOf(content),
-    // A flag exists by being set: there is no list of them but the effects.
-    flags: new Set(effects.flatMap((effect) => (effect.kind === 'set-flag' ? [effect.flag] : []))),
-    triggersFired: new Set(triggers.map((trigger) => trigger.id)),
-    radioCalls: new Set(
-      devices.flatMap((device) => (device.kind === 'radio' ? device.calls.map((call) => call.id) : [])),
-    ),
-    // The lessons are named by the HUD, not by the content.
-    hintsShown: null,
-    devicesCarried: new Set(
-      devices.flatMap((device) => (device.kind === 'radio' && device.carriedOnUse ? [device.id] : [])),
-    ),
-  }
 }
 
 /**
@@ -2224,6 +1928,12 @@ export type ContentGateExtras = {
    * Without it every accusation is an error, which is what a test wants.
    */
   readonly knownDebt?: { readonly lines: readonly KnownDebt[]; readonly lot: number }
+  /**
+   * The graph the last lot wrote down as it closed (`docs/releases`). With
+   * it the content is held to having taken nothing away since
+   * (`validateAdditive`); without it nothing is compared.
+   */
+  readonly previousGraph?: GraphSnapshot
 }
 
 export function validateContent(
@@ -2244,7 +1954,7 @@ export function validateContent(
     ...validateFacts(content.facts),
     ...(captures ? validateFactCaptures(content.facts, captures) : []),
     ...validateAttribution(content),
-    ...validateSolvability(content),
+    ...simulateProgress(content).issues,
     ...validateOpening(content),
     ...validateTriggers(content),
     ...validatePortals(content),
@@ -2253,6 +1963,7 @@ export function validateContent(
     ...(bundles ? validateBake(content, bundles) : []),
     ...(translationKeys ? validateTranslations(content, translationKeys, extras.keysCitedByCode) : []),
     ...(extras.dictionaries ? validateSpeech(content, extras.dictionaries) : []),
+    ...(extras.previousGraph ? validateAdditive(extras.previousGraph, content) : []),
   ]
   return extras.knownDebt
     ? settleKnownDebt(issues, extras.knownDebt.lines, extras.knownDebt.lot)

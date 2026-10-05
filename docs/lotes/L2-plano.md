@@ -891,7 +891,9 @@ detalhe nunca acende.
 `EXAMINE_HOTSPOT_DOT = 0.55`, `EXAMINE_MIN_CONE_DEGREES = 5` e
 `examineReach(exhibit, hotspot): { reachable: boolean; coneDegrees: number }`, pela forma fechada
 acima. `Interaction.tsx:166-169` passa a importar as duas constantes (uma régua só);
-`runtimeWiring.ts` prende a importação.
+`runtimeWiring.ts` prende a importação. (F4: o módulo exporta também `examineConeDegrees(ρ)`, a
+conta sem a peça, que é o que o teste dos limites pergunta; `audit:examine-sim` lê as duas
+constantes dali.)
 
 **Teste.** `test:playthrough` (T11), bloco próprio: a tabela acima (cada cone a ±0,1°); «as três
 que nenhum save honesto tem são as três que a régua reprova»: `net-1897`, `gym-suit`, `photo-gym`;
@@ -944,6 +946,38 @@ os gatilhos, até nada mudar. Usa `transitionDoorBlock` (com `doorsReleased`), `
 `doorGrant`, `progressConditionMet` e `settleTriggers`: as funções do jogo, não cópias. Um código
 só é digitado com o fato conhecido (I-12).
 
+**Como ficou (F4).** Três coisas que o texto acima não decidia:
+
+- **O que é «disponível».** O que as regras **respondem**. Apertar o `E` numa gaveta trancada
+  está na lista: o teclado sobe (ou a tranca zumbe) e a tranca fica vista (`locksSeen`). É daí
+  que sai o «vista» do estado máximo, e é o que deixa o código errado do robô ser um aperto que
+  não grava nada. O que as regras ignoram não está: porta barrada deste lado, interruptor de
+  sala acesa, detalhe já visto, detalhe que mão nenhuma vira, caderno que já saiu da mesa, rádio
+  sem carga. O `code` só é oferecido a quem já teve o teclado na frente (`locksSeen`) **e**
+  conhece o fato.
+- **O que a passada enxerga.** O que se pode fazer é decidido contra o save do começo da passada,
+  das salas em que ela já podia estar; o que cada ação concede é perguntado ao save como ele
+  está, com os gatilhos assentados depois de cada uma (como o store faz). Por isso uma passada é
+  um nível do roteiro.
+- **O que fica escrito de cada ação** (`ActionRecord`: id, o que pede, o que dá, em átomos de
+  2.4). Além dos apertos (`power:`, `door:<porta>:<de>><para>`, `hotspot:`, `container:`,
+  `code:`, `take:`), o aperto no hospedeiro de tranca fechada é `touch:<hospedeiro>` e duas
+  consequências têm registro próprio: `catalogue:<peça>` (pede os detalhes obrigatórios e dá a
+  ficha; à parte, porque qual detalhe completa a peça depende da ordem em que foram achados, e um
+  registro não pode depender) e `trigger:<id>`. `simulateProgress().actions` são as que ela
+  **encontrou**; `contentActions(content)` são todas as que o conteúdo **oferece**, alcançadas ou
+  não, e é contra estas que o lote seguinte é comparado (T12). Os átomos novos em relação a 2.4:
+  `detail:<peça>:<detalhe>`, `seen:<tranca>`, `carried:<aparelho>` e `fired:<gatilho>`; uma
+  condição negativa vira `not(…)` e um `anyOf`, um átomo só, `any(a+b|c)`.
+
+`credential-orphan` conta como uso a credencial que uma **condição** pede, não só a de uma
+tranca. `flag-never-read` só olha condições: flag lida por código (a luz geral de L11) vai
+precisar de uma condição que a nomeie, ou de uma lista aqui. `no-return-path` e `one-way-trap`:
+com as regras de porta deste lote, a porta por onde se entra é sempre volta (empurrar libera),
+então a primeira só acontece com vão declarado de um lado só; a segunda acusa a sala cujas
+voltas são **todas** portas de mão única («uma aresta a mais, nunca a única»), mesmo que se
+possa sair dela.
+
 Erros em L2 (os demais códigos de 6.4 entram com a mecânica de cada um: termos, promessas datadas,
 dicas, papéis de colocação, fios, consumo):
 
@@ -956,15 +990,21 @@ dicas, papéis de colocação, fios, consumo):
 | `lock-evidence-behind-lock` | a fonte de um código só alcançável com a tranca aberta, em qualquer hospedeiro (substitui `lock-source-behind-lock`) |
 | `checklist-item-untickable` | item sem `doneWhen`, ou com condição fora do ponto fixo |
 | `simulation-no-fixpoint` | não convergiu (substitui `solvability-no-fixpoint`) |
+| `transition-door-invalid` (F4) | `buildTransitionDoorSpecs` lança para este conteúdo, e o runtime o chama ao subir. Dito uma vez; a simulação segue com todo vão livre, para uma porta ruim não acusar cada sala atrás dela |
+| `no-start-room` | fica como era: a sala do spawn não existe |
 
 `validate.ts:2061`: `validateContent` chama `simulateProgress(content).issues`;
 `validateSolvability` sai. `scripts/validate-content.ts` imprime o roteiro em níveis depois da
 linha do bake.
 
-O roteiro de hoje [previsto]: `N0` luminária · `N1` saguão · `N2` luz do saguão, Ala 1 · `N3` luz
-da Ala 1, o ano (retrato ou arquivo A), 9 peças, o atalho liberado · `N4` gaveta, bilhete. O estado
-máximo: três salas acesas e visitadas, cinco documentos, quatro fatos, 9 de 12 peças, `office-drawer`
-aberta e vista, `atrium-from-holyoke-shortcut` liberada, nenhuma credencial.
+O roteiro de hoje **[medido em F4]**: `N0` luminária, caderno, a gaveta tocada · `N1` saguão,
+rádio · `N2` luz do saguão, Ala 1, **as quatro bolas do saguão** · `N3` luz da Ala 1, o ano (no
+retrato e no arquivo A), os outros três fatos, os três papéis dos arquivos, as cinco peças da ala,
+o atalho liberado · `N4` gaveta, bilhete. A previsão punha as nove peças em `N3`; as do saguão
+catalogam um nível antes, porque catalogar no escuro vale (D17). O estado máximo: três salas
+acesas e visitadas, cinco documentos, quatro fatos, 9 de 12 peças, 17 dos 21 detalhes,
+`office-drawer` aberta e vista, `atrium-from-holyoke-shortcut` liberada, o rádio levado, nenhuma
+credencial.
 
 **Teste.** `test:playthrough` (T11), bloco da simulação: o estado máximo acima, átomo por átomo; os
 níveis; cada código contra conteúdo quebrado de propósito (a porta alimentada do outro lado de
@@ -991,10 +1031,26 @@ e a executa pelas ações do store (`grant(actionGrant(…))`, `powerRoom`, `set
 caderno. Em passos sorteados serializa `{ settings, progress }`, grava sob a chave do save e
 continua num store novo, carregado pelo caminho real (`import('../src/state/store.ts?run=N')`).
 
+**Como ficou (F4).** O robô são duas coisas separadas de propósito. A **cabeça** pergunta à
+simulação o que se pode fazer (`availableActions`) e sorteia. As **mãos** (`press`, em
+`scripts/lib/playthrough.ts`) fazem no store o que cada componente faz quando o `E` é apertado,
+linha por linha, com as regras puras que o componente chama (`attemptLock`, `containerGrant`,
+`hotspotGrant`, `doorGrant`, as duas regras de porta, `deskRadioIntent`, `examineReach`), e
+**não chamam `actionGrant`**: se chamassem, o item 7 compararia a simulação com ela mesma. Depois
+de cada aperto, `pressProblem` confronta as duas: aperto oferecido tem de ter gravado exatamente
+o que `actionGrant` disse (com os gatilhos assentados), e aperto não oferecido não pode ter
+gravado nada. É isso que dá sentido ao «vermelho hoje»: com as três peças ainda em
+`availableActions`, a cabeça manda girar a rede e a mão não acha o detalhe. A recarga é a do
+próprio store: `pagehide` (ele grava o que tem), e um store novo lê o texto que ficou na chave
+(`openGame`, de `scripts/lib/storePage.ts`).
+
 **Teste.** `npm run test:playthrough`:
 
-1. a rota canônica (a de 2.4: I-01, I-07, I-08, I-09, I-10, I-11a, I-15, I-12) termina no estado
-   máximo de `simulateProgress(MUSEUM).final`;
+1. a rota canônica (a de 2.4: I-01, I-07, I-08, I-09, I-10, I-11a, I-15, I-12) é jogável nessa
+   ordem, termina no caminho crítico (as três luzes, o ano, o atalho liberado, a gaveta aberta com
+   o bilhete) e, seguida pelo robô, chega ao estado máximo de `simulateProgress(MUSEUM).final`.
+   (O plano dizia que a rota **terminava** no estado máximo. Não termina: ela pula o caderno, o
+   rádio e oito peças; em L2 não há termo para o fim da rota provar. Corrigido em F4.)
 2. **500 sementes** de ordem embaralhada, com recargas, terminam no mesmo estado, comparado como
    conjuntos. A semente que reprovar é impressa; `SEED=<n> npm run test:playthrough` a repete;
 3. o perfil que **pula tudo** (nunca lê o caderno, nunca pega o rádio, nunca acende a lanterna)
@@ -1041,11 +1097,40 @@ quem o tinha, em silêncio; endurecer uma guarda cria beco em save antigo.
 | `term-condition-changed`, `checklist-condition-changed` | condição de termo ou de item de lista diferente da gravada |
 | `save-field-changed` | um campo do save mudou de tipo ou saiu da tabela |
 
+**Como ficou (F4).**
+
+- `validateAdditive(previous, content, aliases = SAVE_ALIASES)`. As ações do instantâneo são
+  procuradas em **tudo o que o conteúdo oferece** (`contentActions`), não só no que a jogadora
+  dele ainda alcança: uma ação antiga atrás de uma exigência nova continua oferecida, e é
+  exatamente o que tem de aparecer como `guard-strengthened` (senão viraria `node-removed`).
+- **Os aliases valem na comparação.** Um save que tem o id velho tem o novo em toda carga
+  (DL2-8); então o que uma ação concedia como `doc:velho` e concede como `doc:novo` não tirou
+  nada, e `hotspot:peça-velha:verso` continua existindo sob o nome novo da peça. Sem isso, o
+  renome do bilhete em L3 (`doc-predecessor` → `doc-otavio-handover`) acusaria `grant-removed`
+  com o alias no lugar. Um id que some pede alias em **cada** lista que o guarda: sala em
+  `roomsVisited` e `roomsPowered`, tranca em `locksOpened` e `locksSeen`.
+- `ids.devices` tem, além do rádio que se leva, todo aparelho sob o qual o save guarda algo
+  (`clockSeconds`, `radioMemory`): renomear o relógio zera a hora de quem volta. Alias não leva
+  chave de registro; a mensagem diz que aí é migração.
+- O arquivo é JSON com **uma ação por linha**, tudo ordenado; o diff de dois lotes mostra a ação
+  que mudou e mais nada. Ler e escrever de novo dá o mesmo texto, e é assim que o teste sabe que
+  o arquivo saiu do script.
+- A leitura de `docs/releases` é `scripts/lib/graphSnapshots.ts` (`newestSnapshot`,
+  `snapshotForGate`), com três acusações do portão: `graph-snapshot-missing`,
+  `graph-snapshot-stale` (mais velho que `CONTENT_LOT − 1`) e `graph-snapshot-invalid` (não é um
+  instantâneo, ou o nome do arquivo e o `lot` de dentro discordam).
+- `saveIdsByField` e `doorIdsOf` saíram de `validate.ts` para `additive.ts`: «todo id que um save
+  pode ter» é lido por `validateSaveAliases` e por `validateAdditive`, as duas metades de uma
+  promessa só.
+
 **Teste.** `test:playthrough`, bloco próprio: o conteúdo contra o próprio instantâneo não acusa
 nada; acrescentar ação, sala, peça ou concessão não acusa; cada código com um par feito para o
 teste; por mutação sobre o conteúdo real: tirar `portrait-morgan:date` dá `node-removed` e
 `id-renamed-without-alias`; dar `requiresPower: 'holyoke'` à porta principal da Ala 1 dá
-`guard-strengthened`; o arquivo commitado é o que `graphSnapshot` escreveria (byte a byte).
+`guard-strengthened`; o arquivo commitado é o que `graphSnapshot` escreveria (byte a byte)
+**enquanto o lote do arquivo não tem «Feito em» no plano mestre**. Depois disso o arquivo é
+registro: exigir que ele siga o conteúdo faria a primeira fatia de L3 reescrever o instantâneo
+de L2, que é justamente o que ela tem de respeitar (corrigido em F4; ver §14).
 
 **Vermelho hoje.** Não há instantâneo: o portão de T12.3 reprova até o arquivo existir.
 
@@ -1230,7 +1315,8 @@ nova: tudo é `node --experimental-strip-types`.
 | `scripts/test-transition-door.ts:419-423`, `scripts/test-opening.ts:253-265` | as duas regras com dois e três argumentos | com a lista de portas liberadas | F3 |
 | `scripts/test-navigation.ts:325-366` | o atalho num sentido | nos dois | F3 |
 | `scripts/test-opening.ts:284-288` | `validateSolvability` | `simulateProgress` | F4 |
-| `scripts/test-facts.ts:737-748` | seis módulos só do portão | nove | F4, F5 |
+| `scripts/test-facts.ts:737-748` | seis módulos só do portão | nove (oito depois de F4: `simulate.ts` e `additive.ts`), e a regra provada com importações feitas para o teste | F4, F5 |
+| `scripts/test-docs.ts:461-472` | `lastLotDone` morava na suíte | a mesma função, em `scripts/lib/planLots.ts`, lida também por `test:playthrough` | F4 |
 
 `scripts/test-navigation.ts:385` (`reciprocalPairs.size === 3`) não muda: L2 não acrescenta vão.
 
@@ -1246,7 +1332,7 @@ jogo 388.248 (teto 390.200). **A folga do título é de 147 bytes.**
 | título | as quatro chaves novas e as duas mudadas de 6, nas duas línguas (os dicionários viajam com o título) | +0,2 kB; **[medido em F3: +217 bytes, 28.863; teto 29.000]** (a folha de estilos também viaja com o título, e as regras da planta cresceram) | F3 |
 | jogo | `triggers.ts`, `contentRegistry.ts`, `progressGrants.ts`, `lockRules.ts` | +1,5 a +2 kB; **[medido em F2: +1.250 bytes, 389.477; o teto fica em 390.200, com 723 bytes de folga]** | F2 |
 | jogo | `mapModel.ts`, o toast, `doorGrant` | +1 kB; **[medido em F3: +1.237 bytes, 390.714; teto 392.700]** | F3 |
-| jogo | `examineReach.ts` | +0,2 kB | F4 |
+| jogo | `examineReach.ts` | +0,2 kB; **[medido em F4: −6 bytes, 390.708; os tetos ficam]** (a vista só importa as duas constantes; a conta do cone não entra no bundle) | F4 |
 
 Tudo [previsto]. Cada teto sobe **no commit da fatia que precisa**, para o medido mais meio por
 cento, com o motivo escrito em `BUNDLE_PATH_CEILINGS` (`scripts/lib/ratchets.ts:237-241`), como a
@@ -1696,3 +1782,114 @@ hachura num aparelho real, no sol, que é o que a regra do padrão existe para r
 - O corpus do fecho (`l2-shortcut-released`, §13) sai do fim da rota A: é o primeiro save com
   `doorsReleased` preenchido.
 - O teto `game` tem 1.986 bytes de folga e o `title`, 137.
+
+### F4 — A prova de que se joga (2026-10-05; commit local, sem push)
+
+T9, T10, T11 e T12 inteiros. Nada muda para o jogador: a única linha de runtime tocada é a
+importação, em `Interaction.tsx`, dos dois números que ele já usava. O que entra é o portão: a
+régua do exame como conta, a jogadora exaustiva no lugar de `validateSolvability`, o robô sobre o
+store de verdade e o primeiro instantâneo do grafo.
+
+**Vermelho primeiro** (§9.1, passo 2), cada um visto antes do conserto:
+
+- **As cinco acusações.** Com `simulateProgress` ligado em `validateContent` e a tabela de dívidas
+  intocada, `npm run validate:content` saiu com 5 erros que `validateSolvability` deixava passar:
+  `exhibit-uncataloguable` em `net-1897` («a cone of 0.0°»), `gym-suit` (0,0°) e `photo-gym`
+  (1,5°), e `checklist-item-untickable` em `notebook.todo.catalogue` e `notebook.todo.vault`. As
+  cinco linhas de §7.2 entraram depois disso, no mesmo commit.
+- **O instantâneo.** Sem `docs/releases/L2.graph.json`: `ERROR [graph-snapshot-missing] There is
+  no graph snapshot in docs/releases…`, saída 1. E, na suíte, «docs/releases holds no snapshot».
+- **Robô × simulação.** Com o filtro de `examineReach` tirado de `availableActions` (as três peças
+  oferecidas): 11 de 28 casos passavam. As 500 noites reprovaram todas, a primeira com «seed 1:
+  the simulation offers "detail net-1897:socket" in holyoke … and the store did something else:
+  it did not write detail:net-1897:socket»; o estado máximo tinha 12 peças em vez de 9; os níveis
+  mudavam; e as três acusações de `exhibit-uncataloguable` sumiam (a dívida viraria
+  `known-debt-stale`).
+- **A régua na vista.** `examineWiringProblems` contra o `Interaction.tsx` de antes acusou seis
+  problemas (as duas constantes não importadas, a distância e o limiar usados com nomes próprios,
+  `const HOLD_DISTANCE = 0.42` e `const HOTSPOT_DOT = 0.55` declarados ali).
+- O resto da suíte nem carregava: `examineReach.ts`, `simulate.ts` e `additive.ts` não existiam.
+
+Com tudo verde, **92 mutações** foram aplicadas uma a uma (o arquivo voltava ao original depois de
+cada uma), em `examineReach.ts`, `simulate.ts`, `additive.ts`, `graphSnapshots.ts`, `validate.ts`,
+`knownDebt.ts`, `validate-content.ts`, nas mãos do robô e, para provar que ele morde no que é do
+jogo, em `store.ts`, `progressFields.ts`, `progressGrants.ts`, `transitionDoorTopology.ts`,
+`lockRules.ts`, `Interaction.tsx` e `Hud.tsx`. Na primeira rodada, de 84, três escaparam e duas
+reprovaram pelo motivo errado (a mutação não era TypeScript válido, ou fazia a suíte lançar); as
+cinco voltaram, com mais oito, depois de três testes novos, e todas reprovam:
+
+- «a passada que enxerga o que acabou de fazer» escapava porque no museu de hoje nenhuma sala
+  depende, na mesma passada, de outra visitada antes. Virou o caso da casa de duas salas: um
+  interruptor atrás de um teclado e, na sala ao lado, um rádio que espera a luz da primeira
+  (toque e ano em `N0`, código em `N1`, luz em `N2`, rádio em `N3`). É também o único caso com
+  tranca num controle de energia;
+- «a recarga que não procura perdas» escapava porque nada se perde. Virou o caso do disco que
+  esquece a porta: `reload` tem de parar ali («the save lost something on its way through the
+  disk»), porque no fim da noite o robô teria dado a volta e empurrado a porta de novo;
+- «a ficha no primeiro detalhe» (`hotspotGrant` catalogando sempre) escapava desta suíte, e só
+  `test:triggers` a pegava: robô e simulação usam a mesma função. O caso dos registros passou a
+  perguntar o «não antes» (um detalhe obrigatório de dois não cataloga a Spalding).
+
+**Onde a execução se afastou do plano.** O que muda o sentido de uma tarefa está escrito na
+própria tarefa (T10, T11 e T12, «Como ficou»). Em resumo:
+
+- **A rota canônica não termina no estado máximo** (T11, item 1): termina nos treze átomos do
+  caminho crítico, e o robô segue dali até o fim.
+- **As mãos do robô não usam `actionGrant`**; espelham os componentes. `pressProblem` confronta as
+  duas coisas a cada aperto, e é o item 7.
+- **`container` e `power` são oferecidos mesmo com a tranca fechada** (o aperto grava
+  `locksSeen`); `code` pede a tranca vista e o fato.
+- **Os níveis medidos** põem as quatro bolas do saguão em `N2`, não em `N3`.
+- **`transition-door-invalid`** é código novo; `no-start-room` ficou.
+- **O «byte a byte» do instantâneo só vale com o lote aberto** (sem «Feito em» no plano mestre).
+  Quem escreve o «Feito em» o faz num commit que não muda conteúdo, ou roda `npm run
+  graph:snapshot` antes: a partir dali o arquivo não é mais conferido contra o conteúdo, só o
+  conteúdo contra ele.
+- **`validateAdditive` compara com o que o conteúdo oferece e segue os aliases**; `ids.devices`
+  inclui relógio e rádio.
+- **`saveIdsByField` e `doorIdsOf`** moram em `additive.ts`; **`lastLotDone`** saiu de
+  `scripts/test-docs.ts` para `scripts/lib/planLots.ts`, sem mudar de sentido (as duas suítes o
+  leem).
+- **`ATOM_PREFIX`** (em `simulate.ts`) é tipado contra as listas do save: lista nova sem linha ali
+  não compila. `radioCalls` e `hintsShown` ficam de fora (ninguém as joga).
+- **A lista «só do portão» de `test:facts` tem oito módulos** (o nono, `textLint.ts`, é de F5), e
+  a regra passou a ser provada com importações feitas para o teste.
+- **`scripts/test-opening.ts`**: o caso da porta alimentada do outro lado pede as duas salas
+  inalcançáveis por id, e «o museu de hoje é jogável» passou a assentar as cinco dívidas antes de
+  exigir zero erros (como `test:power` já fazia).
+
+**Medições.** `test:playthrough`: 30 casos em 10 s de relógio; as 500 noites levam 8 s (19.809
+apertos, 2.528 deles para nada, 1.064 abas fechadas e reabertas). Bem abaixo dos 30 s. Bundle:
+título 28.865 bytes de gzip (28.863 em F3), jogo 390.708 (390.714), documento 63.235 (63.234);
+nenhum teto mudou (o jogo só importa duas constantes de `examineReach.ts`, e os nomes dos chunks
+mudam de hash). `npm run check` e `npm run build`
+verdes. O portão imprime agora o roteiro em níveis e 33 dívidas datadas (eram 28).
+`docs/releases/L2.graph.json`: 42 ações, 3 itens de lista, 54 ids, 19 campos do save; gerar de
+novo não muda um byte.
+
+**No navegador, depois do verde** (servidor `museum-dev` reiniciado depois da última edição;
+1280 × 720; o que se lê aqui saiu do store e do `__museumScene()`). A fatia não tem nada para o
+jogador ver; o que se conferiu é que a vista de exame continua a mesma com os números vindos de
+`examineReach.ts`. `?qaSave=production-radio-on-desk`, «Continuar», diante da bola de cadarço do
+saguão (o teleporte do harness pôs a câmera a um metro dela): o `E` a pega e ela fica a 0,42 m da
+câmera (a malha em −2,40; 1,37; −7,54 com a câmera em −2,40; 1,62; −7,20, inclinada 0,64 rad); o
+cadarço conta ao pegar, a ficha aparece («Catálogo — Couro, costura e cadarço») e o save tem o
+detalhe e a peça. Na segunda pegada, 10 px de arrasto (4,6°) mostram a costura em relevo, que
+estava a uns 46° da linha da câmera: o cone que a régua dá para ela é 44,6°. `E` e `Esc` devolvem
+a peça ao lugar. Console sem erro; o único aviso é o `THREE.Clock` de sempre. Viewport de volta ao
+preset desktop e `localStorage` da origem de desenvolvimento vazio.
+
+**O que não deu para conferir.** O robô joga o store, não os componentes: as mãos são uma cópia,
+à mão, do que cada `interact` faz, presa às mesmas funções puras; quem prende o componente a essas
+funções continua sendo `runtimeWiring.ts`. As três peças grandes não foram tentadas no navegador
+(nada mudou nelas: continuam sem catalogar, e é L4 quem as resolve).
+
+**Para F5.**
+
+- `validate.ts` ganhou `ContentGateExtras.previousGraph`; o lint de numerais entra ao lado.
+- `KNOWN_DEBT` tem cinco linhas novas (três até L4, uma até L4, uma até L3); as de F5 entram
+  depois delas.
+- Se F5 mudar algo que o instantâneo registra (um id, uma ação, um item de lista), `test:playthrough`
+  reprova até `npm run graph:snapshot` rodar de novo: o lote ainda está aberto.
+- `scripts/lib/playthrough.ts` exporta `press`, `everyPress`, `playToEnd` e `pressProblem`; a
+  inundação de T13 pode usar `everyPress` para saber o que cada sala oferece.

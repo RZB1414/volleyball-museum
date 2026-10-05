@@ -259,6 +259,10 @@ export const BUNDLE_BUDGETS = {
  *     door rules; the toast. 1,237 bytes for a plan that keeps the building's
  *     secrets and a shortcut that stays open. The document did not grow
  *     (63,234).
+ *   - nothing in the fourth slice (63,235, 28,865 and 390,708): the examine
+ *     view imports its two numbers from `examineReach.ts` and the cone's
+ *     arithmetic stays out of the game; the exhaustive player, the snapshot
+ *     and the robot are the gate's and ship nowhere.
  */
 export const BUNDLE_PATH_CEILINGS = {
   document: 63_600,
