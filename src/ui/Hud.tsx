@@ -10,6 +10,13 @@
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
+// The content's rules reach the store as this module is evaluated, before
+// anything here renders. The HUD is a chunk of its own and may arrive ahead
+// of the canvas, which registers them too: without this line a toast could
+// first see a save the content has not settled yet, and announce as taken
+// now a key that an open drawer was owed since another night.
+import '../engine/contentRegistry'
+
 import { formatCreditLine } from '../content/credit'
 import { PRE_OPENING_SAVE } from '../content/legacySave'
 import { MUSEUM } from '../content/museum'
@@ -26,8 +33,10 @@ import { lockStatus } from '../engine/lockRules'
 import { fillHour, nightPhraseKey, nightPoints } from '../engine/nightClock'
 import { containerById, isNotebook, journalUnlocked } from '../engine/notebook'
 import { isRoomPowered } from '../engine/power'
+import { credentialKey } from '../engine/progressCondition'
 import { placeRadioCall, releaseHeldRadio } from '../engine/radioCall'
 import { heldRadioId } from '../engine/radioPatience'
+import { containerReadQueue, transcriptText, type ReadingPage } from '../engine/readingQueue'
 import { useTranslate } from '../i18n'
 import {
   archiveFiledKey,
@@ -44,10 +53,11 @@ import {
 } from './hudRules'
 import { LockPanel } from './LockPanel'
 import { MobileControls } from './MobileControls'
-import { NotebookPanel } from './Notebook'
-import { clockJustSet, containerPrompt, devicePrompt } from './promptRules'
+import { NotebookPageView, NotebookPanel } from './Notebook'
+import { clockJustSet, containerPrompt, credentialsTaken, devicePrompt } from './promptRules'
 import { useCoarsePointer } from './useCoarsePointer'
 import { useDocumentHidden } from './useDocumentHidden'
+import { useReaderKeys } from './useReaderKeys'
 import { isModalOpen, useMuseum } from '../state/store'
 
 /** Every device the crosshair may rest on, by id: the ones a prompt is drawn for. */
@@ -61,7 +71,10 @@ const clockFlags: ReadonlySet<string> = new Set(
     }),
   ),
 )
-const roomOf = (roomId: string) => MUSEUM.rooms.find((room) => room.id === roomId)
+/** The name each credential the house declares is announced by, by its key in the save. */
+const credentialTitles: ReadonlyMap<string, string> = new Map(
+  (MUSEUM.credentials ?? []).map((entry) => [credentialKey(entry.credential), entry.titleKey]),
+)
 /**
  * The room each one-way door opens from, by the door's id (the portal that
  * declares the leaf): the room its toast names. Read off the content rather
@@ -219,7 +232,8 @@ function TransitionDoorPrompt() {
  * The porter's radio on its desk is live once its charger has power and is
  * taken on the first press. A thing that only says something (the plinth of
  * the hall, until the lot that gives it its use) is drawn as its name and
- * its notice, with no key: there is nothing to press.
+ * its notice, with no key: there is nothing to press. A thing that speaks
+ * (the telephone) is worded by what it would do: dial, listen, listen again.
  */
 function DevicePrompt() {
   const focused = useWinner('device')?.id ?? null
@@ -229,7 +243,7 @@ function DevicePrompt() {
 
   const device = focused === null ? undefined : devicesById.get(focused)
   if (!device) return null
-  const view = devicePrompt(device, deviceIntent(device, deviceInputOf(device, { progress, radio }, roomOf)))
+  const view = devicePrompt(device, deviceIntent(device, deviceInputOf(device, { progress, radio }, MUSEUM)))
   if (!view) return null
 
   return (
@@ -328,36 +342,92 @@ function RadioSubtitles() {
   )
 }
 
-/** The documents found in a cabinet the player just opened. */
+/** One screen of the reader: a paper's body, a page of a bound one, or what a recording said. */
+function ReadingPageBody({ page }: { page: ReadingPage }) {
+  const t = useTranslate()
+  if (page.kind === 'page') {
+    // In its own typography, on its own sheet, as the journal re-reads it.
+    return (
+      <div className="notebook-sheet is-inline">
+        <NotebookPageView page={page.page} />
+      </div>
+    )
+  }
+  const text =
+    page.kind === 'transcript' ? transcriptText(page.lineKeys.map((key) => t(key as never))) : t(page.bodyKey as never)
+  return <p className="examine-label">{text}</p>
+}
+
+/**
+ * What a cabinet the player just opened holds, one paper at a time.
+ *
+ * It used to pour every document of the container into one column. Now it
+ * shows one page of `containerReadQueue`, and E, the arrow keys or the
+ * buttons turn to the next; the page is the store's, the one a notebook
+ * turns, and it starts at the first whenever a container opens. Everything
+ * in the cabinet was recorded as read by the press that opened it: the
+ * reader is how it is shown, not what the save waits for.
+ */
 function DocumentPanel() {
   const openedContainer = useMuseum((state) => state.openedContainer)
+  const page = useMuseum((state) => state.notebookPage)
+  const setPage = useMuseum((state) => state.setNotebookPage)
   const setOpenedContainer = useMuseum((state) => state.setOpenedContainer)
   const unlocked = useJournalUnlocked()
   const coarse = useCoarsePointer()
   const t = useTranslate()
+  // Notebooks have their own page-turning reader, and their own keys.
+  const notebook = isNotebook(containerById(MUSEUM, openedContainer))
+  const queue = useMemo(
+    () => (notebook ? [] : containerReadQueue(MUSEUM, openedContainer)),
+    [notebook, openedContainer],
+  )
+  const lastPage = queue.length - 1
+  useReaderKeys(queue.length > 0, lastPage)
 
   if (!openedContainer) return null
-  // Notebooks have their own page-turning reader.
-  if (isNotebook(containerById(MUSEUM, openedContainer))) return <NotebookPanel />
+  if (notebook) return <NotebookPanel />
+  if (queue.length === 0) return null
 
-  const documents = MUSEUM.documents.filter((doc) => doc.containerId === openedContainer)
-  if (documents.length === 0) return null
+  const shown = Math.min(page, lastPage)
+  const current = queue[shown]
 
   return (
     <div className="examine" role="dialog" aria-label={t('archive.title')}>
-      <div className="examine-panel">
-        {documents.map((doc) => (
-          <article key={doc.id} className="document">
-            <h2>{t(doc.titleKey as never)}</h2>
-            <p className="examine-label">{t(doc.bodyKey as never)}</p>
-          </article>
-        ))}
+      {/* `is-reader`: the paper scrolls and the buttons under it do not, so
+          the way on to the next paper is in sight on every page. */}
+      <div className="examine-panel is-reader">
+        {/* Keyed by the page, so a paper scrolled to its end does not hand
+            its scroll position to the next one. */}
+        <article key={shown} className="document" aria-live="polite">
+          <h2>{t(current.titleKey as never)}</h2>
+          <ReadingPageBody page={current} />
+        </article>
 
         <div className="examine-actions">
           <span className="examine-drag">{t(archiveFiledKey(unlocked, coarse))}</span>
-          <button type="button" onClick={() => setOpenedContainer(null)}>
-            {closeLabel(t('prompt.close'), 'Esc', coarse)}
-          </button>
+          <span className="examine-pager">
+            {/* A cabinet with one paper reads as it always did: one button. */}
+            {queue.length > 1 ? (
+              <>
+                <button type="button" onClick={() => setPage(shown - 1)} disabled={shown === 0}>
+                  ← {t('notebook.previous')}
+                </button>
+                <span className="examine-folio">
+                  {shown + 1} / {queue.length}
+                </span>
+              </>
+            ) : null}
+            {shown < lastPage ? (
+              <button type="button" onClick={() => setPage(shown + 1)}>
+                {t('reader.next')} →
+              </button>
+            ) : (
+              <button type="button" onClick={() => setOpenedContainer(null)}>
+                {closeLabel(t('prompt.close'), 'Esc', coarse)}
+              </button>
+            )}
+          </span>
         </div>
       </div>
     </div>
@@ -603,6 +673,53 @@ function ClockToast() {
       <span>
         {t('clock.set')}
         {phraseKey ? ` — ${t(phraseKey as never)}` : ''}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * A credential has just been taken: said once, by the name the content
+ * gives it («Você pegou — Chave do cofre de ferro»). A key is handed over
+ * by a consequence (a drawer that opens), not by a press on the key itself,
+ * so without a word the player would hold it and not know.
+ *
+ * Only what is taken now. The save arrives whole on the first render, and
+ * settled: what a trigger owed it as the content arrived is in it already
+ * (this module imports the registry for that), so a key from another night,
+ * or one handed over at load, is not announced.
+ */
+function CredentialToast() {
+  const credentials = useMuseum((state) => state.progress.credentials)
+  const seenLength = useRef(credentials.length)
+  const [shown, setShown] = useState<readonly string[]>([])
+  const t = useTranslate()
+
+  useEffect(() => {
+    const taken = credentialsTaken(seenLength.current, credentials, credentialTitles)
+    // A new game empties the list; a toast still up belongs to the old one.
+    const emptied = credentials.length < seenLength.current
+    seenLength.current = credentials.length
+    if (taken.length > 0) {
+      setShown(taken)
+      museumAudio.chime()
+    } else if (emptied) setShown([])
+  }, [credentials])
+
+  // Its own effect, keyed only on `shown`: another write during these few
+  // seconds must not cancel the timer and leave the toast up for good.
+  useEffect(() => {
+    if (shown.length === 0) return undefined
+    const timer = window.setTimeout(() => setShown([]), 3200)
+    return () => window.clearTimeout(timer)
+  }, [shown])
+
+  if (shown.length === 0) return null
+  return (
+    <div className="toast" role="status">
+      <span className="toast-mark">✓</span>
+      <span>
+        {t('credential.taken')} — {shown.map((titleKey) => t(titleKey as never)).join(', ')}
       </span>
     </div>
   )
@@ -886,6 +1003,7 @@ export function Hud() {
         <CatalogueToast />
         <PowerToast />
         <ClockToast />
+        <CredentialToast />
         <DoorReleasedToast />
         <JournalTakenToast />
         <RadioTakenToast />

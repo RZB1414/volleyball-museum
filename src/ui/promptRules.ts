@@ -65,6 +65,42 @@ const CLOCK_LABEL = {
   set: 'prompt.clock.set',
 } as const satisfies Record<Extract<DeviceIntent, { readonly kind: 'clock' }>['intent'], TranslationKey>
 
+type VoiceIntent = Extract<DeviceIntent, { readonly kind: 'voice' }>['intent']
+
+/**
+ * What the prompt of a voice says E does, by intent. `play` is the one a
+ * device may word for itself (`promptKey`): a telephone is dialled, a
+ * machine is listened to.
+ */
+const VOICE_LABEL = {
+  dead: 'prompt.voice.dead',
+  play: 'prompt.voice.play',
+  again: 'prompt.voice.again',
+  skip: 'radio.skip',
+} as const satisfies Record<VoiceIntent, TranslationKey>
+
+/**
+ * The names of the credentials a save has just gained: what their toast
+ * announces («Você pegou — Chave do cofre de ferro»).
+ *
+ * By the rule every toast follows (`listGrew`): the save arrives whole on
+ * the first render, and a key taken on another night is not announced on
+ * Continue. `titles` is the content's own list, by the key the save spells
+ * a credential with; one this build does not declare has no name to be
+ * announced by, and is passed over.
+ */
+export function credentialsTaken(
+  seenLength: number,
+  credentials: readonly string[],
+  titles: ReadonlyMap<string, string>,
+): readonly string[] {
+  if (!listGrew(seenLength, credentials.length)) return []
+  return credentials.slice(seenLength).flatMap((key) => {
+    const title = titles.get(key)
+    return title === undefined ? [] : [title]
+  })
+}
+
 /** How a device's prompt is worded. */
 export type DevicePromptView =
   /** «[E] label title»: a thing E works, or (with no key) one that says why it will not. */
@@ -102,6 +138,20 @@ export function devicePrompt(device: DeviceData, intent: DeviceIntent): DevicePr
       // that can be set and has none.
       return device.kind === 'clock' && device.titleKey !== undefined
         ? { form: 'action', key: true, labelKey: CLOCK_LABEL[intent.intent], titleKey: device.titleKey }
+        : null
+    case 'voice':
+      // «[E] Discar · Telefone»; with no mains, «Sem energia · …» and no key.
+      return device.kind === 'voice'
+        ? {
+            form: 'action',
+            key: intent.intent !== 'dead',
+            // The gate holds every `…Key` of the content to the dictionary.
+            labelKey:
+              intent.intent === 'play' && device.promptKey !== undefined
+                ? (device.promptKey as TranslationKey)
+                : VOICE_LABEL[intent.intent],
+            titleKey: device.titleKey,
+          }
         : null
   }
 }

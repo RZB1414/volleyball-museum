@@ -307,14 +307,13 @@ export type DeviceData =
       readonly holdSeconds: number
     })
 
-export type VoiceUtterance = {
-  readonly when: ProgressCondition
-  /** `call`: lines of its own. */
-  readonly lineKeys?: readonly string[]
-  /** `play-once`: a recording. Its lines are the document's, and hearing it out files the document. */
-  readonly documentId?: string
-}
+/** Lines of its own, or a recording (its lines are the document's, and hearing it out files the document). */
+export type VoiceUtterance =
+  | { readonly when: ProgressCondition; readonly lineKeys: readonly string[]; readonly documentId?: never }
+  | { readonly when: ProgressCondition; readonly documentId: string; readonly lineKeys?: never }
 ```
+
+(F3 escreveu a fala como união: uma fala que é as duas coisas não compila. Ver §15.3.)
 
 ```ts
 // deviceRules.ts — pure. One answer for the prompt, the key and the touch button.
@@ -331,7 +330,16 @@ export function deviceIntent(device: DeviceData, input: DeviceInput): DeviceInte
 export function deviceLive(intent: DeviceIntent): boolean
 /** Every device the crosshair may rest on, with its room. */
 export function aimableDevices(content: Pick<MuseumContent, 'rooms'>): readonly { room: RoomData; device: DeviceData }[]
+/** F3. The input, read off the save and the air, against the content (a voice asks its conditions of it). */
+export function deviceInputOf(device: DeviceData, world: DeviceWorld, content: Pick<MuseumContent, 'rooms' | 'exhibits'>): DeviceInput
+/** F3. What a voice would say now: the first utterance whose `when` holds. */
+export function voiceUtterance(device: Pick<VoiceDevice, 'utterances'>, progress: ConditionProgress, content): VoiceUtterance | null
+/** F3. Whether the message lamp shows now: it blinks while a recording waits unheard, with the mains on. */
+export function messageLampLit(device: Pick<VoiceDevice, 'messageLamp'>, input: Pick<DeviceInput, 'powered' | 'recording'>, seconds: number): boolean
 ```
+
+`DeviceInput` (F1: `powered`, `carried`, `speaking`; F2: `set`) ganha em F3 `voicing` (a transmissão
+no ar é a deste aparelho) e `recording: 'none' | 'waiting' | 'heard'` (o que ele tocaria agora).
 
 `PROXY_MINIMUM` ganha `device: [0.3, 0.2, 0.3]`, o mínimo de todo dispositivo que não é rádio.
 
@@ -430,6 +438,8 @@ export type ContainerData = {
 // lockRules.ts
 /** Credential keys spent: a consumed tool whose one lock is open. */
 export function toolSpent(locks: readonly Lock[], progress: Pick<Progress, 'locksOpened'>): readonly string[]
+/** F3. Whether a container stands open: its lock is open, or it has none. What the door and the contents are drawn by. */
+export function containerOpen(container: Pick<ContainerData, 'lockId'>, progress: Pick<Progress, 'locksOpened'>): boolean
 ```
 
 `attemptLock`, na tabela de L2: a linha «`tool` com `consumesTool: true` → `refused: 'unsupported'`»
@@ -462,10 +472,17 @@ export type ReadingPage =
   | { readonly documentId: string; readonly kind: 'transcript'; readonly titleKey: string; readonly lineKeys: readonly string[] }
 /** Every page a container hands over, one document after another, each in its own page order. */
 export function containerReadQueue(content: Pick<MuseumContent, 'documents'>, containerId: string | null): readonly ReadingPage[]
+/** F3. How many pages the reader turns (a notebook its own bound pages), and E on it: the next page, or `close`. */
+export function readerPageCount(content, containerId: string | null): number
+export function readerAdvance(content, containerId: string | null, page: number): number | 'close'
+/** F3. The page an arrow or a page key turns to; null for any other key. They stop at each end. */
+export function readerKeyPage(code: string, page: number, lastPage: number): number | null
+/** F3. A transcript as it is printed: one paragraph. */
+export function transcriptText(lines: readonly string[]): string
 ```
 
 O estado da página é o `notebookPage` que o store já tem (zera a cada container aberto); a regra de
-avançar é `notebookAdvance`, a mesma do caderno.
+avançar é `notebookAdvance`, a mesma do caderno (por `readerAdvance`).
 
 ### 3.10 Termos, mesa de assinatura e o gesto (`schema.ts`; `src/engine/termRules.ts`, `holdAction.ts`, novos; `primaryAction.ts`)
 
@@ -930,14 +947,17 @@ chama o Jorge sete vezes depois de acender a casa.
 
 1. `lockRules.ts`: sai o ramo `consumesTool` de `:110`; entra `toolSpent` (3.8).
 2. `validate.ts:207-218`: container aceita `knowledge` e `tool`; quadro de sala continua só
-   `knowledge`. Novos: `consumable-multi-consumer` (ferramenta consumida que mais de uma tranca
-   pede), `container-node-missing` (porta ou conteúdo sem nó no bake).
+   `knowledge`; portal continua recusado. Novos: `consumable-multi-consumer` (ferramenta consumida
+   que mais de uma tranca pede; em `validateLockHosts`), `container-node-missing` (porta ou
+   conteúdo sem nó no bake; em `validateBake`, que é quem tem o manifesto).
 3. `schema.ts`: `ContainerData.door`, `.contents` (3.8). `Containers.tsx`: um pivô na dobradiça,
    como `prepareClockHands` (`Devices.tsx:135-164`), reúne os nós `<part>__<prefixo>*` e gira até
-   `openAngle` quando o container está aberto; os nós de `contents` ficam num grupo com
-   `visible` igual a «aberto» (a mira rejeita o que tem ancestral oculto, como hoje).
-   `src/engine/containerNodes.ts` (novo, puro sobre objetos three, no molde de `deviceNodes.ts`)
-   para a suíte rodar em Node.
+   `openAngle` quando o container está aberto (`containerOpen`: a tranca aberta, ou sem tranca);
+   os nós de `contents` ficam num grupo com `visible` igual a «aberto» (a mira rejeita o que tem
+   ancestral oculto, como hoje). No primeiro quadro a porta está onde o save a tem (um cofre
+   aberto noutra noite é encontrado aberto); só a que abre agora é vista girar, em 0,7 s
+   (`doorAngleAfter`). `src/engine/containerNodes.ts` (novo, puro sobre objetos three, no molde
+   de `deviceNodes.ts`) para a suíte rodar em Node.
 4. `simulate.ts`: nada além do que `attemptLock` já decide (`lockGuard`, `:437-451`, passa a ver a
    tranca de ferramenta como aberta pelo toque de quem tem a chave).
 
@@ -957,13 +977,21 @@ mover nó nenhum de lugar (a soma dos mundos antes e depois, como o caso do mono
 **Hoje.** `validate.ts:926-931` («A credential is a member of the schema's own unions until
 credentials are data (L3)»); nenhum toast.
 
-**Mudança.** `MuseumContent.credentials` (3.8); `validate.ts`: `credential-undeclared` (uma
-credencial que um efeito dá ou uma tranca pede e que não está na lista) e `credential-unused`
+**Mudança.** `MuseumContent.credentials` (3.8); `validate.ts` (`validateOpening`, que já sabe o
+que os efeitos dão e passa por toda condição): `credential-undeclared` (uma credencial que um
+efeito dá, ou que uma tranca ou uma condição pede, e que não está na lista) e `credential-unused`
 (declarada, e nada dá nem pede); `Hud.tsx`: `CredentialToast` («Você pegou — {título}») pela
-regra `listGrew` sobre `credentials`, com o título vindo do dado. Em F3 a lista do museu é vazia.
+regra `credentialsTaken` (`promptRules.ts`: `listGrew` sobre `credentials`, com o título vindo do
+dado; credencial que este build não declara não tem nome e não é anunciada). Em F3 a lista do
+museu é vazia. **«Dada pelo gatilho na carga não é anunciada» é uma ordem, não uma regra do
+toast:** o HUD é um chunk à parte e pode chegar antes do canvas, que é quem registrava as regras
+do conteúdo; `Hud.tsx` passou a importar `engine/contentRegistry` pelo efeito, de modo que o save
+que o HUD vê no primeiro render já foi assentado.
 
 **Teste.** `test:opening`: os dois códigos; `test:opening-flow`: o toast só anuncia crescimento
-(uma credencial que já vinha no save, ou dada pelo gatilho na carga, não é anunciada).
+(a tabela de `credentialsTaken`) e a fiação (o import do registro, com mutação); `test:locks`: o
+save com a gaveta aberta recebe a chave quando o conteúdo se registra, numa escrita, e a regra
+perguntada com o que o HUD vê ao montar não anuncia nada; a chave pega em jogo é anunciada uma vez.
 
 **Vermelho hoje.** `credential-undeclared` não existe: um museu de teste que dá `tool:service-key`
 sem declará-la passa no portão.
@@ -977,19 +1005,35 @@ só grava `callId`.
 
 1. `schema.ts`: `voice`, `VoiceUtterance`, `DocumentData.lineKeys` (3.5, 3.9).
    `store.ts`: `grantOnEnd` em `RadioTransmission`; `endRadio` (`:744-750`) junta as duas concessões
-   num `commitProgress` só.
+   num `commitProgress` só, e só arquiva o que foi ouvido até a última linha (`dropRadio`, que
+   encerra uma transmissão com linhas por dizer, continua marcando a chamada e não arquiva).
 2. `deviceRules.ts`: `voiceUtterance(device, progress, content)` (a primeira que vale);
    `deviceIntent` para `voice`: `dead` sem a energia que pede, `skip` com a própria fala no ar,
-   `again` quando o documento da gravação já foi lido, `play` no resto.
+   `again` quando o documento da gravação já foi lido, `play` no resto. Para perguntar as
+   condições, `deviceInputOf` passa a receber o conteúdo (era um `roomById`).
    `src/engine/voiceDevice.ts` (novo, sem React, no molde de `radioCall.ts`): `operateVoice(id)`
-   chama `startRadio` com as linhas (as do documento, numa gravação) e `grantOnEnd`.
+   (e `operateVoiceOn(store, content, id)`, a mesma com o store e o conteúdo dados) chama
+   `startRadio` com as linhas (as do documento, numa gravação) e `grantOnEnd`
+   (`recordingGrant`, em `progressGrants.ts`: o documento e o fato que ele revela). **Começar a
+   falar toma o ar de quem estava nele:** uma chamada do Jorge cortada assim não foi ouvida, não
+   é gravada como ouvida e continua devida.
 3. `Devices.tsx`: `interact` despacha `voice`; `VoiceDeviceView` pisca o `__led` (entre `led-red`
-   e `led-off`, por `paintLenses`) enquanto há gravação por ouvir e energia.
-4. `validate.ts`: `voice-silent` (sem fala incondicional no fim), `voice-recording-missing`
-   (`documentId` que não é documento com `lineKeys`, ou cujo `containerId` não é este aparelho),
-   `device-node-missing` pede `__led` quando `messageLamp`. `spokenKeys` inclui as falas próprias.
-5. `simulate.ts`: ação `voice` (concede o documento da gravação que vale; nada, numa fala).
-   `Hud.tsx:285-318` e `Journal.tsx:91-112`: documento com `lineKeys` é impresso como um parágrafo.
+   e `led-off`, por `paintLenses`) enquanto há gravação por ouvir e energia (`messageLampLit`).
+   `RadioDirector` passa a perguntar o que é devido também quando o ar se cala (`onAir` nas
+   dependências do efeito): até F3 nada tirava uma transmissão do ar, e uma chamada cortada não
+   escreve nada no save que acordasse o diretor.
+4. `validate.ts`: `voice-silent` (sem fala incondicional no fim, ou com fala que não é nem linha
+   nem gravação), `voice-recording-missing` (`documentId` que não é documento com `lineKeys`, ou
+   cujo `containerId` não é este aparelho), `device-node-missing` pede `__led` quando
+   `messageLamp`. `spokenKeys` inclui as falas próprias; as linhas de uma gravação são só
+   medidas contra os 130 caracteres de uma legenda (`recordedKeys`: a transcrição é documento,
+   feita noutro dia, e o visor da secretária diz `16:47`). `textLint.ts` lê as falas próprias
+   em `speech-night-state-unconditional`.
+5. `simulate.ts`: ação `voice` (concede o documento da gravação que vale; nada, numa fala),
+   oferecida sempre que o aparelho responderia. O registro é por gravação
+   (`voice:<aparelho>:<documento>`); uma fala própria não tem registro, porque não concede nada.
+   `Hud.tsx:285-318` e `Journal.tsx:91-112`: documento com `lineKeys` é impresso como um parágrafo
+   (`transcriptText`).
 6. `museum.ts:1481`: o telefone sai do `kit` e entra em `OFFICE_DEVICES`:
    `{ kind: 'voice', id: 'office-telephone', part: 'desk-telephone', position: [0.52, 0.747, 0.34],
    rotationY: -1.75, titleKey: 'device.office-telephone.title', speakerKey:
@@ -1011,14 +1055,18 @@ encostar nos vizinhos (a suíte já lê dispositivos). `test:navigation`: o tele
 `Containers.tsx:230-244`: `E` só vira página de caderno.
 
 **Mudança.** `src/engine/readingQueue.ts` (3.9). `Containers.tsx:230-244`: `E` avança por
-`notebookAdvance` sobre o tamanho da fila, para todo container. `Hud.tsx:285-318`: uma página por
-vez, com «← Voltar», fólio «n / m» e «Próximo →» / «Fechar» (as teclas ← → de `Notebook.tsx:74-89`
-passam a valer para os dois leitores). `containerGrant` não muda (DL3-9).
+`notebookAdvance` sobre o tamanho da fila, para todo container (`readerAdvance`). `Hud.tsx:285-318`:
+uma página por vez, com «← Voltar», fólio «n / m» e «Próximo →» / «Fechar» (as teclas ← → de
+`Notebook.tsx:74-89` passam a valer para os dois leitores: `src/ui/useReaderKeys.ts`, sobre a
+regra `readerKeyPage`). Um armário com um papel só continua com um botão só. `containerGrant`
+não muda (DL3-9). **No leitor o papel rola e os botões não** (`.examine-panel.is-reader`, em
+`museum.css`): o painel rolava inteiro, e em 844 × 390 «Próximo» ficava 98 px abaixo da dobra.
 
 **Teste.** `test:opening-flow`, regra pura `containerReadQueue`: o arquivo A da Ala 1 dá duas
 páginas, na ordem do conteúdo; um documento de duas páginas dá duas; um container vazio, nenhuma;
 `E` na última fecha. E a asserção de que abrir concede os dois documentos de uma vez (o que o
-registro de L2 diz).
+registro de L2 diz). `test:map` (`readerLayoutProblems`): a forma do leitor na folha de estilos,
+e a soma da altura dele com a margem numa tela baixa.
 
 **Vermelho hoje.** `containerReadQueue` não existe.
 
@@ -1553,11 +1601,11 @@ HANDOFF §11.6. Um validador de L3 que acuse algo fora destas tabelas reprova a 
 | `test:opening-flow` | ganha casos | T2, T3, T4, T10, T11, T13, T15, T19 | F1, F3, F4, F5 |
 | `test:radio` | ganha casos | T5, T6, T7, T12, T19 | F2, F3, F5 |
 | `test:mobile-controls` | ganha casos | T15 | F4 |
-| `test:save` | ganha casos (abas vivas) | T5, T6, T14, T20 | F2, F4, F5 |
+| `test:save` | ganha casos (abas vivas) | T5, T6, T12, T14, T20 | F2, F3, F4, F5 |
 | `test:triggers`, `test:locks` | ganham casos | T14; T10 | F4; F3 |
 | `test:playthrough` | ganha casos e mãos novas | T1, T8, T12, T14, T19, T21 | F1 a F5 |
 | `test:navigation`, `test:desk-top`, `test:kit`, `test:kit-runtime` | ganham casos | T2, T12, T18 | F1, F3, F5 |
-| `test:lints`, `test:qa-save`, `test:ratchets`, `test:docs`, `test:map` | ganham casos | T7; T19; T21; T21; T4 | — |
+| `test:lints`, `test:qa-save`, `test:ratchets`, `test:docs`, `test:map` | ganham casos | T7; T19; T21; T21; T4 e T13 | — |
 
 `package.json`: `test:ending` e `test:speech-coherence`. No `check`: `test:ending` depois de
 `test:locks`; `test:speech-coherence` depois de `test:playthrough`; `test:bundle` continua no fim.
@@ -1595,6 +1643,12 @@ Sem dependência nova: tudo é `node --experimental-strip-types`.
 | `scripts/test-triggers.ts` (a recarga da casa de teste) | recarregar não muda nada do que a primeira sessão deixou | não muda nada além das chamadas que são notícia velha (`PRE_POSSE_SAVE`) | F2 |
 | `scripts/test-opening-flow.ts` («a player who skipped the notebook is sent back for it first») | a dica do caderno vale em qualquer sala | só enquanto o jogador não saiu do escritório (S25) | F2 |
 | `scripts/test-playthrough.ts` («she accuses the museum of five things…») | cinco acusações datadas | seis: entra `flag-never-set` de `basement-drained`, até L12 | F2 |
+| `scripts/test-locks.ts` («a key that would be spent, and a ritual, refuse as unsupported until their lots») | a chave que se gasta e o ritual recusam como `unsupported` | só o ritual (e o teclado sem resposta); a chave que se gasta abre pelo toque de quem a tem, como qualquer ferramenta | F3 |
+| `scripts/test-opening.ts` («each validator the gate lacked…», `lock-host-kind-unsupported`) | uma tranca de ferramenta num armário é recusada | recusados são um crachá num armário e uma tranca de ferramenta num quadro de sala; a de ferramenta no armário passa, e é acusada só de `credential-unobtainable` (nada dá a chave) | F3 |
+| `scripts/test-opening-flow.ts` («a thing that only says something…») e `scripts/test-radio.ts` (a varredura) | três dispositivos miráveis: pódio, relógio, rádio | quatro: entra o telefone | F3 |
+| `scripts/test-playthrough.ts` («what the rules answer is offered…») | no escuro o escritório oferece a luminária, a gaveta e o caderno | e o telefone (`hear office-telephone`), em toda lista, aceso ou não; é oferecido e não concede nada | F3 |
+| `scripts/test-desk-top.ts` («every object on the desk is found») | o telefone é `kit:desk-telephone` | é `device:office-telephone`, no mesmo apoio e com a mesma folga | F3 |
+| `scripts/test-opening.ts`, `scripts/test-opening-flow.ts`, `scripts/lib/runtimeWiring.ts` (toda chamada de `deviceInputOf`) | o terceiro argumento é uma função `roomById` | é o conteúdo; as três asserções de fiação de F1 citam `MUSEUM` e `content` | F3 |
 
 `scripts/test-opening.ts:422` (a lanterna nunca alcança o teto do átrio) e
 `scripts/test-navigation.ts` (`reciprocalPairs.size === 3`) não mudam.
@@ -1609,10 +1663,10 @@ título: toda fatia que escreve texto sobe esse teto.
 |---|---|---|---|
 | título | 12 chaves e a carta maior | +0,4 kB | F1 |
 | título | cerca de 45 chaves de fala; `hintHeight`; `prePosse` | +1,6 kB; **[medido em F2: 35 chaves novas, 8 a menos, 5 reescritas; +1.165 bytes, 31.478; teto 31.630]** | F2 |
-| título | 8 chaves | +0,2 kB | F3 |
+| título | 8 chaves | +0,2 kB; **[medido em F3: 8 chaves novas, as regras do leitor na folha de estilos e `grantOnEnd` no store; +249 bytes, 31.727; teto 31.880]** | F3 |
 | título | 9 chaves; `termsSigned`, `sequencesSeen` | +0,3 kB | F4 |
 | título | cerca de 60 chaves (dois documentos longos, o recado, falas) ; o alias | +2,4 kB | F5 |
-| jogo | `checklist.ts`, dispositivos miráveis, `nightClock.ts`, `readingQueue.ts`, `voiceDevice.ts`, `containerNodes.ts`, `termRules.ts`, `holdAction.ts`, `sequenceRules.ts`, `SequenceOverlay.tsx`, o conteúdo novo | +6 a +9 kB no lote; **[medido: F1 +1.151 (392.146), F2 +1.649 (393.795); teto 395.760 desde F2]** | F1 a F5 |
+| jogo | `checklist.ts`, dispositivos miráveis, `nightClock.ts`, `readingQueue.ts`, `voiceDevice.ts`, `containerNodes.ts`, `termRules.ts`, `holdAction.ts`, `sequenceRules.ts`, `SequenceOverlay.tsx`, o conteúdo novo | +6 a +9 kB no lote; **[medido: F1 +1.151 (392.146), F2 +1.649 (393.795), F3 +1.632 (395.427); teto 395.760 desde F2, com 333 bytes de folga depois de F3: F4 sobe]** | F1 a F5 |
 
 Tudo [previsto]. Cada teto sobe **no commit da fatia que precisa**, para o medido mais meio por
 cento, com o motivo em `BUNDLE_PATH_CEILINGS`. Os dois orçamentos do papel ficam longe: 93 kB antes
@@ -1974,3 +2028,161 @@ DOM e do store; pt-BR e inglês, 1280 × 720).
   um encontro na portaria que o jogador não viu.
 - Acertar o relógio enquanto o Jorge se apresenta mostra o aviso e a legenda juntos. Não se
   cobrem (um no topo, a outra embaixo), em 1280 × 720 e em 844 × 390.
+
+### 15.3 F3 — O escritório responde: tranca de ferramenta, credencial, voz e leitor (2026-10-05)
+
+T10 a T13 feitas. `npm run check` (34 passos) e `npm run build` verdes. `CONTENT_LOT` continua 2;
+`docs/releases/L2.graph.json` não foi tocado e `validateAdditive` contra ele não acusa nada
+(«graph: held to L2's snapshot · 42 actions it gave»); a ação `container:holyoke-cabinet-a` é,
+palavra por palavra, a que L2 gravou (`test:opening-flow` compara as duas). `SAVE_VERSION` 1, e
+**nenhum campo novo no save**. No conteúdo de verdade não há tranca de ferramenta, credencial nem
+gravação (`credentials: []`; entram em F5 com os consumidores delas): o único conteúdo novo é o
+telefone. O motor das três é provado com museus feitos para o teste.
+
+**Vermelho visto antes do conserto** (as suítes escritas primeiro, rodadas contra a fonte de
+`637adb4`):
+
+| Suíte | Como reprovou |
+|---|---|
+| `test:locks` | «safe, empty-handed»: `reason: 'unsupported'` onde se espera `missing-credential` com `missing`; a única espécie sem entrada devia ser `ritual` e eram `tool` e `ritual`; nas abas vivas, `toolSpent is not a function` |
+| `test:opening` | `lock-host-kind-unsupported accuses a cabinet that takes a key`; e a lista do caso novo: o jogador exaustivo não abre o cofre com a chave da gaveta; `credential-undeclared` não acusa `tool:service-key` (com a lista vazia e sem lista) nem `badge:indoor`; `credential-unused`, `consumable-multi-consumer` e `container-node-missing` não acusam nada; «the office has a telephone that speaks» |
+| `test:radio`, `test:opening-flow`, `test:playthrough` | erro de importação (`voiceDevice.ts`, `containerNodes.ts`, `toolSpent`). Perguntado à fonte de então por um script à parte: o telefone é mobília (`kit`), e os miráveis são o pódio, o relógio e o rádio; uma transmissão com `grantOnEnd` ouvida até o fim deixa `documentsRead` vazio; um museu que dá `tool:service-key` sem declarar passa pelo portão com `credential-orphan` e nada mais |
+| `test:kit-runtime` | «kit 53, by data 74, 0 telephone(s) among the devices» |
+| `test:navigation` | «the telephone is not a target the flood judged» |
+| `officeAnswersWiringProblems` (nova), contra a fonte de então | 26 fragmentos em falta, um por linha de fiação |
+| navegador, 844 × 390 (o leitor com uma página por vez, antes das regras `is-reader`) | painel de 179 px; «Próximo» 98 px abaixo da dobra na primeira página e 148 na segunda |
+
+**Mutações que provam que as asserções mordem.**
+
+- `officeAnswersWiringProblems` (`runtimeWiring.ts`, chamada por `test:opening-flow`): trinta
+  refatorações em memória, todas pegas. A voz: `E` tomado sem dizer nada; o que `E` faz decidido
+  fora da intenção; recomeçar em vez de avançar; gravação tocada e nunca arquivada; arquivada sem
+  ter sido ouvida até o fim; o fim que não arquiva; a lâmpada por regra própria, verde, ou sem
+  quem a pinte. O diretor: sem olhar o ar, só quando o save muda, ou reagendando a chamada que
+  está no ar. O leitor: `E` que fecha no primeiro papel; fila própria; todos os papéis de uma
+  vez; setas só no caderno, decididas no gancho ou no caderno; sem botão de próximo; o resumo no
+  lugar da transcrição, no leitor e no arquivo. A dobradiça: aberto por regra própria; porta
+  nunca posta no pivô; porta que gira com a tranca fechada; pivô que não gira; conteúdo desenhado
+  através da porta. O aviso: anunciar o que veio no save; nome inventado no componente; aviso
+  que ninguém monta; HUD que pode ver o save antes de o conteúdo assentá-lo.
+- `readerLayoutProblems` (`test:map`): oito mudanças na folha de estilos e uma no componente.
+- `test:opening`: um museu quebrado para cada código do portão desta fatia
+  (`lock-host-kind-unsupported` nas duas formas novas, `consumable-multi-consumer`,
+  `container-node-missing`, `credential-undeclared`, `credential-unused`, `voice-silent`,
+  `voice-recording-missing`, `device-node-missing` com `messageLamp`), e um museu são para cada
+  um (a cadeia gaveta, chave, cofre; um telefone que toca uma gravação própria).
+- `test:locks`, abas vivas: uma abre o cofre, outra só tinha a chave, uma terceira está no
+  título, sem regras. As três e o disco ficam com a chave em `credentials`, o cofre aberto, a
+  flag do cofre e a chave gasta (`toolSpent`); a aba sem regras grava um ajuste e não apaga nada;
+  esconder e mostrar todas não gera escrita.
+- `test:save`, abas vivas: uma gravação ouvida até o fim numa aba é arquivada nas duas, numa
+  escrita só, e a outra não responde; cortada no meio, não é arquivada em nenhuma e nada é
+  escrito; ouvida de novo, não escreve. (`grantOnEnd` não é campo do save: grava em
+  `documentsRead` e `factsKnown`, que já tinham junção por união.)
+
+**O que saiu diferente do plano** (o texto acima já está corrigido onde se diz).
+
+1. **`VoiceUtterance` é uma união** (3.5, corrigido): fala própria ou gravação, com `never` do
+   outro lado. Uma fala que é as duas coisas não compila; o portão ainda acusa a que não é
+   nenhuma (`voice-silent`), para o conteúdo que não passa pelo compilador.
+2. **`deviceInputOf(device, world, content)`** (T12, corrigido): o terceiro argumento era uma
+   função `roomById`. Uma voz pergunta as condições das falas dela ao save, e condição se
+   pergunta contra o conteúdo. `DeviceInput` ganhou `voicing` e `recording`; `DeviceWorld` aceita
+   o save inteiro ou em parte.
+3. **Uma voz toma o ar, e o diretor passou a olhar o ar** [não previsto]. Até F3 nada tirava uma
+   transmissão do ar (`placeRadioCall` avança a que está tocando; o diretor espera). Discar por
+   cima do Jorge corta a chamada, que não é gravada como ouvida; mas o diretor só reagendava
+   quando o save mudava, e uma chamada cortada não muda o save. `RadioDirector` ganhou `onAir`
+   nas dependências do efeito e não reagenda a chamada que está no ar. Visto no navegador: a
+   apresentação cortada pelo telefone volta, da primeira linha, depois de «Linha muda.». **F4
+   herda isso para a sequência dirigida (DL3-12), que corta o rádio do mesmo jeito.**
+4. **`dropRadio` não arquiva** (T12, corrigido): `endRadio(radio, heardOut)`. Uma chamada largada
+   sob um modal continua contando como ouvida, como sempre; uma gravação largada não foi ouvida.
+5. **O registro da simulação é por gravação** (`voice:<aparelho>:<documento>`); uma fala própria
+   (o telefone) é oferecida, não concede nada e não tem registro. `availableActions` oferece a
+   voz sempre que o aparelho responderia (`deviceLive`), também para ouvir de novo.
+6. **A mão do robô é o próprio handler:** `press` chama `operateVoiceOn`, a função que `E`
+   chama, e depois deixa a transmissão ir até a última linha. O que a mão não prova é o `case`
+   que chega a ela em `Devices.tsx`: é a primeira linha de `officeAnswersWiringProblems`.
+7. **As credenciais são conferidas em `validateOpening`** (T11, corrigido), e uma condição que
+   espera uma credencial conta como quem pede. **O aviso depende de uma ordem** que o plano não
+   via: ver T11.
+8. **`lock-host-kind-unsupported` é por portador** (T10, corrigido): container aceita
+   `knowledge` e `tool`; quadro de sala, só `knowledge`; portal, nenhuma.
+9. **`container-node-missing` mora em `validateBake`**, e `device-node-missing` ganhou o `id` do
+   dispositivo (não tinha: não podia ser datado nem perguntado por id).
+10. **As linhas de uma gravação não entram em `spokenKeys`** (T12, corrigido): são medidas só
+    contra os 130 caracteres (`recordedKeys`). As regras de quem fala da noite de agora (hora em
+    algarismo, ponto cardeal, Helena apresentada, estado da noite) são das falas próprias.
+11. **O leitor em tela baixa** [não previsto]: ver T13. O painel é uma coluna que não rola
+    (`is-reader`), o papel rola, os botões ficam; em tela de até 420 px de altura o leitor pode
+    ir a 84vh (nada é segurado atrás de um papel). Medido depois, em 844 × 390: painel de 271 e
+    322 px nas duas páginas do arquivo A, sem rolagem, botões dentro do painel.
+12. **`useReaderKeys` tem arquivo próprio** (`src/ui/useReaderKeys.ts`): exportado de
+    `Notebook.tsx`, um gancho ao lado de um componente quebra o Fast Refresh (aviso do oxlint).
+13. **O som de uma voz é `museumAudio.radioStatic()`** (meio segundo de chiado sem bipe: uma
+    linha sem ninguém, ou a fita antes da voz). Som próprio é de L16.
+14. **Formas que o plano deixou em aberto.** `containerOpen` e `toolSpent` (`lockRules.ts`);
+    `prepareContainerDoor`, `prepareContainerContents`, `swingContainerDoor`,
+    `showContainerContents`, `doorAngleAfter`, `CONTAINER_DOOR_SECONDS = 0.7`, `isDoorNode`,
+    `contentsNodeName` (`containerNodes.ts`); `recordingGrant` (`progressGrants.ts`);
+    `voiceLineKeys`, `operateVoice`, `operateVoiceOn` (`voiceDevice.ts`); `messageLampLit`,
+    `MESSAGE_LAMP_PERIOD_SECONDS = 1.2`; `credentialsTaken` (`promptRules.ts`);
+    `documentReadPages`, `readerPageCount`, `readerAdvance`, `readerKeyPage`, `transcriptText`
+    (`readingQueue.ts`). A porta gira em passo constante; `hingeAt` é x e z no espaço da receita.
+15. **Um caso a mais em `test:playthrough`**: a cadeia da Posse sobre o museu com ela
+    acrescentada (a gaveta dá a chave, o cofre vira container com tranca de ferramenta, uma
+    máquina toca uma gravação), jogada pela simulação e pelo robô até o mesmo fim. Os níveis
+    que saíram: gravação em N1, chave em N4 com a gaveta, cofre em N5. **F5 parte daí** (o plano
+    dá N4 gaveta e chave, N5 cofre).
+16. **Mais testes mudaram de sentido do que 9.2 previa**: as seis linhas novas da tabela.
+
+**Medido.**
+
+- Bundle (gzip, pelo próprio portão): documento 63.235 (teto 63.600), título 31.727 (era 31.478;
+  teto de 31.630 para 31.880, o medido mais meio por cento, com o motivo em
+  `BUNDLE_PATH_CEILINGS`), jogo 395.427 (era 393.795; **o teto de 395.760 não subiu**, sobram
+  333 bytes: F4 vai precisar subir). Antes do clique 94,96 kB; no jogo 490,39 kB.
+- Lotes (`test:kit-runtime`): escritório com 51 lotes de kit (eram 53; teto 53), 74 nós por dado
+  (kit 51, containers 5, dispositivos 16, controle 2), como antes. Átrio e Holyoke iguais.
+- Navegador, 1280 × 720, qualidade `medium`, linha de base: R01 58 · 36.086 e R02 66 · 37.906
+  (draws · triângulos), **iguais** ao `BROWSER_RECORD`: o telefone clonado em vez de instanciado
+  não custou nada.
+- Inundação: 29 alvos (eram 28); o telefone é julgado, com lugar de pé no escritório.
+- Suítes: `test:locks` 19 (eram 16), `test:opening` 39 (37), `test:opening-flow` 52 (48),
+  `test:radio` 40 (35), `test:save` 61 (60), `test:map` 19 (18), `test:playthrough` 37 (36),
+  `test:kit-runtime` 32 (31), `test:navigation` 114 (113). As 500 noites: 20.531 teclas, 2.610
+  delas para nada.
+
+**Navegador** (servidor reiniciado depois da última edição; aba oculta, jogo andado por
+`__museumStep`, a visibilidade do documento forçada para a legenda aparecer; pt-BR e inglês).
+
+- Jogo novo, pt-BR, 1280 × 720, no escuro: «E · Discar · Telefone». `E`: legenda «TELEFONE ·
+  Linha muda.», o prompt vira «E · Pular · Telefone»; `E` de novo encerra; deixada, a linha some
+  sozinha em 3,2 s. O save é o mesmo objeto antes e depois: nada foi gravado.
+- Luminária acesa: a apresentação do Jorge começa; `E` no telefone corta, toca «Linha muda.»,
+  `radioCalls` continua vazio, e a apresentação volta da primeira linha depois do silêncio.
+- Arquivo A da Ala 1: `E` abre na primeira nota («← Voltar» apagado, «1 / 2», «Próximo →»); os
+  dois documentos e o fato já estão no save; `E` ou «Próximo» mostra «Springfield, 1896» («2 / 2»,
+  «Fechar · Esc»); ← e → viram e param nas pontas; `E` na última fecha; `Esc` fecha de qualquer
+  uma. Arquivo B (um papel): só «Fechar · Esc», sem fólio.
+- Inglês: *E · Dial · Telephone*, *TELEPHONE · The line is dead.*, *← Back*, *Next →*,
+  *Close · Esc*.
+- 844 × 390, pelos botões: diante do telefone há o botão «AÇÃO» e o prompt sem a tecla; o toque
+  disca, a legenda cabe entre os direcionais, «Pular» encerra. O leitor: «← Voltar», «1 / 2»,
+  «Próximo →» dentro do painel, sem rolagem; na última, «Fechar» (sem «· Esc»).
+- `?qaSave=l2-shortcut-released` (toque) e `?qaSave=production-drawer-open` (inglês): «Continuar»
+  sem aviso nenhum, `credentials` vazio, a gaveta aberta lê «E · Read · Otávio's drawer ✓» e abre
+  num papel só.
+- Console sem erro nem aviso novo (só o `THREE.Clock` de sempre).
+- **Não exercitado no navegador, porque o conteúdo de verdade ainda não tem:** a porta que gira,
+  o conteúdo atrás dela, a lâmpada de recado, uma gravação e o aviso de credencial. São de F5.
+
+**Visto de passagem, sem conserto nesta fatia.**
+
+- Com o rádio no bolso, o ícone do rádio fica verde («Pular») enquanto o telefone fala: é o
+  mesmo ar, e `R` avança a linha do telefone. Dura uma linha.
+- No leitor com mais de um papel, só a última página tem «Fechar»; no toque, sair no meio pede
+  passar pelas outras. É a regra que o caderno já tinha.
+- A nota «Será arquivado no caderno do curador…» passa a duas linhas em 1280 × 720 quando há
+  paginação ao lado (418 px de 683). Cabe; não rola.

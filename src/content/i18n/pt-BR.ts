@@ -77,12 +77,21 @@ export const ptBR = {
   'prompt.radio.dead': 'Sem carga',
   'prompt.radio.take': 'Pegar o rádio',
   'prompt.clock.set': 'Acertar o relógio',
+  // A thing that speaks when worked: what E does to it, by what it would do.
+  // A device may have a word of its own for the first («Discar»).
+  'prompt.voice.play': 'Ouvir',
+  'prompt.voice.again': 'Ouvir de novo',
+  'prompt.voice.dead': 'Sem energia',
   'power.restored': 'Energia restaurada',
   // Followed by the room the door opens into: «Atalho destrancado — Ala 1 · Holyoke».
   'door.released': 'Atalho destrancado',
   'radio.skip': 'Pular',
   'notebook.next': 'Virar a página',
   'notebook.previous': 'Voltar',
+  // A cabinet is read one paper at a time: on to the next one.
+  'reader.next': 'Próximo',
+  // Followed by the name of what was taken: «Você pegou — Chave do cofre de ferro».
+  'credential.taken': 'Você pegou',
 
   // Map
   'map.title': 'Planta do museu',
@@ -190,6 +199,12 @@ export const ptBR = {
   // hour of the night, which goes forward by what has been done.
   'device.office-clock.title': 'Relógio do escritório',
   'clock.set': 'Relógio acertado',
+  // The telephone on the desk: it can be dialled in the dark, and the storm
+  // took the line. The first line is its name, and who the subtitle says is
+  // speaking.
+  'device.office-telephone.title': 'Telefone',
+  'device.office-telephone.prompt': 'Discar',
+  'device.office-telephone.dead': 'Linha muda.',
   // The hour as the porter would say it, one phrase for each milestone of
   // the night met: spelt out and rounded, never in digits.
   'night.hour.1': 'Passa das sete',

@@ -1127,6 +1127,30 @@ const OFFICE_DEVICES = [
     ],
     patience: PORTER_PATIENCE,
   },
+  /**
+   * The telephone on the blotter, dial turned towards the visitors' side,
+   * where the player stands.
+   *
+   * It was furniture, and answered the crosshair with nothing: the one
+   * object in the office that promises a way to reach somebody. It answers
+   * now, in the dark as well (a line needs no mains of the room), and what
+   * it says closes that door honestly: the storm took the line. A device
+   * rather than a kit placement for the reason the plinth of the hall is
+   * one: furniture is instanced, with no id and nothing to aim at. Its two
+   * nodes are drawn once either way.
+   */
+  {
+    kind: 'voice',
+    id: 'office-telephone',
+    part: 'desk-telephone',
+    position: [0.52, 0.747, 0.34],
+    rotationY: -1.75,
+    titleKey: 'device.office-telephone.title',
+    // The telephone itself is who speaks: there is nobody on the other end.
+    speakerKey: 'device.office-telephone.title',
+    promptKey: 'device.office-telephone.prompt',
+    utterances: [{ when: {}, lineKeys: ['device.office-telephone.dead'] }],
+  },
 ] as const satisfies readonly DeviceData[]
 
 /**
@@ -1705,10 +1729,9 @@ const ROOMS = [
       // The ledgers and the telephone both stand on the blotter (0.747), side
       // by side: the stack used to sit 7 mm into the leather and straight
       // through the telephone. `npm run test:desk-top` keeps every desk-top
-      // object on its support and out of its neighbours.
+      // object on its support and out of its neighbours. (The telephone is
+      // one of the room's devices since it has a dead line to say.)
       { part: 'ledger-stack', position: [0.81, 0.747, 0.32], rotationY: -1.67 },
-      // Dial turned towards the visitors' side, where the player stands.
-      { part: 'desk-telephone', position: [0.52, 0.747, 0.34], rotationY: -1.75 },
       { part: 'office-corkboard', position: [-0.9, 1.35, -3.34] },
       { part: 'archive-trolley', position: [-0.55, 0, -2.96] },
       { part: 'office-flatfile', position: [-2.55, 0, -2.05], rotationY: Math.PI / 2 },
@@ -1758,4 +1781,7 @@ export const MUSEUM: MuseumContent = {
   facts: FACTS,
   media: [...GENERATED_MEDIA, ...AUTHORED_MEDIA],
   nightClock: NIGHT_CLOCK,
+  // What the house hands out or asks for, by name. Nothing yet: the first
+  // is the key of the iron safe, which arrives with the safe it opens.
+  credentials: [],
 }

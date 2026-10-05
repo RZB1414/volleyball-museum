@@ -903,19 +903,19 @@ export function deviceWiringProblems(read: SourceReader): string[] {
   )
   need(
     'engine/Devices.tsx',
-    'const intent = deviceIntent(entry.device, deviceInputOf(entry.device, useMuseum.getState(), roomById)) if (!deviceLive(intent)) return false',
+    'const intent = deviceIntent(entry.device, deviceInputOf(entry.device, useMuseum.getState(), MUSEUM)) if (!deviceLive(intent)) return false',
     'E no longer acts on the intent the prompt is worded by',
   )
   need(
     'engine/interactionTarget.ts',
-    'live: focused !== undefined && deviceLive(deviceIntent(focused, deviceInputOf(focused, state, lookups.room))),',
+    'live: focused !== undefined && deviceLive(deviceIntent(focused, deviceInputOf(focused, state, content))),',
     'whether a device takes the key is no longer its own rule: a notice, or a radio without charge, would',
   )
 
   // The prompt is worded by the same intent, and a notice is drawn with no key.
   need(
     'ui/Hud.tsx',
-    'const view = devicePrompt(device, deviceIntent(device, deviceInputOf(device, { progress, radio }, roomOf)))',
+    'const view = devicePrompt(device, deviceIntent(device, deviceInputOf(device, { progress, radio }, MUSEUM)))',
     'the prompt of a device is worded by the component, apart from what E does',
   )
   need(
@@ -977,6 +977,240 @@ export function deviceWiringProblems(read: SourceReader): string[] {
     'fillHour(t(radio.lineKeys[radio.index] as never), hourKey ? t(hourKey as never) : null)',
     'a line of the radio that says the hour would show the token as it was typed',
   )
+  return problems
+}
+
+/**
+ * The office answers (L3, F3): a thing that speaks, a cabinet read one paper
+ * at a time, a door on a hinge, a credential announced by name.
+ *
+ * Each of the four is a pure module a suite proves (`voiceDevice.ts` and the
+ * voice's intent, `readingQueue.ts`, `containerNodes.ts`, `credentialsTaken`)
+ * and a line in a component that calls it. The robot's hand for the voice is
+ * the very function the component calls, so the hand proves the function and
+ * not the `case` that reaches it; nothing in Node draws a reader, swings a
+ * door or mounts a toast. These hold each component to the call.
+ */
+export function officeAnswersWiringProblems(read: SourceReader): string[] {
+  const problems: string[] = []
+  const need = (path: string, fragment: string, without: string) => {
+    if (!squeezed(read(path)).includes(fragment)) problems.push(`${path} no longer has \`${fragment}\`: ${without}`)
+  }
+
+  // --- a thing that speaks ------------------------------------------------------
+  need(
+    'engine/Devices.tsx',
+    "case 'voice': return operateVoice(deviceId)",
+    'E on a telephone or a machine is taken and nothing is said: the prompt offers what the key does not do',
+  )
+  need(
+    'engine/voiceDevice.ts',
+    'const intent = deviceIntent(device, deviceInputOf(device, state, content))',
+    'what a voice does on E is decided apart from the intent its prompt is worded by',
+  )
+  need(
+    'engine/voiceDevice.ts',
+    "if (intent.intent === 'skip') { state.advanceRadio() return true }",
+    'E on a voice that is speaking starts it over instead of moving it on a line',
+  )
+  need(
+    'engine/voiceDevice.ts',
+    '...(utterance.documentId === undefined ? {} : { grantOnEnd: recordingGrant(content, utterance.documentId) }),',
+    'a recording is played and never filed: the archive stays empty however many times it is heard',
+  )
+  // Filed with the last line and with nothing less; one write for the end
+  // and what it means.
+  need(
+    'state/store.ts',
+    'const filed: ProgressGrant = heardOut && radio.grantOnEnd ? radio.grantOnEnd : {}',
+    'what a transmission files is written whether or not it was heard to its end, or not at all',
+  )
+  need(
+    'state/store.ts',
+    'commitProgress((progress) => grantProgress(grantProgress(progress, heard), filed), {',
+    'the end of a transmission and what it files are no longer one write',
+  )
+  need(
+    'engine/Devices.tsx',
+    'const lit = messageLampLit(device, deviceInputOf(device, useMuseum.getState(), MUSEUM), clock.elapsedTime)',
+    'the message lamp is lit by something other than the rule: it blinks with no message, or after it was heard',
+  )
+  need(
+    'engine/Devices.tsx',
+    "const material = materials.get(lit ? 'led-red' : 'led-off')",
+    'the message lamp no longer shows red for a message and dark for none',
+  )
+  need(
+    'engine/Devices.tsx',
+    "{device.kind === 'voice' && device.messageLamp ? ( <VoiceDeviceView device={device} instance={instance} materials={materials} /> ) : null}",
+    'a voice with a message lamp never has it painted',
+  )
+  // A voice takes the air from whatever was on it. A call of the porter's
+  // cut off that way was not heard and wrote nothing, so the director has to
+  // ask again when the air falls silent: the save will not tell it to.
+  need(
+    'engine/Devices.tsx',
+    'const onAir = useMuseum((state) => state.radio !== null)',
+    'the director no longer watches the air: a call cut off by a telephone dialled over it waits for some other change of the save to come back',
+  )
+  need(
+    'engine/Devices.tsx',
+    '}, [onAir, progress])',
+    'the director schedules what is owed only when the save changes: a call that was cut off is not delivered again',
+  )
+  need(
+    'engine/Devices.tsx',
+    'if (!call || timers.has(call.id) || useMuseum.getState().radio?.callId === call.id) continue',
+    'the call being said is scheduled again while it is on air',
+  )
+
+  // --- one paper at a time ----------------------------------------------------------
+  need(
+    'engine/Containers.tsx',
+    "const next = readerAdvance(MUSEUM, state.openedContainer, state.notebookPage) if (next !== 'close') { state.setNotebookPage(next) return true } state.setOpenedContainer(null) return true",
+    'E in an open cabinet closes it from its first paper: the second is never read',
+  )
+  need(
+    'ui/Hud.tsx',
+    'containerReadQueue(MUSEUM, openedContainer)',
+    'the reader lists the papers of a cabinet by a rule of its own',
+  )
+  need('ui/Hud.tsx', 'const current = queue[shown]', 'the reader draws every paper of the cabinet at once again')
+  need(
+    'ui/Hud.tsx',
+    'useReaderKeys(queue.length > 0, lastPage)',
+    'the arrow keys turn the pages of the notebook and not of a cabinet',
+  )
+  need(
+    'ui/Notebook.tsx',
+    'useReaderKeys(Boolean(openedContainer) && pages.length > 0, lastPage)',
+    'the notebook no longer turns its pages by the keys every reader shares',
+  )
+  need(
+    'ui/useReaderKeys.ts',
+    'const page = readerKeyPage(event.code, state.notebookPage, lastPage)',
+    'the keys that turn a page are decided in the component, apart from the rule a suite asks',
+  )
+  need(
+    'ui/Hud.tsx',
+    "{shown < lastPage ? ( <button type=\"button\" onClick={() => setPage(shown + 1)}> {t('reader.next')} → </button> ) : (",
+    'the reader has no way on to the next paper for a mouse or a finger',
+  )
+  // A recording is printed as what was said, wherever it is read again.
+  for (const path of ['ui/Hud.tsx', 'ui/Journal.tsx']) {
+    need(path, 'transcriptText(', 'a recording is filed and shows its one-line summary where its words should be')
+  }
+
+  // --- a door on a hinge ------------------------------------------------------------
+  need(
+    'engine/Containers.tsx',
+    'const open = useMuseum((state) => containerOpen(container, state.progress))',
+    'whether a cabinet stands open is no longer its lock\'s to say',
+  )
+  need(
+    'engine/Containers.tsx',
+    'prepareContainerDoor(instance, container.part, container.door)',
+    'a door declared in the content is never put on its hinge',
+  )
+  need(
+    'engine/Containers.tsx',
+    'const target = open ? container.door.openAngle : 0',
+    'the door of an open safe stays shut, or the door of a shut one swings',
+  )
+  need('engine/Containers.tsx', 'swingContainerDoor(door, angle)', 'the hinge is never turned')
+  need(
+    'engine/Containers.tsx',
+    'useLayoutEffect(() => showContainerContents(contents, open), [contents, open])',
+    'what a safe holds is drawn through its shut door, or never drawn at all',
+  )
+
+  // --- a credential announced by name ------------------------------------------------
+  need(
+    'ui/Hud.tsx',
+    'const taken = credentialsTaken(seenLength.current, credentials, credentialTitles)',
+    'the toast of a credential is no longer decided by the rule: it would greet a Continue',
+  )
+  need(
+    'ui/Hud.tsx',
+    'new Map( (MUSEUM.credentials ?? []).map((entry) => [credentialKey(entry.credential), entry.titleKey]), )',
+    'a credential is announced by a name the component made up, not by the content\'s',
+  )
+  if (!/<div className="toast-stack">(?:(?!<\/div>).)*<CredentialToast \/>/.test(squeezed(read('ui/Hud.tsx')))) {
+    problems.push('ui/Hud.tsx no longer mounts CredentialToast in the stack of toasts: a key is handed over without a word')
+  }
+  // The HUD is a chunk of its own and may be evaluated before the canvas:
+  // without this import its first render can see the save before the content
+  // has settled it, and a key an open drawer was owed since another night is
+  // announced as taken now.
+  if (!/import '\.\.\/engine\/contentRegistry(?:\.ts)?'/.test(squeezed(read('ui/Hud.tsx')))) {
+    problems.push(
+      'ui/Hud.tsx no longer imports engine/contentRegistry: its toasts may first see a save the content has not settled, and announce what a trigger gives at load',
+    )
+  }
+  return problems
+}
+
+/**
+ * The reader of a cabinet, on a screen of any height (`styles/museum.css`).
+ *
+ * The panel scrolled whole, and the button that closed it was the last thing
+ * in the scroll. With a paper to a page, the button that turns to the next
+ * one would be there too: on a phone held sideways the panel was 179 px
+ * tall, and «Próximo» sat 100 px under its fold, on every page.
+ *
+ * The cure is a form, as for the plan's page: the reader is a column that
+ * does not scroll, its paper is the one item that does, and its buttons
+ * never shrink. On a short screen it may also be taller than the examine
+ * view (nothing is held up behind a paper), and that height is added to the
+ * backdrop's margin here, since no layout engine runs in Node.
+ */
+export function readerLayoutProblems(read: SourceReader): string[] {
+  const css = read('styles/museum.css').replace(/\/\*[\s\S]*?\*\//g, ' ')
+  const body = (selector: string, within = css, indent = '') =>
+    new RegExp(`(?:^|\\n)${indent}${selector.replace(/[.>]/g, '\\$&')}\\s*\\{([^}]*)\\}`).exec(within)?.[1] ?? ''
+  const problems: string[] = []
+
+  const panel = body('.examine-panel.is-reader')
+  if (!/\bdisplay:\s*flex\s*;/.test(panel) || !/\bflex-direction:\s*column\s*;/.test(panel) || !/\boverflow-y:\s*hidden\s*;/.test(panel)) {
+    problems.push(
+      'styles/museum.css: `.examine-panel.is-reader` is no longer a column that does not scroll: the buttons of the reader go under the fold with a long paper',
+    )
+  }
+  const paper = body('.examine-panel.is-reader .document')
+  if (!/\bflex:\s*1 1 auto\s*;/.test(paper) || !/\bmin-height:\s*0\s*;/.test(paper) || !/\boverflow-y:\s*auto\s*;/.test(paper)) {
+    problems.push(
+      'styles/museum.css: the paper of the reader no longer shrinks and scrolls (`.document` wants `flex: 1 1 auto`, `min-height: 0` and `overflow-y: auto`): a long paper is cut off, or pushes the buttons out',
+    )
+  }
+  if (!/\bflex:\s*none\s*;/.test(body('.examine-panel.is-reader .examine-actions'))) {
+    problems.push('styles/museum.css: the buttons of the reader may be squeezed instead of the paper (they want `flex: none`)')
+  }
+
+  // On a phone held sideways: the reader's height and the margin under it.
+  const phone = [...css.matchAll(/@media \(max-height: 420px\) \{([\s\S]*?)\n\}/g)].map((block) => block[1]).join('\n')
+  const tall = /\bmax-height:\s*([\d.]+)vh\s*;/.exec(body('.examine-panel.is-reader', phone, ' {2}'))?.[1]
+  const under = /\bpadding:\s*0\s+[\d.]+vw\s+([\d.]+)vh\s*;/.exec(body('.examine'))?.[1]
+  const usual = /\bmax-height:\s*([\d.]+)vh\s*;/.exec(body('.examine-panel'))?.[1]
+  if (tall === undefined || under === undefined || usual === undefined) {
+    problems.push(
+      'styles/museum.css no longer sizes the reader as `max-height: <n>vh` (and on a short screen, again) over a backdrop padded `0 <n>vw <n>vh`: the check that it fits a phone cannot add it up',
+    )
+  } else {
+    if (Number(tall) + Number(under) > 100) {
+      problems.push(
+        `the reader asks for ${tall}vh over a margin of ${under}vh on a short screen, ${Number(tall) + Number(under)} in all: its first lines are above the top edge`,
+      )
+    }
+    if (Number(tall) <= Number(usual)) {
+      problems.push(
+        `the reader is ${tall}vh tall on a short screen, no more than the ${usual}vh of the examine view: on a phone held sideways that is a title and its buttons, with no room for the paper`,
+      )
+    }
+  }
+
+  if (!squeezed(read('ui/Hud.tsx')).includes('<div className="examine-panel is-reader">')) {
+    problems.push('ui/Hud.tsx no longer gives the reader of a cabinet the class `is-reader`: it scrolls whole again, buttons and all')
+  }
   return problems
 }
 

@@ -99,13 +99,15 @@ import {
   examineConeDegrees,
   examineReach,
 } from '../src/engine/examineReach.ts'
+import { toolSpent } from '../src/engine/lockRules.ts'
 import { emptyProgress, grantProgress, PROGRESS_FIELDS, type Progress, type ProgressGrant } from '../src/state/progressFields.ts'
+import { registerProgressRules } from '../src/state/progressRules.ts'
 import { migrateProgress } from '../src/state/saveMigrations.ts'
 import { readText } from './lib/readText.ts'
 
 // The museum hands the store its rules as the canvas chunk arrives. Here, now:
 // every store this suite opens is created with them in place.
-await import('../src/engine/contentRegistry.ts')
+const { progressRulesFor } = await import('../src/engine/contentRegistry.ts')
 
 type Room = MuseumContent['rooms'][number]
 type Exhibit = MuseumContent['exhibits'][number]
@@ -526,8 +528,9 @@ await test('what the rules answer is offered, and what they ignore is not', () =
   const office = (...atoms: string[]) => offered(atoms, 'office')
 
   // The first minute, in the dark: the lamp, the notebook, the drawer to
-  // touch. The door waits for the lamp and the radio for its charger.
-  assert.deepEqual(office(), ['power office', 'open office-cabinet', 'open office-notebook'])
+  // touch, and the telephone, whose dead line needs no mains (L3). The door
+  // waits for the lamp and the radio for its charger.
+  assert.deepEqual(office(), ['power office', 'open office-cabinet', 'open office-notebook', 'hear office-telephone'])
   // With the lamp on: its switch has nothing left to do, the door opens,
   // the radio can be taken and the clock, which has its mains back, set.
   assert.deepEqual(office('power:office'), [
@@ -536,6 +539,7 @@ await test('what the rules answer is offered, and what they ignore is not', () =
     'open office-notebook',
     'set office-clock',
     'take office-radio',
+    'hear office-telephone',
   ])
   // The notebook that was read left the desk with her, a radio in the hand
   // is not on its charger, and a clock that was put right is not set again.
@@ -543,8 +547,19 @@ await test('what the rules answer is offered, and what they ignore is not', () =
     'door atrium-to-office office>atrium',
     'open office-cabinet',
     'set office-clock',
+    'hear office-telephone',
   ])
-  assert.deepEqual(office('power:office', 'doc:doc-welcome', 'carried:office-radio', 'flag:clock-set'), ['door atrium-to-office office>atrium', 'open office-cabinet'])
+  assert.deepEqual(office('power:office', 'doc:doc-welcome', 'carried:office-radio', 'flag:clock-set'), [
+    'door atrium-to-office office>atrium',
+    'open office-cabinet',
+    'hear office-telephone',
+  ])
+  // The telephone is answered, and gives nothing: no press of it is ever
+  // worth making, and it is in no record.
+  const dial: PlayerAction = { kind: 'voice', deviceId: 'office-telephone' }
+  assert.deepEqual(actionGrant(MUSEUM, saveHolding(['room:office']), dial), {})
+  assert.equal(actionRecord(MUSEUM, saveHolding(['room:office']), 'office', dial), null)
+  assert.ok(!contentActions(MUSEUM).some((entry) => entry.id.startsWith('voice:')), 'a dead line is written down as an action that gives something')
   // A flag is not mains: set on another night's save, it still is not offered in the dark.
   assert.ok(!office().includes('set office-clock') && !office('flag:clock-set').includes('set office-clock'))
 
@@ -981,7 +996,7 @@ function saveHolding(atoms: readonly string[]): Progress {
   }
   return grantProgress(emptyProgress(), grant as ProgressGrant)
 }
-const isPress = (entry: ActionRecord) => /^(?:power|door|hotspot|container|touch|code|take|set-clock):/.test(entry.id)
+const isPress = (entry: ActionRecord) => /^(?:power|door|hotspot|container|touch|code|take|set-clock|voice):/.test(entry.id)
 const standingIn = (entry: ActionRecord) => (entry.requires.find((asked) => asked.startsWith('room:')) ?? '').slice('room:'.length)
 /** The press that realises this record for a player who holds `atoms`, if the rules offer one. */
 const pressFor = (content: MuseumContent, entry: ActionRecord, atoms: readonly string[]) => {
@@ -1069,6 +1084,137 @@ await test('what is written down of each action is what the rules do: every guar
   // Every record she met is one the content offers, word for word.
   const offered = new Map(contentActions(MUSEUM).map((entry) => [entry.id, entry]))
   assert.deepEqual(played.actions.filter((entry) => JSON.stringify(offered.get(entry.id)) !== JSON.stringify(entry)), [])
+})
+
+await test('the chain of the Posse, on the museum with it added: the key from the drawer, the safe it is spent on, a recording heard out', async () => {
+  // What the real museum has none of until the Book it leads to: a drawer
+  // that hands over a key as it opens, a safe that key is spent on, and a
+  // machine on the desk that plays a recording once the lamp is on. Played
+  // by the exhaustive player and then by the robot's hands, on the real
+  // store, to the same end.
+  const KEY = { kind: 'tool', id: 'service-key' } as const
+  const chain: MuseumContent = {
+    ...withRooms((room) =>
+      room.id === 'office'
+        ? {
+            ...room,
+            kit: room.kit.filter((placement) => placement.part !== 'office-safe'),
+            containers: [
+              ...(room.containers ?? []),
+              { id: 'office-safe', part: 'office-safe', position: [2.55, 0, 2.45], rotationY: -Math.PI / 2, titleKey: 'container.office.title', lockId: 'office-safe' },
+            ],
+            devices: [
+              ...(room.devices ?? []),
+              {
+                kind: 'voice',
+                id: 'office-machine',
+                part: 'desk-telephone',
+                position: [0.6, 0.74, 0.64],
+                titleKey: 'device.office-telephone.title',
+                speakerKey: 'radio.speaker.static',
+                poweredBy: 'office',
+                utterances: [{ when: {}, documentId: 'doc-test-tape' }],
+              },
+            ],
+          }
+        : room,
+    ),
+    documents: [
+      ...MUSEUM.documents,
+      { id: 'doc-test-tape', era: 'office', kind: 'oral-history', titleKey: 'document.welcome.title', bodyKey: 'document.welcome.summary', containerId: 'office-machine', lineKeys: ['radio.call.hello.1', 'radio.call.hello.3'] },
+      { id: 'doc-test-book', era: 'office', kind: 'letter', titleKey: 'document.welcome.title', bodyKey: 'document.welcome.summary', containerId: 'office-safe', lockId: 'office-safe' },
+    ],
+    locks: [
+      ...MUSEUM.locks.map((lock) => (lock.id === 'office-drawer' ? { ...lock, onOpen: [{ kind: 'grant-credential', credential: KEY } as const] } : lock)),
+      { kind: 'tool', id: 'office-safe', requires: 'service-key', consumesTool: true, mapLabelKey: 'lock.office-drawer.mapLabel' },
+    ],
+    credentials: [{ credential: KEY, titleKey: 'container.office.title', icon: 'key' }],
+  }
+  const result = simulateProgress(chain)
+  const added = sorted([
+    'seen:office-safe',
+    'doc:doc-test-tape',
+    'cred:tool:service-key',
+    'fired:lock:office-drawer:opened',
+    'lock:office-safe',
+    'doc:doc-test-book',
+  ])
+  const END = sorted([...MAXIMUM_END, ...added])
+  assert.deepEqual(endOf(result.final), END)
+  // Nothing the real museum is not accused of: the chain is sound.
+  assert.deepEqual(
+    sorted(result.issues.map((issue) => `${issue.code} ${issue.id}`)),
+    sorted(played.issues.map((issue) => `${issue.code} ${issue.id}`)),
+  )
+  // The script gains a level: the key is in the hand a level after the
+  // drawer gave it, and the safe opens then. The recording waits only for
+  // the lamp, and the safe is touched (and refuses) on the first visit.
+  const levelOf = (entry: string) => result.levels.findIndex((level) => level.includes(entry))
+  assert.equal(result.levels.length, played.levels.length + 1)
+  assert.deepEqual(
+    added.map((entry) => `${entry} N${levelOf(entry)}`).sort(),
+    [
+      'cred:tool:service-key N4',
+      'doc:doc-test-book N5',
+      'doc:doc-test-tape N1',
+      'fired:lock:office-drawer:opened N4',
+      'lock:office-safe N5',
+      'seen:office-safe N0',
+    ],
+  )
+  // The key is spent by the end, and is still in the save.
+  assert.deepEqual(toolSpent(chain.locks, result.final), ['tool:service-key'])
+  assert.deepEqual(result.final.credentials, ['tool:service-key'])
+
+  // Written down: the safe is opened by the press of whoever holds the key,
+  // the recording by a press with the lamp on, and each record is what the
+  // rules do for a player who holds exactly what it asks.
+  const records = Object.fromEntries(result.actions.map((entry) => [entry.id, entry]))
+  assert.deepEqual(records['container:office-safe'], {
+    id: 'container:office-safe',
+    requires: ['cred:tool:service-key', 'room:office'],
+    grants: ['doc:doc-test-book', 'lock:office-safe', 'seen:office-safe'],
+  })
+  assert.deepEqual(records['touch:office-safe'], { id: 'touch:office-safe', requires: ['room:office'], grants: ['seen:office-safe'] })
+  assert.deepEqual(records['voice:office-machine:doc-test-tape'], {
+    id: 'voice:office-machine:doc-test-tape',
+    requires: ['power:office', 'room:office'],
+    grants: ['doc:doc-test-tape'],
+  })
+  for (const id of ['container:office-safe', 'voice:office-machine:doc-test-tape']) {
+    const entry = records[id]
+    assert.ok(pressFor(chain, entry, entry.requires), `${id}: not offered to a player who holds what it asks`)
+    for (const guard of entry.requires.filter((asked) => !asked.startsWith('room:'))) {
+      assert.equal(pressFor(chain, entry, entry.requires.filter((asked) => asked !== guard)), null, `${id}: still offered without ${guard}`)
+    }
+  }
+  // In the dark the machine is dead and is not offered; the telephone beside it is.
+  const inTheDark = availableActions(chain, saveHolding(['room:office']), 'office').map(describe)
+  assert.ok(!inTheDark.includes('hear office-machine') && inTheDark.includes('hear office-telephone'))
+  assert.ok(availableActions(chain, saveHolding(['room:office', 'power:office']), 'office').map(describe).includes('hear office-machine'))
+
+  // The robot, with the content's own rules in the store: every hand of it
+  // is the handler's (the safe by `attemptLock`, the machine by the function
+  // E calls), and every night ends where the simulation ends.
+  registerProgressRules(progressRulesFor(chain))
+  try {
+    for (const seed of [3, 30, 47, 300, 1896]) {
+      const night = await playToEnd(await openGame(), chain, seeded(seed))
+      const end = endOf(night.page.progress())
+      assert.deepEqual(withoutLuck(end), END, `seed ${seed}`)
+      assert.deepEqual(toolSpent(chain.locks, night.page.progress()), ['tool:service-key'], `seed ${seed}`)
+      assert.equal(night.page.state().radio, null, `seed ${seed}: the machine was left talking`)
+      // The key survives the disk, spent as it is.
+      assert.deepEqual((await reload(night.page)).progress().credentials, ['tool:service-key'], `seed ${seed}`)
+    }
+    // The player who never works a voice loses the recording and nothing else.
+    const deaf: RobotProfile = { ...ORDINARY, skips: (action) => action.kind === 'voice' }
+    const night = await playToEnd(await openGame(), chain, seeded(11), deaf)
+    assert.deepEqual(withoutLuck(endOf(night.page.progress())), END.filter((entry) => entry !== 'doc:doc-test-tape'))
+  } finally {
+    // The museum's own rules back in the slot, for every store opened from here on.
+    registerProgressRules(progressRulesFor(MUSEUM))
+  }
 })
 
 await test('from a save, she keeps what it holds and reaches the same end', () => {

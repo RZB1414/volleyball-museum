@@ -1790,6 +1790,78 @@ await test('rules that only one tab has: what follows from another tab\'s write 
   }
 })
 
+await test('a recording heard to its end in one live tab is filed in every tab, in one write; cut short, it is filed in none (L3)', async () => {
+  // What a transmission files when it is heard out (`grantOnEnd`: a recorded
+  // message, kept in the archive) is written with the end of it, by the tab
+  // that heard it. The transmission itself is that tab's own, like the room
+  // it stands in: the other tab is told what was filed, not what was said.
+  const save = SAVE_FIXTURES['l2-shortcut-released'].save
+  const tape = {
+    deviceId: 'a-machine',
+    speakerKey: 'radio.speaker.static',
+    lineKeys: ['tape.1', 'tape.2'],
+    grantOnEnd: { documentsRead: ['doc-a-tape'], factsKnown: ['fact-on-a-tape'] },
+  }
+  assert.ok(!save.progress.documentsRead.includes('doc-a-tape'), 'the case needs a save that has not heard it')
+  const browser = openBrowser(save)
+  try {
+    const listening = await browser.open('the tab that listens')
+    const elsewhere = await browser.open('the tab that does not', 'idle')
+    for (const tab of browser.tabs) tab.act((state) => state.start())
+    leftAlone(browser, 'two tabs in the game')
+    const written = browser.writes.length
+
+    // Cut short after its first line: nothing is filed, and nothing is written.
+    listening.act((state) => {
+      state.startRadio(tape)
+      state.advanceRadio()
+      state.stopRadio()
+    })
+    assert.deepEqual(leftAlone(browser, 'a recording cut short'), [])
+    assert.equal(browser.writes.length, written, 'a recording that was not heard out wrote to the save')
+    assert.ok(!listening.progress().documentsRead.includes('doc-a-tape'))
+
+    // Heard to its last line: the end and what it files are one write.
+    let told = 0
+    const stop = listening.store.useMuseum.subscribe(() => {
+      told += 1
+    })
+    listening.act((state) => {
+      state.startRadio(tape)
+      state.advanceRadio()
+    })
+    told = 0
+    listening.act((state) => state.advanceRadio())
+    stop()
+    assert.equal(told, 1, 'the end of the recording and the document it files were two notifications')
+    assert.equal(listening.state().radio, null)
+    leftAlone(browser, 'a recording heard to its end')
+    assert.deepEqual(
+      browser.writes.slice(written).map((write) => write.by),
+      [listening.name],
+      'what was filed is one write, by the tab that heard it, and nobody answers it',
+    )
+    for (const tab of browser.tabs) {
+      assert.ok(tab.progress().documentsRead.includes('doc-a-tape'), `"${tab.name}" does not have the recording in its archive`)
+      assert.ok(tab.progress().factsKnown.includes('fact-on-a-tape'), `"${tab.name}" does not know what it told`)
+    }
+    assert.equal(elsewhere.state().radio, null, 'a transmission is its own tab\'s: nothing went on air in the other')
+    agreed(browser, 'after the recording')
+
+    // Heard again, it files nothing new and writes nothing.
+    const filed = browser.writes.length
+    listening.act((state) => {
+      state.startRadio(tape)
+      state.advanceRadio()
+      state.advanceRadio()
+    })
+    assert.deepEqual(leftAlone(browser, 'the recording heard again'), [])
+    assert.equal(browser.writes.length, filed)
+  } finally {
+    browser.close()
+  }
+})
+
 await test('"New game" in one live tab: the other takes the new game and falls silent, and what that leaves is on record', async () => {
   const night = SAVE_FIXTURES['production-drawer-open'].save
   const browser = openBrowser(night)

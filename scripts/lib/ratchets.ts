@@ -331,10 +331,25 @@ export const BUNDLE_BUDGETS = {
  *     ceiling is the measure plus half a per cent, as the plan sets it for
  *     every path; the title's was already. The document did not move
  *     (63,232).
+ *   - `title` +250 bytes, on 31,727 measured (it was 31,630 on 31,478). The
+ *     third slice makes the office answer, and 249 bytes of that are before
+ *     the click. Eight keys in each language: the telephone's name, what E
+ *     does to it and the one thing it says («Linha muda.»); the three verbs
+ *     of a thing that speaks; «Próximo», for a cabinet read one paper at a
+ *     time; «Você pegou», for a credential announced by name. The style
+ *     sheet, which ships with the title: the reader's row of back, folio and
+ *     on, and the reader as a column whose paper scrolls while its buttons
+ *     stay in sight (on a phone held sideways «Próximo» was 98 px under the
+ *     fold). And the store: what a transmission files when it is heard to
+ *     its last line (`grantOnEnd`), in the one write that ends it. The game
+ *     grew 1,632 bytes and is inside its ceiling with 333 to spare (395,427:
+ *     a voice as a device and the press that works it, the queue a cabinet
+ *     is read by, a door on a hinge, a key that is spent, the toast of a
+ *     credential); the document did not move (63,235).
  */
 export const BUNDLE_PATH_CEILINGS = {
   document: 63_600,
-  title: 31_630,
+  title: 31_880,
   game: 395_760,
 } as const
 

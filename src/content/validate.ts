@@ -11,7 +11,9 @@
  * broken content edit fails loudly instead of at runtime.
  */
 
+import { contentsNodeName, isDoorNode } from '../engine/containerNodes.ts'
 import { devicePowerRoom } from '../engine/deviceRules.ts'
+import { lockCredentialKeys } from '../engine/lockRules.ts'
 import { HOUR_TOKEN } from '../engine/nightClock.ts'
 import { conditionClass, conditionClasses, credentialKey } from '../engine/progressCondition.ts'
 import { MOUNT_PARTS, mountPartNames, transitionDoorPartNames } from '../engine/runtimePlacedParts.ts'
@@ -190,8 +192,8 @@ function validateReferences(content: MuseumContent): ValidationIssue[] {
  * here is a way the two disagreed in silence: a lock in the list that no
  * object carries, a keypad that is not as long as its own answer, a code
  * resting on a fact nobody certified as one, a note that claims to be free
- * inside a locked drawer, and a kind of lock the one panel the game has
- * cannot show.
+ * inside a locked drawer, a kind of lock its carrier has no way to open,
+ * and a key that is spent on one lock and asked for by another.
  */
 function validateLockHosts(content: MuseumContent): ValidationIssue[] {
   const issues: ValidationIssue[] = []
@@ -202,27 +204,32 @@ function validateLockHosts(content: MuseumContent): ValidationIssue[] {
   const hosted = new Set<string>()
 
   /**
-   * The keypad is the only lock panel there is, and only containers and power
-   * controls open it. Any other kind of lock on one of them opens a modal
-   * with nothing in it.
+   * What each carrier can open. The keypad is the only lock panel there is,
+   * and containers and power controls open it. A container also takes a key
+   * in the hand (a tool lock): the touch of whoever holds it opens the
+   * container, and what the game shows of it is the container standing open.
+   * Any other kind of lock on either would open with no reader to hold the
+   * thing to, or raise a panel with nothing in it.
    */
-  const hostsKeypad = (lockId: string | undefined, hostId: string, what: string) => {
+  const hosts = (lockId: string | undefined, hostId: string, what: string, opens: readonly string[]) => {
     if (!lockId) return
     hosted.add(lockId)
     const lock = locksById.get(lockId)
-    if (lock && lock.kind !== 'knowledge') {
+    if (lock && !opens.includes(lock.kind)) {
       error(
         'lock-host-kind-unsupported',
         hostId,
-        `${what} "${hostId}" carries the ${lock.kind} lock "${lock.id}", but the runtime can only open a knowledge lock there: the panel would be empty.`,
+        `${what} "${hostId}" carries the ${lock.kind} lock "${lock.id}", but the runtime can only open ${opens
+          .map((kind) => `a ${kind} lock`)
+          .join(' or ')} there.`,
       )
     }
   }
 
   for (const room of content.rooms) {
-    for (const container of room.containers ?? []) hostsKeypad(container.lockId, container.id, 'Container')
+    for (const container of room.containers ?? []) hosts(container.lockId, container.id, 'Container', ['knowledge', 'tool'])
     // A room's power lock is met at its control; with no control, nowhere.
-    if (room.powerControl) hostsKeypad(room.powerLockId, room.powerControl.id, 'Power control')
+    if (room.powerControl) hosts(room.powerLockId, room.powerControl.id, 'Power control', ['knowledge'])
     for (const portal of room.portals) {
       if (!portal.lockId) continue
       hosted.add(portal.lockId)
@@ -262,6 +269,23 @@ function validateLockHosts(content: MuseumContent): ValidationIssue[] {
         `Knowledge lock "${lock.id}" opens with fact "${fact.id}", which is not marked \`usedAsCode\`: nothing has held it to two captured publishers.`,
       )
     }
+  }
+
+  // A key that is spent has one lock (V3). Spent is not written anywhere:
+  // it is "the lock that takes this key is open" (`toolSpent`). With a
+  // second lock asking for the same key, the first to open would spend it
+  // and the second would go on being opened by it.
+  const consumed = new Set(content.locks.flatMap((lock) => (lock.kind === 'tool' && lock.consumesTool ? [lock.requires] : [])))
+  for (const tool of consumed) {
+    const askers = content.locks.filter((lock) => lock.kind === 'tool' && lock.requires === tool)
+    if (askers.length < 2) continue
+    error(
+      'consumable-multi-consumer',
+      `tool:${tool}`,
+      `The tool "${tool}" is spent on a lock and ${askers.length} locks ask for it (${askers
+        .map((lock) => `"${lock.id}"`)
+        .join(', ')}): a key that is spent has one lock, or it is spent by one and still opens the other.`,
+    )
   }
 
   const containersById = new Map(
@@ -667,6 +691,9 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
       trigger.effects.flatMap((effect) => (effect.kind === 'grant-credential' ? [credentialKey(effect.credential)] : [])),
     ),
   )
+  // What asks for a credential: a lock, and any condition that waits for
+  // one (gathered as each condition is checked, below).
+  const askedCredentials = new Set(content.locks.flatMap(lockCredentialKeys))
   // Only a device the player can take away is ever "carried": a condition
   // naming any other id would wait for something that cannot happen.
   const carriableIds = new Set(
@@ -750,6 +777,7 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
       }
     }
     for (const key of (condition.credentials ?? []).map(credentialKey)) {
+      askedCredentials.add(key)
       if (!grantedCredentials.has(key)) {
         error(
           'condition-credential-missing',
@@ -870,6 +898,43 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
         }
       }
 
+      if (device.kind === 'voice') {
+        // A press on a thing that speaks always has an answer: the first
+        // utterance whose moment it is, and the last one's moment is always.
+        const last = device.utterances[device.utterances.length - 1]
+        const mute = device.utterances.filter(
+          (utterance) => utterance.documentId === undefined && !((utterance.lineKeys ?? []).length > 0),
+        )
+        if (!last || Object.keys(last.when).length > 0 || mute.length > 0) {
+          error(
+            'voice-silent',
+            !last
+              ? `Voice "${device.id}" has nothing to say.`
+              : mute.length > 0
+                ? `Voice "${device.id}" has an utterance that is neither lines of its own nor a recording: E would be answered with nothing.`
+                : `Voice "${device.id}" has no unconditional last utterance: on a night none of them is for, E is answered with nothing.`,
+            device.id,
+          )
+        }
+        for (const [index, utterance] of device.utterances.entries()) {
+          checkCondition(utterance.when, `Voice "${device.id}" utterance ${index + 1}`)
+          if (utterance.documentId === undefined) continue
+          // A recording is a document with a transcript, filed under the
+          // device that plays it: that is where the archive says it came from.
+          const recording = content.documents.find((doc) => doc.id === utterance.documentId)
+          const why = !recording
+            ? 'which is no document of the content'
+            : !((recording.lineKeys ?? []).length > 0)
+              ? 'which has no `lineKeys`: there is nothing on it to say'
+              : recording.containerId !== device.id
+                ? `which is filed under "${recording.containerId}", not under this device`
+                : null
+          if (why !== null) {
+            error('voice-recording-missing', `Voice "${device.id}" plays the recording "${utterance.documentId}", ${why}.`, utterance.documentId)
+          }
+        }
+      }
+
       if (device.kind === 'radio') {
         for (const call of device.calls) {
           if (callIds.has(call.id)) error('radio-call-duplicate', `Radio call id "${call.id}" is used twice.`)
@@ -937,6 +1002,27 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
         if (device.patience) validateRadioPatience(device, error, warning)
       }
     }
+  }
+
+  // --- credentials -----------------------------------------------------------
+  // A credential is data: the content lists the ones it has, each with the
+  // name it is announced by. One an effect gives or a lock asks for that is
+  // not in the list is handed over without a word; one in the list that
+  // nothing gives or asks for is a name for a thing the house does not have.
+  // (Whether one that is asked for can be obtained is the play's to say:
+  // `credential-unobtainable`, `credential-orphan`.)
+  const declaredCredentials = new Set((content.credentials ?? []).map((entry) => credentialKey(entry.credential)))
+  for (const key of new Set([...grantedCredentials, ...askedCredentials])) {
+    if (declaredCredentials.has(key)) continue
+    error(
+      'credential-undeclared',
+      `The content ${grantedCredentials.has(key) ? 'hands out' : 'asks for'} "${key}", which is not in its list of credentials: it has no name to be announced by.`,
+      key,
+    )
+  }
+  for (const key of declaredCredentials) {
+    if (grantedCredentials.has(key) || askedCredentials.has(key)) continue
+    error('credential-unused', `The content declares the credential "${key}", and nothing gives it or asks for it.`, key)
   }
 
   // --- saves from before the opening -----------------------------------------
@@ -1062,9 +1148,10 @@ export function validateTriggers(content: MuseumContent): ValidationIssue[] {
         return { id: effect.roomId, known: roomIds.has(effect.roomId), what: 'room' }
       case 'reveal-document':
         return { id: effect.documentId, known: documentIds.has(effect.documentId), what: 'document' }
-      // A flag is made by being set. A credential is a member of the schema's
-      // own unions until credentials are data (L3): the compiler holds its id,
-      // and whether anything asks for it is the simulation's question.
+      // A flag is made by being set. A credential is held to the content's
+      // own list where the conditions are checked (`credential-undeclared`,
+      // in `validateOpening`), and whether anything asks for it is the
+      // simulation's question.
       case 'set-flag':
       case 'grant-credential':
         return null
@@ -1475,6 +1562,32 @@ export function validateBake(
           code: 'container-part-not-baked',
           message: `Container "${container.id}" uses recipe "${container.part}", which the bake does not produce.`,
         })
+        continue
+      }
+      /**
+       * A door swings, and what is behind it shows, by named nodes: a door
+       * with none compiles, loads and stays shut on an open safe; contents
+       * with none are never drawn. Both are checked against the manifest by
+       * the names the runtime looks for (`containerNodes.ts`).
+       */
+      const door = container.door
+      if (door && ![...partNames].some((name) => isDoorNode(name, container.part, door))) {
+        issues.push({
+          severity: 'error',
+          code: 'container-node-missing',
+          id: container.id,
+          message: `Container "${container.id}" swings a door, and recipe "${container.part}" bakes no node "${container.part}__${door.nodePrefix}*" to swing.`,
+        })
+      }
+      for (const entry of container.contents ?? []) {
+        const node = contentsNodeName(container.part, entry)
+        if (partNames.has(node)) continue
+        issues.push({
+          severity: 'error',
+          code: 'container-node-missing',
+          id: container.id,
+          message: `Container "${container.id}" shows "${node}" once it stands open, and the bake has no such node.`,
+        })
       }
     }
 
@@ -1495,19 +1608,25 @@ export function validateBake(
       // A carried radio leaves its cradle by hiding the handset's own nodes;
       // without them the whole charger would vanish, or nothing would. A
       // notice animates and relights nothing: it is whatever stands there.
+      // Nor does a voice, unless it has a lamp for a waiting message.
       const required =
         device.kind === 'notice'
           ? []
-          : device.kind === 'clock'
-            ? ['__dial', '__hand-hour', '__hand-minute', '__hand-second']
-            : device.kind === 'radio' && device.carriedOnUse
-              ? ['__led', '__handset']
-              : ['__led']
+          : device.kind === 'voice'
+            ? device.messageLamp
+              ? ['__led']
+              : []
+            : device.kind === 'clock'
+              ? ['__dial', '__hand-hour', '__hand-minute', '__hand-second']
+              : device.kind === 'radio' && device.carriedOnUse
+                ? ['__led', '__handset']
+                : ['__led']
       for (const suffix of required) {
         if (!partNames.has(`${device.part}${suffix}`)) {
           issues.push({
             severity: 'error',
             code: 'device-node-missing',
+            id: device.id,
             message: `Device "${device.id}" needs baked node "${device.part}${suffix}" for its ${device.kind} behaviour.`,
           })
         }
@@ -2110,15 +2229,24 @@ export const SPEECH_LINE_MAX = 130
 export const SPEECH_SHORT_LINE_MAX = 110
 
 /**
- * Every dictionary key a radio can say, with the length it is held to:
- * calls, hints at every height and curt, the porter's patience, dead air. A
- * key said in two places is held to the shorter of its two measures.
+ * Every dictionary key said aloud by something that speaks of the night it
+ * is in, with the length it is held to: a radio's calls, hints at every
+ * height and curt, the porter's patience, dead air; and the lines a voice
+ * device has of its own (a dead line). A key said in two places is held to
+ * the shorter of its two measures.
+ *
+ * The lines of a recording are not here: they are a document's transcript,
+ * made on another day, and are held to the measure of a subtitle and to
+ * nothing else (`recordedKeys`).
  */
 function spokenKeys(content: MuseumContent): Map<string, number> {
   const keys = new Map<string, number>()
   const say = (key: string, limit: number) => keys.set(key, Math.min(limit, keys.get(key) ?? limit))
   for (const room of content.rooms) {
     for (const device of room.devices ?? []) {
+      if (device.kind === 'voice') {
+        for (const utterance of device.utterances) for (const key of utterance.lineKeys ?? []) say(key, SPEECH_LINE_MAX)
+      }
       if (device.kind !== 'radio') continue
       for (const call of device.calls) for (const key of call.lineKeys) say(key, SPEECH_LINE_MAX)
       for (const hint of device.hints) {
@@ -2133,6 +2261,22 @@ function spokenKeys(content: MuseumContent): Map<string, number> {
       }
       for (const outburst of patience.tiers.flatMap((tier) => tier.outbursts ?? [])) {
         for (const key of outburst.lineKeys) say(key, SPEECH_SHORT_LINE_MAX)
+      }
+    }
+  }
+  return keys
+}
+
+/** Every line of a recording some voice device plays: a subtitle each, by the device that says it. */
+function recordedKeys(content: MuseumContent): Map<string, string> {
+  const keys = new Map<string, string>()
+  for (const room of content.rooms) {
+    for (const device of room.devices ?? []) {
+      if (device.kind !== 'voice') continue
+      for (const utterance of device.utterances) {
+        if (utterance.documentId === undefined) continue
+        const recording = content.documents.find((doc) => doc.id === utterance.documentId)
+        for (const key of recording?.lineKeys ?? []) keys.set(key, device.id)
       }
     }
   }
@@ -2183,7 +2327,7 @@ export function validateSpeech(content: MuseumContent, dictionaries: Dictionarie
     for (const [locale, dictionary] of Object.entries(dictionaries)) {
       const text = dictionary[key]
       if (text === undefined) continue // missing-translation reports this
-      const where = `Radio line "${key}" (${locale})`
+      const where = `Spoken line "${key}" (${locale})`
 
       // A language with no list of its own is read against every list.
       const lists = CARDINAL_WORDS[locale] ? [CARDINAL_WORDS[locale]] : Object.values(CARDINAL_WORDS)
@@ -2229,6 +2373,21 @@ export function validateSpeech(content: MuseumContent, dictionaries: Dictionarie
           `${where} names Helena and does not say who she is. A line is heard alone: «a Helena, a diretora», every time.`,
         )
       }
+    }
+  }
+
+  // --- what a recording says ----------------------------------------------------
+  // One line of a transcript is one subtitle, and has to fit the time one
+  // stays up, like anything else read on that line of the screen.
+  for (const [key, deviceId] of recordedKeys(content)) {
+    for (const [locale, dictionary] of Object.entries(dictionaries)) {
+      const text = dictionary[key]
+      if (text === undefined || text.length <= SPEECH_LINE_MAX) continue
+      error(
+        'speech-line-too-long',
+        key,
+        `Line "${key}" (${locale}) of the recording "${deviceId}" plays is ${text.length} characters, and a subtitle fits in ${SPEECH_LINE_MAX}: split it in two.`,
+      )
     }
   }
 

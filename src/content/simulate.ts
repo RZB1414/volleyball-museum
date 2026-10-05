@@ -35,17 +35,20 @@ import {
   deskRadioIntent,
   deviceInputOf,
   deviceIntent,
+  deviceLive,
   deviceSetFlag,
   radioDevices,
   radioHintIndex,
   radioIsLive,
+  voiceUtterance,
+  type VoiceDevice,
 } from '../engine/deviceRules.ts'
 import { EXAMINE_MIN_CONE_DEGREES, examineReach } from '../engine/examineReach.ts'
 import { attemptLock, lockCredentialKeys } from '../engine/lockRules.ts'
 import { isContainerTaken } from '../engine/notebook.ts'
 import { isRoomPowered } from '../engine/power.ts'
 import { conditionClass, credentialKey, progressConditionMet } from '../engine/progressCondition.ts'
-import { clockGrant, containerGrant, doorGrant, hotspotGrant } from '../engine/progressGrants.ts'
+import { clockGrant, containerGrant, doorGrant, hotspotGrant, recordingGrant } from '../engine/progressGrants.ts'
 import {
   buildTransitionDoorSpecs,
   transitionDoorBlock,
@@ -135,6 +138,8 @@ export type PlayerAction =
   | { readonly kind: 'take'; readonly deviceId: string }
   /** A stopped clock put right: E on it, with its mains on. */
   | { readonly kind: 'set-clock'; readonly deviceId: string }
+  /** A thing that speaks, worked and heard to its last line: a dead line, a recording. */
+  | { readonly kind: 'voice'; readonly deviceId: string }
 
 /** What an action asks of the save and gives to it, as atoms. */
 export type ActionRecord = {
@@ -268,7 +273,10 @@ function containerBehind(content: MuseumContent, lockId: string): ContainerData 
  * the rules ignore is not: a door barred from this side, a switch whose room
  * already has power, a detail already seen, a detail no hand can turn to the
  * camera, a notebook that has left its desk, a radio without charge, a clock
- * with no mains or already put right.
+ * with no mains or already put right, a machine with no mains. A thing that
+ * speaks is in the list whenever it would answer, whether or not what it
+ * says leaves anything in the save: a dead line is answered, and gives
+ * nothing.
  *
  * A code is in the list only for a player who has had the keypad in front of
  * her and knows the fact it asks for. The keypad itself compares digits and
@@ -321,8 +329,15 @@ export function availableActions(content: MuseumContent, progress: Progress, roo
   for (const device of here.devices ?? []) {
     if (device.kind === 'clock') {
       // Asked of the device's own rule, as the prompt and the key ask it.
-      const intent = deviceIntent(device, deviceInputOf(device, { progress, radio: null }, (id) => topology.rooms.get(id)))
+      const intent = deviceIntent(device, deviceInputOf(device, { progress, radio: null }, content))
       if (intent.kind === 'clock' && intent.intent === 'set') actions.push({ kind: 'set-clock', deviceId: device.id })
+      continue
+    }
+    if (device.kind === 'voice') {
+      // The same question, with nothing on air: it plays, or plays again.
+      if (deviceLive(deviceIntent(device, deviceInputOf(device, { progress, radio: null }, content)))) {
+        actions.push({ kind: 'voice', deviceId: device.id })
+      }
       continue
     }
     if (device.kind !== 'radio') continue
@@ -345,6 +360,21 @@ function clockOf(content: MuseumContent, deviceId: string) {
     }
   }
   return undefined
+}
+
+/** The voice an action is aimed at, wherever it stands. */
+function voiceOf(content: MuseumContent, deviceId: string): VoiceDevice | undefined {
+  for (const room of content.rooms) {
+    for (const device of room.devices ?? []) {
+      if (device.id === deviceId && device.kind === 'voice') return device
+    }
+  }
+  return undefined
+}
+
+/** The recording a voice would play to this save, if what it would say is one. */
+function recordingOf(content: MuseumContent, device: VoiceDevice, progress: Progress): string | undefined {
+  return voiceUtterance(device, progress, content)?.documentId
 }
 
 /** The action, as the grant the runtime's own verbs give it in this save. */
@@ -387,6 +417,13 @@ export function actionGrant(content: MuseumContent, progress: Progress, action: 
     case 'set-clock': {
       const clock = clockOf(content, action.deviceId)
       return clock ? clockGrant(clock) : {}
+    }
+    case 'voice': {
+      // Heard to its last line, which is what files a recording; a line of
+      // the device's own leaves nothing.
+      const voice = voiceOf(content, action.deviceId)
+      const recording = voice ? recordingOf(content, voice, progress) : undefined
+      return recording === undefined ? {} : recordingGrant(content, recording)
     }
   }
 }
@@ -592,6 +629,32 @@ function setClockRecord(topology: Topology, room: RoomData, device: Extract<Devi
   )
 }
 
+/**
+ * A recording heard out: its device's mains, whatever its utterance waits
+ * for, and the document it files. One record to a recording, named by it, so
+ * that a device given a second tape keeps the record of the first.
+ *
+ * An utterance that is a line of the device's own has no record: it gives
+ * nothing, so nothing is taken from anybody by its going.
+ */
+function voiceRecord(
+  topology: Topology,
+  content: MuseumContent,
+  room: RoomData,
+  device: VoiceDevice,
+  utterance: VoiceDevice['utterances'][number] & { readonly documentId: string },
+) {
+  return record(
+    `voice:${device.id}:${utterance.documentId}`,
+    [
+      atom('roomsVisited', room.id),
+      ...(device.poweredBy ? powerRequired(topology, device.poweredBy) : []),
+      ...conditionAtoms(utterance.when, content),
+    ],
+    grantAtoms(recordingGrant(content, utterance.documentId)),
+  )
+}
+
 function triggerRecord(content: MuseumContent, trigger: Trigger): ActionRecord {
   return record(`trigger:${trigger.id}`, conditionAtoms(trigger.when, content), [
     atom('triggersFired', trigger.id),
@@ -624,6 +687,11 @@ export function contentActions(content: MuseumContent): readonly ActionRecord[] 
     for (const device of room.devices ?? []) {
       if (device.kind === 'radio' && device.carriedOnUse) records.push(takeRecord(topology, room, device))
       if (device.kind === 'clock' && device.setFlag !== undefined) records.push(setClockRecord(topology, room, device))
+      if (device.kind === 'voice') {
+        for (const utterance of device.utterances) {
+          if (utterance.documentId !== undefined) records.push(voiceRecord(topology, content, room, device, utterance))
+        }
+      }
     }
   }
   for (const host of topology.hosts) {
@@ -693,6 +761,13 @@ export function actionRecord(
     case 'set-clock': {
       const device = (room.devices ?? []).find((candidate) => candidate.id === action.deviceId)
       return device?.kind === 'clock' && device.setFlag !== undefined ? setClockRecord(topology, room, device) : null
+    }
+    case 'voice': {
+      const device = (room.devices ?? []).find((candidate) => candidate.id === action.deviceId)
+      if (device?.kind !== 'voice') return null
+      const utterance = voiceUtterance(device, progress, content)
+      // What it says to this save: a recording has a record, a line of its own has none.
+      return utterance?.documentId !== undefined ? voiceRecord(topology, content, room, device, utterance) : null
     }
   }
 }
@@ -852,6 +927,8 @@ function conditionsOf(content: MuseumContent, topology: Topology): readonly Prog
   }
   for (const room of content.rooms) {
     for (const device of room.devices ?? []) {
+      // What a voice waits for before it says each thing.
+      if (device.kind === 'voice') conditions.push(...device.utterances.map((utterance) => utterance.when))
       if (device.kind !== 'radio') continue
       conditions.push(...device.calls.map((call) => call.when), ...device.hints.map((hint) => hint.when))
       // What ends a call's moment, and what an answer looks at before it is said.

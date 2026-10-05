@@ -261,7 +261,9 @@ test('every object on the desk is found', () => {
   const ids = items.map((item) => item.footprint.id)
   for (const expected of [
     'kit:ledger-stack',
-    'kit:desk-telephone',
+    // The telephone left the furniture in L3: it answers (a dead line), so
+    // it is a device, on the same leather at the same height.
+    'device:office-telephone',
     'container:office-notebook',
     'device:office-radio',
     'power:office-lamp-switch',
@@ -294,7 +296,7 @@ test('the rules catch the old ledger stack: sunk into the leather and through th
   )
   assert.ok(
     overlapProblems(withOld).some(
-      (problem) => problem.includes('kit:desk-telephone') && problem.includes('kit:ledger-stack (old)'),
+      (problem) => problem.includes('device:office-telephone') && problem.includes('kit:ledger-stack (old)'),
     ),
     'the ledgers standing in the telephone are reported',
   )

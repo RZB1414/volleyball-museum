@@ -15,8 +15,10 @@
  *   - a MIND, which asks the simulation what may be done (`availableActions`)
  *     and picks among it;
  *   - HANDS (`press`), which do to the store what each component does when E
- *     is pressed, line for line, with the pure rules the component calls. The
- *     hands never ask the simulation anything.
+ *     is pressed, line for line, with the pure rules the component calls (and,
+ *     where the component calls one function that does it all, as for a thing
+ *     that speaks, with that function). The hands never ask the simulation
+ *     anything.
  *
  * After every press the two are held against each other (`pressProblem`): a
  * press the simulation offered has to have written exactly what the
@@ -61,6 +63,7 @@ import { isContainerTaken } from '../../src/engine/notebook.ts'
 import { isRoomPowered } from '../../src/engine/power.ts'
 import { clockGrant, containerGrant, doorGrant, hotspotGrant } from '../../src/engine/progressGrants.ts'
 import { placeRadioCallOn } from '../../src/engine/radioCall.ts'
+import { operateVoiceOn } from '../../src/engine/voiceDevice.ts'
 import {
   buildTransitionDoorSpecs,
   canOpenTransitionDoor,
@@ -94,6 +97,8 @@ export function describe(action: PlayerAction): string {
       return `take ${action.deviceId}`
     case 'set-clock':
       return `set ${action.deviceId}`
+    case 'voice':
+      return `hear ${action.deviceId}`
   }
 }
 
@@ -270,12 +275,21 @@ export function press(page: GamePage, world: MuseumContent, action: PlayerAction
     case 'set-clock': {
       const device = (room.devices ?? []).find((candidate) => candidate.id === action.deviceId)
       if (!device || device.kind !== 'clock') return
-      const intent = deviceIntent(
-        device,
-        deviceInputOf(device, state, (roomId) => world.rooms.find((candidate) => candidate.id === roomId)),
-      )
+      const intent = deviceIntent(device, deviceInputOf(device, state, world))
       if (!deviceLive(intent) || intent.kind !== 'clock') return
       state.grant(clockGrant(device))
+      return
+    }
+
+    // `Devices.tsx`, `operateDevice`: a thing that speaks is worked by the
+    // one function the component calls, so this hand is the handler and not
+    // a copy of it. Then it is heard to its last line, as the subtitle's own
+    // timer would let it be: that is what files a recording.
+    case 'voice': {
+      const device = (room.devices ?? []).find((candidate) => candidate.id === action.deviceId)
+      if (!device || device.kind !== 'voice') return
+      if (!operateVoiceOn(page.store.useMuseum, world, device.id)) return
+      for (let line = 0; line < 64 && page.state().radio?.deviceId === device.id; line += 1) page.state().advanceRadio()
       return
     }
   }
@@ -327,6 +341,7 @@ export function everyPress(
   for (const device of room.devices ?? []) {
     if (device.kind === 'radio' && device.carriedOnUse) presses.push({ kind: 'take', deviceId: device.id })
     if (device.kind === 'clock' && device.setFlag !== undefined) presses.push({ kind: 'set-clock', deviceId: device.id })
+    if (device.kind === 'voice') presses.push({ kind: 'voice', deviceId: device.id })
   }
   return presses
 }

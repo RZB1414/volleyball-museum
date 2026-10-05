@@ -13,9 +13,15 @@
  *
  * Now there is one function, `attemptLock`, and it hands back an outcome and
  * a grant. Only one outcome may open a modal. The plan lists what the save
- * says was touched. v1: the kinds of lock that have a panel in this lot are
- * the knowledge lock alone; a key that is spent and a ritual arrive with
- * their own lots, and until then they refuse, out loud.
+ * says was touched. The kinds of lock that have a panel are the knowledge
+ * lock alone; a ritual arrives with its own lot, and until then it refuses,
+ * out loud.
+ *
+ * A key that is spent (L3) opens its lock by touch like any tool, and is
+ * never taken out of the save: it is spent because its one lock is open
+ * (`toolSpent`). That is asked here of two tabs that are alive
+ * (`lib/liveTabs.ts`), because a key removed from a list is exactly what the
+ * join of two tabs would bring back.
  */
 
 import assert from 'node:assert/strict'
@@ -23,6 +29,7 @@ import { readdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { openBrowser } from './lib/liveTabs.ts'
 import { progressWiringProblems, type SourceReader } from './lib/runtimeWiring.ts'
 import { openGame, saveOf, seeded, suite, throughJson } from './lib/storePage.ts'
 import { readText } from './lib/readText.ts'
@@ -30,8 +37,9 @@ import { readText } from './lib/readText.ts'
 const { MUSEUM } = await import('../src/content/museum.ts')
 const { fixtureLot, SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
 const { progressRulesFor } = await import('../src/engine/contentRegistry.ts')
-const { attemptLock, lockPanel, lockStatus, pendingLocks } = await import('../src/engine/lockRules.ts')
+const { attemptLock, containerOpen, lockPanel, lockStatus, pendingLocks, toolSpent } = await import('../src/engine/lockRules.ts')
 const { containerGrant } = await import('../src/engine/progressGrants.ts')
+const { credentialsTaken } = await import('../src/ui/promptRules.ts')
 const { effectGrant } = await import('../src/engine/triggers.ts')
 const { emptyProgress } = await import('../src/state/progressFields.ts')
 const { registerProgressRules } = await import('../src/state/progressRules.ts')
@@ -66,6 +74,8 @@ const ALL_LOCKS = Object.values(LOCKS)
 
 /** Every credential any of them asks for, in the save's spelling. */
 const KEYRING = ['badge:indoor', 'medallion:founding', 'medallion:lineage', 'tool:service-key']
+/** The one key that is spent on its lock. */
+const KEY = 'tool:service-key'
 const TOUCH: Attempt = { kind: 'touch' }
 const code = (entry: string): Attempt => ({ kind: 'code', entry })
 const ATTEMPTS: readonly Attempt[] = [TOUCH, code('1896'), code('1895'), code('')]
@@ -152,6 +162,9 @@ await test('a lock that takes a credential opens to whoever holds all of it, by 
     [LOCKS['staff-door'], ['badge:indoor']],
     [LOCKS.plinth, ['medallion:founding', 'medallion:lineage']],
     [LOCKS.hatch, ['tool:service-key']],
+    // The key that is spent on its lock (L3): the same row as the tool that
+    // is not. It refused as unsupported until the safe arrived.
+    [LOCKS.safe, ['tool:service-key']],
   ]
   for (const [lock, needs] of cases) {
     // There is no panel to type at: a code tried on it is a touch.
@@ -176,22 +189,57 @@ await test('a lock that takes a credential opens to whoever holds all of it, by 
   assert.equal(attempt(LOCKS.hatch, holding({ credentials: ['badge:service-key', 'service-key'] }), TOUCH).outcome, 'refused')
 })
 
-await test('a key that would be spent, and a ritual, refuse as unsupported until their lots (DL2-11)', () => {
-  for (const lock of [LOCKS.safe, LOCKS.shelf]) {
-    for (const keyring of [[], KEYRING]) {
-      for (const what of ATTEMPTS) {
-        assert.deepEqual(
-          attempt(lock, holding({ credentials: keyring }), what),
-          { outcome: 'refused', reason: 'unsupported', grant: seen(lock) },
-          `${lock.id}, ${JSON.stringify(what)}`,
-        )
-      }
+await test('a ritual refuses as unsupported until its lot, and so does a keypad with no answer behind it (DL2-11)', () => {
+  for (const keyring of [[], KEYRING]) {
+    for (const what of ATTEMPTS) {
+      assert.deepEqual(
+        attempt(LOCKS.shelf, holding({ credentials: keyring }), what),
+        { outcome: 'refused', reason: 'unsupported', grant: seen(LOCKS.shelf) },
+        `${LOCKS.shelf.id}, ${JSON.stringify(what)}`,
+      )
     }
   }
   // A keypad with no answer behind it could never be closed by the right code.
   for (const what of ATTEMPTS) {
     assert.deepEqual(attempt(LOCKS.drawer, holding(), what, []), { outcome: 'refused', reason: 'unsupported', grant: seen(LOCKS.drawer) })
   }
+  // The one kind left without a way in: every other lock of the suite opens
+  // to somebody.
+  const neverOpens = ALL_LOCKS.filter(
+    (lock) => ![TOUCH, code('1896')].some((what) => attempt(lock, holding({ credentials: KEYRING }), what).outcome === 'opened'),
+  )
+  assert.deepEqual(neverOpens.map((lock) => lock.kind), ['ritual'])
+})
+
+await test('a key that is spent opens its lock by touch, stays in the save, and is spent by the lock being open (DL3-1)', () => {
+  const { safe, hatch } = LOCKS
+  // The table, row by row: no key, the key, the lock already open.
+  assert.deepEqual(attempt(safe, holding(), TOUCH), { outcome: 'refused', reason: 'missing-credential', missing: [KEY], grant: seen(safe) })
+  assert.deepEqual(attempt(safe, holding({ credentials: [KEY] }), TOUCH), opened(safe))
+  assert.deepEqual(attempt(safe, holding({ credentials: [KEY], locksOpened: [safe.id], locksSeen: [safe.id] }), TOUCH), { outcome: 'open' })
+  // What opening it writes is about the lock and nothing else: the key is
+  // not taken out of anything. There is no grant that could take it.
+  const opening = attempt(safe, holding({ credentials: [KEY] }), TOUCH)
+  assert.deepEqual(Object.keys(opening.outcome === 'opened' ? opening.grant : {}).sort(), ['locksOpened', 'locksSeen'])
+
+  // Spent is read off the save, never written to it: the key of a consumed
+  // tool whose lock is open.
+  const before = holding({ credentials: [KEY] })
+  const after = holding({ credentials: [KEY], locksOpened: [safe.id], locksSeen: [safe.id] })
+  assert.deepEqual(toolSpent(ALL_LOCKS, before), [], 'a key in the hand and a safe still shut')
+  assert.deepEqual(toolSpent(ALL_LOCKS, after), [KEY], 'the safe is open: its key is spent')
+  assert.deepEqual(after.credentials, [KEY], 'and still in the save')
+  // A tool that is not consumed is never spent, however many locks it opened.
+  assert.deepEqual(toolSpent([hatch], holding({ credentials: [KEY], locksOpened: [hatch.id] })), [])
+  assert.deepEqual(toolSpent(ALL_LOCKS, holding({ locksOpened: ALL_LOCKS.map((lock) => lock.id) })), [KEY], 'once, whatever else is open')
+  // A lock opened by a consequence spent its key too: spent is what is true of the lock.
+  assert.deepEqual(toolSpent([safe], holding({ locksOpened: [safe.id] })), [KEY])
+  assert.deepEqual(toolSpent([], after), [])
+
+  // What a lock holds shut stands open with its lock open, and at once with none.
+  assert.equal(containerOpen({ lockId: safe.id }, before), false)
+  assert.equal(containerOpen({ lockId: safe.id }, after), true)
+  assert.equal(containerOpen({}, before), true, 'a cabinet with no lock is open from the start')
 })
 
 await test('no kind of lock without a panel ever answers "ask" (S1)', () => {
@@ -396,6 +444,126 @@ await test('every opened lock is on record as seen, after any sequence of attemp
       assert.deepEqual(pendingLocks(locks, page.progress()).filter((pending) => locksOpened.includes(pending.id)), [])
     }
   }
+})
+
+/**
+ * A house with the chain the Posse will have: a drawer that hands over a key
+ * when it opens, and a safe that key is spent on, which says so with a flag.
+ */
+const KEY_HOUSE = {
+  rooms: [{ id: 'hall', startsPowered: true }],
+  exhibits: [],
+  documents: [],
+  locks: [
+    { ...LOCKS.drawer, onOpen: [{ kind: 'grant-credential', credential: { kind: 'tool', id: 'service-key' } }] },
+    { ...LOCKS.safe, onOpen: [{ kind: 'set-flag', flag: 'safe-open' }] },
+  ],
+} as unknown as Content
+const KEY_RULES = progressRulesFor(KEY_HOUSE)
+const SAFE = KEY_HOUSE.locks[1]
+
+await test('two live tabs: one opens the safe, the other only held the key, and both end with the key, the safe open and the key spent', async () => {
+  // The night as another night left it: the drawer open, under a build whose
+  // drawer gave nothing yet. Both tabs are owed the key as the content arrives.
+  const browser = openBrowser(saveOf({ version: 1, radioCalls: [], locksOpened: ['drawer'], locksSeen: ['drawer'] }))
+  try {
+    const opener = await browser.open('the tab that opens the safe')
+    const keeper = await browser.open('the tab that only holds the key', 'idle')
+    const titled = await browser.open('a tab left on the title screen')
+    const inTheGame = [opener, keeper]
+    const leftAlone = (when: string) => {
+      const { quiet, rounds } = browser.settle()
+      assert.ok(quiet, `${when}: the tabs were still writing the save at each other (writes per round: ${rounds.join(', ')})`)
+    }
+    for (const tab of inTheGame) {
+      tab.act((state) => state.start())
+      tab.registerRules(KEY_RULES)
+    }
+    leftAlone('the content arrived in two tabs')
+    for (const tab of browser.tabs) {
+      assert.deepEqual(tab.progress().credentials, [KEY], `"${tab.name}" was handed the key the open drawer owed`)
+      assert.deepEqual(toolSpent(KEY_HOUSE.locks, tab.progress()), [], `"${tab.name}": a key in the hand is not a key spent`)
+    }
+
+    // One tab puts the key in the safe.
+    const outcome = opener.act((state) => {
+      const attempt = attemptLock(SAFE, FACTS, state.progress, TOUCH)
+      if (attempt.outcome !== 'open') state.grant(attempt.grant)
+      return attempt.outcome
+    })
+    assert.equal(outcome, 'opened')
+    assert.deepEqual(keeper.progress().locksOpened, ['drawer'], 'the other tab has not heard of it yet')
+    leftAlone('one tab opened the safe')
+
+    // The tab on the title screen has no rules and wrote nothing of its own;
+    // it holds what it was told, flag and all.
+    const disk = browser.disk()?.progress as Raw
+    for (const [who, progress] of [...browser.tabs.map((tab) => [tab.name, tab.progress()] as const), ['the disk', disk] as const]) {
+      assert.deepEqual(progress.credentials, [KEY], `${who}: the key is still in the save`)
+      assert.deepEqual(progress.locksOpened, ['drawer', 'safe'], `${who}: the safe is open`)
+      assert.deepEqual(progress.flags, ['safe-open'], `${who}: and what follows from it happened once`)
+      assert.deepEqual(toolSpent(KEY_HOUSE.locks, progress as Progress), [KEY], `${who}: the key is spent`)
+    }
+    // The tab that only held the key finds the safe open, and its touch
+    // writes nothing: there is nothing to open twice and no key to take back.
+    const written = browser.writes.length
+    assert.equal(keeper.act((state) => attemptLock(SAFE, FACTS, state.progress, TOUCH).outcome), 'open')
+    // A tab with no rules that writes (the title screen, a setting changed)
+    // rewrites the save from what it holds: the key and the flag are in it.
+    titled.act((state) => state.setSetting('brightness', 1.2))
+    leftAlone('the tab on the title screen changed a setting')
+    assert.equal(browser.writes.length, written + 1, 'a setting is one write, and nobody answers it')
+    assert.deepEqual(browser.disk()?.progress?.credentials, [KEY])
+    assert.deepEqual(browser.disk()?.progress?.flags, ['safe-open'])
+    assert.deepEqual(browser.disk()?.progress?.triggersFired, ['lock:drawer:opened', 'lock:safe:opened'])
+
+    // Silence: every tab made to write, as switching between tabs does, writes nothing.
+    const quietAt = browser.writes.length
+    for (const tab of browser.tabs) {
+      tab.hide()
+      tab.show()
+    }
+    leftAlone('every tab was hidden and shown')
+    assert.equal(browser.writes.length, quietAt, 'a tab with nothing new wrote as it was hidden')
+  } finally {
+    browser.close()
+  }
+})
+
+await test('a key the save was owed arrives with the content and is not announced; a key taken in play is, once', async () => {
+  const titles = new Map([[KEY, 'credential.service-key.title']])
+  // The title screen: the store has read the save, and the content has not arrived.
+  registerProgressRules({ settle: (progress: Progress) => progress })
+  const page = await openGame(saveOf({ version: 1, radioCalls: [], locksOpened: ['drawer'], locksSeen: ['drawer'] }))
+  assert.deepEqual(page.progress().credentials, [])
+  // The content arrives (the HUD's chunk imports the registry, so this is
+  // before its first render): the open drawer hands over its key, in one write.
+  assert.equal(page.notifications(() => registerProgressRules(KEY_RULES)), 1)
+  assert.deepEqual(page.progress().credentials, [KEY])
+  // The HUD mounts now, and what it first sees is the save as it stands.
+  const atMount = page.progress().credentials.length
+  assert.deepEqual(credentialsTaken(atMount, page.progress().credentials, titles), [], 'a key owed since another night was announced on Continue')
+  // A HUD that had looked before the content came would have greeted the
+  // load with it: that is the order `officeAnswersWiringProblems` holds.
+  assert.deepEqual(credentialsTaken(0, page.progress().credentials, titles), ['credential.service-key.title'])
+  // Reloaded, the key is in the save from the first read, and is not news either.
+  page.leave()
+  const back = await openGame(page.savedText()!)
+  assert.deepEqual(back.progress().credentials, [KEY])
+  assert.deepEqual(credentialsTaken(back.progress().credentials.length, back.progress().credentials, titles), [])
+
+  // A new game, with the content there from the start: the drawer is opened
+  // by its code, and the key it gives is taken now.
+  const fresh = await openGame()
+  const seen = fresh.progress().credentials.length
+  const typed = attemptLock(KEY_HOUSE.locks[0], FACTS, fresh.progress(), code('1896'))
+  assert.equal(typed.outcome, 'opened')
+  if (typed.outcome === 'opened') fresh.state().grant(typed.grant)
+  assert.deepEqual(credentialsTaken(seen, fresh.progress().credentials, titles), ['credential.service-key.title'])
+  // Announced once: the HUD has seen it, and the next write is about something else.
+  const after = fresh.progress().credentials.length
+  fresh.state().recordHint('torch-used')
+  assert.deepEqual(credentialsTaken(after, fresh.progress().credentials, titles), [])
 })
 
 await test('the corpus: a save from before `locksSeen` has seen exactly the locks it opened (DL2-4)', async () => {

@@ -34,6 +34,7 @@ import {
   notebookLetterLayoutProblems,
   planPageLayoutProblems,
   planWiringProblems,
+  readerLayoutProblems,
   type SourceReader,
 } from './lib/runtimeWiring.ts'
 import { openGame, suite } from './lib/storePage.ts'
@@ -756,6 +757,43 @@ await test("the director's letter fits its page, postscript and all, at the heig
   )
   // A rule in a form the check cannot read is not a rule that passes.
   assert.match(problemsWith(hand, '$<rule>170%'), /cannot count the lines/)
+})
+
+await test('the reader of a cabinet keeps its buttons in sight: the paper scrolls, the way on does not (L3)', () => {
+  // In the browser, at 844 x 390, with archive A open on its first paper:
+  // the panel was 179 px tall and «Próximo» was 98 px under its fold (148 on
+  // the second paper). It had always been so for «Fechar»; with a paper to a
+  // page the button is the way to the rest of the cabinet.
+  assert.deepEqual(readerLayoutProblems(readSource), [])
+
+  const changed =
+    (path: string, from: RegExp | string, to: string): SourceReader =>
+    (asked) => {
+      const source = readSource(asked)
+      if (asked !== path) return source
+      const next = source.replace(from, to)
+      assert.notEqual(next, source, 'the change found nothing to change')
+      return next
+    }
+  const styled = (from: RegExp | string, to: string) => readerLayoutProblems(changed('styles/museum.css', from, to)).join('\n')
+  const reader = /(?<rule>\n\.examine-panel\.is-reader \{[^}]*?)overflow-y: hidden;/
+  // The panel scrolling whole again, as it did.
+  assert.match(styled(reader, '$<rule>overflow-y: auto;'), /no longer a column that does not scroll/)
+  assert.match(styled(/(?<rule>\n\.examine-panel\.is-reader \{\s*)display: flex;/, '$<rule>display: block;'), /no longer a column/)
+  // A paper that cannot shrink pushes the buttons out of the panel.
+  assert.match(styled(/(?<rule>\n\.examine-panel\.is-reader \.document \{[^}]*?)min-height: 0;/, '$<rule>'), /no longer shrinks and scrolls/)
+  assert.match(styled(/(?<rule>\n\.examine-panel\.is-reader \.document \{[^}]*?)overflow-y: auto;/, '$<rule>overflow-y: visible;'), /no longer shrinks and scrolls/)
+  assert.match(styled(/(?<rule>\n\.examine-panel\.is-reader \.examine-actions \{\s*)flex: none;/, '$<rule>flex: 0 1 auto;'), /may be squeezed/)
+  // On a phone held sideways: taller than the examine view, and inside the screen.
+  const phone = /(?<rule>\n {2}\.examine-panel\.is-reader \{\s*max-height: )84vh/
+  assert.match(styled(phone, '$<rule>98vh'), /98vh over a margin of 4vh on a short screen, 102 in all/)
+  assert.match(styled(phone, '$<rule>46vh'), /no more than the 46vh of the examine view/)
+  assert.match(styled(phone, '$<rule>20rem'), /cannot add it up/)
+  // And the component has to wear the class the rules are written for.
+  assert.match(
+    readerLayoutProblems(changed('ui/Hud.tsx', 'className="examine-panel is-reader"', 'className="examine-panel"')).join('\n'),
+    /no longer gives the reader of a cabinet the class/,
+  )
 })
 
 done('plan checks')

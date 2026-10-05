@@ -1,5 +1,6 @@
 /**
- * Device rules: what the clock shows, what the radio says.
+ * Device rules: what the clock shows, what the radio says, what a telephone
+ * or a machine answers.
  *
  * Pure so the opening scene can be proved headless. The React layer in
  * `Devices.tsx` only feeds these the save, the clock and the elapsed time.
@@ -13,11 +14,13 @@ import type {
   RadioCall,
   RadioHint,
   RoomData,
+  VoiceUtterance,
 } from '../content/schema'
 import { isRoomPowered } from './power.ts'
 import { progressConditionMet, type ConditionProgress } from './progressCondition.ts'
 
 export type RadioDevice = Extract<DeviceData, { kind: 'radio' }>
+export type VoiceDevice = Extract<DeviceData, { kind: 'voice' }>
 
 const SECONDS_PER_DAY = 24 * 60 * 60
 
@@ -308,6 +311,9 @@ export function devicePowerRoom(device: DeviceData): EraId | null {
       return device.poweredBy
     case 'notice':
       return null
+    case 'voice':
+      // A dead line answers in the dark; a machine on mains does not.
+      return device.poweredBy ?? null
   }
 }
 
@@ -321,38 +327,72 @@ export type DeviceInput = {
   readonly speaking: boolean
   /** The flag it sets is in the save (a clock already put right); false of a device that sets none. */
   readonly set: boolean
+  /** The transmission on air is this device's own voice; false of whatever is no voice. */
+  readonly voicing: boolean
+  /**
+   * What a voice would play now: `none` for a line of its own (and for
+   * whatever is no voice), `waiting` for a recording not yet heard to its
+   * end, `heard` for one that has been.
+   */
+  readonly recording: 'none' | 'waiting' | 'heard'
 }
 
-/** The store, as far as a device's intent reads it. */
+/**
+ * The store, as far as a device's intent reads it. The save may be handed
+ * over whole or in part: a list that is not there answers as the save in
+ * which none of it happened (`progressCondition.ts`).
+ */
 export type DeviceWorld = {
-  readonly progress: {
-    readonly roomsPowered: readonly string[]
-    readonly devicesCarried?: readonly string[]
-    readonly flags?: readonly string[]
-  }
-  readonly radio: object | null
+  readonly progress: Pick<ConditionProgress, 'roomsPowered'> & Partial<ConditionProgress>
+  /** The transmission on air, if any, and whose it is. */
+  readonly radio: { readonly deviceId?: string } | null
 }
+
 
 /** The flag a device sets when worked, if it sets one: today, a clock that can be put right. */
 export function deviceSetFlag(device: DeviceData): string | null {
   return device.kind === 'clock' ? (device.setFlag ?? null) : null
 }
 
-/** A device's input, read off the save and the air as they are now. */
+/**
+ * What a voice device would say now: the first utterance whose moment it is,
+ * or null for a voice with nothing to say on this night (the gate refuses
+ * one: its last utterance asks nothing).
+ */
+export function voiceUtterance(
+  device: Pick<VoiceDevice, 'utterances'>,
+  progress: ConditionProgress,
+  content: Pick<MuseumContent, 'rooms' | 'exhibits'>,
+): VoiceUtterance | null {
+  return device.utterances.find((utterance) => progressConditionMet(utterance.when, progress, content)) ?? null
+}
+
+/**
+ * A device's input, read off the save and the air as they are now.
+ *
+ * Asked against the content: a mains device by the room that feeds it, a
+ * voice by whatever the conditions of its utterances name.
+ */
 export function deviceInputOf(
   device: DeviceData,
   world: DeviceWorld,
-  roomById: (roomId: string) => Pick<RoomData, 'id' | 'startsPowered'> | undefined,
+  content: Pick<MuseumContent, 'rooms' | 'exhibits'>,
 ): DeviceInput {
   const supply = devicePowerRoom(device)
-  const room = supply === null ? undefined : roomById(supply)
+  const room = supply === null ? undefined : content.rooms.find((candidate) => candidate.id === supply)
   const flag = deviceSetFlag(device)
+  // A voice asks its utterances of the save like any other condition; a
+  // list the asker did not hand over is the one in which nothing happened.
+  const progress: ConditionProgress = { locksOpened: [], documentsRead: [], catalogued: [], ...world.progress }
+  const recorded = device.kind === 'voice' ? voiceUtterance(device, progress, content)?.documentId : undefined
   return {
     // A supply the content does not have feeds nothing.
     powered: supply === null ? true : room !== undefined && isRoomPowered(room, world.progress.roomsPowered),
     carried: world.progress.devicesCarried?.includes(device.id) ?? false,
     speaking: world.radio !== null,
     set: flag !== null && Array.isArray(world.progress.flags) && world.progress.flags.includes(flag),
+    voicing: device.kind === 'voice' && world.radio?.deviceId === device.id,
+    recording: recorded === undefined ? 'none' : progress.documentsRead.includes(recorded) ? 'heard' : 'waiting',
   }
 }
 
@@ -374,6 +414,12 @@ export type DeviceIntent =
   | { readonly kind: 'radio'; readonly intent: DeskRadioIntent }
   /** A stopped clock that can be put right: E sets it. */
   | { readonly kind: 'clock'; readonly intent: 'set' }
+  /**
+   * A thing that speaks. `dead`: its mains are off, and E does nothing.
+   * `skip`: it is speaking, and E moves it on a line. `again`: what it
+   * would play is a recording already heard out. `play`: anything else.
+   */
+  | { readonly kind: 'voice'; readonly intent: 'dead' | 'play' | 'again' | 'skip' }
 
 export function deviceIntent(device: DeviceData, input: DeviceInput): DeviceIntent {
   switch (device.kind) {
@@ -390,7 +436,32 @@ export function deviceIntent(device: DeviceData, input: DeviceInput): DeviceInte
         kind: 'radio',
         intent: deskRadioIntent(device, { live: input.powered, carried: input.carried, speaking: input.speaking }),
       }
+    case 'voice':
+      if (!input.powered) return { kind: 'voice', intent: 'dead' }
+      // Its own voice, not the porter's: E on a telephone while he talks
+      // dials, and what he was saying is still owed.
+      if (input.voicing) return { kind: 'voice', intent: 'skip' }
+      return { kind: 'voice', intent: input.recording === 'heard' ? 'again' : 'play' }
   }
+}
+
+/** How long the message lamp of a voice takes to blink once: half lit, half dark. */
+export const MESSAGE_LAMP_PERIOD_SECONDS = 1.2
+
+/**
+ * Whether the message lamp of a voice shows now: it blinks while a recording
+ * waits unheard and the mains are on, and is dark for a voice with no lamp,
+ * no mains, no recording, or one already heard to its end. It goes on
+ * blinking while the message plays: unheard is unheard until the last line.
+ */
+export function messageLampLit(
+  device: Pick<VoiceDevice, 'messageLamp'>,
+  input: Pick<DeviceInput, 'powered' | 'recording'>,
+  seconds: number,
+) {
+  if (!device.messageLamp || !input.powered || input.recording !== 'waiting') return false
+  const phase = ((seconds % MESSAGE_LAMP_PERIOD_SECONDS) + MESSAGE_LAMP_PERIOD_SECONDS) % MESSAGE_LAMP_PERIOD_SECONDS
+  return phase < MESSAGE_LAMP_PERIOD_SECONDS / 2
 }
 
 /**
@@ -415,8 +486,8 @@ export function clockFaceAngles(
 
 /**
  * Whether E does anything to it. False for whatever only answers: a notice,
- * a radio with no charge. Those may hold the prompt and never the key, and
- * the touch button does not show for them.
+ * a radio with no charge, a machine with no mains. Those may hold the prompt
+ * and never the key, and the touch button does not show for them.
  */
 export function deviceLive(intent: DeviceIntent): boolean {
   switch (intent.kind) {
@@ -427,6 +498,8 @@ export function deviceLive(intent: DeviceIntent): boolean {
       return intent.intent !== 'dead'
     case 'clock':
       return true
+    case 'voice':
+      return intent.intent !== 'dead'
   }
 }
 
@@ -443,7 +516,8 @@ export function aimableDevices(
       // Asked of the rule itself, with the house lit and nothing done yet:
       // what a kind answers may change with power and with the save, but
       // whether it ever answers does not.
-      deviceIntent(device, { powered: true, carried: false, speaking: false, set: false }).kind === 'none'
+      deviceIntent(device, { powered: true, carried: false, speaking: false, set: false, voicing: false, recording: 'none' })
+        .kind === 'none'
         ? []
         : [{ room, device }],
     ),

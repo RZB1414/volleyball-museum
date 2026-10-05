@@ -1452,3 +1452,52 @@
 .examine-actions span button + button {
   margin-left: 0.5rem;
 }
+
+/* The reader of a cabinet, one paper at a time: back, where it is, on. A row
+   of its own, so the folio sits between the buttons at their height and the
+   three never wrap apart under a long note beside them. */
+.examine-actions .examine-pager {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.examine-actions .examine-pager button + button {
+  margin-left: 0;
+}
+
+.examine-folio {
+  color: #8a8070;
+  font-family: ui-monospace, monospace;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+/* In the reader the paper scrolls and its buttons do not. The panel used to
+   scroll whole, with the way out at the end of the scroll; with a paper to a
+   page, the way on to the next one has to be in sight on every page. */
+.examine-panel.is-reader {
+  display: flex;
+  flex-direction: column;
+  overflow-y: hidden;
+}
+
+.examine-panel.is-reader .document {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.examine-panel.is-reader .examine-actions {
+  flex: none;
+}
+
+/* A phone held sideways: nothing is held up behind a paper, so the reader
+   may take the height the examine view leaves to the piece. At 46vh it was
+   three lines of text over its own buttons. */
+@media (max-height: 420px) {
+  .examine-panel.is-reader {
+    max-height: 84vh;
+  }
+}

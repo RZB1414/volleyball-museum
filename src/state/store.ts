@@ -297,6 +297,13 @@ export type RadioTransmission = {
    * is checked against its own `when` (`transmissionLapsed`).
    */
   readonly validWhile?: ProgressCondition
+  /**
+   * What hearing it to its last line records, beside `callId`: a recorded
+   * message is filed in the archive when it has been heard out, and not
+   * when it was cut short. Handed in by whoever starts the transmission
+   * (the store imports no content to work it out).
+   */
+  readonly grantOnEnd?: ProgressGrant
 }
 
 export type MuseumStore = {
@@ -377,16 +384,19 @@ export type MuseumStore = {
   setJournalTab: (tab: JournalTab | null) => void
   startRadio: (transmission: Omit<RadioTransmission, 'serial' | 'index'>) => void
   /**
-   * The next line, or the end. Ending a content call records it as heard;
-   * ending a hang-up starts the dead air. Takes no argument on purpose, so
-   * it can never be handed a click event by an `onClick={advanceRadio}`.
+   * The next line, or the end. Ending a content call records it as heard,
+   * and whatever else the transmission files on being heard out
+   * (`grantOnEnd`); ending a hang-up starts the dead air. Takes no argument
+   * on purpose, so it can never be handed a click event by an
+   * `onClick={advanceRadio}`.
    */
   advanceRadio: () => void
   /**
    * Ends a transmission without its remaining lines, because what it says
    * stopped being true while a modal held it. A content call still counts as
    * heard, so nothing schedules it again; a hang-up does not start, since the
-   * line it would have ended on was never said.
+   * line it would have ended on was never said, and for the same reason
+   * nothing is filed.
    */
   dropRadio: () => void
   stopRadio: () => void
@@ -741,12 +751,16 @@ export const useMuseum = create<MuseumStore>((set, get) => {
   })
 
   // One write for the end and what it means, so a retry waiting on the radio
-  // to fall silent already sees the call as heard.
-  const endRadio = (radio: RadioTransmission, hangUp: boolean) => {
-    const callId = radio.callId
-    commitProgress((progress) => (callId ? grantProgress(progress, { radioCalls: [callId] }) : progress), {
+  // to fall silent already sees the call as heard. `heardOut` is false for a
+  // transmission dropped with lines unsaid: a call still counts as heard
+  // (nothing may schedule it again), while a hang-up does not start and a
+  // recording is not filed, since neither was heard to the line that does it.
+  const endRadio = (radio: RadioTransmission, heardOut: boolean) => {
+    const heard: ProgressGrant = radio.callId ? { radioCalls: [radio.callId] } : {}
+    const filed: ProgressGrant = heardOut && radio.grantOnEnd ? radio.grantOnEnd : {}
+    commitProgress((progress) => grantProgress(grantProgress(progress, heard), filed), {
       radio: null,
-      ...(hangUp && radio.hangsUpFor ? { radioHungUpUntil: Date.now() + radio.hangsUpFor * 1000 } : {}),
+      ...(heardOut && radio.hangsUpFor ? { radioHungUpUntil: Date.now() + radio.hangsUpFor * 1000 } : {}),
     })
   }
 

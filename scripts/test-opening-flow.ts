@@ -18,7 +18,7 @@
 
 import assert from 'node:assert/strict'
 
-import { Box3, Matrix4, Ray, Vector3 } from 'three'
+import { Box3, Group, Matrix4, Mesh, Ray, Vector3 } from 'three'
 import { readText } from './lib/readText.ts'
 
 // ---------------------------------------------------------------------------
@@ -89,7 +89,19 @@ const {
   PROXY_MINIMUM,
   shouldCapturePointer,
 } = await import('../src/engine/interactionTarget.ts')
-const { checklistPageOf, containerById, journalUnlocked } = await import('../src/engine/notebook.ts')
+const {
+  CONTAINER_DOOR_SECONDS,
+  doorAngleAfter,
+  prepareContainerContents,
+  prepareContainerDoor,
+  showContainerContents,
+  swingContainerDoor,
+} = await import('../src/engine/containerNodes.ts')
+const { hiddenInScene } = await import('../src/engine/deviceNodes.ts')
+const { checklistPageOf, containerById, journalUnlocked, notebookPagesFor } = await import('../src/engine/notebook.ts')
+const { containerGrant } = await import('../src/engine/progressGrants.ts')
+const { containerReadQueue, readerAdvance, readerKeyPage, readerPageCount, transcriptText } = await import('../src/engine/readingQueue.ts')
+const { contentActions } = await import('../src/content/simulate.ts')
 const { isUnclaimedInteractKey } = await import('../src/engine/primaryAction.ts')
 const { progressConditionMet } = await import('../src/engine/progressCondition.ts')
 const {
@@ -114,8 +126,8 @@ const {
   shouldAnnounceJournal,
 } = await import('../src/ui/hudRules.ts')
 const { portalOpening } = await import('../src/ui/mapGeometry.ts')
-const { containerPrompt, devicePrompt } = await import('../src/ui/promptRules.ts')
-const { deviceWiringProblems } = await import('./lib/runtimeWiring.ts')
+const { containerPrompt, credentialsTaken, devicePrompt } = await import('../src/ui/promptRules.ts')
+const { deviceWiringProblems, officeAnswersWiringProblems } = await import('./lib/runtimeWiring.ts')
 
 type Progress = ReturnType<typeof migrateProgress>
 type StoreState = ReturnType<typeof useMuseum.getState>
@@ -485,12 +497,13 @@ test('a thing that only says something holds the prompt and never the key (L3)',
   assert.ok(podium, "the hall's plinth is something the crosshair rests on")
   assert.equal(podium.room.id, 'atrium')
   assert.equal(podium.device.kind, 'notice')
-  // The crosshair rests on what answers it: the radio, the plinth and, since
-  // it can be put right, the clock on the office wall. A door reader says
-  // nothing to E, and is not in the list.
+  // The crosshair rests on what answers it: the radio, the plinth, the clock
+  // on the office wall (it can be put right) and the telephone on the desk
+  // (it has a dead line to say). A door reader says nothing to E, and is not
+  // in the list.
   assert.deepEqual(
     aimableDevices(MUSEUM).map((entry) => `${entry.room.id}/${entry.device.id}`).sort(),
-    ['atrium/atrium-podium', 'office/office-clock', 'office/office-radio'],
+    ['atrium/atrium-podium', 'office/office-clock', 'office/office-radio', 'office/office-telephone'],
   )
 
   // Alone under the crosshair it owns the prompt, and E has nothing to do:
@@ -576,7 +589,7 @@ test('a thing that only says something holds the prompt and never the key (L3)',
   assert.deepEqual(clockFocus(progressWith({ roomsPowered: ['office'], flags: ['clock-set'] })), { kind: 'device', id: 'office-clock', live: false })
   const officeClock = aimableDevices(MUSEUM).find((entry) => entry.device.id === 'office-clock')!.device
   const clockView = (progress: Progress) =>
-    devicePrompt(officeClock, deviceIntent(officeClock, deviceInputOf(officeClock, { progress, radio: null }, (id) => MUSEUM.rooms.find((room) => room.id === id))))
+    devicePrompt(officeClock, deviceIntent(officeClock, deviceInputOf(officeClock, { progress, radio: null }, MUSEUM)))
   assert.deepEqual(clockView(progressWith({ roomsPowered: ['office'] })), {
     form: 'action',
     key: true,
@@ -885,6 +898,287 @@ test('a list from the save is never announced, only its growth', () => {
   const hud = source('ui/Hud.tsx')
   assert.ok(hud.includes('useMuseum((state) => state.progress.doorsReleased)'), 'the door toast reads doorsReleased')
   assert.ok(hud.includes('listGrew(seenLength.current, released.length)'), 'and announces only its growth')
+})
+
+test('a credential is announced by its name when it is taken, and never because it came with the save (L3)', () => {
+  const titles = new Map([
+    ['tool:service-key', 'credential.service-key.title'],
+    ['medallion:curator', 'credential.curator.title'],
+  ])
+  const KEY = 'tool:service-key'
+  // On mount the save is whole: a key taken on another night is not news.
+  assert.deepEqual(credentialsTaken(1, [KEY], titles), [])
+  assert.deepEqual(credentialsTaken(0, [], titles), [])
+  // Taken now: announced by the name the content gives it.
+  assert.deepEqual(credentialsTaken(0, [KEY], titles), ['credential.service-key.title'])
+  // Only what is new, in the order it came; two at once are two names.
+  assert.deepEqual(credentialsTaken(1, [KEY, 'medallion:curator'], titles), ['credential.curator.title'])
+  assert.deepEqual(credentialsTaken(0, [KEY, 'medallion:curator'], titles), ['credential.service-key.title', 'credential.curator.title'])
+  // A new game empties the list: nothing is announced by a list that shrank.
+  assert.deepEqual(credentialsTaken(2, [], titles), [])
+  assert.deepEqual(credentialsTaken(2, [KEY], titles), [])
+  // A credential this content does not declare (another build's) has no name to be announced by.
+  assert.deepEqual(credentialsTaken(0, ['badge:beach'], titles), [])
+  assert.deepEqual(credentialsTaken(0, ['badge:beach', KEY], titles), ['credential.service-key.title'])
+  assert.deepEqual(credentialsTaken(0, [KEY], new Map()), [], 'with no credential declared, as in this slice, nothing can be announced')
+  // The words: «Você pegou — {nome}».
+  assert.equal(ptBR['credential.taken'], 'Você pegou')
+  assert.equal(en['credential.taken'], 'You took')
+  // What a trigger hands over as the content arrives (the key an open drawer
+  // was owed) is in the save before the HUD first looks: `test:locks` plays
+  // that load against the store, and the wiring further down holds the HUD
+  // to importing the registry that makes it so.
+  assert.deepEqual(MUSEUM.credentials ?? [], [])
+})
+
+// ---------------------------------------------------------------------------
+// A cabinet read one paper at a time (H-35), and a door on a hinge (L3)
+// ---------------------------------------------------------------------------
+
+test('a cabinet hands over its papers one at a time, in the order of the content, and E on the last closes it', () => {
+  // Archive A of Wing 1: two papers, each a page of its own.
+  const archiveA = containerReadQueue(MUSEUM, 'holyoke-cabinet-a')
+  assert.deepEqual(archiveA, [
+    { documentId: 'doc-invention-date', kind: 'body', titleKey: 'document.invention-date.title', bodyKey: 'document.invention-date.body' },
+    { documentId: 'doc-halstead', kind: 'body', titleKey: 'document.halstead.title', bodyKey: 'document.halstead.body' },
+  ])
+  assert.deepEqual(
+    archiveA.map((page) => page.documentId),
+    MUSEUM.documents.filter((doc) => doc.containerId === 'holyoke-cabinet-a').map((doc) => doc.id),
+    'in the order the content lists them',
+  )
+  assert.equal(containerReadQueue(MUSEUM, 'holyoke-cabinet-b').length, 1)
+  assert.equal(containerReadQueue(MUSEUM, 'office-cabinet').length, 1)
+  // A cabinet that holds nothing, one the house does not have, and no cabinet at all.
+  assert.deepEqual(containerReadQueue({ documents: [] }, 'holyoke-cabinet-a'), [])
+  assert.deepEqual(containerReadQueue(MUSEUM, 'no-such-cabinet'), [])
+  assert.deepEqual(containerReadQueue(MUSEUM, null), [])
+
+  // A paper of two pages is two pages, in its own order; a recording is one,
+  // and carries its lines; a plain paper after them is one more.
+  const [flyleaf, letter] = notebookPagesFor(MUSEUM, 'office-notebook')
+  const box = {
+    rooms: [{ id: 'hall', containers: [{ id: 'box', part: 'archive-cabinet', position: [0, 0, 0], titleKey: 'container.office.title' }] }],
+    documents: [
+      { id: 'doc-book', containerId: 'box', titleKey: 'document.welcome.title', bodyKey: 'document.welcome.summary', pages: [flyleaf, letter] },
+      { id: 'doc-tape', containerId: 'box', titleKey: 'document.halstead.title', bodyKey: 'document.halstead.body', lineKeys: ['radio.call.hello.1', 'radio.call.hello.2'] },
+      { id: 'doc-note', containerId: 'box', titleKey: 'document.predecessor.title', bodyKey: 'document.predecessor.body' },
+      { id: 'doc-elsewhere', containerId: 'another', titleKey: 'document.halstead.title', bodyKey: 'document.halstead.body' },
+    ],
+  } as unknown as Parameters<typeof readerPageCount>[0]
+  assert.deepEqual(containerReadQueue(box, 'box'), [
+    { documentId: 'doc-book', kind: 'page', titleKey: 'document.welcome.title', page: flyleaf },
+    { documentId: 'doc-book', kind: 'page', titleKey: 'document.welcome.title', page: letter },
+    { documentId: 'doc-tape', kind: 'transcript', titleKey: 'document.halstead.title', lineKeys: ['radio.call.hello.1', 'radio.call.hello.2'] },
+    { documentId: 'doc-note', kind: 'body', titleKey: 'document.predecessor.title', bodyKey: 'document.predecessor.body' },
+  ])
+  // A transcript is printed as one paragraph: what was said, line after line.
+  assert.equal(transcriptText(['Aqui é o Otávio.', 'O último ônibus é o das cinco.']), 'Aqui é o Otávio. O último ônibus é o das cinco.')
+  assert.equal(transcriptText([]), '')
+
+  // E turns to the next and, on the last, closes: the rule of the notebook, for every reader.
+  assert.equal(readerPageCount(MUSEUM, 'holyoke-cabinet-a'), 2)
+  assert.equal(readerAdvance(MUSEUM, 'holyoke-cabinet-a', 0), 1)
+  assert.equal(readerAdvance(MUSEUM, 'holyoke-cabinet-a', 1), 'close', 'E on the last paper closes the cabinet')
+  assert.equal(readerAdvance(MUSEUM, 'holyoke-cabinet-b', 0), 'close', 'a cabinet with one paper closes at once, as it did')
+  assert.deepEqual([0, 1, 2, 3].map((page) => readerAdvance(box, 'box', page)), [1, 2, 3, 'close'])
+  // The notebook turns its own pages, as before.
+  assert.equal(readerPageCount(MUSEUM, 'office-notebook'), notebookPagesFor(MUSEUM, 'office-notebook').length)
+  assert.deepEqual([0, 1, 2].map((page) => readerAdvance(MUSEUM, 'office-notebook', page)), [1, 2, 'close'])
+  // A page past the end (a save of nothing: the page is session state) still closes.
+  assert.equal(readerAdvance(MUSEUM, 'holyoke-cabinet-a', 7), 'close')
+  assert.equal(readerAdvance(MUSEUM, null, 0), 'close')
+
+  // The arrows and the page keys turn without closing, and stop at each end.
+  assert.equal(readerKeyPage('ArrowRight', 0, 1), 1)
+  assert.equal(readerKeyPage('PageDown', 0, 1), 1)
+  assert.equal(readerKeyPage('ArrowRight', 1, 1), 1, 'the last page stays: only E and the button close')
+  assert.equal(readerKeyPage('ArrowLeft', 1, 1), 0)
+  assert.equal(readerKeyPage('PageUp', 0, 1), 0)
+  assert.equal(readerKeyPage('KeyE', 0, 1), null)
+  assert.equal(readerKeyPage('Escape', 0, 1), null)
+
+  // Opening the cabinet reads everything in it at once, as it always did:
+  // the reader shows one paper at a time, the save does not wait for the
+  // second (DL3-9). The record of L2 has this action giving both papers and
+  // the fact, and a grant by page would have taken one away.
+  assert.deepEqual(containerGrant(MUSEUM, 'holyoke-cabinet-a'), {
+    documentsRead: ['doc-invention-date', 'doc-halstead'],
+    factsKnown: ['springfield-renaming'],
+  })
+  const recorded = (JSON.parse(readText(new URL('../docs/releases/L2.graph.json', import.meta.url))) as {
+    actions: { id: string; requires: string[]; grants: string[] }[]
+  }).actions.find((action) => action.id === 'container:holyoke-cabinet-a')
+  assert.deepEqual(recorded?.grants, ['doc:doc-halstead', 'doc:doc-invention-date', 'fact:springfield-renaming'])
+  assert.deepEqual(contentActions(MUSEUM).find((action) => action.id === 'container:holyoke-cabinet-a'), recorded, 'word for word what L2 wrote down')
+  // And the store starts every cabinet on its first paper.
+  useMuseum.getState().setOpenedContainer('holyoke-cabinet-a')
+  useMuseum.getState().setNotebookPage(1)
+  useMuseum.getState().setOpenedContainer(null)
+  useMuseum.getState().setOpenedContainer('holyoke-cabinet-a')
+  assert.equal(useMuseum.getState().notebookPage, 0)
+  useMuseum.getState().setOpenedContainer(null)
+})
+
+test('a door swings on its hinge without moving a node, and what stands behind it shows only while it is open', () => {
+  // A safe made for the test, placed and turned as a container is: a body,
+  // a door of two families, a paper on the shelf, hardware that stays put.
+  const placed = new Group()
+  placed.position.set(2.55, 0, 2.45)
+  placed.rotation.y = -Math.PI / 2
+  const assembly = new Group()
+  placed.add(assembly)
+  const names = ['test-safe', 'test-safe__hardware', 'test-safe__door', 'test-safe__door-hardware', 'test-safe__papers']
+  for (const [index, name] of names.entries()) {
+    const node = new Mesh()
+    node.name = name
+    // A quantisation compensation of its own, as every baked node has.
+    node.position.set(0.11 + 0.013 * index, 0.2 + 0.07 * index, -0.05 + 0.021 * index)
+    node.scale.setScalar(0.6 + index * 0.05)
+    assembly.add(node)
+  }
+  const world = () => {
+    placed.updateMatrixWorld(true)
+    return names.map((name) => assembly.getObjectByName(name)!.getWorldPosition(new Vector3()))
+  }
+  const before = world()
+  const sum = (points: readonly Vector3[]) => points.reduce((total, point) => total.add(point), new Vector3())
+  const hinge = { nodePrefix: 'door', hingeAt: [0.31, 0.27] as [number, number], openAngle: -1.75 }
+
+  const door = prepareContainerDoor(assembly, 'test-safe', hinge)
+  assert.ok(door)
+  assert.deepEqual(door.children.map((child) => child.name), ['test-safe__door', 'test-safe__door-hardware'], 'every family that begins with the prefix')
+  assert.equal(prepareContainerDoor(assembly, 'test-safe', hinge), door, 'idempotent under StrictMode')
+  assert.equal(door.children.length, 2)
+  const contents = prepareContainerContents(assembly, 'test-safe', [{ node: 'papers' }])
+  assert.ok(contents)
+  assert.deepEqual(contents.children.map((child) => child.name), ['test-safe__papers'])
+  assert.equal(prepareContainerContents(assembly, 'test-safe', [{ node: 'papers' }]), contents, 'idempotent too')
+  assert.deepEqual(
+    assembly.children.map((child) => child.name),
+    ['test-safe', 'test-safe__hardware', door.name, contents.name],
+    'the body and its hardware stay where they were',
+  )
+  // Gathered, and shut: no node is anywhere but where the bake put it.
+  swingContainerDoor(door, 0)
+  const gathered = world()
+  for (const [index, name] of names.entries()) {
+    assert.ok(gathered[index].distanceTo(before[index]) < 1e-12, `${name} moved when the door was put on its hinge`)
+  }
+  assert.ok(sum(gathered).distanceTo(sum(before)) < 1e-12)
+
+  // Open: the door's nodes turn about the hinge, each at the distance from
+  // it that it had, at the height it had; nothing else moves.
+  swingContainerDoor(door, hinge.openAngle)
+  const open = world()
+  placed.updateMatrixWorld(true)
+  const hingeWorld = assembly.localToWorld(new Vector3(hinge.hingeAt[0], 0, hinge.hingeAt[1]))
+  const fromHinge = (point: Vector3) => Math.hypot(point.x - hingeWorld.x, point.z - hingeWorld.z)
+  for (const [index, name] of names.entries()) {
+    const swung = name.startsWith('test-safe__door')
+    assert.equal(open[index].distanceTo(before[index]) > 0.05, swung, `${name} ${swung ? 'did not swing' : 'moved with the door'}`)
+    assert.ok(Math.abs(open[index].y - before[index].y) < 1e-12, `${name} kept its height`)
+    assert.ok(Math.abs(fromHinge(open[index]) - fromHinge(before[index])) < 1e-12, `${name} turned about the hinge`)
+  }
+  // And shut again it is back to the bake, to the last digit that matters.
+  swingContainerDoor(door, 0)
+  const shut = world()
+  for (const [index, name] of names.entries()) assert.ok(shut[index].distanceTo(before[index]) < 1e-12, `${name} came back`)
+  swingContainerDoor(null, 1)
+
+  // What is behind the door shows with the container open and is hidden with
+  // it shut: by a group, so the ray that finds a hidden mesh still rejects it.
+  const papers = assembly.getObjectByName('test-safe__papers') as Mesh
+  showContainerContents(contents, false)
+  papers.visible = true
+  assert.equal(hiddenInScene(papers), true, 'behind a shut door the paper is not aimed at')
+  assert.equal(hiddenInScene(assembly.getObjectByName('test-safe') ?? null), false)
+  showContainerContents(contents, true)
+  assert.equal(hiddenInScene(papers), false)
+  showContainerContents(null, true)
+
+  // A recipe with no such nodes has no door and no contents to prepare.
+  assert.equal(prepareContainerDoor(new Group(), 'test-safe', hinge), null)
+  assert.equal(prepareContainerContents(new Group(), 'test-safe', [{ node: 'papers' }]), null)
+  // Nor one whose nodes are not the ones named: a content names its node whole.
+  const other = new Group()
+  for (const name of ['test-safe', 'test-safe__papers-clip']) {
+    const node = new Mesh()
+    node.name = name
+    other.add(node)
+  }
+  assert.equal(prepareContainerContents(other, 'test-safe', [{ node: 'papers' }]), null, 'a content is one node, not every family that begins like it')
+  assert.equal(prepareContainerContents(other, 'test-safe', []), null)
+  assert.equal(prepareContainerDoor(other, 'test-safe', hinge), null)
+
+  // The swing: from shut to open in the time it takes, never past either
+  // end, whichever way the hinge turns and however long the frame was.
+  for (const openAngle of [-1.75, 1.2]) {
+    let angle = 0
+    const steps: number[] = []
+    for (let frame = 0; frame < 200 && angle !== openAngle; frame += 1) {
+      angle = doorAngleAfter(angle, openAngle, openAngle, 1 / 60)
+      steps.push(angle)
+    }
+    assert.equal(angle, openAngle, 'it arrives exactly')
+    assert.ok(Math.abs(steps.length / 60 - CONTAINER_DOOR_SECONDS) < 0.05, `open in ${(steps.length / 60).toFixed(2)} s`)
+    assert.ok(steps.every((step) => Math.abs(step) <= Math.abs(openAngle) && Math.sign(step) === Math.sign(openAngle)), 'never past the stop')
+    assert.ok(steps.every((step, index) => index === 0 || Math.abs(step) > Math.abs(steps[index - 1])), 'and always on')
+    assert.equal(doorAngleAfter(0, openAngle, openAngle, 5), openAngle, 'a frozen tab comes back to a door that is open, not past it')
+    assert.equal(doorAngleAfter(openAngle, 0, openAngle, 5), 0)
+    assert.equal(doorAngleAfter(openAngle / 2, openAngle, openAngle, 0), openAngle / 2, 'no time, no movement')
+    assert.equal(doorAngleAfter(openAngle, openAngle, openAngle, 1), openAngle)
+  }
+  assert.equal(doorAngleAfter(0.3, 0, 0, 1), 0, 'a door that opens by nothing is where it is told to be')
+})
+
+test('the components ask those rules: the voice, the reader, the hinge and the toast of a credential (L3)', () => {
+  assert.deepEqual(officeAnswersWiringProblems(source), [])
+  const changed = (path: string, from: string | RegExp, to: string) => (asked: string) => {
+    if (asked !== path) return source(asked)
+    const next = source(asked).replace(from, to)
+    assert.notEqual(next, source(asked), `the refactor of ${path} found nothing to change`)
+    return next
+  }
+  const refactors: readonly (readonly [string, (path: string) => string])[] = [
+    // The voice: the press, what a recording files, the lamp.
+    ['E on a voice that is taken and says nothing', changed('engine/Devices.tsx', 'return operateVoice(deviceId)', 'return true')],
+    ['a voice that decides what E does apart from its prompt', changed('engine/voiceDevice.ts', 'deviceIntent(device, deviceInputOf(device, state, content))', "({ kind: 'voice', intent: 'play' } as const)")],
+    ['a voice that starts over when asked to move on', changed('engine/voiceDevice.ts', "if (intent.intent === 'skip') {", "if (intent.intent === 'never') {")],
+    ['a recording played and never filed', changed('engine/voiceDevice.ts', '{ grantOnEnd: recordingGrant(content, utterance.documentId) }', '{}')],
+    ['a recording filed whether or not it was heard out', changed('state/store.ts', 'heardOut && radio.grantOnEnd ? radio.grantOnEnd : {}', 'radio.grantOnEnd ?? {}')],
+    ['the end of a transmission that files nothing', changed('state/store.ts', 'grantProgress(grantProgress(progress, heard), filed)', 'grantProgress(progress, heard)')],
+    ['a lamp that blinks by a rule of its own', changed('engine/Devices.tsx', 'messageLampLit(device, deviceInputOf(device, useMuseum.getState(), MUSEUM), clock.elapsedTime)', 'clock.elapsedTime % 1 < 0.5')],
+    ['a lamp that is green for a message', changed('engine/Devices.tsx', "lit ? 'led-red' : 'led-off'", "lit ? 'led-green' : 'led-off'")],
+    ['a voice whose lamp nobody paints', changed('engine/Devices.tsx', "{device.kind === 'voice' && device.messageLamp ? (", "{device.kind === 'voice' && false ? (")],
+    // The porter, cut off by a voice that took the air: owed, and delivered again.
+    ['a director that asks only when the save changes', changed('engine/Devices.tsx', '}, [onAir, progress])', '}, [progress])')],
+    ['a director that does not watch the air', changed('engine/Devices.tsx', 'const onAir = useMuseum((state) => state.radio !== null)', 'const onAir = false')],
+    ['a call scheduled again while it is being said', changed('engine/Devices.tsx', ' || useMuseum.getState().radio?.callId === call.id) continue', ') continue')],
+    // The reader.
+    ['E that closes a cabinet from its first paper', changed('engine/Containers.tsx', 'const next = readerAdvance(MUSEUM, state.openedContainer, state.notebookPage)', "const next = 'close' as number | 'close'")],
+    ['a reader that lists the papers by itself', changed('ui/Hud.tsx', 'containerReadQueue(MUSEUM, openedContainer)', 'MUSEUM.documents.filter((doc) => doc.containerId === openedContainer)')],
+    ['a reader that draws every paper at once', changed('ui/Hud.tsx', 'const current = queue[shown]', 'const current = queue[0]')],
+    ['arrow keys that turn only the notebook', changed('ui/Hud.tsx', 'useReaderKeys(queue.length > 0, lastPage)', 'void lastPage')],
+    ['keys decided in the hook', changed('ui/useReaderKeys.ts', 'readerKeyPage(event.code, state.notebookPage, lastPage)', "event.code === 'ArrowRight' ? state.notebookPage + 1 : null")],
+    ['a notebook with keys of its own again', changed('ui/Notebook.tsx', 'useReaderKeys(Boolean(openedContainer) && pages.length > 0, lastPage)', 'void lastPage')],
+    ['a reader with no button for the next paper', changed('ui/Hud.tsx', "{t('reader.next')} →", "{t('prompt.close')}")],
+    ['a recording filed and shown as its summary, in the reader', changed('ui/Hud.tsx', 'transcriptText(', 'String(')],
+    ['a recording filed and shown as its summary, in the archive', changed('ui/Journal.tsx', 'transcriptText(', 'String(')],
+    // The hinge.
+    ['a cabinet open by a rule of its own', changed('engine/Containers.tsx', 'containerOpen(container, state.progress)', 'container.lockId === undefined')],
+    ['a door never put on its hinge', changed('engine/Containers.tsx', 'prepareContainerDoor(instance, container.part, container.door)', 'null')],
+    ['a door that swings while its lock is shut', changed('engine/Containers.tsx', 'const target = open ? container.door.openAngle : 0', 'const target = container.door.openAngle')],
+    ['a hinge that is never turned', changed('engine/Containers.tsx', 'swingContainerDoor(door, angle)', 'void angle')],
+    ['what a safe holds, drawn through its shut door', changed('engine/Containers.tsx', 'showContainerContents(contents, open)', 'showContainerContents(contents, true)')],
+    // The toast.
+    ['a toast for a credential that came with the save', changed('ui/Hud.tsx', 'credentialsTaken(seenLength.current, credentials, credentialTitles)', 'credentialsTaken(0, credentials, credentialTitles)')],
+    ['a credential named by the component', changed('ui/Hud.tsx', '[credentialKey(entry.credential), entry.titleKey]', "[credentialKey(entry.credential), 'credential.taken']")],
+    ['a toast nobody mounts', changed('ui/Hud.tsx', /\n\s*<CredentialToast \/>/, '')],
+    ['a HUD that may see the save before the content settled it', changed('ui/Hud.tsx', /import '\.\.\/engine\/contentRegistry'\n/, '')],
+  ]
+  const uncaught = refactors.filter(([, reader]) => officeAnswersWiringProblems(reader).length === 0).map(([name]) => name)
+  assert.deepEqual(uncaught, [], 'a refactor this check exists to catch went through')
 })
 
 test('the journal lesson is shown once ever, after the notebook closes', () => {

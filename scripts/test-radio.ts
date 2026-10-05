@@ -35,8 +35,12 @@ import { validateBake, validateOpening } from '../src/content/validate.ts'
 import {
   aimableDevices,
   deskRadioIntent,
+  deviceInputOf,
   deviceIntent,
+  deviceLive,
   dueRadioCalls,
+  MESSAGE_LAMP_PERIOD_SECONDS,
+  messageLampLit,
   nextRadioCall,
   radioCallReady,
   radioDeliveryStep,
@@ -46,6 +50,7 @@ import {
   radioLineSeconds,
   radioWithinEarshot,
   transmissionLapsed,
+  voiceUtterance,
 } from '../src/engine/deviceRules.ts'
 import {
   aimableDeviceId,
@@ -56,6 +61,7 @@ import {
   prepareHandset,
 } from '../src/engine/deviceNodes.ts'
 import { conditionClass, progressConditionMet } from '../src/engine/progressCondition.ts'
+import { recordingGrant } from '../src/engine/progressGrants.ts'
 import { placeRadioCall, releaseHeldRadio, takeDeskRadio } from '../src/engine/radioCall.ts'
 import {
   calmedTemper,
@@ -86,6 +92,8 @@ import {
   shouldAnnounceTaken,
   shouldCrackle,
 } from '../src/ui/hudRules.ts'
+import { devicePrompt } from '../src/ui/promptRules.ts'
+import { operateVoice, operateVoiceOn } from '../src/engine/voiceDevice.ts'
 import { readText } from './lib/readText.ts'
 
 let passed = 0
@@ -1178,6 +1186,286 @@ test('an answer about the dark, the blackout or the rain looks at the night firs
     const answer = porterAnswer(allLooking, lit, tiredAt(lit, temper), START, fixed(0.99), MUSEUM)
     assert.equal(answer.replyId, patience.tiers[answer.tier].replies[0].id)
   }
+})
+
+// ---------------------------------------------------------------------------
+// 11b. L3: a thing that speaks when worked (the telephone; a recording)
+// ---------------------------------------------------------------------------
+
+type VoiceDevice = Extract<NonNullable<MuseumContent['rooms'][number]['devices']>[number], { readonly kind: 'voice' }>
+
+const TELEPHONE = 'office-telephone'
+const telephone = MUSEUM.rooms
+  .flatMap((room) => room.devices ?? [])
+  .find((device): device is VoiceDevice => device.kind === 'voice' && device.id === TELEPHONE)
+
+/** The intent of a device, as the prompt, the key and the touch button ask it of the store. */
+const intentNow = (device: VoiceDevice, content: Pick<MuseumContent, 'rooms' | 'exhibits'> = MUSEUM) =>
+  deviceIntent(device, deviceInputOf(device, useMuseum.getState(), content))
+
+test('E on the telephone, in the dark, says the line is dead and records nothing', () => {
+  assert.ok(telephone, 'the office has a telephone that answers')
+  assert.ok(aimableDevices(MUSEUM).some((entry) => entry.device.id === TELEPHONE && entry.room.id === 'office'), 'the crosshair may rest on it')
+
+  // Nothing is lit, nothing was read: the first second of the night.
+  newGame()
+  assert.deepEqual(useMuseum.getState().progress.roomsPowered, [])
+  assert.deepEqual(intentNow(telephone), { kind: 'voice', intent: 'play' }, 'a dead line needs no mains')
+  const before = useMuseum.getState().progress
+  assert.equal(operateVoice(TELEPHONE), true, 'the press is taken')
+  const on = useMuseum.getState().radio
+  assert.ok(on)
+  assert.equal(on.deviceId, TELEPHONE)
+  assert.deepEqual(on.lineKeys, ['device.office-telephone.dead'])
+  assert.equal(ptBR[on.lineKeys[0] as 'device.office-telephone.dead'], 'Linha muda.')
+  assert.equal(en[on.lineKeys[0] as 'device.office-telephone.dead'], 'The line is dead.')
+  // Who speaks is the telephone, not the porter.
+  assert.equal(on.speakerKey, telephone.titleKey)
+  assert.notEqual(on.speakerKey, radio.speakerKey)
+  assert.equal(on.callId, undefined)
+  assert.equal(on.grantOnEnd, undefined, 'a dead line files nothing')
+  // While it speaks, the same press moves it on: one line, so it ends.
+  assert.deepEqual(intentNow(telephone), { kind: 'voice', intent: 'skip' })
+  assert.equal(operateVoice(TELEPHONE), true)
+  assert.equal(useMuseum.getState().radio, null)
+  assert.equal(useMuseum.getState().progress, before, 'the save is the very object it was: nothing was written')
+  // And it can be tried again, for ever: a dead line is never "heard".
+  assert.deepEqual(intentNow(telephone), { kind: 'voice', intent: 'play' })
+  assert.equal(operateVoice(TELEPHONE), true)
+  finishTransmission()
+  assert.equal(useMuseum.getState().progress, before)
+
+  // With every room lit it says the same: nothing about it reads the night.
+  newGame({ roomsPowered: ['office', 'atrium', 'holyoke'] })
+  assert.deepEqual(intentNow(telephone), { kind: 'voice', intent: 'play' })
+  assert.equal(operateVoice(TELEPHONE), true)
+  assert.deepEqual(useMuseum.getState().radio?.lineKeys, ['device.office-telephone.dead'])
+  finishTransmission()
+
+  // A device the house does not have, or one that is no voice, takes no press.
+  assert.equal(operateVoice('office-fax'), false)
+  assert.equal(operateVoice(RADIO), false)
+  assert.equal(useMuseum.getState().radio, null)
+})
+
+test('dialling over the porter cuts him off, and what he was saying is still owed', () => {
+  assert.ok(telephone)
+  newGame({ roomsPowered: ['office'], documentsRead: ['doc-welcome'] })
+  const hello = radio.calls.find((call) => call.id === 'porter-hello')!
+  useMuseum.getState().startRadio({ deviceId: RADIO, speakerKey: radio.speakerKey, lineKeys: hello.lineKeys, callId: hello.id })
+  // His voice on air is not the telephone's own: the press plays, it does not skip his line.
+  assert.deepEqual(intentNow(telephone), { kind: 'voice', intent: 'play' })
+  assert.equal(operateVoice(TELEPHONE), true)
+  assert.equal(useMuseum.getState().radio?.deviceId, TELEPHONE)
+  finishTransmission()
+  assert.deepEqual(useMuseum.getState().progress.radioCalls, [], 'a call that was cut is not a call that was heard')
+  assert.equal(nextRadioCall(radio, useMuseum.getState().progress, MUSEUM)?.id, 'porter-hello', 'and the director delivers it again')
+  // The director waits while the telephone speaks, as for any transmission.
+  operateVoice(TELEPHONE)
+  assert.equal(
+    radioDeliveryStep(radioCallReady(radio, 'porter-hello', useMuseum.getState().progress, MUSEUM), {
+      onAir: useMuseum.getState().radio !== null,
+      modal: false,
+      hidden: false,
+    }),
+    'wait',
+  )
+  finishTransmission()
+  // R while a voice speaks moves it on, like any line on air, and is no call to him.
+  useMuseum.getState().carryDevice(RADIO)
+  useMuseum.setState((state) => ({ progress: { ...state.progress, radioCalls: ALL_CALLS } }))
+  operateVoice(TELEPHONE)
+  assert.equal(placeRadioCall(RADIO, START, fixed(0.5)), true)
+  assert.equal(useMuseum.getState().radio, null, 'the one line of the telephone was moved on')
+  assert.equal(memoryOf().calls, 0)
+})
+
+/**
+ * A house with a recording: a machine on mains that plays a tape of three
+ * lines, and files it (and what it tells) when the last one ends.
+ */
+const MACHINE = {
+  kind: 'voice',
+  id: 'machine',
+  part: 'desk-telephone',
+  position: [0, 0.74, 0],
+  titleKey: 'device.office-telephone.title',
+  speakerKey: 'radio.speaker.static',
+  poweredBy: 'office',
+  messageLamp: true,
+  utterances: [{ when: {}, documentId: 'doc-tape' }],
+} as const satisfies VoiceDevice
+const TAPE = ['radio.call.hello.1', 'radio.call.hello.2', 'radio.call.hello.3']
+const TAPE_HOUSE = {
+  rooms: [{ id: 'office', startsPowered: false, devices: [MACHINE] }],
+  exhibits: [],
+  documents: [
+    { id: 'doc-tape', containerId: 'machine', titleKey: 'document.welcome.title', bodyKey: 'document.welcome.summary', lineKeys: TAPE, revealsFactId: 'fact-on-tape' },
+  ],
+} as unknown as MuseumContent
+
+test('a recording is filed when its last line ends: skipping counts, cutting it short does not', () => {
+  const press = () => operateVoiceOn(useMuseum, TAPE_HOUSE, 'machine')
+  const intent = () => intentNow(MACHINE, TAPE_HOUSE)
+  const read = () => useMuseum.getState().progress.documentsRead
+
+  // No mains, no tape: the prompt says so and the press is not taken.
+  newGame()
+  assert.deepEqual(intent(), { kind: 'voice', intent: 'dead' })
+  assert.equal(deviceLive(intent()), false)
+  assert.equal(press(), false)
+  assert.equal(useMuseum.getState().radio, null)
+
+  // With the lamp on it plays the lines of the document, in order.
+  newGame({ roomsPowered: ['office'] })
+  assert.deepEqual(intent(), { kind: 'voice', intent: 'play' })
+  assert.equal(press(), true)
+  const on = useMuseum.getState().radio
+  assert.deepEqual(on?.lineKeys, TAPE, 'what it says is the transcript, line by line')
+  assert.equal(on?.speakerKey, MACHINE.speakerKey)
+  assert.deepEqual(on?.grantOnEnd, recordingGrant(TAPE_HOUSE, 'doc-tape'))
+  assert.deepEqual(recordingGrant(TAPE_HOUSE, 'doc-tape'), { documentsRead: ['doc-tape'], factsKnown: ['fact-on-tape'] })
+  assert.deepEqual(recordingGrant(TAPE_HOUSE, 'doc-no-such-tape'), {}, 'a recording the house does not have files nothing')
+
+  // Heard to the end by the subtitle's own timer: filed with the last line, not before.
+  useMuseum.getState().advanceRadio()
+  assert.deepEqual(read(), [], 'one line in')
+  useMuseum.getState().advanceRadio()
+  assert.deepEqual(read(), [], 'two lines in')
+  let told = 0
+  const stop = useMuseum.subscribe(() => {
+    told += 1
+  })
+  useMuseum.getState().advanceRadio()
+  stop()
+  assert.equal(useMuseum.getState().radio, null)
+  assert.deepEqual(read(), ['doc-tape'], 'the last line ended: it is in the archive')
+  assert.deepEqual(useMuseum.getState().progress.factsKnown, ['fact-on-tape'], 'with what it tells')
+  assert.equal(told, 1, 'the end and what it files are one write')
+
+  // Heard once, the prompt offers it again, and hearing it again writes nothing.
+  assert.deepEqual(intent(), { kind: 'voice', intent: 'again' })
+  const filed = useMuseum.getState().progress
+  assert.equal(press(), true)
+  assert.deepEqual(useMuseum.getState().radio?.lineKeys, TAPE)
+  finishTransmission()
+  assert.equal(useMuseum.getState().progress, filed)
+
+  // Skipped line by line, by E on the machine itself: that is hearing it out.
+  newGame({ roomsPowered: ['office'] })
+  assert.equal(press(), true)
+  for (let line = 1; line < TAPE.length; line += 1) {
+    assert.deepEqual(intent(), { kind: 'voice', intent: 'skip' })
+    assert.equal(press(), true)
+    assert.equal(useMuseum.getState().radio?.index, line)
+    assert.deepEqual(read(), [])
+  }
+  assert.equal(press(), true)
+  assert.equal(useMuseum.getState().radio, null)
+  assert.deepEqual(read(), ['doc-tape'], 'skipped to the end is heard')
+
+  // Cut in the middle (the player dials something else, a directed sequence
+  // takes the air): not filed, and still there to be heard from the start.
+  newGame({ roomsPowered: ['office'] })
+  press()
+  useMuseum.getState().advanceRadio()
+  useMuseum.getState().stopRadio()
+  assert.deepEqual(read(), [], 'a recording cut short is not a recording heard')
+  assert.deepEqual(intent(), { kind: 'voice', intent: 'play' })
+  assert.equal(press(), true)
+  assert.equal(useMuseum.getState().radio?.index, 0, 'it starts over')
+  finishTransmission()
+  assert.deepEqual(read(), ['doc-tape'])
+
+  // Dropped under a modal (`dropRadio`) is not heard out either; a content
+  // call dropped the same way still counts as heard, as it always did.
+  newGame({ roomsPowered: ['office'] })
+  useMuseum.getState().startRadio({
+    deviceId: 'machine',
+    speakerKey: MACHINE.speakerKey,
+    lineKeys: TAPE,
+    callId: 'a-call',
+    grantOnEnd: recordingGrant(TAPE_HOUSE, 'doc-tape'),
+  })
+  useMuseum.getState().dropRadio()
+  assert.deepEqual(useMuseum.getState().progress.radioCalls, ['a-call'])
+  assert.deepEqual(read(), [])
+  // Heard to its end, a transmission that is a call and a recording at once records both, in one write.
+  useMuseum.getState().startRadio({ deviceId: 'machine', speakerKey: MACHINE.speakerKey, lineKeys: ['radio.call.hello.1'], callId: 'another', grantOnEnd: { documentsRead: ['doc-tape'] } })
+  useMuseum.getState().advanceRadio()
+  assert.deepEqual(useMuseum.getState().progress.radioCalls, ['a-call', 'another'])
+  assert.deepEqual(read(), ['doc-tape'])
+  newGame()
+})
+
+test('the prompt of a voice says what the key does, in each of its four states', () => {
+  assert.ok(telephone)
+  const view = (device: VoiceDevice, intent: 'dead' | 'play' | 'again' | 'skip') => devicePrompt(device, { kind: 'voice', intent })
+  // A machine with no words of its own for the verb: «Ouvir», «Ouvir de novo».
+  assert.deepEqual(view(MACHINE, 'dead'), { form: 'action', key: false, labelKey: 'prompt.voice.dead', titleKey: MACHINE.titleKey })
+  assert.deepEqual(view(MACHINE, 'play'), { form: 'action', key: true, labelKey: 'prompt.voice.play', titleKey: MACHINE.titleKey })
+  assert.deepEqual(view(MACHINE, 'again'), { form: 'action', key: true, labelKey: 'prompt.voice.again', titleKey: MACHINE.titleKey })
+  assert.deepEqual(view(MACHINE, 'skip'), { form: 'action', key: true, labelKey: 'radio.skip', titleKey: MACHINE.titleKey })
+  // The telephone has: «Discar — Telefone».
+  assert.deepEqual(view(telephone, 'play'), {
+    form: 'action',
+    key: true,
+    labelKey: 'device.office-telephone.prompt',
+    titleKey: 'device.office-telephone.title',
+  })
+  for (const intent of ['dead', 'play', 'again', 'skip'] as const) {
+    // The key is drawn exactly when E does something.
+    assert.equal(view(MACHINE, intent)?.form === 'action' && view(MACHINE, intent)?.key, deviceLive({ kind: 'voice', intent }), intent)
+  }
+  assert.deepEqual(
+    (['prompt.voice.play', 'prompt.voice.again', 'prompt.voice.dead'] as const).map((key) => [ptBR[key], en[key]]),
+    [['Ouvir', 'Listen'], ['Ouvir de novo', 'Listen again'], ['Sem energia', 'No power']],
+  )
+  // A voice handed another kind's intent, and another kind handed a voice's, draw nothing.
+  assert.equal(devicePrompt(telephone, { kind: 'notice' }), null)
+  assert.equal(devicePrompt(radio, { kind: 'voice', intent: 'play' }), null)
+
+  // What it would say is the first utterance whose moment it is.
+  const twoTapes = {
+    ...MACHINE,
+    utterances: [
+      { when: { powered: ['atrium'] }, documentId: 'doc-second-tape' },
+      { when: {}, documentId: 'doc-tape' },
+    ],
+  } as const satisfies VoiceDevice
+  const house = { ...TAPE_HOUSE, rooms: [...TAPE_HOUSE.rooms, { id: 'atrium', startsPowered: false }] } as unknown as MuseumContent
+  assert.equal(voiceUtterance(twoTapes, progressWith(), house)?.documentId, 'doc-tape')
+  assert.equal(voiceUtterance(twoTapes, progressWith({ roomsPowered: ['office', 'atrium'] }), house)?.documentId, 'doc-second-tape')
+  assert.equal(voiceUtterance({ utterances: [] }, progressWith(), house), null)
+  // «Again» is asked of the recording in force: the first one heard, the second is new.
+  const input = (progress: Progress) => deviceInputOf(twoTapes, { progress, radio: null }, house)
+  assert.equal(deviceIntent(twoTapes, input(progressWith({ documentsRead: ['doc-tape'] }))).intent, 'again')
+  assert.equal(deviceIntent(twoTapes, input(progressWith({ roomsPowered: ['office', 'atrium'], documentsRead: ['doc-tape'] }))).intent, 'play')
+})
+
+test('the message lamp blinks while a recording waits with the mains on, and is dark otherwise', () => {
+  const input = (progress: Progress, radioOn: object | null = null) => deviceInputOf(MACHINE, { progress, radio: radioOn as never }, TAPE_HOUSE)
+  const waiting = input(progressWith({ roomsPowered: ['office'], documentsRead: [] }))
+  const lit = (seconds: number, given = waiting, device: VoiceDevice = MACHINE) => messageLampLit(device, given, seconds)
+  // On for the first half of each period, off for the second, for ever.
+  assert.equal(lit(0), true)
+  assert.equal(lit(MESSAGE_LAMP_PERIOD_SECONDS * 0.25), true)
+  assert.equal(lit(MESSAGE_LAMP_PERIOD_SECONDS * 0.75), false)
+  assert.equal(lit(MESSAGE_LAMP_PERIOD_SECONDS * 7.25), true)
+  assert.equal(lit(MESSAGE_LAMP_PERIOD_SECONDS * 7.75), false)
+  const everLit = (given: ReturnType<typeof input>, device: VoiceDevice = MACHINE) =>
+    Array.from({ length: 40 }, (_, step) => messageLampLit(device, given, step * 0.1)).some(Boolean)
+  // No mains: dark. Heard out: dark. A voice with no lamp: nothing to light.
+  assert.equal(everLit(input(progressWith({ roomsPowered: [], documentsRead: [] }))), false, 'no mains')
+  assert.equal(everLit(input(progressWith({ roomsPowered: ['office'], documentsRead: ['doc-tape'] }))), false, 'the message was heard')
+  assert.equal(everLit(waiting, { ...MACHINE, messageLamp: false }), false)
+  assert.ok(telephone)
+  assert.equal(everLit(deviceInputOf(telephone, { progress: progressWith(), radio: null }, MUSEUM), telephone), false, 'a dead line is no message')
+  // It goes on blinking while the message plays: it is unheard until its last line.
+  assert.equal(everLit(input(progressWith({ roomsPowered: ['office'] }), { deviceId: 'machine' })), true)
+  // The component paints the lens by this rule and by nothing of its own.
+  const devices = source('engine/Devices.tsx')
+  assert.ok(devices.includes('messageLampLit(device, deviceInputOf(device, useMuseum.getState(), MUSEUM), clock.elapsedTime)'), 'Devices.tsx asks messageLampLit')
 })
 
 // ---------------------------------------------------------------------------

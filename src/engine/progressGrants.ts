@@ -83,3 +83,18 @@ export function doorGrant(door: TransitionDoorSpec, currentRoom: string, release
 export function clockGrant(device: Extract<DeviceData, { readonly kind: 'clock' }>): ProgressGrant {
   return device.setFlag === undefined ? {} : { flags: [device.setFlag] }
 }
+
+/**
+ * A recording, heard to its last line: the document it is the transcript
+ * of, and the fact that document reveals. The same two lists a cabinet
+ * records for a paper (`containerGrant`), for a paper that is listened to.
+ *
+ * When it is granted is the store's to say: with the last line, and not
+ * with a transmission cut short (`RadioTransmission.grantOnEnd`). A
+ * recording the content does not have files nothing.
+ */
+export function recordingGrant(content: Pick<MuseumContent, 'documents'>, documentId: string): ProgressGrant {
+  const doc = content.documents.find((candidate) => candidate.id === documentId)
+  if (!doc) return {}
+  return { documentsRead: [doc.id], ...(doc.revealsFactId ? { factsKnown: [doc.revealsFactId] } : {}) }
+}

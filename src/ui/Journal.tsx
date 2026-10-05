@@ -20,6 +20,7 @@ import { useEffect, useState } from 'react'
 import { formatCreditEntry } from '../content/credit'
 import { MUSEUM } from '../content/museum'
 import { checklistPageOf, journalUnlocked } from '../engine/notebook'
+import { transcriptText } from '../engine/readingQueue'
 import { useTranslate } from '../i18n'
 import { useMuseum, type JournalTab } from '../state/store'
 import { closeLabel, JOURNAL_HOME_TAB } from './hudRules'
@@ -105,7 +106,10 @@ function ArchiveTab() {
   )
 }
 
-/** A filed document; a paged notebook is re-read as its pages, in order. */
+/**
+ * A filed document; a paged notebook is re-read as its pages, in order, and
+ * a recording as what was said, in one paragraph.
+ */
 function ArchiveDocument({ documentId }: { documentId: string }) {
   const t = useTranslate()
   const doc = MUSEUM.documents.find((candidate) => candidate.id === documentId)
@@ -123,7 +127,7 @@ function ArchiveDocument({ documentId }: { documentId: string }) {
           ))}
         </div>
       ) : (
-        <p>{t(doc.bodyKey as never)}</p>
+        <p>{doc.lineKeys ? transcriptText(doc.lineKeys.map((key) => t(key as never))) : t(doc.bodyKey as never)}</p>
       )}
     </article>
   )

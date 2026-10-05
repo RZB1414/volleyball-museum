@@ -1,7 +1,7 @@
 /**
  * The working objects of a room: clocks, door readers, the porter's radio,
- * a thing that only has something to say — and, once it leaves the desk, the
- * radio in the player's hand.
+ * a thing that only has something to say, a thing that speaks when worked —
+ * and, once it leaves the desk, the radio in the player's hand.
  *
  * Each device is a kit recipe cloned per placement — never instanced, because
  * every one carries its own state: a clock turns its own hands, a reader
@@ -38,12 +38,14 @@ import {
   deviceInputOf,
   deviceIntent,
   deviceLive,
+  messageLampLit,
   nextRadioCall,
   radioCallReady,
   radioDeliveryStep,
   radioDevices,
   radioWithinEarshot,
   type RadioDevice,
+  type VoiceDevice,
 } from './deviceRules'
 import {
   aimableDeviceId,
@@ -64,6 +66,7 @@ import { isUnclaimedInteractKey, subscribePrimaryAction } from './primaryAction'
 import { clockGrant } from './progressGrants'
 import { placeRadioCall, takeDeskRadio } from './radioCall'
 import { hangUpDelayMs, hangUpStarted, heldRadioId, isRadioCallKey } from './radioPatience'
+import { operateVoice } from './voiceDevice'
 
 const CENTRE = new Vector2(0, 0)
 const INTERACTION_LAYER = 7
@@ -75,7 +78,6 @@ const ROOMS_BY_ID = new Map(MUSEUM.rooms.map((room) => [room.id as string, room]
 const RADIOS = radioDevices(MUSEUM)
 /** Every device the crosshair may rest on: the radio, and whatever only answers. */
 const AIMABLE_BY_ID = new Map(aimableDevices(MUSEUM).map((entry) => [entry.device.id, entry] as const))
-const roomById = (roomId: string) => ROOMS_BY_ID.get(roomId)
 
 function usePowered(roomId: string) {
   const restored = useMuseum((state) => state.progress.roomsPowered)
@@ -275,6 +277,41 @@ function RadioDeviceView({
 }
 
 // ---------------------------------------------------------------------------
+// A voice with a message lamp
+// ---------------------------------------------------------------------------
+
+/**
+ * The lamp of a thing that holds a recorded message: it blinks red while the
+ * message waits unheard and the mains are on, and is dark otherwise.
+ *
+ * Whether it shows is the rule's to say (`messageLampLit`), asked every
+ * frame of the save as it stands; the lens is repainted only when the answer
+ * changes, with the library's own material, so a blink costs no program.
+ */
+function VoiceDeviceView({
+  device,
+  instance,
+  materials,
+}: {
+  device: VoiceDevice
+  instance: Object3D
+  materials: MaterialLibrary
+}) {
+  const shownRef = useRef<boolean | null>(null)
+
+  useFrame(({ clock }) => {
+    const lit = messageLampLit(device, deviceInputOf(device, useMuseum.getState(), MUSEUM), clock.elapsedTime)
+    if (lit === shownRef.current) return
+    const material = materials.get(lit ? 'led-red' : 'led-off')
+    if (!material) return
+    shownRef.current = lit
+    paintLenses(instance, device.part, material)
+  })
+
+  return null
+}
+
+// ---------------------------------------------------------------------------
 // The volume the crosshair finds
 // ---------------------------------------------------------------------------
 
@@ -372,6 +409,9 @@ function Device({
       {device.kind === 'radio' ? (
         <RadioDeviceView device={device} instance={instance} materials={materials} />
       ) : null}
+      {device.kind === 'voice' && device.messageLamp ? (
+        <VoiceDeviceView device={device} instance={instance} materials={materials} />
+      ) : null}
       {AIMABLE_BY_ID.has(device.id) ? (
         <DeviceProxy device={device} instance={instance} hidden={carried} />
       ) : null}
@@ -421,14 +461,15 @@ export function DeviceLayer({
  * A radio on its desk is picked up if it is one the player carries away,
  * otherwise the same press as the call button — skip a line, or call him. A
  * stopped clock is put right, which records its flag (`clockGrant`) and no
- * more: what it shows from then on follows from the save. A notice has said
- * all it has to say in the prompt: it declines the press, and the key goes
- * to whatever else is waiting for it.
+ * more: what it shows from then on follows from the save. A thing that
+ * speaks says what this night makes it say (`voiceDevice.ts`). A notice
+ * has said all it has to say in the prompt: it declines the press, and the
+ * key goes to whatever else is waiting for it.
  */
 function operateDevice(deviceId: string) {
   const entry = AIMABLE_BY_ID.get(deviceId)
   if (!entry) return false
-  const intent = deviceIntent(entry.device, deviceInputOf(entry.device, useMuseum.getState(), roomById))
+  const intent = deviceIntent(entry.device, deviceInputOf(entry.device, useMuseum.getState(), MUSEUM))
   if (!deviceLive(intent)) return false
   switch (intent.kind) {
     case 'radio':
@@ -438,6 +479,8 @@ function operateDevice(deviceId: string) {
       if (entry.device.kind !== 'clock') return false
       useMuseum.getState().grant(clockGrant(entry.device))
       return true
+    case 'voice':
+      return operateVoice(deviceId)
     case 'notice':
     case 'none':
       return false
@@ -549,9 +592,15 @@ export function DeviceTargeting() {
  * call never interrupts the player holding an exhibit, reading, entering a
  * code or listening to another transmission; it waits politely and retries.
  * It is recorded as heard only when its last line ends (`advanceRadio`).
+ *
+ * What is owed is asked again whenever the air changes hands, and not only
+ * when the save changes: a call cut off by something else that took the air
+ * (the telephone, dialled over the porter) was not heard and wrote nothing,
+ * so no change of the save would ever bring it back.
  */
 export function RadioDirector() {
   const progress = useMuseum((state) => state.progress)
+  const onAir = useMuseum((state) => state.radio !== null)
   const timersRef = useRef(new Map<string, number>())
 
   useEffect(() => {
@@ -559,7 +608,9 @@ export function RadioDirector() {
     for (const { device, room } of RADIOS) {
       if (!poweredNow(device.poweredBy)) continue
       const call = nextRadioCall(device, progress, MUSEUM)
-      if (!call || timers.has(call.id)) continue
+      // The call being said is owed until its last line, and is not
+      // scheduled again while it is on air.
+      if (!call || timers.has(call.id) || useMuseum.getState().radio?.callId === call.id) continue
       const deliver = () => {
         const state = useMuseum.getState()
         // Gone: heard meanwhile (the player called first), or its moment
@@ -588,7 +639,7 @@ export function RadioDirector() {
       }
       timers.set(call.id, window.setTimeout(deliver, call.delaySeconds * 1000))
     }
-  }, [progress])
+  }, [onAir, progress])
 
   useEffect(() => {
     const timers = timersRef.current

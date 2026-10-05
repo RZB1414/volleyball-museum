@@ -473,11 +473,22 @@ export function conditionAsks(when: ProgressCondition | undefined): boolean {
 
 type SpokenLine = { readonly key: string; readonly by: string; readonly conditional: boolean }
 
-/** Every line a radio can say, with who says it and whether they look first. */
+/**
+ * Every line said of the night as it is, with who says it and whether they
+ * look first: what a radio can say, and the lines a voice device has of its
+ * own. (A recording was made on another day and says nothing of this one.)
+ */
 function spokenLines(content: Pick<MuseumContent, 'rooms'>): SpokenLine[] {
   const lines: SpokenLine[] = []
   for (const room of content.rooms) {
     for (const device of room.devices ?? []) {
+      if (device.kind === 'voice') {
+        for (const utterance of device.utterances) {
+          for (const key of utterance.lineKeys ?? []) {
+            lines.push({ key, by: `voice "${device.id}"`, conditional: conditionAsks(utterance.when) })
+          }
+        }
+      }
       if (device.kind !== 'radio') continue
       for (const call of device.calls) {
         for (const key of call.lineKeys) lines.push({ key, by: `call "${call.id}"`, conditional: conditionAsks(call.when) })
@@ -525,7 +536,7 @@ function validateNightState(content: MuseumContent, dictionaries: Dictionaries):
       code: 'speech-night-state-unconditional',
       id: line.key,
       message:
-        `Radio line "${line.key}" says ${said.join(', ')}, and ${line.by} says it whatever the night is ` +
+        `Spoken line "${line.key}" says ${said.join(', ')}, and ${line.by} says it whatever the night is ` +
         `doing: it needs a \`when\` that asks.`,
     })
   }

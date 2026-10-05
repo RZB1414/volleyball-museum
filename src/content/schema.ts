@@ -192,6 +192,22 @@ export type Credential =
   | { readonly kind: 'tool'; readonly id: ToolId }
 
 /**
+ * A credential the house has, with the name the game announces it by.
+ *
+ * The unions above say what a credential may be; this says which of them
+ * this build hands out or asks for. The gate holds the two to each other: an
+ * effect or a lock that names one not declared here has no name to be
+ * announced by, and one declared that nothing gives or asks for is a name
+ * for a thing the house does not have.
+ */
+export type CredentialData = {
+  readonly credential: Credential
+  /** What it is called when it is taken: «Você pegou — Chave do cofre de ferro». */
+  readonly titleKey: string
+  readonly icon: 'key' | 'medallion' | 'badge' | 'tool'
+}
+
+/**
  * A knowledge lock that cannot be escaped is a quiz that fails the casual
  * visitor — the exact anti-pattern the design names as fatal. Every one gets an
  * escalating in-world hint ladder so it reads as "go read that panel", never as
@@ -238,7 +254,11 @@ export type Lock =
   | (LockBase & {
       readonly kind: 'tool'
       readonly requires: ToolId
-      /** Consumed on use, like RE4R's Small Keys. */
+      /**
+       * Consumed on use, like RE4R's Small Keys: the key stays in the lock.
+       * It is never taken out of the save, which only grows; it is spent
+       * because this lock is open (`toolSpent`), and so it has one lock.
+       */
       readonly consumesTool: boolean
     })
   | (LockBase & {
@@ -482,7 +502,17 @@ export type DocumentData = {
   /** Oral history plays while the player keeps walking — depth never stops the game. */
   readonly audioId?: string
   readonly mediaId?: string
-  /** The physical furniture holding it: a drawer, a filing cabinet, a desk. */
+  /**
+   * A recording's transcript, line by line: what the device that plays it
+   * says, one subtitle to a line, and what the archive prints of it as one
+   * paragraph. The words are written once. `bodyKey` is then the one-line
+   * summary the archive lists.
+   */
+  readonly lineKeys?: readonly string[]
+  /**
+   * The physical furniture holding it: a drawer, a filing cabinet, a desk.
+   * For a recording, the voice device that plays it.
+   */
   readonly containerId: string
   /** Set when the container is locked. Gates the DEPTH layer, never a gallery. */
   readonly lockId?: string
@@ -766,6 +796,15 @@ export type ContainerData = {
    * on. Until one such container is read, there is no journal to open.
    */
   readonly carriesJournal?: boolean
+  /**
+   * A door that swings: the nodes `<part>__<nodePrefix>*` turn about a
+   * vertical hinge once the container stands open (its lock is open, or it
+   * has none). `hingeAt` is the hinge in the recipe's own space, x and z;
+   * `openAngle` is how far it turns, in radians about +Y.
+   */
+  readonly door?: { readonly nodePrefix: string; readonly hingeAt: Vec2; readonly openAngle: number }
+  /** Nodes `<part>__<node>` drawn only while the container stands open: what was behind the door. */
+  readonly contents?: readonly { readonly node: string }[]
 }
 
 // ---------------------------------------------------------------------------
@@ -901,7 +940,8 @@ type DevicePlacement = {
  * a clock needs `<part>__hand-hour|minute|second` and `<part>__dial`, every
  * lit device needs `<part>__led`, and a radio the player carries away needs
  * `<part>__handset` (with its `__handset-*` families) to leave its cradle.
- * A notice asks nothing of its recipe: it is whatever stands there.
+ * A notice asks nothing of its recipe: it is whatever stands there. Nor
+ * does a voice, unless it shows a waiting message (`messageLamp`).
  *
  * A device is solid by whatever collider its recipe carries in the bake
  * manifest, like a container or a power control.
@@ -962,6 +1002,40 @@ export type DeviceData =
       /** The lot that gives it its use. The gate fails once that lot has come. */
       readonly deferredUntilLot: number
     })
+  | (DevicePlacement & {
+      /**
+       * A thing that speaks when it is worked: a telephone with a dead line,
+       * a machine with a recorded message. What it says goes out on the same
+       * subtitle the radio uses, under its own name, and is asked of the
+       * save each time.
+       */
+      readonly kind: 'voice'
+      readonly titleKey: string
+      /** Who the subtitle says is speaking. */
+      readonly speakerKey: string
+      /** What the prompt says E does to it; «Ouvir» when it has no word of its own. */
+      readonly promptKey?: string
+      /** Mains: silent without this room's power. Omitted: it answers in the dark. */
+      readonly poweredBy?: EraId
+      /** Needs a baked `<part>__led`: it blinks while a recording waits unheard, with the mains on. */
+      readonly messageLamp?: boolean
+      /**
+       * The first whose `when` holds is what it says. Never empty, and the
+       * last asks nothing: a press always has an answer.
+       */
+      readonly utterances: readonly VoiceUtterance[]
+    })
+
+/**
+ * One thing a voice device says: lines of its own, or a recording.
+ *
+ * A recording's lines are the transcript of a document, and hearing it to
+ * its last line files that document in the archive. One or the other: the
+ * `never` on each side is what makes an utterance that is both not compile.
+ */
+export type VoiceUtterance =
+  | { readonly when: ProgressCondition; readonly lineKeys: readonly string[]; readonly documentId?: never }
+  | { readonly when: ProgressCondition; readonly documentId: string; readonly lineKeys?: never }
 
 /**
  * One thing done that moves the night on. Either a condition that stays true
@@ -1105,4 +1179,6 @@ export type MuseumContent = {
   readonly nightClock?: NightClock
   /** What the curator signs, oldest first. None until the lectern is a signing desk. */
   readonly terms?: readonly Term[]
+  /** Every credential the house hands out or asks for, with the name it is announced by. */
+  readonly credentials?: readonly CredentialData[]
 }

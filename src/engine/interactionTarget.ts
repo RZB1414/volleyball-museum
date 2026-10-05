@@ -18,7 +18,7 @@
 
 import type { DeviceData, MuseumContent, RoomData } from '../content/schema'
 import { isModalOpen, type MuseumStore } from '../state/store.ts'
-import { aimableDevices, deviceInputOf, deviceIntent, deviceLive } from './deviceRules.ts'
+import { aimableDevices, deviceInputOf, deviceIntent, deviceLive, type DeviceWorld } from './deviceRules.ts'
 import { isRoomPowered } from './power.ts'
 
 /** How far each system's ray reaches. Shared with the headless proof. */
@@ -127,20 +127,20 @@ export type FocusState = Pick<
   | 'focusedPowerControlDistance'
   | 'radio'
 > & {
-  readonly progress: {
-    readonly roomsPowered: readonly string[]
-    readonly devicesCarried?: readonly string[]
-    /** What a device that sets a flag reads: a clock already put right answers nothing. */
-    readonly flags?: readonly string[]
-  }
+  /**
+   * The save, as far as a device reads it: the rooms with power, and beside
+   * them whatever its kind asks (a radio whether it is carried, a clock its
+   * flag, a voice the conditions of what it says). A list not handed over
+   * answers as the save in which none of it happened.
+   */
+  readonly progress: DeviceWorld['progress']
 }
 
-type InteractionContent = Pick<MuseumContent, 'rooms'>
+/** The rooms, and what a device's conditions may name beside them. */
+type InteractionContent = Pick<MuseumContent, 'rooms' | 'exhibits'>
 
 type Lookups = {
   readonly devices: ReadonlyMap<string, DeviceData>
-  /** A room by id, as a function: what a device's supply is looked up with. */
-  readonly room: (roomId: string) => RoomData | undefined
   readonly powerControls: ReadonlyMap<string, RoomData>
 }
 
@@ -151,9 +151,7 @@ const lookupsByContent = new WeakMap<InteractionContent, Lookups>()
 function lookupsFor(content: InteractionContent): Lookups {
   const cached = lookupsByContent.get(content)
   if (cached) return cached
-  const rooms = new Map(content.rooms.map((room) => [room.id as string, room]))
   const lookups: Lookups = {
-    room: (roomId) => rooms.get(roomId),
     devices: new Map(aimableDevices(content).map((entry) => [entry.device.id, entry.device])),
     powerControls: new Map(
       content.rooms.flatMap((room) =>
@@ -178,7 +176,7 @@ export function focusSnapshotOf(state: FocusState, content: InteractionContent):
     device = {
       id: state.focusedDevice,
       distance: state.focusedDeviceDistance,
-      live: focused !== undefined && deviceLive(deviceIntent(focused, deviceInputOf(focused, state, lookups.room))),
+      live: focused !== undefined && deviceLive(deviceIntent(focused, deviceInputOf(focused, state, content))),
     }
   }
 

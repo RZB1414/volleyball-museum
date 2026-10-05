@@ -363,5 +363,22 @@ check(
   `${twice.total} nodes by data, ${twice.kit} kit batches`,
 )
 
+// The telephone on the desk left the furniture the same way (L3, F3): it has
+// a dead line to say, so it is a device. Its two nodes are out of the office
+// kit, which stands at 51 batches under its ceiling of 53, and in the count
+// of devices; the room draws what it drew.
+const officeRoom = MUSEUM.rooms.find((room) => room.id === 'office')
+if (!officeRoom) throw new Error('The office is required for the draw budgets.')
+const officeDrawn = drawnByData(officeRoom)
+const telephoneDevices = (officeRoom.devices ?? []).filter((device) => device.part === 'desk-telephone')
+check(
+  'the telephone is drawn once, as a device: the office kit is at 51 batches and the room still draws 74 nodes by data',
+  officeDrawn.kit === 51 &&
+    officeDrawn.total === 74 &&
+    telephoneDevices.length === 1 &&
+    officeRoom.kit.every((placement) => placement.part !== 'desk-telephone'),
+  `kit ${officeDrawn.kit}, by data ${officeDrawn.total}, ${telephoneDevices.length} telephone(s) among the devices`,
+)
+
 console.log(`\n${passed} passed, ${failed} failed`)
 if (failed > 0) process.exitCode = 1

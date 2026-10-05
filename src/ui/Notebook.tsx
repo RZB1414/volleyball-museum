@@ -8,14 +8,13 @@
  * opened it closes it from the last page.
  */
 
-import { useEffect } from 'react'
-
 import { MUSEUM } from '../content/museum'
 import type { NotebookPage } from '../content/schema'
 import { checklistRows, counterText } from '../engine/checklist'
 import { containerById, notebookPagesFor } from '../engine/notebook'
 import { useTranslate } from '../i18n'
 import { useMuseum } from '../state/store'
+import { useReaderKeys } from './useReaderKeys'
 
 function paragraphs(text: string) {
   return text.split(/\n{2,}/).map((paragraph, index) => <p key={index}>{paragraph}</p>)
@@ -81,22 +80,7 @@ export function NotebookPanel() {
   const pages = notebookPagesFor(MUSEUM, openedContainer)
   const lastPage = pages.length - 1
 
-  useEffect(() => {
-    if (!openedContainer || pages.length === 0) return undefined
-    const onKeyDown = (event: KeyboardEvent) => {
-      const state = useMuseum.getState()
-      if (event.code === 'ArrowRight' || event.code === 'PageDown') {
-        event.preventDefault()
-        state.setNotebookPage(Math.min(lastPage, state.notebookPage + 1))
-      }
-      if (event.code === 'ArrowLeft' || event.code === 'PageUp') {
-        event.preventDefault()
-        state.setNotebookPage(Math.max(0, state.notebookPage - 1))
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [lastPage, openedContainer, pages.length])
+  useReaderKeys(Boolean(openedContainer) && pages.length > 0, lastPage)
 
   if (!container || pages.length === 0) return null
   const current = pages[Math.min(page, lastPage)]

@@ -1391,6 +1391,25 @@ function furnished(roomId: string, kit: RoomData['kit']): MuseumContent {
       ? `the eye is ${beforeThePlinth.usable.distance.toFixed(2)} m from it, of ${INTERACTION_REACH.device}`
       : 'no place to read it from',
   )
+  // The telephone on the desk answers since L3 (a dead line): it is a device
+  // on the far half of the blotter, between the ledgers and the radio, and
+  // has to have a place to be dialled from like anything else E works.
+  const beforeTheTelephone = survey.verdicts.find(({ volume }) => volume.id === 'office-telephone')
+  check(
+    'the telephone is dialled from a place in the office, within the device ray\'s reach and outside its box',
+    Boolean(
+      beforeTheTelephone?.volume.kind === 'device' &&
+        beforeTheTelephone.usable &&
+        beforeTheTelephone.usable.distance > 0 &&
+        beforeTheTelephone.usable.distance <= INTERACTION_REACH.device &&
+        roomContaining(beforeTheTelephone.usable.point)?.id === 'office',
+    ),
+    beforeTheTelephone?.usable
+      ? `the eye is ${beforeTheTelephone.usable.distance.toFixed(2)} m from it, of ${INTERACTION_REACH.device}`
+      : beforeTheTelephone
+        ? 'no place to dial it from'
+        : 'the telephone is not a target the flood judged',
+  )
   console.log(`  note  ${[...byKind].map(([kind, count]) => `${count} ${kind}`).join(', ')}`)
   for (const kind of byKind.keys()) {
     const distances = survey.verdicts.flatMap((verdict) =>

@@ -7,12 +7,19 @@
  * having an archive layer at all.
  *
  * Reading one is a single press: no drawer animation, no inventory. The reward
- * for exploring should be the text, not a ceremony in front of it.
+ * for exploring should be the text, not a ceremony in front of it. What it
+ * holds is read one paper at a time, and E turns to the next
+ * (`readingQueue.ts`).
+ *
+ * The one thing that moves is a door a container declares (`door`): it
+ * stands open once the container's lock is, and what was behind it
+ * (`contents`) is drawn from then on. It is what the lock did, shown; the
+ * press that opened the lock has already read everything.
  */
 
 import { useGLTF } from '@react-three/drei'
 import { useFrame, useThree } from '@react-three/fiber'
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef } from 'react'
 import { Box3, Mesh, Raycaster, Vector2, type Group, type Object3D } from 'three'
 
 import type { BakedBundle } from '../content/bake.generated'
@@ -21,20 +28,22 @@ import type { ContainerData, RoomData, Vec3 } from '../content/schema'
 import { museumAudio } from './audio'
 import { USE_DRACO, USE_MESHOPT } from './bundleCache'
 import type { CollisionWorld } from './collision'
-import { cloneKitPart, disposeKitPart, registerKitColliders } from './kitPart'
-import { attemptLock } from './lockRules'
-import type { MaterialLibrary } from './materials'
 import {
-  containerById,
-  isContainerTaken,
-  isNotebook,
-  notebookAdvance,
-  notebookPagesFor,
-} from './notebook'
+  doorAngleAfter,
+  prepareContainerContents,
+  prepareContainerDoor,
+  showContainerContents,
+  swingContainerDoor,
+} from './containerNodes'
+import { cloneKitPart, disposeKitPart, registerKitColliders } from './kitPart'
+import { attemptLock, containerOpen } from './lockRules'
+import type { MaterialLibrary } from './materials'
+import { containerById, isContainerTaken, isNotebook } from './notebook'
 import { DRAWER_PROXY, PROXY_MATERIAL_PROPS, paddedProxy } from './interactionProxy'
 import { INTERACTION_REACH, interactionWinnerOf, PROXY_MINIMUM } from './interactionTarget'
 import { isUnclaimedInteractKey, subscribePrimaryAction } from './primaryAction'
 import { containerGrant } from './progressGrants'
+import { readerAdvance } from './readingQueue'
 import { isModalOpen, useMuseum } from '../state/store'
 import './bvhSetup'
 
@@ -140,6 +149,33 @@ function Container({
     [container, documentsRead],
   )
 
+  // A door on a hinge, and what stands behind it. Whether the container
+  // stands open is its lock's to say (`containerOpen`): one boolean out of
+  // the selector, so the component hears of it only when it changes.
+  const open = useMuseum((state) => containerOpen(container, state.progress))
+  const door = useMemo(
+    () => (instance && container.door ? prepareContainerDoor(instance, container.part, container.door) : null),
+    [container.door, container.part, instance],
+  )
+  const contents = useMemo(
+    () => (instance && container.contents ? prepareContainerContents(instance, container.part, container.contents) : null),
+    [container.contents, container.part, instance],
+  )
+  // Before paint, so what is behind a shut door is never drawn for a frame.
+  useLayoutEffect(() => showContainerContents(contents, open), [contents, open])
+  const angleRef = useRef<number | null>(null)
+  useFrame((_, delta) => {
+    if (!door || !container.door) return
+    const target = open ? container.door.openAngle : 0
+    // On the first frame the door is where the save has it: a safe opened on
+    // another night is found open, and only one opened now is seen to swing.
+    const angle =
+      angleRef.current === null ? target : doorAngleAfter(angleRef.current, target, container.door.openAngle, delta)
+    if (angle === angleRef.current) return
+    angleRef.current = angle
+    swingContainerDoor(door, angle)
+  })
+
   if (!instance || !proxy) return null
 
   return (
@@ -224,20 +260,16 @@ export function ContainerTargeting() {
     const interact = () => {
       const state = useMuseum.getState()
 
-      // Pressing E again while reading closes the panel, matching the exhibit
-      // examine view — one key in, the same key out. A notebook turns its
-      // pages first and closes from the last one.
+      // Pressing E again while reading turns to the next page, and from the
+      // last one closes the panel, matching the exhibit examine view: one
+      // key in, the same key out. The rule was the notebook's alone, and a
+      // cabinet poured every paper it held into one column; it is every
+      // reader's now (`readerAdvance`).
       if (state.openedContainer) {
-        const opened = containerById(MUSEUM, state.openedContainer)
-        if (isNotebook(opened)) {
-          const next = notebookAdvance(
-            notebookPagesFor(MUSEUM, state.openedContainer).length,
-            state.notebookPage,
-          )
-          if (next !== 'close') {
-            state.setNotebookPage(next)
-            return true
-          }
+        const next = readerAdvance(MUSEUM, state.openedContainer, state.notebookPage)
+        if (next !== 'close') {
+          state.setNotebookPage(next)
+          return true
         }
         state.setOpenedContainer(null)
         return true
