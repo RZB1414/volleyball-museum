@@ -2743,9 +2743,11 @@ dono e continua pendente. Não trava L1; trava o livro-caixa de L6.
   `test:radio`, `test:opening`, `test:opening-flow`.
 - **Risco.** Médio (o gesto novo toca o caminho de todo `E`). Teto temporário de ÁT-K1 (o Livro).
 - **Passagem.** Dívida: catalogar ainda falha em três peças (L4). Promessa datada: a caixa-forte.
-- **Feito em 2026-10-05**, ainda não publicado, em commits locais na `main`: o plano do lote
-  (`6cd9b7d`), as cinco fatias dele (de `e9f9803` a `4c97f47`; `docs/lotes/L3-plano.md`, §15) e
-  o fecho (§16 do mesmo arquivo). `npm run check` (35 passos) e `npm run build` verdes. O
+- **Feito em 2026-10-05 e publicado** (até `bdbc457`, versão Cloudflare `7d38d0a3`), em commits
+  na `main`: o plano do lote
+  (`6cd9b7d`), as cinco fatias dele (de `e9f9803` a `4c97f47`; `docs/lotes/L3-plano.md`, §15), o
+  fecho (§16 do mesmo arquivo), o da revisão adversarial (`7af33b2`; HANDOFF, §12.12) e o da
+  revisão antes do push (`bdbc457`; HANDOFF, §12.13). `npm run check` (35 passos) e `npm run build` verdes. O
   percurso completo foi feito no navegador de desenvolvimento, do título ao termo de posse
   assinado: um jogo novo na ordem canônica; a ordem de quem pula tudo (sem caderno, sem rádio,
   sem lanterna), em inglês, com o cofre aberto antes de qualquer quadro e a Ala 1 acesa antes do
@@ -2761,10 +2763,12 @@ dono e continua pendente. Não trava L1; trava o livro-caixa de L6.
   foram medidos de novo no fecho e deram os números que F5 gravou (`BROWSER_RECORD`, lote 3); o
   ponto de leitura do escritório conta um draw a mais durante treze segundos de cada minuto,
   que é o ponteiro de segundos do relógio da parede (HANDOFF, §12.3).
-  **Faltam** os passos 5 (revisão adversarial por quem não implementou), 8 a 11 (revisor, push,
-  deploy e fumaça em produção, com a versão Cloudflare anotada no HANDOFF e esta linha passando
-  a dizer que o lote foi publicado) e 13 (playtest: o aceite manual pede que uma pessoa nova
-  chegue à Posse, 8.10); e o aparelho real, que continua com o dono.
+  Os passos 5 (revisão adversarial: 37 achados, 33 distintos; 29 consertados, dois em parte,
+  um adiado, e o «major» do par escritório↔átrio registrado como dívida de L6) e 8 a 11 (revisor sem bloqueio, com um defeito
+  e duas notas consertados; push, deploy e fumaça em produção) estão feitos.
+  **Falta** o passo 13 (playtest: o aceite manual pede que uma pessoa nova chegue à Posse,
+  8.10); e o aparelho real, que continua com o dono. **Os lotes estão em pausa por decisão do
+  dono (2026-10-05):** L4 só começa quando ele pedir.
 
 ### L4 — O verbo: examinar, virar, catalogar
 

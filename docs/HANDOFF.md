@@ -1,12 +1,12 @@
 # Handoff — Museu do Voleibol
 
-Atualizado em 2026-10-05 (L3, o terceiro lote do plano, §12: fechado e revisado, §12.12, ainda
-não publicado; L2 é
+Atualizado em 2026-10-05 (L3, o terceiro lote do plano, §12: publicado, com a revisão
+adversarial dele em §12.12 e a revisão antes do push em §12.13; L2 é
 §11, com a revisão adversarial dele em §11.12 e a revisão antes do push em §11.13; L1 é §10; a
 abertura no escritório é §9); o estado técnico das salas é o de 2026-08-12.
 Este documento é o ponto de entrada para retomar o projeto sem depender da conversa anterior.
-**Próxima tarefa:** publicar L3 (§12.11, item 1; a revisão deixou três coisas para conferir à
-mão, em §12.12) e começar L4.
+**Próxima tarefa:** L4 (§12.11, item 2), **só quando o dono pedir**: os lotes estão em pausa
+por decisão dele (2026-10-05). A revisão deixou três coisas para conferir à mão, em §12.12.
 
 Leia também, nesta ordem: `docs/PLANO-DO-ZERO.md` (o desenho do jogo),
 `docs/REFERENCIA-TECNICA.md` (gramática de Resident Evil + pipeline web-3D) e
@@ -65,10 +65,10 @@ em §10.4):
 
 O único aviso é o preexistente `react(only-export-components)` em `src/main.tsx:17`.
 Deploy de produção: `https://volleyball-museum.renanbuiatti14.workers.dev`, versão
-Cloudflare `b6c1e51b-af79-4fff-aff4-0c365fa6821a` (2026-10-05: L2 do plano, até `2dc7b23`;
-§11). As anteriores: `1d3a4554` (2026-10-04, P0 e L1, até `f0fb5a3`; §10) e `0027afaa`
-(2026-10-03, a rodada de §9). **L3 está fechado e não está no ar**: o que está em produção é o
-jogo de L2, sem fim assinável (§12).
+Cloudflare `7d38d0a3-2e9d-4d0e-aec8-81726ef0458a` (2026-10-05: L3 do plano, até `bdbc457`;
+§12). As anteriores: `b6c1e51b` (2026-10-05, L2, até `2dc7b23`; §11), `1d3a4554` (2026-10-04,
+P0 e L1, até `f0fb5a3`; §10) e `0027afaa` (2026-10-03, a rodada de §9). **L3 está no ar**: o
+jogo em produção tem o fim assinável (§12).
 
 Bake atual (de L3, fatia F5):
 
@@ -2590,16 +2590,26 @@ locais na `main`:
 | `645b2ca` | F4: assinar (termos e a mesa deles, o gesto de segurar, a sequência dirigida) |
 | `4c97f47` | F5: a Posse inteira (o recado, a chave na gaveta, o Livro no cofre de ferro, o termo no púlpito); o bake; o save antigo; `CONTENT_LOT` passa a 3 |
 | `d78236b` | o fecho: este registro, os dois saves do lote, os dois conjuntos de capturas, o digest do instantâneo, o «Feito em» |
-| o da revisão | os achados da revisão adversarial (12.12): duas abas, o gesto, a porta do cofre, as falas, o registro de desempenho |
+| `7af33b2` | os achados da revisão adversarial (12.12): duas abas, o gesto, a porta do cofre, as falas, o registro de desempenho |
+| `bdbc457` | os achados do revisor antes do push (12.13): a pergunta que toques seguidos não respondem, a pressão que um atalho do navegador não começa, o dedo que sai do botão sem captura |
 
-**Estado: fechado e revisado em 2026-10-05, não publicado.** Dos passos de §9.1 do plano estão
-feitos o 1 (plano do lote), o 2 (teste primeiro, fatia por fatia, no fecho e na revisão), o 3, o 4
+**Estado: publicado em 2026-10-05**, até `bdbc457`, versão Cloudflare `7d38d0a3`. Fumaça em
+produção feita: o build novo está servido (a mesma entrada do build local, sem `qaSave` no
+bundle e sem os ganchos de QA na página); `l2-shortcut-released` posto sob a chave
+`volleyball-museum:v1` na origem de produção carregou por «Continuar» sem aviso, ganhou a chave
+do cofre de ferro (`tool:service-key`) e a marca (`legacy-pre-L3-drawer`), passou a `contentLot`
+3 com `version` 1 e ouviu as chamadas devidas, a da gaveta entre elas; a cena montou e o console
+ficou limpo (só o aviso preexistente de `THREE.Clock`). **Não repetidos em produção:** o jogo
+novo até o primeiro marco e as duas abas com uma assinando, feitos no navegador de
+desenvolvimento sobre a mesma árvore (12.8). Dos passos de §9.1 do plano estão
+feitos o 1 (plano do lote), o 2 (teste primeiro, fatia por fatia, no fecho e nas revisões), o 3, o 4
 (portão verde), o 5 (revisão adversarial: 12.12, com duas lentes que não reportaram), o 6 (o
-percurso completo, do título ao termo assinado: 12.8) e o 12 (este registro, o instantâneo, o
-corpus e as capturas). O 7 não se aplica (não é lote de arte). **Faltam** o 8 ao 11 (revisor,
-push, deploy e fumaça em produção) e o 13 (playtest: o aceite manual do lote pede que uma pessoa
-nova chegue à Posse, 8.10), além da medição em aparelho real (P0, item 6). Nada foi enviado nem publicado: a seção L3 do plano diz
-«Feito em 2026-10-05», sem a palavra que solta o instantâneo de acompanhar o conteúdo (11.10).
+percurso completo, do título ao termo assinado: 12.8), o 8 (revisor antes do push: 12.13), o 9
+ao 11 (push, deploy e fumaça em produção) e o 12 (este registro, o instantâneo, o corpus e as
+capturas). O 7 não se aplica (não é lote de arte). A seção L3 do plano passou a dizer «Feito em
+2026-10-05 e publicado», a frase que solta o instantâneo de acompanhar o conteúdo (11.10).
+**Falta** o 13 (playtest: o aceite manual do lote pede que uma pessoa nova chegue à Posse,
+8.10), além da medição em aparelho real (P0, item 6).
 
 ### 12.1 O que mudou para o jogador
 
@@ -3146,17 +3156,11 @@ plano ou é decisão de quem revisar.
 
 ### 12.11 Próximos passos
 
-1. **Publicar L3** (passos 8 a 11). A revisão adversarial está feita (12.12), com duas lentes
-   por fazer («testes» e «visual») e três coisas para conferir à mão antes do push: o Esc com o
-   mouse capturado num navegador de verdade, a escolha do lembrete do caderno e a fala de
-   «saguão = átrio». Na fumaça em produção, além do
-   novo jogo até o primeiro marco: «Continuar» com `l2-shortcut-released` posto sob a chave
-   `volleyball-museum:v1` na origem de produção, e conferir que não há aviso, que o save
-   carregado tem a chave e a marca, e que as três chamadas tocam; e duas abas, uma assinando.
-   Anotar a versão Cloudflare em §2 e no topo desta seção, e trocar o «Feito em» da seção L3
-   do plano pela forma publicada. **Se algum conserto mudar o grafo, regravar o instantâneo**
-   (`npm run graph:snapshot -- --reopen`) e fixar o digest novo no mesmo commit; se mudar o
-   que uma sala desenha, medir de novo e trocar o `BROWSER_RECORD`.
+1. **L3 está publicado** (2026-10-05; o estado no topo desta seção, a revisão antes do push em
+   12.13). Ficaram para conferir à mão, sem bloquear nada: o Esc com o mouse capturado num
+   navegador de verdade, a escolha do lembrete do caderno e a fala de «saguão = átrio» (12.12).
+   **Os lotes estão em pausa por decisão do dono:** L4 só começa quando ele pedir, e antes de
+   começar pergunta-se o modo (econômico, solo ou completo).
 2. **Playtest** (passo 13): L3 muda o percurso, e o aceite pede que uma pessoa nova chegue à
    Posse (8.10).
 3. **L4 (o verbo).** Começa a rota por `l3-posse-signed` e `l3-new-game-safe-open`. Paga as
@@ -3328,3 +3332,28 @@ noite 4 reprova).
   gaveta aberta) mostram a redação de antes da revisão e continuam congeladas no que mostravam.
 - **As duas lentes que não reportaram** («testes», «visual»).
 - O toque, o som, o fps e o build publicado, como em 12.8.
+
+### 12.13 Revisão antes do push (passo 8 de §9.1), 2026-10-05
+
+Um revisor que não escreveu o lote leu de `5f48687` a `7af33b2`. **Nenhum bloqueio.** Um defeito
+e quatro notas; o defeito e duas notas foram consertados em `bdbc457`, com `npm run check` e
+`npm run build` verdes, e duas notas ficaram.
+
+| Achado | O que foi feito | Onde está provado |
+|---|---|---|
+| **(deveria)** Martelar o `E` assinava o termo em menos de um segundo: cada pressão não ouvida deixava correr o tempo da pergunta, e a que caísse depois de 0,5 s respondia (o conserto de 12.12 só segurava o segundo toque) | uma pressão não ouvida recomeça o tempo da pergunta (`asked` volta a 0): o que responde é uma pressão depois de meio segundo em que nada foi pressionado | `test:mobile-controls`: a tabela do gesto; a rajada (um toque depois dela não assina, 0,6 s depois assina); 3, 4, 5, 6 e 8 toques por segundo durante 2 s nunca assinam, e uma pressão 0,6 s depois assina |
+| (nota) `Ctrl`, `Meta` ou `Alt` com o `E` começava uma pressão cujo soltar o navegador pode não entregar: a espera correria sozinha | `keyMayBeginHold`: com um modificador a tecla não começa a espera | `test:mobile-controls` (a regra e a fiação), `test:opening-flow` (a linha presa e a mutação) |
+| (nota) Sem captura do ponteiro, o dedo que sai do botão e solta fora nunca é ouvido: a espera correria com nada pressionado | `pointerLeaveReleases`: onde a captura falhou, sair do botão é soltar (`onPointerLeave` no botão de Ação e no «Assinar») | `test:mobile-controls` (a regra e as duas ocorrências), `test:opening-flow` (a linha presa e a mutação) |
+
+**Ficaram, e por quê.**
+
+- **«Cancelar» segurado por mais de 700 ms pode reabrir a pergunta** (o clique dele chega depois
+  do eco do ponteiro e é lido como uma pressão nova). Falha para o lado seguro: pergunta de novo,
+  não assina. Só acontece em aparelho de toque; fica para o playtest dizer se incomoda.
+- **As regras que alocam a cada quadro** (`VoiceDeviceView`, `useNightPhraseKey`): o revisor
+  repetiu o achado, já adiado em 12.12 com o motivo.
+
+**O que esta revisão não olhou.** As duas lentes de 12.12 que não reportaram («testes» e
+«visual») continuam sem um olho de fora: o revisor do passo 8 leu o diff, não refez as capturas
+nem auditou se cada teste prova o que diz. O conserto de `bdbc457` foi escrito depois da revisão
+e não passou por outra: o que o segura é o teste que estava vermelho antes dele.
