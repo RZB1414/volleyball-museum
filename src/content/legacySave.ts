@@ -45,10 +45,17 @@ export const PRE_OPENING_SAVE = {
  * lot as one written by this. The evidence is `helloCallId`, the call every
  * save is owed and hears first. Whoever has not heard it has not met the
  * porter of this lot, and whatever milestone they have passed was passed
- * before he had anything to say about it. The cost, taken on purpose: a new
- * player who leaves the office without the radio, passes a milestone and
- * reloads before hearing him loses the call for that milestone. The hint the
- * radio gives when called says the same thing.
+ * before he had anything to say about it.
+ *
+ * Unless a build of this lot wrote the save, which the save also says (a
+ * field no earlier build wrote: `saveMigrations.ts`). His introduction is on
+ * record half a minute after the lamp, and a game begun in this build can
+ * pass a milestone sooner. Read by `helloCallId` alone, that game lost the
+ * call for the milestone at the next reload, a cost taken on purpose at
+ * first; and it lost it with no reload at all whenever a second tab was
+ * open, which read the other's write as it would a save of another night
+ * and handed the call back as heard. A game this build began has met the
+ * porter from its first write.
  *
  * The drawer is the other half, and does not wait for the first. L3 pinned a
  * key to what is in it, handed over as the drawer opens: a trigger of the

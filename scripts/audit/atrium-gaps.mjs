@@ -17,7 +17,12 @@ const { MUSEUM } = await load('src/content/museum.ts')
 const kit = BAKED_BUNDLES.find((b) => b.name === 'kit')
 const atrium = MUSEUM.rooms.find((r) => r.id === 'atrium')
 const obbs = []
-atrium.kit.forEach((pl, i) => {
+// Everything the room places that the manifest gives a collider, by whichever
+// list places it: furniture is in the kit, and a thing with something to say
+// is a device (the plinth and the lectern, since L3) or a container. The kit
+// alone measured the hall's gaps without its two largest solids.
+const placed = [...atrium.kit, ...(atrium.containers ?? []), ...(atrium.devices ?? []), ...(atrium.powerControl ? [atrium.powerControl] : [])]
+placed.forEach((pl, i) => {
   for (const part of kit.parts.filter((p) => p.collider && (p.name === pl.part || p.name.startsWith(pl.part + '__')))) {
     const s = pl.scale ?? 1, r = pl.rotationY ?? 0, c = Math.cos(r), sn = Math.sin(r)
     const [cx, cy, cz] = part.collider.centre, [hx, hy, hz] = part.collider.halfExtents

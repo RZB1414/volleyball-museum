@@ -453,5 +453,76 @@ check(
   `safe ${nodesOf('office-safe').join(', ')}; machine ${nodesOf('office-answering-machine').join(', ')}`,
 )
 
+/**
+ * And the triangles, by data, for the reason the nodes are counted that way.
+ *
+ * The two triangle ceilings above («atrium kit stays within 50,000», «office
+ * kit stays within 36,000») sum the kit alone. When the plinth (2,052
+ * triangles), the lectern, the safe and the telephone left the kit for the
+ * devices and the containers (L3), what those ceilings measure dropped by
+ * some 3,000 in each room while the rooms went on drawing every one of those
+ * triangles: the hall's apparent slack went from 3,700 to 6,700, the
+ * office's from 1,300 to 4,400, and a later lot could have spent the
+ * difference on furniture with every gate green. The node count by data
+ * does not see it either: it counts draws.
+ *
+ * So each room is held to what it places in all, by whichever list: every
+ * kit placement (instanced, a copy of its triangles each), every container
+ * whole, every device at the most it draws at once, and its power control.
+ * At what was measured when the review of L3 found the gap, which is where a
+ * ratchet starts.
+ */
+const trianglesOf = (recipe: string) =>
+  kitBundle!.parts.filter((part) => part.name === recipe || part.name.startsWith(`${recipe}__`)).reduce((sum, part) => sum + part.triangles, 0)
+
+function trianglesAtOnce(device: NonNullable<(typeof MUSEUM.rooms)[number]['devices']>[number]) {
+  const all = trianglesOf(device.part)
+  if (device.kind !== 'signing-desk' || device.termIds.length !== 1) return all
+  // The lamp or the Book, never both (`drawnAtOnce`): the heavier of the two counts.
+  const of = (prefix: string) =>
+    kitBundle!.parts.filter((part) => part.name.startsWith(`${device.part}__${prefix}`)).reduce((sum, part) => sum + part.triangles, 0)
+  return all - Math.min(of('led'), of('book'))
+}
+
+function trianglesByData(room: (typeof MUSEUM.rooms)[number]) {
+  const kit = room.kit.reduce((sum, placement) => sum + trianglesOf(placement.part), 0)
+  const containers = (room.containers ?? []).reduce((sum, container) => sum + trianglesOf(container.part), 0)
+  const devices = (room.devices ?? []).reduce((sum, device) => sum + trianglesAtOnce(device), 0)
+  const control = room.powerControl ? trianglesOf(room.powerControl.part) : 0
+  return { kit, containers, devices, control, total: kit + containers + devices + control }
+}
+
+const TRIANGLES_BY_DATA_CEILING: Readonly<Record<string, number>> = { atrium: 47_224, holyoke: 21_860, office: 41_614 }
+for (const room of MUSEUM.rooms) {
+  const placed = trianglesByData(room)
+  const ceiling = TRIANGLES_BY_DATA_CEILING[room.id]
+  console.log(
+    `  PERF  ${room.id.padEnd(8)} triangles by data ${String(placed.total).padStart(6)} ` +
+      `(kit ${placed.kit}, containers ${placed.containers}, devices ${placed.devices}, control ${placed.control})`,
+  )
+  check(
+    `${room.id} places at most ${ceiling?.toLocaleString('en-US')} triangles by data: kit, containers, devices and its power control`,
+    ceiling !== undefined && placed.total <= ceiling,
+    ceiling === undefined ? 'a room with no ceiling' : `${placed.total} triangles`,
+  )
+  // The kit's share is the figure the older ceilings read, placement by placement.
+  check(
+    `${room.id}: the kit's share of that count is the kit ceiling's own figure`,
+    placed.kit === roomMetrics.get(room.id)?.instantiatedTriangles,
+    `${placed.kit} against ${roomMetrics.get(room.id)?.instantiatedTriangles}`,
+  )
+}
+// The mistake it exists for: a piece of furniture the weight of the plinth,
+// placed as a device, is under both kit ceilings and over this one.
+const heavier = trianglesByData({
+  ...officeRoom,
+  devices: [...(officeRoom.devices ?? []), { ...(atriumRoom.devices ?? []).find((device) => device.part === 'atrium-central-podium')!, id: 'a-second-plinth' }],
+})
+check(
+  'furniture added as a device breaks the triangle ceiling by data, with the kit ceilings untouched',
+  heavier.total > TRIANGLES_BY_DATA_CEILING.office && heavier.kit === trianglesByData(officeRoom).kit && heavier.kit <= 36_000,
+  `${heavier.total} triangles by data, ${heavier.kit} in the kit`,
+)
+
 console.log(`\n${passed} passed, ${failed} failed`)
 if (failed > 0) process.exitCode = 1

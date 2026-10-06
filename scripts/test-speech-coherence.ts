@@ -17,9 +17,10 @@
  * written down with the save as it stood. What was heard is then held to the
  * rules below, which are about the night and not about any one line.
  *
- * And the rules are shown to bite: three museums changed for the purpose
- * (a call that no longer lapses, an answer that no longer looks first, a
- * milestone of the night that can be un-met) each fail.
+ * And the rules are shown to bite: museums changed for the purpose (a call
+ * that no longer lapses, an answer that no longer looks first, a milestone
+ * of the night that can be un-met, a hint that sends the player to a
+ * recording already heard) each fail.
  *
  * Since the Posse the night has an end, and two things are said that the
  * radio does not carry: a recording, and the card and the lines that follow
@@ -116,11 +117,29 @@ function heardProblems(content: MuseumContent, entry: Heard): string[] {
   const met = (condition: Parameters<typeof progressConditionMet>[0]) => progressConditionMet(condition, save, content)
   const lit = content.rooms.every((room) => isRoomPowered(room, save.roomsPowered))
   const switches = new Map(content.rooms.flatMap((room) => (room.powerControl ? [[room.powerControl.id, room] as const] : [])))
-  /** Nobody is sent to a switch already thrown. */
+  /**
+   * A thing that plays a recording, and the recordings it has: once every
+   * one of them is in the archive, heard to its end, it has nothing left to
+   * say to this save, and its message lamp is dark.
+   */
+  const recordings = new Map(
+    content.rooms.flatMap((room) =>
+      (room.devices ?? []).flatMap((device) => {
+        if (device.kind !== 'voice') return []
+        const documents = device.utterances.flatMap((utterance) => (utterance.documentId === undefined ? [] : [utterance.documentId]))
+        return documents.length > 0 ? [[device.id, documents] as const] : []
+      }),
+    ),
+  )
+  /** Nobody is sent to a switch already thrown, nor to a recording already heard. */
   const sentToDone = (mentions: readonly string[], who: string) => {
     for (const id of mentions) {
       const room = switches.get(id)
       if (room && isRoomPowered(room, save.roomsPowered)) problems.push(`${who} sends the player to "${id}" with ${room.id} already lit`)
+      const heard = recordings.get(id)
+      if (heard && heard.every((documentId) => save.documentsRead.includes(documentId))) {
+        problems.push(`${who} sends the player to "${id}" with its recording already heard`)
+      }
     }
   }
 
@@ -435,7 +454,7 @@ const withRadio = (change: (radio: Radio) => Radio): MuseumContent => ({
   })),
 })
 
-await test('the rules bite: a call that no longer lapses, an answer that no longer looks, a milestone that can be un-met, a call for an older night said to everybody, a card shown before the signature', async () => {
+await test('the rules bite: a call that no longer lapses, an answer that no longer looks, a milestone that can be un-met, a call for an older night said to everybody, a card shown before the signature, a hint that sends the player to a recording already heard', async () => {
   // 1. The call for the hall lit keeps waiting once Wing 1 is lit too: a
   //    player who lit both away from the desk comes back to be sent to a
   //    breaker already thrown.
@@ -503,6 +522,21 @@ await test('the rules bite: a call that no longer lapses, an answer that no long
   assert.ok(
     older.problems.some((problem) => /a new game was told to look again in a drawer of another night/.test(problem)),
     `a call for an older night's drawer said to everybody went through: ${older.problems.join('; ') || 'no problem found'}`,
+  )
+
+  // 6. The hint for the drawer as the lot shipped it: its first height sent
+  //    the player to the message on the answering machine, and went on
+  //    sending them there once the message had been heard and filed, its
+  //    lamp dark on his own panel. (The reminder of the machine lapses with
+  //    the message; the hint asked only whether the drawer was shut.)
+  const toTheMachine = withRadio((radio) => ({
+    ...radio,
+    hints: radio.hints.map((hint) => (hint.targetId === 'portrait-morgan' ? { ...hint, mentions: [...hint.mentions, 'office-answering-machine'] } : hint)),
+  }))
+  const replayed = await problemsOf(toTheMachine, 60, RADIO_FIRST, PROMPT)
+  assert.ok(
+    replayed.problems.some((problem) => /hint \d+ of "office-radio" sends the player to "office-answering-machine" with its recording already heard/.test(problem)),
+    `a hint that sends the player to a message already heard went through: ${replayed.problems.join('; ') || 'no problem found'}`,
   )
 
   // 5. The card that says the deed was signed, owed from the moment the

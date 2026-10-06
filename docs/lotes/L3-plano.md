@@ -225,6 +225,8 @@ export type ChecklistItem = {
   readonly deferredUntilLot?: number
   /** A pencil note beside the line. */
   readonly noteKey?: string
+  /** What the save has to hold for the note to be on the page (the review, §17.5). Omitted: with the line. */
+  readonly noteWhen?: ProgressCondition
   readonly mentions?: readonly string[]
 }
 
@@ -250,7 +252,7 @@ A lista no fim do lote (as três primeiras em F1; as quatro a lápis em F5, com 
 |---|---|---|---|---|---|
 | 1 | `notebook.todo.power` | helena | sempre | `powered: ['office', 'atrium', 'holyoke']` | um, sem título, sobre a mesma lista |
 | 2 | `notebook.todo.catalogue` | helena | sempre | `catalogued:` as doze da casa, por extenso (dívida datada até L4) | `room.atrium.title` (as quatro); `room.holyoke.title` (as oito) |
-| 3 | `notebook.todo.vault` | helena | sempre | — (`deferredUntilLot: 12`, `noteKey: 'notebook.todo.vault.note'`) | — |
+| 3 | `notebook.todo.vault` | helena | sempre | — (`deferredUntilLot: 12`, `noteKey: 'notebook.todo.vault.note'`, `noteWhen: { powered: ['office'] }` [revisão, §17.5]) | — |
 | 5 | `notebook.todo.drawer` | curator | `anyOf: [{ documentsRead: ['doc-otavio-tape'] }, { locksSeen: ['office-drawer'] }]` | `locksOpened: ['office-drawer']` | — |
 | 6 | `notebook.todo.safe-key` | curator | `locksOpened: ['office-drawer']` | `locksOpened: ['office-safe']` | — |
 | 7 | `notebook.todo.posse` | curator | `documentsRead: ['doc-termos']` | `flags: ['posse-signed']` | — |
@@ -560,7 +562,7 @@ export type HoldRequest = { readonly id: string; readonly seconds: number }
 export type HoldGesture =
   | { readonly phase: 'idle' }
   | { readonly phase: 'holding'; readonly id: string; readonly seconds: number; readonly held: number }
-  | { readonly phase: 'confirming'; readonly id: string }
+  | { readonly phase: 'confirming'; readonly id: string; readonly asked: number }   // `asked`: há quanto tempo a pergunta está na tela [revisão, §17.1]
 export type HoldEvent =
   | { readonly kind: 'press'; readonly request: HoldRequest }
   | { readonly kind: 'tick'; readonly seconds: number; readonly aimed: string | null }
@@ -577,7 +579,7 @@ export function readHoldMark(mark: string): HoldView
 |---|---|---|---|---|
 | `idle` | `holding` em 0 | fica | fica | fica |
 | `holding` | ignorado (a mesma entrada não desce duas vezes) | mira em outro alvo → `idle`; senão **soma o passo**, limitado a 0,25 s, e com a soma ≥ `seconds` → `idle` e **dispara**: o quadro que completa o tempo é o que assina (um passo de zero devolve o mesmo gesto) | `held` < 0,3 s → `confirming`; senão `idle` | `idle` |
-| `confirming` | mesmo id → `idle` e **dispara**; outro id → `holding` nele | mira em outro alvo → `idle` | fica | `idle` |
+| `confirming` | mesmo id, com a pergunta há 0,5 s na tela (`HOLD_CONFIRM_AFTER_SECONDS`) → `idle` e **dispara**; antes disso, não é ouvida e a pergunta fica; outro id → `holding` nele [revisão, §17.1: dois toques seguidos assinavam] | mira em outro alvo → `idle`; senão soma o passo à pergunta, até 0,5 s | fica | `idle` |
 
 ```ts
 // primaryAction.ts
@@ -841,7 +843,7 @@ ouvi-la nunca conhece o Jorge); `deviceRules.ts:88-98` (`dueRadioCalls`); `pt-BR
 |---|---|---|---|---|---|
 | `porter-hello` | `powered: ['office']` | — | 2,4 s | `radio.call.hello.1` a `.5` | `office-clock`, `office-radio` |
 | `porter-first-call` | `powered: ['office'], unpowered: ['atrium']` (igual a hoje) | `powered: ['atrium']` | 1,2 s | `radio.call.first.1`, `.2` | `atrium-breaker`, `atrium`, `holyoke` |
-| `porter-notebook-reminder` | como hoje | `documentsRead: ['doc-welcome']` | 4 s | como hoje | `office-notebook` |
+| `porter-notebook-reminder` | como hoje | `documentsRead: ['doc-welcome']` | 4 s | `radio.call.notebook.1`, com texto novo [revisão, §17.8] | `office-notebook`, `office` |
 | `porter-radio-taken` | como hoje | — | 0,8 s | como hoje | `office-radio` |
 | `porter-atrium-service` | `powered: ['atrium']` | `powered: ['holyoke']` | 1,5 s | `radio.call.atrium.1` | `atrium-to-holyoke`, `holyoke-breaker` |
 | `porter-holyoke-lit` | `powered: ['holyoke']` | `catalogued:` as oito da ala | 1,5 s | `radio.call.holyoke.1` | `holyoke` |
@@ -1374,7 +1376,7 @@ prateleira); `test:desk-top` (a secretária apoiada na nogueira e a 2 mm ou mais
 |---|---|---|---|---|
 | `porter-machine-reminder` | `powered: ['office', 'atrium']` | `documentsRead: ['doc-otavio-tape']` | `radio.call.machine.1` | `office-answering-machine` |
 | `porter-drawer-open` | `locksOpened: ['office-drawer'], flagsUnset: ['legacy-pre-L3-drawer']` | `locksOpened: ['office-safe']` | `radio.call.drawer.1`, `.2` | `office-cabinet`, `office-safe` |
-| `porter-legacy-drawer` | `flags: ['legacy-pre-L3-drawer']` | `locksOpened: ['office-safe']` | `radio.call.legacy-drawer.1` | `office-cabinet` |
+| `porter-legacy-drawer` | `flags: ['legacy-pre-L3-drawer']` | `locksOpened: ['office-safe']` | `radio.call.legacy-drawer.1` | `office-cabinet`, `office-safe` [revisão: a fala passou a dizer de onde é a chave] |
 | `porter-safe-open` | `locksOpened: ['office-safe']` | `flags: ['posse-signed']` | `radio.call.safe.1`, `.2` | `office-safe`, `atrium-lectern` |
 
    `PRE_POSSE_SAVE.oldNews` não ganha nenhuma: as quatro dependem de objetos que nenhum save
@@ -1387,6 +1389,7 @@ prateleira); `test:desk-top` (a secretária apoiada na nogueira e a 2 mm ou mais
 | posse | `documentsRead: ['doc-termos'], flagsUnset: ['posse-signed']` | `atrium-lectern` |
 
    A altura «onde» da gaveta passa a citar o recado, e o resto vira o fecho honesto (§6.5).
+   [Revisão, §17.8: a altura «onde» voltou ao texto de F2; o recado é só da chamada que caduca.]
 10. **Lista.** As linhas 5 a 8 de 3.4. `Hud.tsx`: `ChecklistToast` («Anotado no caderno») por
     `checklistNews`, só para quem tem o caderno.
 11. **Relógio.** Os marcos `safe` e `posse`, com as frases 9 e 10.
@@ -1489,7 +1492,7 @@ Otávio seco, sem exclamação; o Jorge com «tá», «pra», «Câmbio», dizen
 | Chave | pt-BR | inglês |
 |---|---|---|
 | `intro.line3` (muda) | Seu antecessor deixou alguma coisa na caixa-forte. | (não muda) Your predecessor left something in the vault. |
-| `notebook.welcome.letter` (muda) | Olá, novo curador! Bem-vindo ao seu novo trabalho.⏎⏎A tempestade desta tarde derrubou a energia do museu inteiro, e você vai ter que religá-la sala por sala.⏎⏎A seguradora só libera a reabertura com o inventário conferido por você, contra o livro de tombo do Otávio, o antigo curador, que ficou na caixa-forte. Coragem!⏎⏎Reabrimos amanhã às 9h. Bom trabalho! | Hello, new curator! Welcome to your new job.⏎⏎This afternoon's storm knocked out the power across the whole museum, and you will have to bring it back room by room.⏎⏎The insurer will only clear the reopening once you have checked the inventory yourself, against the accession ledger of Otávio, the previous curator, which was left in the vault. Chin up!⏎⏎We reopen tomorrow at 9. Good luck! |
+| `notebook.welcome.letter` (muda) | Olá, novo curador! Bem-vindo ao seu novo trabalho.⏎⏎A tempestade desta tarde derrubou a energia do museu inteiro, e você vai ter que religá-la sala por sala.⏎⏎A seguradora só libera a reabertura com o inventário conferido por você, contra o livro de tombo do Otávio, o antigo curador. O livro ficou na caixa-forte. Coragem!⏎⏎Reabrimos amanhã às 9h. Bom trabalho! [revisão: «…o antigo curador, que ficou na caixa-forte» deixava o curador na caixa-forte] | Hello, new curator! Welcome to your new job.⏎⏎This afternoon's storm knocked out the power across the whole museum, and you will have to bring it back room by room.⏎⏎The insurer will only clear the reopening once you have checked the inventory yourself, against the accession ledger of Otávio, the previous curator, which was left in the vault. Chin up!⏎⏎We reopen tomorrow at 9. Good luck! |
 | `notebook.todo.power` (muda) | Religar a energia: escritório, átrio e Ala 1 | Restore the power: office, atrium and Wing 1 |
 | `notebook.todo.catalogue` (muda) | Catalogar o acervo: conferir peça por peça | Catalogue the collection: check it piece by piece |
 | `notebook.todo.vault` (muda) | Caixa-forte — só o Otávio sabia abrir | (não muda) The vault — only Otávio knew how to open it |
@@ -1498,8 +1501,8 @@ Otávio seco, sem exclamação; o Jorge com «tá», «pra», «Câmbio», dizen
 | `journal.tab.notebook` | Caderno | Notebook |
 | `container.office.title` (muda) | Gaveta do Otávio | Otávio's drawer |
 | `lock.office-drawer.prompt` | trancada (um ano) | locked (a year) |
-| `device.atrium-podium.title` | Plinto do Fundador | The Founder's plinth |
-| `device.atrium-podium.notice` | Interditado: obra do piso. | Closed off: the floor is being relaid. |
+| `device.atrium-podium.title` | Plinto do Fundador | Founder's plinth [revisão: sem artigo, como os outros nomes] |
+| `device.atrium-podium.notice` | Interditado: obra do piso. | Closed off: floor works. [revisão: sem tempo verbal; o piso novo já existe] |
 
 (⏎⏎ é a quebra de parágrafo `\n\n` que a carta já usa.)
 
@@ -1509,21 +1512,21 @@ Otávio seco, sem exclamação; o Jorge com «tá», «pra», «Câmbio», dizen
 |---|---|---|
 | `radio.call.hello.1` | Curador? É o Jorge de novo, da portaria. Câmbio. | Curator? It's Jorge again, at the front desk. Over. |
 | `radio.call.hello.2` | Vi no painel que a luz do escritório voltou. A tempestade desarmou os quadros do prédio inteiro. | The panel here says the office lights are back. The storm tripped every breaker in the building. |
-| `radio.call.hello.3` | O Otávio se aposentou hoje. Pegou o ônibus antes de a estrada fechar e deixou tudo com você. | Otávio retired today. He caught the bus before the road closed and left it all to you. |
+| `radio.call.hello.3` | O Otávio se aposentou hoje. Pegou o ônibus antes da estrada fechar e deixou tudo com você. [revisão: a forma sem contração é de texto escrito] | Otávio retired today. He caught the bus before the road closed and left it all to you. |
 | `radio.call.hello.4` | Aqui eu tenho o painel do alarme: toda vitrine, gaveta e porta desse prédio acende uma luzinha pra mim. | I've got the alarm panel here: every case, drawer and door in this building lights a little lamp for me. |
-| `radio.call.hello.5` | O relógio aí parou com a luz: acerta. O subsolo alagou; hoje ninguém desce. Qualquer coisa, me chama no rádio. Câmbio, desligo. | The clock there stopped with the power: set it. Basement flooded; nobody goes down tonight. Call me on the radio. Over and out. |
+| `radio.call.hello.5` | O relógio aí parou com a luz. O subsolo alagou; hoje ninguém desce. Qualquer coisa, me chama no rádio. Câmbio, desligo. [revisão: sem «acerta», dito a quem já tinha acertado] | The clock there stopped with the power. Basement flooded; nobody goes down tonight. Trouble? Call me on the radio. Over and out. [revisão: sem a ordem, e a oferta de volta] |
 | `radio.call.first.1` (muda) | O quadro do saguão fica do outro lado, um pouco à direita de quem sai daí, junto da entrada da Ala 1. Procura a luzinha vermelha. | The hall breaker is across from you, a little to your right as you leave, by the Wing 1 entrance. Look for the little red light. |
 | `radio.call.first.2` (muda) | Saguão, átrio: é o mesmo lugar. A placa diz átrio; eu digo saguão. Câmbio. | The hall, the atrium: same place. The sign says atrium; I say the hall. Over. |
 | `radio.call.atrium.1` | Saguão no painel! A Ala 1 é a porta com placa, perto do quadro. O quadro dela fica na parede de frente pras portas. Câmbio. | The hall's on my panel! Wing 1 is the door with the sign, by the breaker. Its own breaker is on the wall facing its doors. Over. |
 | `radio.call.holyoke.1` | Ala 1 acesa. Agora é conferir, peça por peça. Câmbio. | Wing 1 is lit. Now it gets checked, piece by piece. Over. |
-| `radio.call.catalogued.1` | Uma vitrine abriu e fechou aqui no painel. Primeira conferida? Faltam… bom, faltam bastante. Câmbio. | A case just opened and shut on my panel. First one checked? That leaves… well, plenty. Over. |
+| `radio.call.catalogued.1` | Tem vitrine abrindo e fechando aqui no painel. Tá conferindo, é? Câmbio. [revisão: era ouvida com quatro ou nove peças conferidas] | Cases opening and shutting on my panel. Checking them, are you? Over. |
 | `radio.call.shortcut.1` | A porta de serviço abriu por dentro. Agora fica destrancada dos dois lados. Tá no meu painel. Câmbio. | The service door opened from the inside. It stays unlocked both ways now. It's on my panel. Over. |
 | `radio.hint.notebook.where` | Primeiro o caderno: a diretora, a Helena, deixou um na mesa. | Notebook first: the director, Helena, left one on the desk. |
 | `radio.hint.notebook.what` | Capa vermelha, do lado da luminária. | Red cover, next to the lamp. |
 | `radio.hint.notebook.how` | Pega e lê até a última página. | Pick it up and read it to the last page. |
 | `radio.hint.notebook.curt` (não muda) | Caderno. Na mesa. Pega e lê. Câmbio. | Notebook. On the desk. Pick it up and read it. Over. |
-| `radio.hint.atrium.where` | O quadro fica do outro lado do saguão. | The breaker's on the far side of the hall. |
-| `radio.hint.atrium.what` | Luzinha vermelha, perto da porta com placa. | A little red light, by the door with the sign. |
+| `radio.hint.atrium.where` | O quadro do saguão fica na parede da Ala 1, do lado da porta dela. [revisão: «do outro lado» só valia da porta do escritório] | The hall breaker is on the Wing 1 wall, right beside its door. |
+| `radio.hint.atrium.what` | Luzinha vermelha, do lado da porta da Ala 1, a que tem placa. [revisão] | A little red light, beside the Wing 1 door, the one with the sign. |
 | `radio.hint.atrium.how` | Caixa cinza na parede, com alavanca. É só acionar. | A grey box on the wall, with a lever. Just throw it. |
 | `radio.hint.atrium.curt` (muda) | Saguão. Do lado da porta da Ala 1. Luzinha vermelha. Câmbio. | The hall. Beside the Wing 1 door. Little red light. Over. |
 | `radio.hint.holyoke.where` | A Ala 1 tem quadro próprio, na parede de frente pras portas. | Wing 1 has its own breaker, on the wall facing the doors. |
@@ -1535,7 +1538,10 @@ Otávio seco, sem exclamação; o Jorge com «tá», «pra», «Câmbio», dizen
 | `radio.hint.drawer.how` | Pega a moldura e inclina: tá na borda de baixo. Ou no arquivo de proveniência, perto da entrada da ala. | Pick the frame up and tilt it: it's on the bottom edge. Or in the provenance archive, by the wing entrance. |
 | `radio.hint.drawer.curt` (não muda) | Gaveta do Otávio: uma data. Retrato do Morgan, Ala 1. Pega a moldura e inclina: tá na borda de baixo. | Otávio's drawer: a date. Morgan's portrait, Wing 1. Pick the frame up and tilt it: it's on the bottom edge. |
 | `radio.hint.rest`, `.curt` (em F2: os textos de hoje de `radio.hint.vault` e `.curt`, só com a chave renomeada) | O subsolo alagou; hoje ninguém desce. A luz tá feita; fora isso, hoje é só conferência. Câmbio. | (o de hoje) |
-| `radio.patience.t3.torch.close` | Brincadeira. A porta de enrolar tá sem motor, e posto é posto. | Kidding. The roller door has no motor, and a post is a post. |
+| `radio.patience.t3.torch.close` | …Ir aí eu não vou: a porta de enrolar tá sem motor, e posto é posto. [revisão: dita depois da dica, «Brincadeira.» desdizia a dica] | …Not that I'm coming: the roller door has no motor, and a post is a post. |
+| `radio.patience.t2.repeat` (muda) [revisão] | Explico, que explicar é de graça: | I'll spell it out. Explaining's free: |
+| `radio.patience.t2.reception` (muda) [revisão: ele diz «saguão»] | Só pra constar: aqui é a portaria. Recepção é aquele balcão vazio no saguão. | (não muda) |
+| `radio.call.notebook.1` (muda) [revisão: ouvida também fora do escritório] | Ah, e a Helena, a diretora, deixou um caderno pra você na mesa do escritório. Pega, que tá tudo explicado lá. Câmbio. | Oh, and Helena, the director, left you a notebook on the office desk. Take it: it explains everything. Over. |
 | `radio.patience.t4.dark.close` (muda) | …Só pra Helena, a diretora, talvez. | …Except Helena, the director, maybe. |
 | `radio.deadAir.rain` (muda) | (Nada. Só a chuva.) | (Nothing. Only the rain.) |
 | `device.office-clock.title` | Relógio do escritório | Office clock |
@@ -1609,28 +1615,28 @@ quatro dicas cheias de hoje), `radio.hint.vault`, `.vault.curt` (renomeadas).
 | `radio.call.machine.1` | Tem uma luz de recado piscando no ramal do escritório. Deve ser coisa do Otávio. Câmbio. | There's a message light blinking on the office extension. Must be Otávio's doing. Over. |
 | `radio.call.drawer.1` | A gaveta do Otávio abriu aqui no painel. Trinta anos e eu nunca vi o que tinha dentro. Tinha o quê? | Otávio's drawer just opened on my panel. Thirty years and I never saw what was in it. What was in it? |
 | `radio.call.drawer.2` | Se for chave, é do cofre de ferro. Ele era assim: chave dentro de gaveta, gaveta dentro de data. Câmbio. | If it's a key, it's for the iron safe. That was him: a key inside a drawer, a drawer inside a date. Over. |
-| `radio.call.legacy-drawer.1` | Olha de novo a gaveta do Otávio: o bilhete tinha uma chave presa. Câmbio. | Have another look in Otávio's drawer: there was a key pinned to the note. Over. |
+| `radio.call.legacy-drawer.1` | A gaveta do Otávio já tava aberta aqui no painel. Olha de novo lá dentro: se tiver chave, é do cofre de ferro. Câmbio. [revisão: ele não vê o que há na gaveta] | Otávio's drawer was already open on my panel. Have another look inside: if there's a key, it's for the iron safe. Over. |
 | `radio.call.safe.1` | O cofre de ferro abriu. Esse é o cofre. A caixa-forte é a do Fundador, lá embaixo: não confunde. | The iron safe's open. That one is the safe. The vault is the Founder's, down below: don't mix them up. |
 | `radio.call.safe.2` | Se tem livro aí, é o de termos. Termo se assina no púlpito do saguão, com a casa acesa. Câmbio. | If there's a book in there, it's the Book of Deeds. A deed gets signed at the lectern in the hall, with the house lit. Over. |
 | `sequence.speaker.porter` | Jorge · alto-falante | Jorge · loudspeaker |
 | `sequence.posse.card` | Termo de posse assinado | Deed of office signed |
 | `sequence.posse.1` | A lâmpada do púlpito acendeu e apagou: assinou. O acervo é seu, curador. {hora}. | The lectern lamp came on and went out: you signed. The collection's yours, curator. {hora}. |
 | `sequence.posse.2` | O livro que a seguradora quer tá na caixa-forte, e o subsolo alagou. Hoje não se desce. Câmbio. | The ledger the insurer wants is in the vault, and the basement flooded. Nobody goes down tonight. Over. |
-| `radio.hint.drawer.where` (muda) | A gaveta do Otávio abre com um ano. Ele deixou recado na secretária do escritório. | Otávio's drawer opens with a year. He left a message on the office answering machine. |
+| `radio.hint.drawer.where` (não muda, afinal) [revisão: a dica mandava ao recado quem já o tinha ouvido] | A gaveta do Otávio abre com um ano. O ano tá na Ala 1. | Otávio's drawer opens with a year. The year is in Wing 1. |
 | `radio.hint.key.where` | Chave do Otávio? É do cofre de ferro. | Otávio's key? It's for the iron safe. |
 | `radio.hint.key.what` | Canto do escritório, do lado das estantes. | In the corner of the office, beside the bookcases. |
 | `radio.hint.key.how` | Chega perto e abre. A chave fica lá. | Walk up and open it. The key stays in it. |
 | `radio.hint.key.curt` | Cofre de ferro. Canto do escritório. A chave abre. Câmbio. | Iron safe. Corner of the office. The key opens it. Over. |
 | `radio.hint.posse.where` | O termo se assina no púlpito do saguão. | A deed gets signed at the lectern in the hall. |
 | `radio.hint.posse.what` | O púlpito com a lâmpada acesa, entre as duas portas da parede da Ala 1. | The lectern with its lamp lit, between the two doors on the Wing 1 wall. |
-| `radio.hint.posse.how` | Com luz nas três salas, segura a ação até a pena parar. | With all three rooms lit, hold the action down until the pen stops. |
+| `radio.hint.posse.how` | No púlpito, com luz nas três salas, segura a ação sem soltar até assinar. [revisão: não há pena, na tela nem no som] | At the lectern, with all three rooms lit, hold the action down and don't let go until it's signed. |
 | `radio.hint.posse.curt` | Púlpito. Saguão. Assina. Câmbio. | Lectern. The hall. Sign. Over. |
 | `radio.hint.rest` (muda) | Posse assinada. Agora é conferir o acervo, peça por peça. A caixa-forte fica pra depois: o subsolo alagou. | The post is yours, signed. Now it's checking the collection, piece by piece. The vault can wait: the basement flooded. |
 | `radio.hint.rest.curt` (muda) | Posse assinada. Falta conferir. Caixa-forte: hoje não. | Signed. Checking is what's left. The vault: not tonight. |
-| `notebook.todo.drawer` | Gaveta do Otávio: “o ano em que o jogo deixou de se chamar Mintonette”. | Otávio's drawer: “the year the game stopped being called Mintonette”. |
+| `notebook.todo.drawer` | Gaveta do Otávio: o ano em que o jogo deixou de se chamar Mintonette. [revisão: sem aspas] | Otávio's drawer: the year the game stopped being called Mintonette. |
 | `notebook.todo.safe-key` | Chave do cofre de ferro. | Key to the iron safe. |
 | `notebook.todo.posse` | Assinar o termo de posse, no púlpito. | Sign the deed of office, at the lectern. |
-| `notebook.todo.proof` | A reforma tirou das placas a linha que diz o que cada coisa é. O Otávio guardou a prova no cofre de ferro. | The refit took off the plaques the line that says what each thing is. Otávio kept the proof in the iron safe. |
+| `notebook.todo.proof` | A reforma tirou das placas a linha que diz o que cada coisa é. O Otávio guardou a prova no cofre de ferro. | The refit took one line off the plaques: the one that says what each thing is. Otávio kept the proof in the iron safe. [revisão: a anterior lia-se «tirou as placas»] |
 | `notebook.todo.proof.note` [não previsto: o portão pede a nota de toda promessa datada] | hoje não: fica para a reabertura | not tonight: it waits for the reopening |
 | `prompt.unlock` [não previsto: 3.8] | Destrancar | Unlock |
 | `checklist.noted` | Anotado no caderno | Noted in your notebook |
@@ -2928,3 +2934,124 @@ conjuntos de capturas, congelados com digest e citados quadro a quadro no HANDOF
 **O que o fecho não fez:** os passos 5 (revisão adversarial), 8 a 11 (revisor, push, deploy,
 fumaça) e 13 (playtest). Se a revisão mudar o grafo, `npm run graph:snapshot -- --reopen` e o
 digest novo no mesmo commit; se mudar o que uma sala desenha, medir de novo.
+
+## 17. A revisão adversarial (passo 5 de §9.1), 2026-10-05
+
+Cinco lentes reportaram (o fim, a história, os saves, o bake, a produção); outras duas, «testes» e
+«visual», foram interrompidas e **não reportaram**. 37 achados (um «major», 21 «minor», 15 de
+acabamento): 16 já conferidos por um verificador independente, 21 conferidos na hora de consertar,
+lendo o código e rodando a regra, o store ou o navegador. Quatro eram o mesmo defeito visto por
+duas lentes (o Esc com o mouse capturado; a sequência do fecho repetida na aba que assinou;
+`porter-hello` e o relógio; «Primeira conferida?»), o que dá 33 distintos. **Nenhum recusado como
+errado.** Num commit local, com `npm run check` e `npm run build` verdes: 29 consertados; o
+«major», que não tem conserto dentro do lote, registrado com os números medidos; dois fechados em
+parte e um adiado, com o motivo. O registro para quem retoma, achado por achado, está em
+`docs/HANDOFF.md` §12.12; aqui fica o que muda o desenho do lote.
+
+**1. O gesto de segurar ganhou uma espera (3.10; D11).** Dois toques seguidos no `E` assinavam: o
+primeiro abria a pergunta e o segundo, décimos de segundo depois, a respondia. Era o caminho mais
+rápido para assinar, com a tecla que o jogador apertou a noite inteira e sem nada lido no meio. A
+pergunta agora tem de ter ficado `HOLD_CONFIRM_AFTER_SECONDS` (0,5 s) na tela para que a mesma
+entrada a responda; antes disso a pressão não é ouvida (não vira espera nova, não recomeça a
+contagem: a pergunta fica onde está). O tempo é contado pelos quadros, com o mesmo teto de 0,25 s
+por quadro. Vale igual no toque, onde «Cancelar» já ficava sob o polegar. A tabela de 3.10 foi
+corrigida acima.
+
+**2. O Esc com o mouse capturado.** O navegador fica com essa tecla para soltar o ponteiro e não
+entrega `keydown`: a pergunta continuava na tela depois do Esc que o próprio prompt oferece, e o
+`E` seguinte assinava. `DeviceTargeting` passou a ouvir `pointerlockchange` e a cancelar quando a
+captura termina. **Não foi conferido num navegador com `pointer lock`** (o painel não concede): ver
+HANDOFF §12.12, «O que não deu para conferir».
+
+**3. Uma janela mostra uma aba de cada vez.** A sequência do fecho, e toda chamada do Jorge,
+tocavam duas vezes para quem trocava de aba no meio: a aba deixada segurava o passo, a outra,
+que também o devia, mostrava até o fim, e na volta o passo segurado recomeçava do tempo cheio. O
+store tira da tela a sequência cujo id passou a estar em `sequencesSeen` e do ar a chamada cujo
+id passou a estar em `radioCalls` (em `takeInOtherTabs`: são ids numa lista, o store continua
+sem importar conteúdo). Provado em abas vivas, em `test:ending`.
+
+**4. «Notícia velha» é de outra noite (DL3-3 mudou).** A migração `prePosse` decidia só pela
+apresentação não ouvida, e toda leitura do disco passa por ela, a que uma aba faz da escrita de
+outra também. Uma segunda aba deste build, só aberta, lia «saguão aceso, nenhuma chamada ouvida»
+de um jogo em andamento como um save de outra noite, marcava a chamada do saguão como ouvida e a
+devolvia à aba que jogava. A evidência ganhou a segunda metade: **um save que um build deste lote
+já gravou** (tem o campo `termsSigned`, que nenhum build anterior escreve) encontrou o porteiro
+desde a primeira escrita, e o que ele passa é notícia. O custo aceito em DL3-3 (sair sem o rádio,
+passar um marco e recarregar antes de ouvir o Jorge perdia a chamada do marco) deixou de existir:
+o jogo recarregado é lido como foi deixado. Um save anterior ao lote continua como era, na carga e
+lido ao vivo de uma aba de L2. A isenção que a corrida sorteada de `test:save` precisava
+(chamadas de marco «que ninguém fez») saiu, e a corrida continua verde.
+
+**5. A nota a lápis espera o seu momento (3.4).** `ChecklistItem` ganhou `noteWhen`. A nota da
+caixa-forte, «hoje não: o subsolo alagou», é lápis (a mão do curador) e estava na página antes de
+qualquer coisa lida ou ouvida falar de alagamento: o caderno é lido no escuro. Entra com
+`powered: ['office']`, o estado em que a apresentação do Jorge, que diz o alagamento, é devida
+(estado, nunca «chamada ouvida»: M32). Um `noteWhen` que nenhuma partida alcança é
+`checklist-note-unreachable`.
+
+**6. A porta aberta do cofre é sólida.** O colisor do cofre é a caixa de porta fechada; a folha
+aberta ficava atravessada no piso e o jogador passava por dentro dela. `containerDoorSolid.ts`
+dá a caixa da folha (o nó `office-safe__door`, pelos limites do manifesto, girado na dobradiça
+pelo `openAngle`); `Containers.tsx` a registra enquanto o container está aberto, e o mundo das
+suítes a põe pela mesma função (`buildMuseumWorld(…, { openContainers })`). Sem bake: o manifesto
+já tinha os limites do nó. Com a folha sólida o escritório fica com 339 lugares de pé em vez de
+346, tudo o que há nele continua alcançável de onde era, e o lugar de onde se abre o cofre fica
+livre dela (`test:navigation`, dez casos).
+
+**7. A planta lista o que ainda barra.** «Cofre de ferro — precisa de chave» para quem já tem a
+chave desmente o estado (a pergunta que §16 deixou à revisão). A lista de trancas da planta passou
+a perguntar `lockBars`, a regra do prompt: a tranca de ferramenta sai da planta quando a chave
+chega à mão, e a linha «Chave do cofre de ferro.» do caderno fica com o lembrete.
+
+**8. Textos** (tabelas de §6 corrigidas acima, cada linha com a marca «revisão»). O que mudou de
+regra, e não só de palavra: o Jorge não diz o que há dentro de uma gaveta (`legacy-drawer`); não
+manda fazer o que pode estar feito (o relógio em `hello.5`; o recado na dica da gaveta, que ganhou
+portão em `test:speech-coherence`); não conta o que o painel não conta («Primeira conferida?»);
+diz «saguão» em toda fala fora da que explica a palavra; uma dica diz onde por algo que vale de
+qualquer sala («do outro lado» passou a ser medido de toda porta, como esquerda e direita); uma
+abertura de resposta não anuncia repetição e um fecho não desdiz a dica; a carta da Helena não
+deixa o curador na caixa-forte; a linha a lápis da gaveta não cita o recado; a página do termo
+não imprime o título duas vezes. `porter-notebook-reminder` mudou de texto e não de `when`
+(a alternativa do verificador): «…na mesa do escritório. Pega…» vale em qualquer sala e mantém a
+regra «caderno opcional, mas lembrado» para quem já saiu; o texto que o plano dava como «como
+hoje» mudou, e é do dono confirmar.
+
+**9. A planta emoldurada (D34) e a exceção ao «nenhuma mídia».** O SVG da parede do escritório
+dizia «COFRE · SUBSOLO» da caixa-forte, a dois metros do cofre de ferro. O rótulo virou
+«CAIXA-FORTE · SUBSOLO», e o arquivo mudou de nome (`office-blueprint.v2.svg`), porque
+`/textures/*` é servido como imutável por um ano e o SVG não tem hash no nome (é de L5): com o
+nome antigo a correção não chegaria a quem já entrou no escritório. É a única mídia que o lote
+toca; a textura residente não muda (mesmas dimensões). O caso de D34 em `test:opening-flow`
+passou a ler também as letras dos SVG. O «3 medalhas?» continua lá: é cânone (1.5.7) e o
+redesenho é de L9.
+
+**10. Desempenho: o que o registro não olhava.** Nenhum número do jogo mudou; mudou o que está
+escrito. (a) **O par escritório↔átrio com a porta aberta nunca tinha sido medido** (a linha de
+base mediu o par da ala): 186 draws do lugar de onde se abre o cofre, 134 do lado do saguão, contra
+o teto de 125 que vale para a ala. Com o que L3 acrescentou oculto na cena, 182: a dívida é
+anterior ao lote, e o lote somou quatro (três da secretária, um da porta do cofre). Não tem
+conserto fora de L6 e L17; virou catraca própria (`officePairDraws`, 186) com dívida datada
+(`office-pair-draws`, L6), e a da ala continua em 125. (b) **O escritório sozinho chega a 95 de
+100** visto da parede leste (era 91 antes de L3), e não «63 e 71, longe do teto»: esses são os dois
+pontos junto da porta. (c) Os tetos de triângulos «por nome» do kit ficaram cerca de 3.000 mais
+frouxos em cada sala quando o pódio, o púlpito, o cofre e o telefone saíram do `kit`: a conta por
+dado ganhou triângulos (47.224, 21.860 e 41.614). (d) O `BROWSER_RECORD` passou a treze pontos
+(R11 a R13). Medido no navegador nesta revisão: os dez pontos antigos reproduzidos, nos dois
+estados, antes dos três novos.
+
+**11. Bundle.** O teto do jogo tinha fechado o lote com 522 bytes de folga (0,13%). Os dois tetos
+que se mexeram foram postos no medido mais meio por cento, com o motivo em
+`scripts/lib/ratchets.ts`: título 36.100 (35.919 medidos), jogo 402.820 (400.806).
+
+**O que não foi feito** (HANDOFF §12.12 tem o motivo de cada um): a fala que iguala «saguão» e
+«átrio» continua só em `porter-first-call`, e não chega a save antigo nem a quem acende o saguão
+durante a apresentação; `porter-holyoke-lit` e `porter-first-catalogued` continuam sem caducar
+neste build (as doze peças só catalogam em L4), sem portão para `lapsesWhen` fora do ponto fixo;
+as alocações por quadro de `VoiceDeviceView` e `useNightPhraseKey` ficaram como estão (medidas:
+microssegundos). **Nenhuma captura refeita:** os quadros `l3-o01`, `l3-o04`, `l3-o05` e
+`l3-o06` mostram a redação anterior à revisão (as aspas da linha da gaveta, o título do termo
+duas vezes, a linha inglesa da prova, a fala antiga ao save com a gaveta aberta) e continuam
+congelados no que mostravam.
+
+**O grafo não mudou** (o instantâneo só guarda ids, `doneWhen` e datas): `docs/releases/L3.graph.json`
+e o digest fixado são os do fecho.

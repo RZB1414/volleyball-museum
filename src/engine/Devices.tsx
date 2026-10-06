@@ -597,11 +597,22 @@ export function DeviceTargeting() {
     const dropHoldWhenHidden = () => {
       if (document.visibilityState === 'hidden') cancelPrimaryHold()
     }
+    // Escape with the pointer captured, which is how a mouse aims at the
+    // desk at all: the browser takes that key for itself, to let the pointer
+    // go, and hands the page no `keydown`. All the page hears is that the
+    // capture ended. Without this the question stayed up after the Escape
+    // its own prompt offers, the mouse no longer turned the view away from
+    // it, and the next E signed. A capture that ends for any other reason
+    // (a panel opening, the window left) had already lost the hold.
+    const dropHoldWhenReleased = () => {
+      if (document.pointerLockElement === null) cancelPrimaryHold()
+    }
 
     window.addEventListener('keydown', onKeyDown)
     window.addEventListener('keyup', onKeyUp)
     window.addEventListener('blur', dropHold)
     document.addEventListener('visibilitychange', dropHoldWhenHidden)
+    document.addEventListener('pointerlockchange', dropHoldWhenReleased)
     // The hold came to its end, by key or by finger: the term is signed.
     const stopSigning = onPrimaryHoldFired(signAtDesk)
     // Between furniture (200) and the room's own power control (100): the
@@ -615,6 +626,7 @@ export function DeviceTargeting() {
       window.removeEventListener('keyup', onKeyUp)
       window.removeEventListener('blur', dropHold)
       document.removeEventListener('visibilitychange', dropHoldWhenHidden)
+      document.removeEventListener('pointerlockchange', dropHoldWhenReleased)
     }
   }, [])
 

@@ -188,11 +188,11 @@ export const en = {
   // safe", always with its metal: a bare "safe" would be either (D34).
   'notebook.todo.vault': 'The vault — only Otávio knew how to open it',
   'notebook.todo.vault.note': 'not tonight: the basement flooded',
-  'notebook.todo.drawer': "Otávio's drawer: “the year the game stopped being called Mintonette”.",
+  'notebook.todo.drawer': "Otávio's drawer: the year the game stopped being called Mintonette.",
   'notebook.todo.safe-key': 'Key to the iron safe.',
   'notebook.todo.posse': 'Sign the deed of office, at the lectern.',
   'notebook.todo.proof':
-    'The refit took off the plaques the line that says what each thing is. Otávio kept the proof in the iron safe.',
+    'The refit took one line off the plaques: the one that says what each thing is. Otávio kept the proof in the iron safe.',
   'notebook.todo.proof.note': 'not tonight: it waits for the reopening',
   'notebook.counter': '{done} of {total}',
   'device.office-radio.title': "Porter's radio",
@@ -228,8 +228,10 @@ export const en = {
   'night.hour.8': 'Nearly eleven',
   'night.hour.9': 'Gone eleven',
   'night.hour.10': 'Nearly midnight',
-  'device.atrium-podium.title': "The Founder's plinth",
-  'device.atrium-podium.notice': 'Closed off: the floor is being relaid.',
+  // Works, with no tense: the new floor is down, and the notice stays up
+  // until the lot that gives the plinth its medals.
+  'device.atrium-podium.title': "Founder's plinth",
+  'device.atrium-podium.notice': 'Closed off: floor works.',
   'device.atrium-lectern.title': 'Lectern',
   'device.atrium-lectern.empty': 'signing desk: the Book of Deeds is missing',
   'radio.speaker.porter': 'Jorge · porter',
@@ -243,17 +245,17 @@ export const en = {
   'radio.call.hello.4':
     "I've got the alarm panel here: every case, drawer and door in this building lights a little lamp for me.",
   'radio.call.hello.5':
-    'The clock there stopped with the power: set it. Basement flooded; nobody goes down tonight. Call me on the radio. Over and out.',
+    'The clock there stopped with the power. Basement flooded; nobody goes down tonight. Trouble? Call me on the radio. Over and out.',
   'radio.call.first.1':
     'The hall breaker is across from you, a little to your right as you leave, by the Wing 1 entrance. Look for the little red light.',
   'radio.call.first.2': 'The hall, the atrium: same place. The sign says atrium; I say the hall. Over.',
   'radio.call.notebook.1':
-    'Oh, and Helena, the director, left you a notebook there on the desk. Take it before you go — it explains everything. Over.',
+    'Oh, and Helena, the director, left you a notebook on the office desk. Take it: it explains everything. Over.',
   'radio.call.atrium.1':
     "The hall's on my panel! Wing 1 is the door with the sign, by the breaker. Its own breaker is on the wall facing its doors. Over.",
   'radio.call.holyoke.1': 'Wing 1 is lit. Now it gets checked, piece by piece. Over.',
   'radio.call.catalogued.1':
-    'A case just opened and shut on my panel. First one checked? That leaves… well, plenty. Over.',
+    'Cases opening and shutting on my panel. Checking them, are you? Over.',
   'radio.call.shortcut.1':
     "The service door opened from the inside. It stays unlocked both ways now. It's on my panel. Over.",
   'radio.call.machine.1':
@@ -263,7 +265,7 @@ export const en = {
   'radio.call.drawer.2':
     "If it's a key, it's for the iron safe. That was him: a key inside a drawer, a drawer inside a date. Over.",
   'radio.call.legacy-drawer.1':
-    "Have another look in Otávio's drawer: there was a key pinned to the note. Over.",
+    "Otávio's drawer was already open on my panel. Have another look inside: if there's a key, it's for the iron safe. Over.",
   // The one line that sets the two safes side by side: the only place a
   // bare "the safe" is said.
   'radio.call.safe.1':
@@ -280,14 +282,13 @@ export const en = {
   'radio.hint.notebook.where': 'Notebook first: the director, Helena, left one on the desk.',
   'radio.hint.notebook.what': 'Red cover, next to the lamp.',
   'radio.hint.notebook.how': 'Pick it up and read it to the last page.',
-  'radio.hint.atrium.where': "The breaker's on the far side of the hall.",
-  'radio.hint.atrium.what': 'A little red light, by the door with the sign.',
+  'radio.hint.atrium.where': 'The hall breaker is on the Wing 1 wall, right beside its door.',
+  'radio.hint.atrium.what': 'A little red light, beside the Wing 1 door, the one with the sign.',
   'radio.hint.atrium.how': 'A grey box on the wall, with a lever. Just throw it.',
   'radio.hint.holyoke.where': 'Wing 1 has its own breaker, on the wall facing the doors.',
   'radio.hint.holyoke.what': 'A little red light, across the room.',
   'radio.hint.holyoke.how': 'Cross in the dark to the little red light. The torch will do.',
-  'radio.hint.drawer.where':
-    "Otávio's drawer opens with a year. He left a message on the office answering machine.",
+  'radio.hint.drawer.where': "Otávio's drawer opens with a year. The year is in Wing 1.",
   'radio.hint.drawer.what': "The year is in Wing 1, on Morgan's portrait.",
   'radio.hint.drawer.how':
     "Pick the frame up and tilt it: it's on the bottom edge. Or in the provenance archive, by the wing entrance.",
@@ -296,7 +297,7 @@ export const en = {
   'radio.hint.key.how': 'Walk up and open it. The key stays in it.',
   'radio.hint.posse.where': 'A deed gets signed at the lectern in the hall.',
   'radio.hint.posse.what': 'The lectern with its lamp lit, between the two doors on the Wing 1 wall.',
-  'radio.hint.posse.how': 'With all three rooms lit, hold the action down until the pen stops.',
+  'radio.hint.posse.how': "At the lectern, with all three rooms lit, hold the action down and don't let go until it's signed.",
   // The honest close: only heard with the deed signed.
   'radio.hint.rest':
     "The post is yours, signed. Now it's checking the collection, piece by piece. The vault can wait: the basement flooded.",
@@ -321,14 +322,14 @@ export const en = {
   'radio.patience.t2.coffee': "Go ahead. My coffee's gone cold anyway.",
   'radio.patience.t2.reception':
     "For the record, I'm the night porter, not customer service. Go on.",
-  'radio.patience.t2.repeat': "I'll say it again. Repeating's free:",
+  'radio.patience.t2.repeat': "I'll spell it out. Explaining's free:",
   'radio.patience.t2.chat': "I'm starting to think you just like talking to me.",
   'radio.patience.t3.hotline': 'Curator, this is the front desk, not a helpline.',
   'radio.patience.t3.hotline.close': "Write it in the notebook. That's what it's for.",
   'radio.patience.t3.otavio':
     'Otávio worked here thirty years and called me twice. Once was a wrong number.',
   'radio.patience.t3.torch': 'Want me to come over and hold the torch for you too?',
-  'radio.patience.t3.torch.close': 'Kidding. The roller door has no motor, and a post is a post.',
+  'radio.patience.t3.torch.close': "…Not that I'm coming: the roller door has no motor, and a post is a post.",
   'radio.patience.t3.crossword':
     "I'd nearly finished the crossword. Just missing “pest”, five letters. Go on.",
   'radio.patience.t3.announcer':

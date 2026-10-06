@@ -61,15 +61,17 @@ export function NotebookPageView({ page }: { page: NotebookPage }) {
   }
 
   if (page.style === 'term') {
-    // The page is the term as it stands in the book: its own title and
-    // body, and a signature line that is filled once the save holds the
-    // signature. Nothing here is written twice.
+    // The page is the term as it stands in the book: its body, and a
+    // signature line that is filled once the save holds the signature. No
+    // heading over it: the body opens with the term's own title in capitals
+    // («TERMO DE POSSE. …»), as the page of the handover before it does, and
+    // a heading printed that title a second time, on this page of the book
+    // and on no other.
     const shown = (MUSEUM.terms ?? []).find((candidate) => candidate.id === page.termId)
     if (!shown) return null
     const isSigned = signedTerms(MUSEUM.terms ?? [], progress).some((term) => term.id === page.termId)
     return (
       <div className="notebook-page is-term">
-        <h3>{text(shown.titleKey)}</h3>
         {paragraphs(text(shown.bodyKey))}
         <p className={isSigned ? 'notebook-term-line is-signed' : 'notebook-term-line'}>{isSigned ? t('term.signed') : ''}</p>
       </div>

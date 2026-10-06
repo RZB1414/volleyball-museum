@@ -1067,8 +1067,10 @@ function conditionsOf(content: MuseumContent, topology: Topology): readonly Prog
     for (const page of doc.pages ?? []) {
       for (const item of page.items ?? []) {
         if (item.doneWhen) conditions.push(item.doneWhen)
-        // What puts a line on the page is asked of the save like what ticks it.
+        // What puts a line on the page is asked of the save like what ticks
+        // it, and so is what puts a note beside it.
         if (item.appearsWhen) conditions.push(item.appearsWhen)
+        if (item.noteWhen) conditions.push(item.noteWhen)
       }
     }
   }
@@ -1397,6 +1399,22 @@ export function simulateProgress(content: MuseumContent, from: Progress = emptyP
             `Checklist item "${item.labelKey}" waits to appear for something no play reaches: it is never on the list.`,
           )
           continue
+        }
+        // The note beside a line is how a promise says «not tonight». One
+        // that waits for something no play reaches is never read, and the
+        // line is then a promise the game does not say. Only the play knows
+        // what is reached, so it is asked here and not with
+        // `deferred-without-notice`, which reads the content alone.
+        if (
+          item.noteWhen &&
+          conditionClass(item.noteWhen) === 'positive' &&
+          !progressConditionMet(item.noteWhen, final, content)
+        ) {
+          error(
+            'checklist-note-unreachable',
+            item.labelKey,
+            `Checklist item "${item.labelKey}" keeps its note for something no play reaches: nobody ever reads it.`,
+          )
         }
         // A promise with a date has no box, on purpose: there is nothing in
         // this build to tick it, and it says so (`validateDeferred` holds it

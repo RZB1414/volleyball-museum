@@ -1,10 +1,12 @@
 # Handoff — Museu do Voleibol
 
-Atualizado em 2026-10-05 (L3, o terceiro lote do plano, §12: fechado, ainda não publicado; L2 é
+Atualizado em 2026-10-05 (L3, o terceiro lote do plano, §12: fechado e revisado, §12.12, ainda
+não publicado; L2 é
 §11, com a revisão adversarial dele em §11.12 e a revisão antes do push em §11.13; L1 é §10; a
 abertura no escritório é §9); o estado técnico das salas é o de 2026-08-12.
 Este documento é o ponto de entrada para retomar o projeto sem depender da conversa anterior.
-**Próxima tarefa:** revisar e publicar L3 (§12.11, item 1) e começar L4.
+**Próxima tarefa:** publicar L3 (§12.11, item 1; a revisão deixou três coisas para conferir à
+mão, em §12.12) e começar L4.
 
 Leia também, nesta ordem: `docs/PLANO-DO-ZERO.md` (o desenho do jogo),
 `docs/REFERENCIA-TECNICA.md` (gramática de Resident Evil + pipeline web-3D) e
@@ -33,30 +35,31 @@ intencionalmente no commit `5e51e24`. O museu data-driven é a única aplicaçã
 
 O corte vertical está integrado, assado, caminhável e com progressão de energia.
 
-Portão verde em 2026-10-05 (`npm run check`, 35 passos, depois das cinco fatias de L3 e do fecho
-dele, §12; o que cada suíte ganhou no lote está em §12.4, o de L2 em §11.4 e o de L1 em §10.4):
+Portão verde em 2026-10-05 (`npm run check`, 35 passos, depois das cinco fatias de L3, do fecho
+dele e da revisão, §12; o que cada suíte ganhou no lote está em §12.4, o de L2 em §11.4 e o de L1
+em §10.4):
 
 - conteúdo: 3 salas válidas, com 34 dívidas datadas e 3 promessas datadas impressas
   (`knownDebt.ts`), o roteiro em sete níveis e a comparação com o instantâneo do grafo
   (`docs/releases/L2.graph.json`, que continua sendo o juiz até L3 ser publicado; o de L3 é
   `docs/releases/L3.graph.json`, com o digest fixado);
 - lint de texto: 21/21; catracas: 4/4; fontes: 28; documentação: 25/25;
-- capturas: 18/18; saves do corpus: 31/31; save: 66/66;
+- capturas: 18/18; saves do corpus: 31/31; save: 67/67;
 - energia: 30/30;
 - abertura: 39/39; fluxo da abertura: 54/54; rádio: 40/40;
-- gatilhos: 31/31; trancas: 20/20; o fim (a Posse): 23/23; planta: 19/19;
+- gatilhos: 31/31; trancas: 20/20; o fim (a Posse): 24/24; planta: 19/19;
 - colisão: 28/28;
 - kit e posicionamento: 347/347; vitrine corrida: 12/12; peça × `layout`: 7/7;
 - materiais: 10; mesa do curador: 10; estantes: 20;
-- runtime do kit: 35/35;
+- runtime do kit: 42/42;
 - runtime das salas: 19/19;
 - LOD de salas: 23/23;
 - aquecimento de GPU: verde; prontidão da sala: 6/6;
 - performance de render e projeção: 16/16;
 - sinalização arquitetônica: 26/26;
 - portas de transição: 38/38;
-- controles móveis e modo imersivo: 22/22;
-- navegação: 121/121; partida (o robô e a simulação): 38/38; coerência das falas: 7/7;
+- controles móveis e modo imersivo: 23/23;
+- navegação: 131/131; partida (o robô e a simulação): 38/38; coerência das falas: 7/7;
 - bundle por caminho: 5/5;
 - `npm run build`: verde.
 
@@ -581,9 +584,9 @@ lista abaixo é anterior ao plano e vale no que ele não cobrir.
 push, deploy e fumaça, e o que sobrou do passo 12 (§10.10). Tudo em §10.
 
 **L1 e L2 foram publicados depois disso** (§2, §10 e §11). **L3 (Posse), estado em
-2026-10-05:** fechado em commits locais e conferido no navegador de desenvolvimento do título ao
-termo de posse assinado; faltam a revisão adversarial, o revisor, push, deploy, fumaça e o
-playtest (§12.11). Tudo em §12.
+2026-10-05:** fechado em commits locais, conferido no navegador de desenvolvimento do título ao
+termo de posse assinado e revisado (§12.12, com duas lentes que não reportaram); faltam o revisor,
+push, deploy, fumaça e o playtest (§12.11). Tudo em §12.
 
 **Preparação (P0), estado em 2026-10-04.** Nada mudou no jogo; o build de produção é o mesmo.
 
@@ -2586,22 +2589,23 @@ locais na `main`:
 | `3adc4fd` | F3: o escritório responde (o telefone, um documento por vez, o motor da chave que se gasta, da credencial e da gravação) |
 | `645b2ca` | F4: assinar (termos e a mesa deles, o gesto de segurar, a sequência dirigida) |
 | `4c97f47` | F5: a Posse inteira (o recado, a chave na gaveta, o Livro no cofre de ferro, o termo no púlpito); o bake; o save antigo; `CONTENT_LOT` passa a 3 |
-| o do fecho | este registro, os dois saves do lote, os dois conjuntos de capturas, o digest do instantâneo, o «Feito em» |
+| `d78236b` | o fecho: este registro, os dois saves do lote, os dois conjuntos de capturas, o digest do instantâneo, o «Feito em» |
+| o da revisão | os achados da revisão adversarial (12.12): duas abas, o gesto, a porta do cofre, as falas, o registro de desempenho |
 
-**Estado: fechado em 2026-10-05, não publicado.** Dos passos de §9.1 do plano estão feitos o 1
-(plano do lote), o 2 (teste primeiro, fatia por fatia e no fecho), o 3, o 4 (portão verde), o 6
-(o percurso completo, do título ao termo assinado: 12.8) e o 12 (este registro, o instantâneo, o
-corpus e as capturas). O 7 não se aplica (não é lote de arte). **Faltam** o 5 (revisão
-adversarial por quem não implementou), o 8 ao 11 (revisor, push, deploy e fumaça em produção) e
-o 13 (playtest: o aceite manual do lote pede que uma pessoa nova chegue à Posse, 8.10), além da
-medição em aparelho real (P0, item 6). Nada foi enviado nem publicado: a seção L3 do plano diz
+**Estado: fechado e revisado em 2026-10-05, não publicado.** Dos passos de §9.1 do plano estão
+feitos o 1 (plano do lote), o 2 (teste primeiro, fatia por fatia, no fecho e na revisão), o 3, o 4
+(portão verde), o 5 (revisão adversarial: 12.12, com duas lentes que não reportaram), o 6 (o
+percurso completo, do título ao termo assinado: 12.8) e o 12 (este registro, o instantâneo, o
+corpus e as capturas). O 7 não se aplica (não é lote de arte). **Faltam** o 8 ao 11 (revisor,
+push, deploy e fumaça em produção) e o 13 (playtest: o aceite manual do lote pede que uma pessoa
+nova chegue à Posse, 8.10), além da medição em aparelho real (P0, item 6). Nada foi enviado nem publicado: a seção L3 do plano diz
 «Feito em 2026-10-05», sem a palavra que solta o instantâneo de acompanhar o conteúdo (11.10).
 
 ### 12.1 O que mudou para o jogador
 
 - **O jogo tem um fim, e ele é assinado.** A secretária eletrônica do escritório toca o recado
   do Otávio (nove falas, cortado às 16:47), e o caderno ganha uma linha a lápis: «Gaveta do
-  Otávio: “o ano em que o jogo deixou de se chamar Mintonette”.». A gaveta, aberta com o ano,
+  Otávio: o ano em que o jogo deixou de se chamar Mintonette.» A gaveta, aberta com o ano,
   entrega a folha 1 da passagem de acervo com a **chave do cofre de ferro** presa («Você pegou —
   Chave do cofre de ferro»). O cofre («Destrancar · Cofre de ferro») gira a porta na dobradiça e
   guarda o **Livro de Termos** e a prova de etiqueta, que fica à vista na prateleira. No púlpito
@@ -2610,7 +2614,8 @@ medição em aparelho real (P0, item 6). Nada foi enviado nem publicado: a seç�
   por extenso. O Livro fica aberto no púlpito e o caderno ganha «Termos assinados».
 - **Assina-se no telefone.** Segurar o botão de Ação por 1,2 s, com um anel que se fecha em volta
   dele; soltar antes cancela; um toque curto troca o botão por «Assinar» e «Cancelar», com
-  «Cancelar» onde o dedo já está.
+  «Cancelar» onde o dedo já está. A pergunta só aceita resposta depois de meio segundo na tela, no
+  toque e no teclado: dois toques seguidos não assinam (12.12).
 - **Chega-se ao fim sem rádio, sem caderno e sem lanterna.** As chamadas do Jorge só tocam no
   escritório, pelo rádio da mesa; o cartão e as duas falas do fecho não dependem de aparelho.
 - **O púlpito diz o que falta.** Sem o Livro: «mesa de assinatura: falta o Livro de Termos», sem
@@ -2624,8 +2629,8 @@ medição em aparelho real (P0, item 6). Nada foi enviado nem publicado: a seç�
   — Passa das sete») e passa a mostrar a hora da noite, que anda por marcos e nunca para trás.
 - **A lista «Antes das 9h» é viva.** Contador por sala; linhas a lápis que nascem do que o
   jogador fez (a gaveta, a chave, a posse); a linha da caixa-forte sem caixa de riscar, com a
-  anotação «hoje não: o subsolo alagou»; a da prova de etiqueta também sem caixa, com «hoje não:
-  fica para a reabertura». O caderno abre nessa aba.
+  anotação «hoje não: o subsolo alagou» (que entra com a luminária acesa: 12.12); a da prova de
+  etiqueta também sem caixa, com «hoje não: fica para a reabertura». O caderno abre nessa aba.
 - **O plinto deixou de ser mudo:** «Plinto do Fundador — Interditado: obra do piso.».
 - **Os armários mostram um documento por vez**, com «Voltar», «Próximo» e a página.
 - **Dois nomes para dois cofres:** cofre de ferro (o do escritório) e caixa-forte (a do
@@ -2633,10 +2638,15 @@ medição em aparelho real (P0, item 6). Nada foi enviado nem publicado: a seç�
 - **Quem já tinha jogado não perde a noite.** Um save com a gaveta aberta antes de ela guardar
   chave (os de produção, o de L1 e o de L2) recebe a chave **na carga**, sem aviso na tela, e
   ouve do Jorge, uma vez: a apresentação nova, «Tem uma luz de recado piscando no ramal do
-  escritório.» e «Olha de novo a gaveta do Otávio: o bilhete tinha uma chave presa. Câmbio.».
+  escritório.» e «A gaveta do Otávio já tava aberta aqui no painel. Olha de novo lá dentro: se
+  tiver chave, é do cofre de ferro. Câmbio.» (a fala do fecho dizia «o bilhete tinha uma chave
+  presa», que ele não tem como saber: 12.12).
   O Arquivo ganha «Passagem de acervo — folha 1» ao lado do bilhete que o save já tinha.
-- O que não muda: nenhuma sala, nenhuma textura, nenhuma mídia, nenhuma dependência. As três
-  peças que não catalogam continuam sem catalogar (L4). A caixa-forte continua promessa (L12).
+- **O cofre aberto é sólido:** a porta de ferro fica atravessada no piso e não se passa por
+  dentro dela (12.12).
+- O que não muda: nenhuma sala, nenhuma textura, nenhuma dependência. Uma mídia mudou na revisão:
+  o rótulo da planta do escritório, num arquivo de nome novo (12.12). As três peças que não
+  catalogam continuam sem catalogar (L4). A caixa-forte continua promessa (L12).
 
 ### 12.2 Como ficou no código
 
@@ -2666,7 +2676,13 @@ O desenho de cada peça está em `docs/lotes/L3-plano.md` §3; aqui, só o mapa.
   `SAVE_VERSION` continua 1. Dois campos novos, `termsSigned` e `sequencesSeen`, listas unidas
   entre abas. A migração `prePosse` olha a **evidência** no save, não o carimbo: gaveta aberta
   sem o gatilho da gaveta ganha a marca `legacy-pre-L3-drawer`, e as chamadas dos marcos que o
-  save já passou contam como ouvidas. `doc-predecessor` tem alias para `doc-otavio-handover`.
+  save já passou contam como ouvidas, **desde que nenhum build deste lote o tenha gravado** (o
+  campo `termsSigned` no disco: 12.12). `doc-predecessor` tem alias para `doc-otavio-handover`.
+- **Uma janela, duas abas:** `takeInOtherTabs` tira da tela a sequência, e do ar a chamada, que
+  outra aba mostrou até o fim (12.12).
+- **A porta aberta de um container é sólida** (`src/engine/containerDoorSolid.ts`): a caixa da
+  folha, girada na dobradiça, registrada por `Containers.tsx` enquanto o container está aberto e
+  posta no mundo das suítes pela mesma função.
 - **O que a assinatura grava:** o verbo grava `termsSigned`; a flag `posse-signed` é gatilho
   compilado do termo (`term:termo-posse:signed`), que alcança um save com o termo e sem a flag.
 - **Só do portão:** `src/content/simulate.ts` (sete níveis), `additive.ts` (o instantâneo com
@@ -2682,14 +2698,15 @@ O desenho de cada peça está em `docs/lotes/L3-plano.md` §3; aqui, só o mapa.
 | Caminho | L2 (bytes) | L3 (bytes) | Teto |
 |---|---|---|---|
 | documento | 63.234 | 63.234 | 63.600 |
-| tela de título | 29.913 | 35.879 | 36.050 |
-| jogo | 390.995 | 400.368 | 400.890 |
+| tela de título | 29.913 | 35.919 (35.879 no fecho) | 36.100 |
+| jogo | 390.995 | 400.806 (400.368 no fecho) | 402.820 |
 
-São 99,11 kB antes do clique (orçamento 250; eram 93,15) e 499,48 kB no total (orçamento 600;
-eram 484,14). O título cresceu 5.966 bytes, quase tudo dicionário (os textos viajam com a tela
-de título, nas duas línguas); o jogo, 9.373. Cada teto subiu no commit da fatia que precisou,
-com o motivo em `scripts/lib/ratchets.ts`. **Folga: 171 bytes no título e 522 no jogo.** O fecho
-não mexeu em nenhum dos três: o corpus de saves e as suítes não vão para o build.
+São 99,15 kB antes do clique (orçamento 250; eram 93,15) e 499,96 kB no total (orçamento 600;
+eram 484,14). O título cresceu 6.006 bytes, quase tudo dicionário (os textos viajam com a tela
+de título, nas duas línguas); o jogo, 9.811. Cada teto subiu no commit da fatia que precisou,
+com o motivo em `scripts/lib/ratchets.ts`. O fecho deixou 171 bytes de folga no título e 522 no
+jogo (0,13%, um quarto do meio por cento que a regra pede); a revisão pôs os dois no medido mais
+meio por cento. **Folga: 181 bytes no título e 2.014 no jogo.**
 
 **Bake** (F5): `kit.143787a7.glb`, 2.255.668 bytes (eram 2.234.252), 105.476 triângulos em 201
 nós (536 a mais; a conta por peça está em `docs/lotes/L3-plano.md` §15.5).
@@ -2715,8 +2732,14 @@ texturas iguais por 20 rodadas (35, 279 e 53); duas sessões, três passadas igu
 | R09 Holyoke, do canto noroeste | 81 · 62.374 | 81 · 62.374 | 81 · 62.374 | 81 · 62.374 |
 | R10 par com a porta aberta | 125 · 100.428 | 124 · 100.416 | **125 · 100.488** | 125 · 100.488 |
 
-(draws · triângulos.) **Programas: 35** nas duas sessões. Os dez números são os gravados: nada
-mudou no registro. O escritório desenha quatro draws e 440 triângulos a mais do que em L2 (os
+| R11 par do escritório, de dentro (revisão) | não medido | 181 a 183 | **186 · 127.042** | 186 · 127.042 |
+| R12 a mesma porta, do saguão (revisão) | não medido | — | **134 · 87.770** | 134 · 87.770 |
+| R13 escritório, da parede leste (revisão) | não medido | **95 · 58.950** | 95 · 58.950 | 95 · 58.950 |
+
+(draws · triângulos.) **Programas: 35** nas duas sessões. Os dez primeiros números são os gravados
+no fecho: nada mudou neles. Os três últimos entraram na revisão (12.12), que mediu o que o
+registro não olhava; a coluna do meio deles é o jogo novo e a seguinte é o estado mais cheio
+(cofre aberto, posse assinada, rádio e caderno na mesa), não o save `l3-posse-signed`. O escritório desenha quatro draws e 440 triângulos a mais do que em L2 (os
 três nós da secretária e a porta do cofre como nó próprio). O saguão desenha o que desenhava,
 com 60 triângulos a mais onde o Livro aparece, e um draw a menos enquanto o Livro não foi lido
 (o púlpito vazio não acende a lâmpada): 101 de 102 em R04 e 125 de 125 em R10, sem gastar o teto
@@ -2724,9 +2747,13 @@ temporário de ÁT-K1. A Ala 1 não mudou.
 
 Duas coisas que a tabela não diz, medidas no fecho:
 
-- **O estado mais cheio do escritório é 63 · 36.550 e 71 · 38.370**: o de base mais a prova na
-  prateleira (um draw, 24 triângulos), para quem abre o cofre com o rádio e o caderno ainda na
-  mesa. Fica longe do teto de 100.
+- **O estado mais cheio do escritório é 63 · 36.550 e 71 · 38.370 nos dois pontos junto da
+  porta**: o de base mais a prova na prateleira (um draw, 24 triângulos), para quem abre o cofre
+  com o rádio e o caderno ainda na mesa. **Não é o máximo da sala.** R01 e R02 olham da porta
+  para o leste; da parede leste, entre a última estante e o cofre, olhando de volta, a sala
+  inteira entra no quadro: **95 · 58.950** (R13), contra o teto de 100. Eram 91 antes de L3. O
+  fecho dizia aqui «fica longe do teto de 100», e não fica: sobram cinco, e o que o plano prevê
+  para o escritório (4.5: LEDs do arquivo de mapas, chapéu, carrinho) passa disso.
 - **R01 conta um draw e 60 triângulos a mais durante uns treze segundos de cada minuto.** É o
   ponteiro de segundos do relógio da parede, que fica na borda de cima do quadro de R01: com o
   ponteiro entre 143° e 218° (apontando para baixo) a esfera dele entra no quadro e a malha é
@@ -2770,6 +2797,11 @@ terceiro script (`scripts/test-kit-layout.ts`). `test:bundle` continua no fim.
 - render: 16/16; sinalização: 26; portas: 38/38; controles móveis: 22/22 (eram 14);
 - navegação: 121/121 (eram 108); partida: 38/38 (eram 34); coerência das falas: 7/7 (nova);
 - bundle: 5/5; `npm run build`: verde.
+
+Depois da revisão (12.12), verde de novo, com as mesmas 35 etapas: save 67/67, o fim 24/24,
+runtime do kit 42, controles móveis 23/23, navegação 131/131. As outras contagens não mudaram:
+os casos que existiam cresceram por dentro (a lista, o lado da dica, D34, as falas, a tabela do
+gesto, os pontos do registro).
 
 Vermelho primeiro (§9.1, passo 2): o de cada fatia está em `docs/lotes/L3-plano.md` §15. No
 fecho, cada um visto antes do conserto:
@@ -2855,6 +2887,7 @@ Nenhuma linha ficou com a data 3.
 | Portão | Código | O quê | Fecha em |
 |---|---|---|---|
 | `validate:content` | `flag-never-set` | `basement-drained`: «(Nada. Só a chuva.)» espera a ausência de uma flag que só a bomba põe; até lá chove a noite inteira (DL3-14) | L12 |
+| `test:ratchets` | `ratchet-over-budget` | `office-pair-draws`: 186 draws com a porta do escritório aberta, contra 100. Aberta pela revisão (12.12); a dívida é anterior ao lote (cerca de 182) e nunca tinha sido medida | L6 |
 
 **Promessas datadas** (impressas pelo portão, cada uma dita no jogo pela chave ao lado;
 `deferred-overdue` quando a data chega sem pagamento):
@@ -2872,7 +2905,10 @@ chaves da escada de dicas, sem uso), as de L5 (16 peças do kit sem uso),
 `standing-point-inside-target` da rede (L14). O Anexo C do plano ganhou `flag-never-set` e as
 três promessas.
 
-**Texto que outro lote muda**, sem código de dívida: a folha da gaveta e o recado dizem «o que
+**Texto que outro lote muda**, sem código de dívida: a planta da parede do escritório tem as
+letras dentro do SVG e o «3 medalhas?» a lápis até L9, que a redesenha (o rótulo da caixa-forte
+foi corrigido na revisão); `radio.hint.posse.how` volta a falar da pena no lote que trouxer o som
+«pena no papel» (8.4); a folha da gaveta e o recado dizem «o que
 está escrito nas peças» até L4 («o verso»); a folha ganha «há caminho» em L11;
 `radio.hint.posse.what` e a posição do púlpito mudam com a planta do saguão (L9);
 `radio.patience.t3.torch.close` ganha `when` em L11; a sequência do fecho só tem legenda até a
@@ -3053,10 +3089,9 @@ plano ou é decisão de quem revisar.
   `l3-a08-lectern-red-lamp-names-the-wing-without-light-lit`). O prompt diz tudo o que a
   lâmpada diz, então nada se perde; mas quem redesenhar o púlpito (L9 muda a posição dele) deve
   saber que hoje ela é um sinal para quem chega, não para quem assina.
-- **A planta continua listando «Cofre de ferro — precisa de chave»** para quem já tem a chave e
-  ainda não abriu o cofre. Lê-se como o tipo da tranca, como «4 dígitos» na gaveta; o prompt
-  diante do cofre já diz «Destrancar». Se a revisão achar que desmente o estado, a regra é a
-  mesma do prompt (`lockBars`) e o lugar é `src/ui/mapModel.ts`.
+- **A planta listava «Cofre de ferro — precisa de chave»** para quem já tinha a chave e ainda
+  não tinha aberto o cofre. A revisão achou que desmente o estado, e consertou: a lista de
+  trancas da planta pergunta `lockBars` (12.12).
 - **A lista rola.** No telefone, por quase duas telas (560 em 297 px; 659 em inglês). Em 1280 ×
   720 ela cabe até o termo ser assinado, e aí «Termos assinados» a faz rolar 65 px (652 em 587).
   O corpo do caderno rola, então nada se perde; lista inteira à vista é desenho da página.
@@ -3069,10 +3104,8 @@ plano ou é decisão de quem revisar.
   (§13 dele).
 - **`porter-drawer-open` caduca** se o cofre for aberto dentro do atraso dela (2,5 s): quem
   corre da gaveta ao cofre ouve só a do cofre. É o desenho (`lapsesWhen`).
-- **Em inglês, a linha da prova** («The refit took off the plaques the line that says what each
-  thing is.») pode ser lida, até a metade, como «a reforma tirou as placas», e as placas estão
-  lá: o que saiu delas foi uma linha. Em português a frase não tem esse desvio. Nenhum lint a
-  acusa; fica para quem revisar os textos (a revisão adversarial lê as duas línguas).
+- **Em inglês, a linha da prova** lia-se, até a metade, como «a reforma tirou as placas». A
+  revisão trocou a frase (12.12).
 - **A sequência do fecho nomeia um alto-falante que a casca ainda não tem** (a grade é de L5).
 
 ### 12.10 Lições
@@ -3113,8 +3146,10 @@ plano ou é decisão de quem revisar.
 
 ### 12.11 Próximos passos
 
-1. **Revisar e publicar L3** (passos 5 e 8 a 11). A revisão adversarial joga a rota canônica e
-   duas ordens estranhas, uma sem rádio, e carrega os dez saves. Na fumaça em produção, além do
+1. **Publicar L3** (passos 8 a 11). A revisão adversarial está feita (12.12), com duas lentes
+   por fazer («testes» e «visual») e três coisas para conferir à mão antes do push: o Esc com o
+   mouse capturado num navegador de verdade, a escolha do lembrete do caderno e a fala de
+   «saguão = átrio». Na fumaça em produção, além do
    novo jogo até o primeiro marco: «Continuar» com `l2-shortcut-released` posto sob a chave
    `volleyball-museum:v1` na origem de produção, e conferir que não há aviso, que o save
    carregado tem a chave e a marca, e que as três chamadas tocam; e duas abas, uma assinando.
@@ -3128,8 +3163,168 @@ plano ou é decisão de quem revisar.
    dívidas com data dele (12.6): as três peças, o detalhe fora de alcance, a linha «Catalogar o
    acervo» e as quatro chaves da escada de dicas. Refaz o painel do exame e o teclado, que não
    cabem no telefone. A folha da gaveta e o recado trocam «o que está escrito nas peças» por
-   «o verso». O `BROWSER_RECORD` de L3 vale para L4 enquanto nenhuma sala desenhar outra coisa;
-   quem medir o escritório mede no estado da linha de base e olha o ponteiro de segundos
-   (12.3). O título tem 171 bytes de folga e o jogo 522: quem escreve texto sobe o teto no
-   commit dele.
+   «o verso». Com as doze peças catalogando, `porter-holyoke-lit` e `porter-first-catalogued`
+   passam a caducar (12.12). O `BROWSER_RECORD` de L3 tem treze pontos e vale para L4 enquanto
+   nenhuma sala desenhar outra coisa; quem medir o escritório mede no estado da linha de base,
+   olha o ponteiro de segundos (12.3) e mede também da parede leste (R13: sobram cinco draws) e
+   com a porta aberta (R11). O título tem 181 bytes de folga e o jogo 2.014: quem escreve texto
+   sobe o teto no commit dele.
 4. Do dono, ainda: o aparelho real (P0, item 6), que trava o livro-caixa de L6, e o playtest.
+
+### 12.12 Revisão adversarial (passo 5 de §9.1), 2026-10-05
+
+Cinco lentes reportaram (o fim, a história, os saves, o bake, a produção). **Outras duas, «testes»
+e «visual», foram interrompidas e não reportaram:** o que elas olhariam (se os testes do lote
+provam o que dizem; as capturas e a tela) não foi revisado por ninguém de fora, e fica para o
+revisor do passo 8 ou para uma rodada própria. 37 achados (um «major», 21 «minor», 15 de
+acabamento), 33 distintos: quatro foram vistos por duas lentes. Dezesseis chegaram conferidos por
+um verificador independente; os outros 21 foram conferidos na hora, lendo o código e rodando a
+regra, o store ou o navegador antes de mexer. **Nenhum estava errado.** Tudo num commit local, com
+`npm run check` e `npm run build` verdes. O que muda o desenho do lote está em
+`docs/lotes/L3-plano.md` §17.
+
+| Achado | O que foi feito | Onde está provado |
+|---|---|---|
+| Esc não cancela a assinatura com o mouse capturado: o navegador fica com a tecla (2 lentes) | `DeviceTargeting` ouve `pointerlockchange` e cancela a pressão ou a pergunta quando a captura termina | `test:opening-flow` (fiação: três linhas e três refactors). **Não conferido num navegador com `pointer lock`** (abaixo) |
+| A sequência do fecho tocava de novo na aba que assinou, depois de vista até o fim em outra (2 lentes) | `takeInOtherTabs` tira da tela a sequência cujo id passou a estar em `sequencesSeen` | `test:ending`, abas vivas sobre `l3-new-game-safe-open`: assina em A, olha B com o cartão ainda na tela, B mostra até o fim, volta a A |
+| Uma chamada do Jorge retida numa aba oculta era dita de novo depois de ouvida em outra (herdado de L2; L3 levou as chamadas de 3 para 12) | o mesmo, para a chamada cujo id passou a estar em `radioCalls` | o mesmo caso, sobre `production-drawer-open`: «olha de novo a gaveta» é dita uma vez |
+| Com uma segunda aba só aberta, a migração de «notícia velha» apagava a chamada de um marco passado com a apresentação ainda no ar | `prePosse` não toma por notícia velha nada de um save que um build deste lote já gravou (o campo `termsSigned` no disco); o custo aceito em DL3-3 (recarregar antes de ouvir o Jorge) deixou de existir | `test:save`, abas vivas: a mesma noite com e sem a segunda aba termina no mesmo save, com `porter-atrium-service` devida; a isenção da corrida sorteada saiu e a corrida continua verde (sem o conserto, reprova na noite 4) |
+| Dois toques seguidos no `E` assinavam o termo | a pergunta tem de ter ficado 0,5 s na tela para a mesma entrada respondê-la (`HOLD_CONFIRM_AFTER_SECONDS`); antes disso a pressão não é ouvida | `test:mobile-controls`: a tabela do gesto e um caso novo (toque, quadro, toque; a mão de verdade; três em rajada; lida e respondida); `test:ending` |
+| Durante a sequência o botão do rádio dizia «Chamar a portaria» e pulava um passo | o botão pergunta `airTaken`: diz «Pular» com a sequência na tela | `test:ending` (fiação e refactor) |
+| A nota a lápis «hoje não: o subsolo alagou» estava na lista antes de o curador poder saber do alagamento | `ChecklistItem.noteWhen`; a nota entra com a luminária acesa, o estado em que a apresentação do Jorge é devida | `test:opening`: jogo novo sem nota, com a luminária com nota, a condição igual ao `when` da chamada, e nada lido antes da luminária fala de alagamento; `test:playthrough` (`checklist-note-unreachable`) |
+| Dica do quadro do saguão: «do outro lado do saguão» só valia da porta do escritório | as duas primeiras alturas dão a parede e a porta da Ala 1, nas duas línguas | `test:opening`: «do outro lado», `far side`, `across`, «parede do fundo» medidos de toda porta, como esquerda e direita (as linhas antigas acusadas pelas duas portas da ala); `test:radio` («Ala 1» entre os alvos) |
+| «…até a pena parar»: não há pena na tela nem no som | «No púlpito, com luz nas três salas, segura a ação sem soltar até assinar.» (não «o anel»: é do HUD, que o Jorge não vê) | `test:radio` |
+| «Brincadeira.» era dita depois da dica e lia-se como se a dica fosse a brincadeira | «…Ir aí eu não vou: a porta de enrolar tá sem motor, e posto é posto.» | `test:radio` |
+| `porter-hello` mandava acertar um relógio já acertado (2 lentes); em inglês a oferta «Qualquer coisa» tinha virado ordem | a fala diz que o relógio parou e não manda acertar; inglês: `Trouble? Call me on the radio.` | `test:radio` |
+| `porter-notebook-reminder` dizia «aí na mesa… Pega antes de sair» a quem já estava no saguão | texto que vale em qualquer sala: «…na mesa do escritório. Pega, que tá tudo explicado lá.»; `mentions` ganhou `office`. **Escolha a confirmar com o dono** (abaixo) | `test:radio` |
+| «Primeira conferida?» com quatro ou nove peças conferidas (2 lentes) | «Tem vitrine abrindo e fechando aqui no painel. Tá conferindo, é?» | `test:radio` |
+| `porter-legacy-drawer` afirmava o que havia na gaveta, e não dizia de onde é a chave | «A gaveta do Otávio já tava aberta aqui no painel. Olha de novo lá dentro: se tiver chave, é do cofre de ferro.»; `mentions` igual à da chamada irmã | `test:radio`; `test:ending` (o save antigo ouve a chamada uma vez) |
+| A primeira altura da dica da gaveta mandava ao recado já ouvido | voltou ao texto de F2 («…O ano tá na Ala 1.»); o recado é só de `porter-machine-reminder`, que caduca | `test:speech-coherence`: regra nova no ouvinte (ninguém é mandado a uma gravação já ouvida), vermelha na semente 2 antes do conserto, e a mutação correspondente |
+| O Jorge ainda dizia «átrio» (resposta da recepção) | «…balcão vazio no saguão.» | `test:radio`: nenhuma fala dele fora de `first.2` diz «átrio» nem `atrium`. A outra metade do achado ficou (abaixo) |
+| A planta do escritório rotulava a caixa-forte de «COFRE · SUBSOLO» (D34) | «CAIXA-FORTE · SUBSOLO», num arquivo de nome novo (`office-blueprint.v2.svg`): `/textures/*` é imutável por um ano e o SVG não tem hash | `test:opening-flow`: o caso de D34 lê também as letras dos SVG; o rótulo visto em PNG |
+| Carta da Helena: «…do Otávio, o antigo curador, que ficou na caixa-forte» | «…o antigo curador. O livro ficou na caixa-forte.» | `test:opening-flow` (o trecho), `test:map` (a carta cabe na página) |
+| Inglês da linha da prova lia-se «tirou as placas» | `The refit took one line off the plaques: the one that says…` | `test:opening` |
+| Inglês do plinto afirmava obra em andamento | `Founder's plinth — Closed off: floor works.` | `test:opening-flow` |
+| «Repito, que repetir é de graça:» antes de uma altura nunca dita | «Explico, que explicar é de graça:» | `test:radio` |
+| A página do termo imprimia o título duas vezes | sem o cabeçalho: o corpo já abre com o título, como a página do Otávio | `test:ending` (fiação e refactor) |
+| A linha a lápis da gaveta citava entre aspas o recado que o curador pode não ter ouvido | sem aspas, nas duas línguas | `test:opening` |
+| «antes de a estrada fechar» na boca do Jorge | «antes da estrada fechar» | `test:radio` roda as falas; a troca é de leitura |
+| A planta listava «Cofre de ferro — precisa de chave» para quem já tem a chave (a pergunta de 12.9) | a lista de trancas da planta pergunta `lockBars`: a tranca sai quando deixa de barrar | `test:map` |
+| A porta aberta do cofre não era sólida | `containerDoorSolid.ts`: a caixa da folha, na dobradiça, registrada enquanto o container está aberto; o mundo das suítes a põe pela mesma função | `test:navigation`, dez casos (a cápsula não atravessa nos dois sentidos; o escritório continua alcançável; o lugar de onde se abre fica livre; quem está sob a folha é posto ao lado); no navegador: 61 colisores, e o da folha com contato onde antes havia 60 e nenhum |
+| **(major)** O par escritório↔átrio com a porta aberta passa do teto de 125 | confirmado e medido (abaixo): **não tem conserto no lote.** Catraca própria `officePairDraws` em 186, dívida datada `office-pair-draws` (L6), dois pontos novos no registro (R11, R12) | `test:ratchets` (treze pontos; cada catraca de navegador tem ponto; cada par é lido dos dois lados) |
+| O escritório sozinho chega a 95 de 100 visto da parede leste; o registro dizia 71, «longe do teto» | ponto R13 no registro; as duas frases corrigidas (12.3 e `ratchets.ts`) | `test:ratchets` |
+| Os tetos de triângulos «por nome» do kit ficaram ~3.000 mais frouxos quando as peças saíram do `kit` | a conta por dado ganhou triângulos, por sala, no medido: 47.224, 21.860, 41.614 | `test:kit-runtime` (sete casos; um móvel posto como dispositivo estoura o teto novo e não os do kit) |
+| As auditorias do átrio e `wall-item-over-opening` só liam `room.kit` | as duas auditorias percorrem kit, containers, dispositivos e quadro (o pódio e o púlpito voltaram ao relatório); o validador confere containers | `test:opening`: o cofre posto na frente da porta do escritório é acusado (sem a linha do validador, passa) |
+| O teto `game` do bundle fechou o lote com 0,13% de folga | `game` e `title` no medido mais meio por cento, com o motivo em `ratchets.ts` | `test:bundle` |
+
+**Fechados em parte, e por quê.**
+
+- **A fala que iguala «saguão» e «átrio» não chega a save antigo** nem a quem acende o saguão
+  durante a apresentação: ela mora em `porter-first-call`, que caduca com o saguão aceso. O Jorge
+  deixou de dizer «átrio» (conserto acima); levar a frase para `porter-hello`, a única chamada que
+  todo save ouve, é uma sexta fala numa chamada que já dura 34 s, e uma chamada nova passaria a ser
+  devida aos dois saves de L3 do corpus, que têm de continuar sem dever nada. O recado do Otávio diz
+  «o plinto do saguão» sem explicar, e a palavra é a comum para a sala. Fica para o dono decidir.
+- **`porter-holyoke-lit` e `porter-first-catalogued` não caducam neste build:** o `lapsesWhen`
+  das duas pede peças que só catalogam em L4 (dívida `exhibit-uncataloguable`). A segunda deixou de
+  mentir (o texto novo não conta); a primeira, «Ala 1 acesa. Agora é conferir, peça por peça.»,
+  continua verdadeira com nove de doze. Um portão para `lapsesWhen` fora do ponto fixo da simulação
+  é validador novo, com duas linhas de dívida até L4: quem paga as três peças em L4 fecha as duas
+  de graça, e pode trazer o portão.
+
+**Adiado.**
+
+- **Regras que alocam a cada quadro** (`VoiceDeviceView`, `useNightPhraseKey`): medido pelo
+  revisor em 0,4 a 2 µs por chamada, cerca de 9 µs por escrita do store no pior caso. É lixo por
+  quadro que o resto do arquivo evita, e não é pequeno o bastante para conferir de vista: muda dois
+  seletores com cobertura. Fica para quem mexer nos dispositivos de voz (L4 troca o recado) ou para
+  L5, com o estimador.
+
+**Uma escolha que é do dono.** Para `porter-notebook-reminder` o verificador deu dois consertos:
+acrescentar `roomsUnvisited: ['atrium']` ao `when` (a chamada some de vez para quem saiu, como a
+dica) ou trocar a fala por uma que valha em qualquer sala. Ficou a segunda, porque a regra de 9.1,
+«caderno opcional, mas lembrado», continua valendo para quem saiu sem ele (é quem está sem planta e
+sem lista). O custo é mudar um texto que o plano do lote dava como «como hoje». Se o dono preferir a
+primeira, é uma linha de `museum.ts` e a fala volta ao que era.
+
+**O «major», com os números.** Medido nesta revisão, no servidor de dev reiniciado sobre a árvore
+que vai sair, 1280 × 720, `medium`, DPR 1,2, 35 programas, assentado em 35/279/53, do jeito de
+`docs/lotes/P0-linha-de-base.md` §0. Antes de qualquer número novo, os dez pontos antigos foram
+reproduzidos nos dois estados (jogo novo: 63, 70, 79, 100, 84, 79, 39, 70, 81; mais cheio: 63, 71,
+80, 101, 85, 79, 39, 70, 81; R01 com o ponteiro de segundos no quadro).
+
+| O que | Câmera | Jogo novo | Cofre aberto, posse assinada, rádio e caderno na mesa |
+|---|---|---|---|
+| Par do escritório, de dentro (R11) | `13.76,0,5.45,0.9,-0.15` | 181 a 183 conforme o lugar (181 · 126.078 em `14.3,0,4.2,1.1,0`) | **186 · 127.042** (185 · 126.946 sem inclinar; 183 · 126.258 em `14.3,0,4.2,1.1,0`) |
+| O mesmo quadro sem o que L3 acrescentou (a secretária e a porta do cofre ocultas na cena) | o mesmo | 178 em `14.3,0,4.2,1.1,0` | **182 · 126.578** |
+| A mesma porta, do saguão (R12) | `4,0,4,-0.971,0` | — | **134 · 87.770** |
+| O escritório sozinho, da parede leste (R13) | `14.76,0,4.44,1.3,-0.15` | 95 · 58.950 | **95 · 58.950** |
+
+Como chegar ao par: em `10.2,0,3,1.5708,0`, `E` abre a porta do escritório; sem atravessar,
+recuar. A porta fica aberta a até 5,5 m **da posição dela, que é a do portal do átrio (x = 9)**: em
+`14.05,0,5.41` ela já fecha (5,6 m), e uma leitura feita ali durante o fechamento dá números que
+não se repetem. O máximo de cada linha saiu de uma varredura: os 339 lugares de pé do escritório
+com o cofre aberto (a inundação de `test:navigation`), 32 guinadas e duas inclinações em cada um
+com a porta fechada (21.696 quadros, nenhum acima de 95), e os lugares a menos de 5,4 m da porta
+com ela aberta. Fora dos lugares de pé (dentro de um móvel, num canto) a câmera chega a 98 com a
+porta fechada: não é lugar de jogador, e não entrou no registro.
+
+O que isso quer dizer: o teto de 125 nunca valeu para o par do escritório. A linha de base mediu o
+par da ala, onde a porta só fica aberta junto dela e pouco da ala cabe no quadro; no escritório os
+5,5 m cobrem quase a sala toda. O número era cerca de 182 antes de L3 e o lote somou quatro: três da
+secretária, um da porta do cofre como nó próprio. O plano do lote contou um draw no púlpito para
+caber em «125 de 125» em R10 (DL3-7) sem saber que o outro par já estava 57 acima. Baixar isso é o
+que L6 (fusão do kit) e L17 (a vizinha sem as peças) fazem; nada neste lote baixa. O que entrou é o
+registro: catraca própria, para que nenhum dos dois pares fique preso ao número do outro, dívida
+datada, e os pontos no `BROWSER_RECORD`.
+
+**Vermelho primeiro.** Cada caso novo reprovou `d78236b` antes do conserto, pelo motivo dele:
+«the tab that signed still has the card up, seen to its end in the other» e, com esse consertado,
+«the call heard to its end in the other tab is still in the air here»; «the tab beside took a
+milestone of a minute ago … for the old news of another night» (`['porter-atrium-service']` contra
+`[]`); «two quick taps signed the deed»; as três linhas de `pointerlockchange` que
+`engine/Devices.tsx` não tinha; «the radio button of the HUD reads «call the porter» while a
+sequence is on screen»; a nota na lista de um jogo novo (`'notebook.todo.vault.note'` contra
+`null`); as quatro linhas «says "do outro lado" … atrium-breaker is not on the wall facing them»;
+«the plan says the iron safe needs a key to a player who holds it»; «the pencil line quotes a
+message the curator may not have heard»; «an image of the house says a bare «cofre»»; «hint 4 of
+"office-radio" sends the player to "office-answering-machine" with its recording already heard»; a
+frase inglesa do plinto; «PASSED THROUGH the leaf» nos dois sentidos e «9 place(s) under the leaf;
+left inside it»; a fiação da folha em `Containers.tsx`; e 22 de 23 fixações de texto de
+`test:radio`, rodadas sobre os dicionários de `d78236b`. Os que pedem coisa nova nascem verdes e
+foram provados por mutação: a conta de triângulos por dado (um móvel a mais como dispositivo), os
+containers em `wall-item-over-opening` (sem a linha do validador o caso reprova),
+`checklist-note-unreachable`, e a isenção da corrida sorteada (sem a metade nova de `prePosse`, a
+noite 4 reprova).
+
+**Testes que mudaram de sentido (plano, 6.5).**
+
+- `scripts/test-mobile-controls.ts`: «a mesma coisa pressionada de novo é a resposta» passou a ser
+  «…depois de a pergunta ter ficado 0,5 s na tela»; o estado `confirming` tem `asked`. O caso da
+  ação compartilhada dá os quadros antes de responder.
+- `scripts/test-opening.ts`: a linha 3 da lista **não** tem nota num jogo novo (tinha); «um lado»
+  inclui «do outro lado»; um container na frente de uma porta é acusado.
+- `scripts/test-radio.ts`: a resposta da recepção era presa a dizer «átrio» e passou a ser presa a
+  dizer «saguão»; a apresentação era presa a `Call me on the radio` e passou a
+  `Trouble? Call me on the radio`; «Ala 1» entrou nos alvos da dica do saguão.
+- `scripts/test-opening-flow.ts`: a frase inglesa do plinto; D34 lê os SVG.
+- `scripts/test-save.ts`: a isenção das chamadas de marco na corrida sorteada saiu; o comentário
+  de `agreed` diz que a leitura só acrescenta algo a um save que nenhum build deste lote gravou.
+- `scripts/test-ratchets.ts`: «os dez pontos» são treze.
+- `scripts/test-ending.ts`: o gesto com `asked`; dois toques seguidos não assinam.
+
+**O que não deu para conferir.**
+
+- **O Esc sob `pointer lock`.** O painel não concede a captura do ponteiro (`pointerlockerror`), e
+  o defeito e o conserto dependem do que o navegador faz com essa tecla. O que está provado é a
+  fiação. **Conferir à mão, num Chrome e num Firefox de verdade:** no púlpito com o termo pronto e o
+  mouse capturado, um toque curto em `E` (a pergunta «E Assinar · Esc Cancelar»), **um** Esc: a
+  pergunta tem de sumir junto com a captura, e o `E` seguinte tem de começar uma espera, não
+  assinar. E, segurando `E`, um Esc no meio: o anel tem de parar.
+- **A espera de 0,5 s na mão de alguém.** A regra está na tabela; se meio segundo é pouco ou muito
+  para quem toca «Assinar» num telefone é coisa de aparelho e de playtest (passo 13).
+- **As capturas não foram refeitas.** `l3-o01` (a linha da gaveta com aspas), `l3-o04` (o título do
+  termo duas vezes), `l3-o05` (a linha inglesa da prova) e `l3-o06` (a fala antiga ao save com a
+  gaveta aberta) mostram a redação de antes da revisão e continuam congeladas no que mostravam.
+- **As duas lentes que não reportaram** («testes», «visual»).
+- O toque, o som, o fps e o build publicado, como em 12.8.

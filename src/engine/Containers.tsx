@@ -14,7 +14,8 @@
  * The one thing that moves is a door a container declares (`door`): it
  * stands open once the container's lock is, and what was behind it
  * (`contents`) is drawn from then on. It is what the lock did, shown; the
- * press that opened the lock has already read everything.
+ * press that opened the lock has already read everything. Open, the door is
+ * solid where it stands (`containerDoorSolid.ts`).
  */
 
 import { useGLTF } from '@react-three/drei'
@@ -28,6 +29,7 @@ import type { ContainerData, RoomData, Vec3 } from '../content/schema'
 import { museumAudio } from './audio'
 import { USE_DRACO, USE_MESHOPT } from './bundleCache'
 import type { CollisionWorld } from './collision'
+import { openDoorSolid } from './containerDoorSolid'
 import {
   doorAngleAfter,
   prepareContainerContents,
@@ -153,6 +155,21 @@ function Container({
   // stands open is its lock's to say (`containerOpen`): one boolean out of
   // the selector, so the component hears of it only when it changes.
   const open = useMuseum((state) => containerOpen(container, state.progress))
+  // Open, the door is a leaf standing across the floor in front of the
+  // container for the rest of the night, and it is as solid there as the
+  // box it hangs on. The collider above is the box with its door shut, and
+  // was all there was: the player walked through the iron door of the safe
+  // in both directions. Solid from the moment the lock opens, at the door's
+  // place of rest (`containerDoorSolid.ts`, which the suites' world places
+  // too), and gone with the container.
+  useEffect(() => {
+    const solid = open ? openDoorSolid(container, kitBundle, roomOrigin) : null
+    if (!solid || !collision) return undefined
+    const remove = collision.add(solid.geometry, solid.matrix)
+    // The world keeps its own copy, baked into world space.
+    solid.geometry.dispose()
+    return remove
+  }, [collision, container, kitBundle, open, roomOrigin])
   const door = useMemo(
     () => (instance && container.door ? prepareContainerDoor(instance, container.part, container.door) : null),
     [container.door, container.part, instance],

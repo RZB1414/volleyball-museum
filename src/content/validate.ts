@@ -826,10 +826,12 @@ export function validateOpening(content: MuseumContent): ValidationIssue[] {
       }
       for (const item of page.items ?? []) {
         // Whatever a line asks of the save, wherever it asks it: what ticks
-        // it, what puts it on the page, what it counts.
+        // it, what puts it on the page, what puts its note beside it, what
+        // it counts.
         const line = `${where} item "${item.labelKey}"`
         if (item.doneWhen) checkCondition(item.doneWhen, line)
         if (item.appearsWhen) checkCondition(item.appearsWhen, `${line} (to appear)`)
+        if (item.noteWhen) checkCondition(item.noteWhen, `${line} (for its note)`)
         for (const [position, counter] of (item.counters ?? []).entries()) {
           checkCondition(counter.of, `${line}, count ${position + 1}`)
         }
@@ -1939,6 +1941,14 @@ export function validateBake(
         id: device.id,
         what: 'Device',
         extent: baked(device.part, device.position, device.rotationY),
+      })),
+      // A container is furniture with something in it. The iron safe was a
+      // kit placement, and held to this rule, until it began to open (L3):
+      // it moved to this list, which nobody read here.
+      ...(room.containers ?? []).map((container) => ({
+        id: container.id,
+        what: 'Container',
+        extent: baked(container.part, container.position, container.rotationY),
       })),
       ...(room.kit ?? []).map((placement) => ({
         id: `${room.id}/${placement.part}@${placement.position.join(',')}`,

@@ -18,7 +18,9 @@
  *   - a door that opens from one side only is not on the plan, from either
  *     side, until it has been opened; after that it is a door like the rest.
  *     There is no state of a door "seen", and it is not worth one;
- *   - a lock is listed once touched and until opened (`pendingLocks`);
+ *   - a lock is listed once touched and for as long as it bars the way
+ *     (`pendingLocks`, `lockBars`): until it is opened, or until the player
+ *     holds what opens it, whichever comes first;
  *   - the marker faces the way the camera does, and north is up;
  *   - a room is dark, lit with something left to do, or complete, and the
  *     three differ by pattern AND by colour: colour alone is no difference to
@@ -30,7 +32,7 @@
 
 import type { TranslationKey } from '../content/i18n/pt-BR'
 import type { MuseumContent, Portal, RoomData } from '../content/schema'
-import { pendingLocks } from '../engine/lockRules.ts'
+import { lockBars, pendingLocks } from '../engine/lockRules.ts'
 import { isRoomPowered } from '../engine/power.ts'
 import type { Progress } from '../state/progressFields.ts'
 import { portalOpening, type MapSegment } from './mapGeometry.ts'
@@ -217,7 +219,7 @@ function outwardOf({ portal }: Side): readonly [number, number] {
 
 type PlanProgress = Pick<
   Progress,
-  'roomsVisited' | 'roomsPowered' | 'catalogued' | 'documentsRead' | 'locksOpened' | 'locksSeen' | 'doorsReleased'
+  'roomsVisited' | 'roomsPowered' | 'catalogued' | 'documentsRead' | 'locksOpened' | 'locksSeen' | 'doorsReleased' | 'credentials'
 >
 
 /**
@@ -234,7 +236,7 @@ function roomState(room: RoomData, progress: PlanProgress): MapRoomState {
 }
 
 export function mapModel(
-  content: Pick<MuseumContent, 'rooms' | 'exhibits' | 'locks'>,
+  content: Pick<MuseumContent, 'rooms' | 'exhibits' | 'locks' | 'facts'>,
   progress: PlanProgress,
   player: { readonly x: number; readonly z: number; readonly yaw: number; readonly room: string },
 ): MapModel {
@@ -305,8 +307,14 @@ export function mapModel(
     doors,
     // Naming a lock the player has stood in front of is what turns a shut
     // drawer from confusion into a mystery; naming one they have not found
-    // is telling them where to look.
-    locks: pendingLocks(content.locks, progress).map((lock) => ({ id: lock.id, labelKey: lock.mapLabelKey })),
+    // is telling them where to look. And a lock that no longer bars the way
+    // is no mystery: the label of the iron safe says «precisa de chave», and
+    // went on saying it to a player with the key in their hand, where the
+    // prompt before the safe already said «Destrancar». Asked of the rule
+    // the prompt asks (`lockBars`), so the two cannot disagree.
+    locks: pendingLocks(content.locks, progress)
+      .filter((lock) => lockBars(lock, content.facts, progress))
+      .map((lock) => ({ id: lock.id, labelKey: lock.mapLabelKey })),
     player: { x: frame.toX(player.x), y: frame.toY(player.z), headingDegrees: headingDegrees(player.yaw) },
     // The north-east corner of the sheet, which no room of this building reaches.
     north: { x: frame.width - PADDING, y: PADDING },

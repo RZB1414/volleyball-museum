@@ -100,13 +100,19 @@ export const AUTHORED_MEDIA = [
     },
   },
   {
+    // The file's name carries a version, and a change to what it draws is a
+    // new one: `/textures/*` is served immutable for a year, and this SVG has
+    // no content hash in its name (that is L5's). Under the old name a
+    // corrected label would never have reached a browser that had been in
+    // the office. v2 is the vault lettered «CAIXA-FORTE» (D34; it said
+    // «COFRE», the word for the iron safe that stands beside this plan).
     id: 'graphic-office-blueprint',
     kind: 'diagram',
-    src: '/textures/media/office-blueprint.svg',
+    src: '/textures/media/office-blueprint.v2.svg',
     aspect: 1.5,
     credit: {
       license: 'procedural',
-      generator: 'svg/office-blueprint-v1',
+      generator: 'svg/office-blueprint-v2',
     },
   },
 ] as const satisfies readonly MediaAsset[]

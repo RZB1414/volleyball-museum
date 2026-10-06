@@ -43,7 +43,7 @@ const { en } = await import('../src/content/i18n/en.ts')
 const { ptBR } = await import('../src/content/i18n/pt-BR.ts')
 const { MUSEUM } = await import('../src/content/museum.ts')
 const { fixtureLot, SAVE_FIXTURES } = await import('../src/content/saveFixtures.ts')
-const { attemptLock } = await import('../src/engine/lockRules.ts')
+const { attemptLock, lockBars } = await import('../src/engine/lockRules.ts')
 const { doorGrant } = await import('../src/engine/progressGrants.ts')
 const { buildTransitionDoorSpecs } = await import('../src/engine/transitionDoorTopology.ts')
 const { emptyProgress, grantProgress } = await import('../src/state/progressFields.ts')
@@ -430,6 +430,27 @@ await test('a lock: never touched, absent; touched, by name; opened, gone', () =
   assert.equal(right.outcome, 'opened')
   if (right.outcome === 'opened') progress = grantProgress(progress, right.grant)
   assert.deepEqual(locks(), [], 'an open lock is still listed')
+
+  // A lock that asks for a key. Touched with an empty hand it is on the
+  // plan, by what it lacks. With the key in the hand it bars nothing: the
+  // prompt before it says «Destrancar» and the list in the notebook has the
+  // key on it, and the plan went on saying «precisa de chave», which reads
+  // as «a key is still to be found». What the plan lists is what still bars
+  // the way, by the rule the prompt is worded by (`lockBars`).
+  const safe = MUSEUM.locks.find((lock) => lock.id === 'office-safe')!
+  progress = holding({ roomsVisited: ROOM_IDS })
+  const refused = attemptLock(safe, MUSEUM.facts, progress, { kind: 'touch' })
+  assert.equal(refused.outcome, 'refused')
+  if (refused.outcome === 'refused') progress = grantProgress(progress, refused.grant)
+  assert.deepEqual(locks(), [{ id: 'office-safe', labelKey: 'lock.office-safe.mapLabel' }])
+  assert.equal(ptBR['lock.office-safe.mapLabel'], 'Cofre de ferro — precisa de chave')
+  progress = grantProgress(progress, { credentials: ['tool:service-key'] })
+  assert.equal(lockBars(safe, MUSEUM.facts, progress), false)
+  assert.deepEqual(locks(), [], 'the plan says the iron safe needs a key to a player who holds it')
+  // A keypad bars until its code is typed, whatever the player carries.
+  const touched = attemptLock(drawer, MUSEUM.facts, progress, { kind: 'touch' })
+  if (touched.outcome === 'ask') progress = grantProgress(progress, touched.grant)
+  assert.deepEqual(locks(), [{ id: 'office-drawer', labelKey: 'lock.office-drawer.mapLabel' }])
 })
 
 // ---------------------------------------------------------------------------

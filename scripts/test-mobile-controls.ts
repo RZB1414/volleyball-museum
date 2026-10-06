@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 import {
+  HOLD_CONFIRM_AFTER_SECONDS,
   HOLD_IDLE,
   HOLD_MAX_STEP_SECONDS,
   HOLD_TAP_SECONDS,
@@ -248,7 +249,10 @@ await test('the Action button shows before every door that answers a press', () 
 
 const DESK = { id: 'hall-desk', seconds: 1.2 } as const
 const HOLDING = (held: number): HoldGesture => ({ phase: 'holding', id: DESK.id, seconds: DESK.seconds, held })
-const CONFIRMING: HoldGesture = { phase: 'confirming', id: DESK.id }
+/** The question on screen, and for how long it has stood there. */
+const CONFIRMING = (asked = 0): HoldGesture => ({ phase: 'confirming', id: DESK.id, asked })
+/** The question once it has stood its time: from here on the same input answers it. */
+const ASKED = CONFIRMING(HOLD_CONFIRM_AFTER_SECONDS)
 const press = (request: { id: string; seconds: number } = DESK): HoldEvent => ({ kind: 'press', request })
 const tick = (seconds: number, aimed: string | null = DESK.id): HoldEvent => ({ kind: 'tick', seconds, aimed })
 const RELEASE: HoldEvent = { kind: 'release' }
@@ -289,27 +293,46 @@ await test('the table of the held press: every state against every event', () =>
   assert.deepEqual(holdStep(HOLDING(1.19), tick(0.1, 'hall-radio')), { gesture: HOLD_IDLE, fired: null })
   assert.deepEqual(holdStep(HOLDING(1.19), tick(0.1, null)), { gesture: HOLD_IDLE, fired: null })
   // Let go at once: a tap, which asks to confirm. Let go later: nothing.
-  assert.deepEqual(holdStep(HOLDING(0.1), RELEASE), { gesture: CONFIRMING, fired: null })
-  assert.deepEqual(holdStep(HOLDING(0.29), RELEASE), { gesture: CONFIRMING, fired: null })
+  assert.deepEqual(holdStep(HOLDING(0.1), RELEASE), { gesture: CONFIRMING(0), fired: null })
+  assert.deepEqual(holdStep(HOLDING(0.29), RELEASE), { gesture: CONFIRMING(0), fired: null })
   assert.deepEqual(holdStep(HOLDING(0.3), RELEASE), { gesture: HOLD_IDLE, fired: null })
   assert.deepEqual(holdStep(HOLDING(0.6), RELEASE), { gesture: HOLD_IDLE, fired: null })
   assert.deepEqual(holdStep(HOLDING(0.6), CANCEL), { gesture: HOLD_IDLE, fired: null })
 
-  // Confirming: the same thing pressed again is the answer; another thing starts its own hold.
-  assert.deepEqual(holdStep(CONFIRMING, press()), { gesture: HOLD_IDLE, fired: DESK.id })
-  assert.deepEqual(holdStep(CONFIRMING, press({ id: 'another-desk', seconds: 2 })), {
-    gesture: { phase: 'holding', id: 'another-desk', seconds: 2, held: 0 },
-    fired: null,
-  })
-  assert.deepEqual(holdStep(CONFIRMING, tick(0.1)), { gesture: CONFIRMING, fired: null })
-  assert.deepEqual(holdStep(CONFIRMING, tick(0.1, null)), { gesture: HOLD_IDLE, fired: null })
-  assert.deepEqual(holdStep(CONFIRMING, RELEASE), { gesture: CONFIRMING, fired: null })
-  assert.deepEqual(holdStep(CONFIRMING, CANCEL), { gesture: HOLD_IDLE, fired: null })
+  // Confirming: the same thing pressed again is the answer, once the
+  // question has stood long enough to be one; another thing starts its own hold.
+  assert.equal(HOLD_CONFIRM_AFTER_SECONDS, 0.5)
+  assert.deepEqual(holdStep(ASKED, press()), { gesture: HOLD_IDLE, fired: DESK.id })
+  for (const early of [0, 0.2, 0.49]) {
+    assert.deepEqual(holdStep(CONFIRMING(early), press()), { gesture: CONFIRMING(early), fired: null }, `a press ${early} s after the question signed`)
+  }
+  for (const stood of [0, HOLD_CONFIRM_AFTER_SECONDS]) {
+    assert.deepEqual(holdStep(CONFIRMING(stood), press({ id: 'another-desk', seconds: 2 })), {
+      gesture: { phase: 'holding', id: 'another-desk', seconds: 2, held: 0 },
+      fired: null,
+    })
+  }
+  // A frame adds its time to the question, with the limit a frame of a hold
+  // has, and no further than the time it has to stand: from then on a frame
+  // changes nothing, and hands the same gesture back.
+  assert.deepEqual(rounded(holdStep(CONFIRMING(0), tick(0.1)).gesture), CONFIRMING(0.1))
+  assert.deepEqual(holdStep(CONFIRMING(0), tick(5)), { gesture: CONFIRMING(HOLD_MAX_STEP_SECONDS), fired: null })
+  assert.deepEqual(holdStep(CONFIRMING(0.45), tick(0.1)), { gesture: ASKED, fired: null })
+  assert.equal(holdStep(ASKED, tick(0.1)).gesture, ASKED, 'a frame of a question already read made a new gesture')
+  for (const junk of [0, -3, Number.NaN]) assert.deepEqual(holdStep(CONFIRMING(0.2), tick(junk)), { gesture: CONFIRMING(0.2), fired: null }, String(junk))
+  assert.deepEqual(holdStep(CONFIRMING(0.2), tick(0.1, null)), { gesture: HOLD_IDLE, fired: null })
+  assert.deepEqual(holdStep(ASKED, tick(0.1, null)), { gesture: HOLD_IDLE, fired: null })
+  assert.deepEqual(holdStep(CONFIRMING(0.2), RELEASE), { gesture: CONFIRMING(0.2), fired: null })
+  assert.deepEqual(holdStep(ASKED, CANCEL), { gesture: HOLD_IDLE, fired: null })
+  assert.deepEqual(holdStep(CONFIRMING(0), CANCEL), { gesture: HOLD_IDLE, fired: null })
 
   // The reducer writes into nothing it is handed.
   const frozen = Object.freeze(HOLDING(0.2))
   assert.doesNotThrow(() => holdStep(frozen, tick(0.1)))
   assert.equal(frozen.phase === 'holding' && frozen.held, 0.2)
+  const asking = Object.freeze(CONFIRMING(0.2))
+  assert.doesNotThrow(() => holdStep(asking, tick(0.1)))
+  assert.equal(asking.phase === 'confirming' && asking.asked, 0.2)
 })
 
 await test('holding for the whole time signs once; letting go early cancels; a tap asks first', () => {
@@ -321,14 +344,44 @@ await test('holding for the whole time signs once; letting go early cancels; a t
   assert.deepEqual(gesture(press(), ...frames(0.6), RELEASE, ...frames(2)), { gesture: HOLD_IDLE, fired: [] })
   // Let go at 0.1 s: «Assinar / Cancelar». «Assinar» signs, «Cancelar» does not.
   const tapped = gesture(press(), ...frames(0.1), RELEASE)
-  assert.deepEqual(tapped, { gesture: CONFIRMING, fired: [] })
-  assert.deepEqual(gesture(press(), ...frames(0.1), RELEASE, press()), { gesture: HOLD_IDLE, fired: [DESK.id] })
+  assert.deepEqual(tapped, { gesture: CONFIRMING(0), fired: [] })
+  assert.deepEqual(gesture(press(), ...frames(0.1), RELEASE, ...frames(0.6), press()), { gesture: HOLD_IDLE, fired: [DESK.id] })
   assert.deepEqual(gesture(press(), ...frames(0.1), RELEASE, CANCEL, ...frames(2)), { gesture: HOLD_IDLE, fired: [] })
   // The question waits as long as the player looks at the desk, and goes when they look away.
-  assert.deepEqual(gesture(press(), ...frames(0.1), RELEASE, ...frames(30)).gesture, CONFIRMING)
+  assert.deepEqual(gesture(press(), ...frames(0.1), RELEASE, ...frames(30)).gesture, ASKED)
   assert.deepEqual(gesture(press(), ...frames(0.1), RELEASE, ...frames(1), tick(0.05, null), press()).gesture, HOLDING(0))
   // Losing the desk half way cancels, and looking back does not pick the hold up again.
   assert.deepEqual(gesture(press(), ...frames(0.6), tick(0.05, null), ...frames(2)), { gesture: HOLD_IDLE, fired: [] })
+})
+
+await test('a second tap by reflex is not the signature: the question has to stand before the same input answers it', () => {
+  // «Segure E — Assinar», and a player who taps E: nothing seems to happen,
+  // and the reflex is to tap again. The first tap asks; the second used to
+  // answer, some tens of milliseconds later, before a word of the question
+  // had been read. Two taps were then the fastest way to sign, with the key
+  // the player has pressed all night (D11). On glass the lot had seen to
+  // it by putting «Cancelar» under the thumb; a keyboard has one key.
+  const tap = (held = 0.05) => [press(), ...frames(held), RELEASE]
+  const between = (seconds: number) => frames(seconds)
+  // Tap, a frame, tap: thirty milliseconds apart.
+  assert.deepEqual(gesture(press(), tick(0.016), RELEASE, tick(0.016), press()).fired, [], 'two quick taps signed the deed')
+  // As a hand makes it: down, up at 50 ms, down again at 150 ms.
+  assert.deepEqual(gesture(...tap(0.05), ...between(0.1), ...tap(0.05)).fired, [])
+  // No frame at all between the three events.
+  assert.deepEqual(gesture(press(), RELEASE, press()).fired, [])
+  // Three in a burst, inside the half second.
+  assert.deepEqual(gesture(...tap(), ...between(0.1), ...tap(), ...between(0.1), ...tap()).fired, [])
+  // The question is still there after them, and counts from when it went up:
+  // a press it did not hear does not start the wait over.
+  const burst = gesture(...tap(), ...between(0.2), ...tap(), ...between(0.4))
+  assert.deepEqual(burst, { gesture: ASKED, fired: [] })
+  assert.deepEqual(gesture(...tap(), ...between(0.2), ...tap(), ...between(0.4), press()).fired, [DESK.id])
+  // Read, and answered: «Assinar» on glass and E at a keyboard are this press.
+  assert.deepEqual(gesture(...tap(), ...between(0.9), ...tap()).fired, [DESK.id])
+  // Escape answers at once, however young the question.
+  assert.deepEqual(gesture(...tap(), CANCEL, press(), ...frames(0.1)).fired, [])
+  // And a press the question did not hear is not a hold either: kept down, it signs nothing behind the question.
+  assert.deepEqual(gesture(...tap(), ...between(0.1), press(), ...frames(0.2), RELEASE).fired, [], 'a press the question did not hear went on as a hold')
 })
 
 await test('a frozen tab does not sign by itself: one frame counts a quarter of a second at the most', () => {
@@ -345,10 +398,11 @@ await test('a frozen tab does not sign by itself: one frame counts a quarter of 
 await test('what the HUD is told of a hold is one string, and changes only when the gesture does', () => {
   assert.equal(holdMark(HOLD_IDLE), 'idle')
   assert.equal(holdMark(HOLDING(0)), holdMark(HOLDING(0.9)), 'a frame of holding re-rendered the HUD')
-  assert.notEqual(holdMark(HOLDING(0)), holdMark(CONFIRMING))
+  assert.notEqual(holdMark(HOLDING(0)), holdMark(CONFIRMING(0)))
+  assert.equal(holdMark(CONFIRMING(0)), holdMark(ASKED), 'a frame of the question re-rendered the HUD')
   assert.deepEqual(readHoldMark(holdMark(HOLD_IDLE)), { phase: 'idle' })
   assert.deepEqual(readHoldMark(holdMark(HOLDING(0.4))), { phase: 'holding', id: DESK.id, seconds: 1.2 })
-  assert.deepEqual(readHoldMark(holdMark(CONFIRMING)), { phase: 'confirming', id: DESK.id })
+  assert.deepEqual(readHoldMark(holdMark(CONFIRMING(0.3))), { phase: 'confirming', id: DESK.id })
   // Ids may carry colons themselves.
   const odd: HoldGesture = { phase: 'holding', id: 'desk:of:the:hall', seconds: 0.5, held: 0 }
   assert.deepEqual(readHoldMark(holdMark(odd)), { phase: 'holding', id: 'desk:of:the:hall', seconds: 0.5 })
@@ -381,11 +435,20 @@ await test('the shared action carries the hold: down, frames, up, and whoever li
     releasePrimaryAction()
     assert.deepEqual(fired, [DESK.id])
 
-    // A tap: down and up. The question is on screen, and the same press again answers it.
+    // A tap: down and up. The question is on screen, and the same press
+    // again answers it once it has stood its time; sooner, it is not heard,
+    // and whoever draws the hold is told nothing (the question is as it was).
     assert.equal(pressPrimaryAction(), 'holding')
     tickPrimaryHold(0.1, DESK.id)
     releasePrimaryAction()
-    assert.deepEqual(primaryHold(), CONFIRMING)
+    assert.deepEqual(primaryHold(), CONFIRMING(0))
+    const asked = told
+    assert.equal(pressPrimaryAction(), 'holding', 'a press on a question just asked was taken for its answer')
+    releasePrimaryAction()
+    assert.deepEqual(fired, [DESK.id])
+    tickPrimaryHold(0.25, DESK.id)
+    tickPrimaryHold(0.25, DESK.id)
+    assert.equal(told, asked, 'the frames of a question were told to the HUD')
     assert.equal(pressPrimaryAction(), 'acted')
     assert.deepEqual(fired, [DESK.id, DESK.id])
     releasePrimaryAction()
@@ -393,7 +456,7 @@ await test('the shared action carries the hold: down, frames, up, and whoever li
     // «Cancelar», Escape, the window losing focus: the question goes, unanswered.
     assert.equal(pressPrimaryAction(), 'holding')
     releasePrimaryAction()
-    assert.deepEqual(primaryHold(), CONFIRMING)
+    assert.deepEqual(primaryHold(), CONFIRMING(0))
     cancelPrimaryHold()
     assert.equal(primaryHoldMark(), 'idle')
     // Half way and let go; half way and looked away.
@@ -409,7 +472,7 @@ await test('the shared action carries the hold: down, frames, up, and whoever li
     assert.equal(primaryHoldMark(), 'idle')
     // A click cannot tell down from up: on something held it is a tap, and asks first.
     assert.equal(triggerPrimaryAction(), true)
-    assert.deepEqual(primaryHold(), CONFIRMING)
+    assert.deepEqual(primaryHold(), CONFIRMING(0))
     assert.deepEqual(fired, [DESK.id, DESK.id])
     cancelPrimaryHold()
     // With nothing held, the frames and the release do nothing and tell nobody.

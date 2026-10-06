@@ -19,11 +19,20 @@
  *     saying which lot brings it down.
  *
  * Three ceilings are NOT the measurement, and say so in their `origin`:
- * `roomDraws` and `frameTriangles` are under their budgets (81 and 100,428
+ * `roomDraws` and `frameTriangles` are under their budgets (95 and 127,042
  * measured) and are held at the plan's hard ceiling, 100 and 150,000, so they
  * do not ratchet until the budget estimator arrives (L5); and `atriumDraws`
  * is held at the temporary ceiling the plan declared (ÁT-K1, 102), one above
  * what was measured.
+ *
+ * A ratchet holds what a reference point looks at and nothing else. Until
+ * the review of L3 the record had one point with a door open, in the wing,
+ * and two points in the office, both looking east from beside its door:
+ * the office seen from its far wall, and the office with ITS door open,
+ * were numbers nobody had read, and the second had been over the ceiling
+ * of the first pair since the baseline. Both are points of the record now,
+ * and the pair of the office has a ratchet of its own, so that neither pair
+ * is held at the other's figure.
  *
  * What only a browser can count (draw calls, triangles, programs) is not
  * measured by the gate: it compares the last written record with these
@@ -122,16 +131,48 @@ export const RATCHETS = {
     unit: 'count',
     budget: 100,
     ceiling: 100,
-    origin: 'the hard mobile ceiling. The highest reference point is 81 (R09).',
+    origin:
+      'the hard mobile ceiling. The highest reference point is 95 (R13: the office from its east wall, the whole room in the frame; it was 91 before L3, which added the answering machine and the door of the safe). Five to spare, where the two points beside the door read 63 and 71.',
   },
-  /** Draw calls with a door open and both rooms in the camera. Browser only. */
+  /** Draw calls with the Holyoke door open and both rooms in the camera. Browser only. */
   pairDraws: {
     id: 'pair-draws',
-    what: 'draw calls per frame with a door open between two rooms',
+    what: 'draw calls per frame with the Holyoke door open, the wing and the hall in the camera',
     unit: 'count',
     budget: 100,
     ceiling: 125,
     origin: 'R10 in L1 (128 at the P0 baseline; the Holyoke breaker left the wall behind the open door). L6 merges the kit; L17 draws the neighbour without its collection.',
+  },
+  /**
+   * Draw calls with the OFFICE door open and both rooms in the camera.
+   * Browser only.
+   *
+   * A ratchet of its own because it is another number. A door stays open
+   * while the player is within 5.5 m of it. In the wing that is a strip by
+   * the door, with little of the wing in front of the camera (R10). In the
+   * office it is nearly the whole room: from the far wall, turned to the
+   * door, the frame holds every piece of the office and everything the hall
+   * has inside the camera's cone, drawn whether the doorway shows it or not.
+   *
+   * Nobody had measured it. The baseline read the pair in the wing and, from
+   * the hall, 97; the ceiling of 125 was written for that. The review of L3
+   * measured this pair for the first time: 186 from the place the safe is
+   * opened from, with the safe open and the deed signed (R11), 181 to 183 in
+   * a new game, and 134 from the hall (R12). With what L3 added hidden in
+   * the scene (the three nodes of the answering machine, the door of the
+   * safe as a node of its own) the same frame is 182: the debt is older
+   * than the lot, and the lot added four draws to it. Held at what was
+   * measured, as a dated debt: nothing short of the kit merge (L6) and a
+   * neighbour drawn without its collection (L17) brings it down.
+   */
+  officePairDraws: {
+    id: 'office-pair-draws',
+    what: 'draw calls per frame with the office door open, the office and the hall in the camera',
+    unit: 'count',
+    budget: 100,
+    ceiling: 186,
+    origin:
+      'R11, measured for the first time by the review of L3 (the safe open, the deed signed; 181 to 183 in a new game). About 182 before L3, read with what the lot added hidden: the answering machine is three of the four draws, the door of the safe the fourth. L6 merges the kit; L17 draws the neighbour without its collection.',
   },
   /** Triangles of any single frame. Browser only. */
   frameTriangles: {
@@ -140,7 +181,7 @@ export const RATCHETS = {
     unit: 'count',
     budget: 150_000,
     ceiling: 150_000,
-    origin: 'the hard mobile ceiling. The highest reference point is 100,488 (R10).',
+    origin: 'the hard mobile ceiling. The highest reference point is 127,042 (R11, the office and the hall through the office door; R10 is 100,488).',
   },
 } as const satisfies Record<string, Ratchet>
 
@@ -162,7 +203,7 @@ export function mippedRgbaBytes(width: number, height: number) {
 
 export type ReferencePoint = {
   readonly id: string
-  readonly ratchet: 'roomDraws' | 'atriumDraws' | 'pairDraws'
+  readonly ratchet: 'roomDraws' | 'atriumDraws' | 'pairDraws' | 'officePairDraws'
   /** `?qaCamera=` of the point: x,y,z,yaw,pitch in world space. */
   readonly camera: string
   readonly draws: number
@@ -201,12 +242,27 @@ export type ReferencePoint = {
  * triangles more (63 · 36,586). The record is the hand outside, which is
  * what every lot since the baseline wrote down without knowing it; a reading
  * one draw off at R01 is the clock before it is anything else.
+ *
+ * Three points since the review of L3 (docs/HANDOFF.md, §12.12), each the
+ * most its ratchet reads, found by turning the camera at every place a
+ * capsule can stand in the office and read again one by one:
+ *
+ *   R11  the office pair from inside: the place the safe is opened from,
+ *        the safe open, the deed signed, the office door open (E on it from
+ *        `10.2,0,3,1.5708,0`, then back, without crossing: it stays open
+ *        within 5.5 m of its own position, x 9);
+ *   R12  the same open door from the hall, 5.1 m from it;
+ *   R13  the office alone from its east wall, between the last bookcase and
+ *        the safe, door shut: 95, in a new game and with the safe open.
+ *
+ * The other ten were read again in the same two sessions and did not move
+ * (R01 with the second hand in its frame, as the note above says).
  */
 export const BROWSER_RECORD = {
   lot: 3,
   date: '2026-10-05',
   source:
-    'docs/lotes/L3-plano.md, §15.5, and again as the lot closed, docs/HANDOFF.md, §12.3 (the record before it: docs/HANDOFF.md, §10.3, of L1)',
+    'docs/lotes/L3-plano.md, §15.5, again as the lot closed, docs/HANDOFF.md, §12.3, and R11 to R13 in its review, §12.12 (the record before it: docs/HANDOFF.md, §10.3, of L1)',
   programs: 35,
   points: [
     { id: 'R01', ratchet: 'roomDraws', camera: '11.05,0,2.95,-1.5708,-0.45', draws: 62, triangles: 36_526 },
@@ -222,6 +278,9 @@ export const BROWSER_RECORD = {
     { id: 'R08', ratchet: 'roomDraws', camera: '-10.2,0,-2,2.3562,0', draws: 70, triangles: 52_036 },
     { id: 'R09', ratchet: 'roomDraws', camera: '-20.45,0,-7.2,-2.3562,0', draws: 81, triangles: 62_374 },
     { id: 'R10', ratchet: 'pairDraws', camera: '-13.5,0,-2,-1.5708,0', draws: 125, triangles: 100_488 },
+    { id: 'R11', ratchet: 'officePairDraws', camera: '13.76,0,5.45,0.9,-0.15', draws: 186, triangles: 127_042 },
+    { id: 'R12', ratchet: 'officePairDraws', camera: '4,0,4,-0.971,0', draws: 134, triangles: 87_770 },
+    { id: 'R13', ratchet: 'roomDraws', camera: '14.76,0,4.44,1.3,-0.15', draws: 95, triangles: 58_950 },
   ],
 } as const satisfies {
   lot: number
@@ -436,11 +495,35 @@ export const BUNDLE_BUDGETS = {
  *     that appears by a lock seen; the toast of a line noted; a shut lock
  *     that is not called locked to the hand holding its key). The document
  *     did not move (63,234).
+ *
+ * Raised by the review of L3, both to the measure plus half a per cent:
+ *   - `game` +1,930 bytes, on 400,806 measured (it was 400,890 on 400,368).
+ *     Two things. The slack first: the last slice of the lot added 1,463
+ *     bytes under a ceiling it did not move, and closed 522 bytes from it,
+ *     0.13 per cent, a quarter of what the rule at the top of this list asks
+ *     and a third of the difference between two deflates of these same
+ *     seven files on one machine (Node's zlib and GNU gzip, 1,563 bytes
+ *     apart). The gate would have turned red on another Node with no line
+ *     changed, which is what the half per cent is for. And 438 bytes of what
+ *     the review fixed: the open door of the safe as something solid
+ *     (`containerDoorSolid.ts`, the largest piece); a question that has to
+ *     stand before the key that asked it can answer it (`holdAction.ts`);
+ *     the pencil note that waits for its moment (`checklist.ts`); the plan's
+ *     list of locks asked of the rule the prompt asks; the listener for a
+ *     captured pointer let go; the radio button that says what its press
+ *     does while a card is up.
+ *   - `title` +50 bytes, on 35,919 measured (it was 36,050 on 35,879). The
+ *     dictionaries came out a little shorter in both languages; the 40
+ *     bytes are the store's, which ships with the title: a card or a call
+ *     taken down in the tab that was holding it once another tab has shown
+ *     it out, and the field of the save that tells a game this build began
+ *     from one of another night (`saveMigrations.ts`). The document did
+ *     not move (63,234).
  */
 export const BUNDLE_PATH_CEILINGS = {
   document: 63_600,
-  title: 36_050,
-  game: 400_890,
+  title: 36_100,
+  game: 402_820,
 } as const
 
 /** Strings that only the content set and the bake manifest contain. */

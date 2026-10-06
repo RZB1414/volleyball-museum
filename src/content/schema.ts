@@ -470,6 +470,14 @@ export type ChecklistItem = {
   readonly deferredUntilLot?: number
   /** A pencil note beside the line. A dated promise has one: it is how the game says "not tonight". */
   readonly noteKey?: string
+  /**
+   * What the save has to hold for the note to be beside its line. Omitted:
+   * from the moment the line is there. A note is pencil, the curator's hand,
+   * whoever wrote the line: it is on the page once the curator can know what
+   * it says, and by what the save holds, like a line of their own
+   * (`appearsWhen`), never by something having been heard.
+   */
+  readonly noteWhen?: ProgressCondition
   /** Ids of the build this line sends the player to. */
   readonly mentions?: readonly string[]
 }
@@ -485,9 +493,10 @@ export type ChecklistItem = {
 export type NotebookPage = {
   readonly style: 'printed' | 'handwritten' | 'checklist' | 'term'
   /**
-   * `term`: the page is that term, as it stands in the book: its title, its
-   * body and its signature line, which is filled once the save holds the
-   * signature. The words are the term's own, written once.
+   * `term`: the page is that term, as it stands in the book: its body, which
+   * opens with its own title as every page of that book does, and its
+   * signature line, which is filled once the save holds the signature. The
+   * words are the term's own, written once.
    */
   readonly termId?: string
   readonly headingKey?: string

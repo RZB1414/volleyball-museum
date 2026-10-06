@@ -761,6 +761,28 @@ export function interactionVolumeWiringProblems(read: SourceReader): string[] {
     'registerKitColliders(kit, container.part, kitBundle, collision, { roomOrigin, position: container.position, rotationY: container.rotationY, scale: 1, })',
     'a cabinet is no longer solid where the suites place it',
   )
+  // The leaf of a door that stands open: the suites put it in their world by
+  // `openDoorSolid`, and the game has to register that very box, for as long
+  // as the door is open and no longer.
+  const containerSource = squeezed(read('engine/Containers.tsx'))
+  need(
+    'engine/Containers.tsx',
+    containerSource,
+    'const solid = open ? openDoorSolid(container, kitBundle, roomOrigin) : null',
+    'the door of an open container is not solid, or is solid while shut: the capsule walks through the leaf the suites stopped at',
+  )
+  need(
+    'engine/Containers.tsx',
+    containerSource,
+    'const remove = collision.add(solid.geometry, solid.matrix)',
+    'the open leaf is worked out and never put in the collision world',
+  )
+  need(
+    'engine/Containers.tsx',
+    containerSource,
+    'const open = useMuseum((state) => containerOpen(container, state.progress))',
+    'whether the leaf is solid is asked of something other than the rule that swings it open',
+  )
   need(
     'engine/RoomFurniture.tsx',
     squeezed(read('engine/RoomFurniture.tsx')),
@@ -1436,6 +1458,11 @@ export function endingWiringProblems(read: SourceReader): string[] {
     'const isSigned = signedTerms(MUSEUM.terms ?? [], progress).some((term) => term.id === page.termId)',
     'the signature line of a term in the book is filled, or left empty, whatever the save says',
   )
+  // The body of a term opens with its own title, in capitals, as the page
+  // of the handover before it does. A heading over that is the title twice.
+  if (squeezed(read('ui/Notebook.tsx')).includes('<h3>{text(shown.titleKey)}</h3>')) {
+    problems.push('ui/Notebook.tsx prints the title of a term over a body that opens with it: the page reads the title twice')
+  }
 
   // --- the sequence: started, played, recorded ------------------------------------------
   need(
@@ -1492,6 +1519,19 @@ export function endingWiringProblems(read: SourceReader): string[] {
     'if (anotherGame && mine.sequence) taken.sequence = null',
     'a card of the erased game stays up in a tab that took the new one, and is recorded as seen in it',
   )
+  // One window shows one tab at a time. What a tab was showing when the
+  // player left it is held there, and may be seen or heard to its end in the
+  // tab they went to: the store takes it down when it hears so.
+  need(
+    'state/store.ts',
+    'if (mine.sequence && progress.sequencesSeen.includes(mine.sequence.id)) taken.sequence = null',
+    'a card held in a hidden tab stays up after another tab has shown it to its end: the closing of the night is shown twice',
+  )
+  need(
+    'state/store.ts',
+    'if (mine.radio?.callId !== undefined && progress.radioCalls.includes(mine.radio.callId)) taken.radio = null',
+    'a call held in a hidden tab stays in the air after another tab has heard it out: the porter says it twice',
+  )
 
   // --- the radio under it ----------------------------------------------------------------
   need(
@@ -1506,6 +1546,13 @@ export function endingWiringProblems(read: SourceReader): string[] {
     'the air is the radio\'s alone again: a sequence on screen is not something a call waits for',
   )
   need('engine/radioCall.ts', 'if (skipSequenceStepOn(store)) return true', 'the call button places a call over a sequence instead of moving it on')
+  // And the button says what its press does: «Pular» while anything has the
+  // air, the sequence included, never «Chamar a portaria» over a card.
+  need(
+    'ui/Hud.tsx',
+    'const onAir = useMuseum(airTaken)',
+    'the radio button of the HUD reads «call the porter» while a sequence is on screen, and its press skips a step of it',
+  )
   need(
     'engine/Devices.tsx',
     'if (skipSequenceStep()) { event.preventDefault() return }',
@@ -1588,6 +1635,24 @@ export function holdWiringProblems(read: SourceReader): string[] {
     'a tab hidden with E down goes on holding',
   )
   need("engine/Devices.tsx", "document.addEventListener('visibilitychange', dropHoldWhenHidden)", 'nobody hears the tab being hidden')
+  // With the pointer captured, which is how a mouse aims at the desk, the
+  // browser takes Escape for itself to let the pointer go: the page hears no
+  // key, only that the capture ended. That is the Escape the prompt promises.
+  need(
+    'engine/Devices.tsx',
+    'if (document.pointerLockElement === null) cancelPrimaryHold()',
+    'Escape with the mouse captured drops neither the hold nor the question: the browser keeps that key, and the next E signs',
+  )
+  need(
+    'engine/Devices.tsx',
+    "document.addEventListener('pointerlockchange', dropHoldWhenReleased)",
+    'nobody hears the pointer being let go',
+  )
+  need(
+    'engine/Devices.tsx',
+    "document.removeEventListener('pointerlockchange', dropHoldWhenReleased)",
+    'the listener for the pointer being let go outlives the scene',
+  )
   need(
     'engine/Devices.tsx',
     "if (primaryHold().phase !== 'idle') tickPrimaryHold(delta, interactionHeldIdOf(state, MUSEUM))",

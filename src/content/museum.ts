@@ -739,7 +739,8 @@ const DOCUMENTS = [
    * wait for and count it, room by room; the third is about the vault under
    * the hall, which this build shows on the office plan and has not built.
    * It is a promise with a date: no box, and a pencil note that says why not
-   * tonight. (The gate held it as a box nothing ticks until L3.)
+   * tonight, once the lamp is lit and the curator can know why. (The gate
+   * held it as a box nothing ticks until L3.)
    *
    * Under the ink the curator adds lines of their own, in pencil, as the
    * night gives them something to write down: the drawer and its question
@@ -791,6 +792,12 @@ const DOCUMENTS = [
             // The Founder's vault is L12's room; until then nothing ticks this.
             deferredUntilLot: 12,
             noteKey: 'notebook.todo.vault.note',
+            // The note says the basement flooded, in the curator's pencil,
+            // and the notebook is read in the dark before anything else:
+            // neither the letter nor the title says so. It is the porter who
+            // does, in his introduction, owed from the lamp on; the note is
+            // on the page from that same state (never «the call was heard»).
+            noteWhen: { powered: ['office'] },
           },
           {
             labelKey: 'notebook.todo.drawer',
@@ -1181,7 +1188,9 @@ const OFFICE_DEVICES = [
         // go the whole night without meeting him (the first call below only
         // held while the hall was dark). A save from before this call hears
         // it once too, and is told nothing it has already done
-        // (`PRE_POSSE_SAVE`).
+        // (`PRE_POSSE_SAVE`). Nor is anybody: it says the clock stopped
+        // and does not order it set, since the clock answers E while he
+        // talks and this call is heard at any hour of the night.
         id: 'porter-hello',
         when: { powered: ['office'] },
         delaySeconds: 2.4,
@@ -1209,13 +1218,16 @@ const OFFICE_DEVICES = [
         // Reading stays optional, so nothing locks the lamp behind the
         // notebook; the porter just notices the player skipped it. Calls are
         // heard in this list's order, so it always follows his introduction,
-        // and it is dropped if the notebook is taken while it waits.
+        // and it is dropped if the notebook is taken while it waits. With
+        // the handset in the pocket it is heard wherever the player has got
+        // to by then (the hall, the wing), so it names the desk by its room:
+        // optional, and reminded all the same.
         id: 'porter-notebook-reminder',
         when: { powered: ['office'], documentsUnread: ['doc-welcome'] },
         lapsesWhen: { documentsRead: ['doc-welcome'] },
         delaySeconds: 4,
         lineKeys: ['radio.call.notebook.1'],
-        mentions: ['office-notebook'],
+        mentions: ['office-notebook', 'office'],
       },
       {
         // He hears his radio leave the charger. After his introduction in
@@ -1246,8 +1258,12 @@ const OFFICE_DEVICES = [
         mentions: ['holyoke'],
       },
       {
-        // The first piece checked, whichever of the twelve it is: a case
-        // opens and shuts on his panel.
+        // A piece checked, whichever of the twelve: cases open and shut on
+        // his panel. Owed from the first, and said once, of however many are
+        // done by the time it is heard (with the radio on its desk, that is
+        // when the player comes back to the office): it asks, and counts
+        // nothing. It lapses with the twelve, which this build cannot reach
+        // before the lot that makes the last three checkable (L4).
         id: 'porter-first-catalogued',
         when: { anyOf: HOUSE_PIECES.map((id) => ({ catalogued: [id] })) },
         lapsesWhen: { catalogued: HOUSE_PIECES },
@@ -1291,13 +1307,15 @@ const OFFICE_DEVICES = [
       {
         // For the save that opened the drawer on another night, and read a
         // note that mentioned no key: it holds one now, handed over as it
-        // loaded, and nothing on the screen said so.
+        // loaded, and nothing on the screen said so. He sends the player
+        // back to look and says what a key would be for; what is in the
+        // drawer he has never seen, tonight or any night.
         id: 'porter-legacy-drawer',
         when: { flags: ['legacy-pre-L3-drawer'] },
         lapsesWhen: { locksOpened: ['office-safe'] },
         delaySeconds: 2.5,
         lineKeys: ['radio.call.legacy-drawer.1'],
-        mentions: ['office-cabinet'],
+        mentions: ['office-cabinet', 'office-safe'],
       },
       {
         // The one line of the night that sets the two safes side by side:
@@ -1327,11 +1345,14 @@ const OFFICE_DEVICES = [
         mentions: ['office-notebook'],
       },
       {
+        // Asked from the office, from the hall or from the wing (which
+        // lights with the hall still dark): where the breaker is, by the
+        // wall and the door it stands beside, which hold from all three.
         when: { unpowered: ['atrium'] },
         targetId: 'atrium-breaker',
         heightKeys: ['radio.hint.atrium.where', 'radio.hint.atrium.what', 'radio.hint.atrium.how'],
         curtLineKeys: ['radio.hint.atrium.curt'],
-        mentions: ['atrium-breaker', 'atrium'],
+        mentions: ['atrium-breaker', 'atrium', 'holyoke'],
       },
       {
         when: { unpowered: ['holyoke'] },
@@ -1341,14 +1362,17 @@ const OFFICE_DEVICES = [
         mentions: ['holyoke-breaker', 'holyoke'],
       },
       {
-        // Where the year is, and how it shows; never the year. The first
-        // height sends the player to the message Otávio left, which asks
-        // the question in his own words; the next two, to the portrait.
+        // Where the year is, and how it shows; never the year: the wing,
+        // the portrait, the gesture. The message Otávio left asks the
+        // question in his own words, and is the reminder's to send the
+        // player to (`porter-machine-reminder`, which lapses once it is
+        // heard): this hint asks only whether the drawer is shut, and sent
+        // players back to a recording they had heard to its end.
         when: { locksClosed: ['office-drawer'] },
         targetId: 'portrait-morgan',
         heightKeys: ['radio.hint.drawer.where', 'radio.hint.drawer.what', 'radio.hint.drawer.how'],
         curtLineKeys: ['radio.hint.drawer.curt'],
-        mentions: ['office-cabinet', 'office-answering-machine', 'portrait-morgan', 'holyoke-cabinet-a', 'holyoke'],
+        mentions: ['office-cabinet', 'portrait-morgan', 'holyoke-cabinet-a', 'holyoke'],
       },
       {
         // The key in the hand and the safe still shut.

@@ -33,6 +33,7 @@ import { simulateProgress } from '../src/content/simulate.ts'
 import {
   datedPromises,
   formatKnownDebt,
+  nearestWallFace,
   validateContent,
   validateDeferred,
   validateOpening,
@@ -279,6 +280,9 @@ test('the list is data: every line has a box or a date, and counts what is done 
   assert.ok(power.doneWhen && catalogue.doneWhen)
 
   // The night begins: three boxes' worth of nothing, counted room by room.
+  // The third line has no box and, as yet, no note: the note is pencil, the
+  // curator's own hand, and says the basement flooded. The notebook is read
+  // in the dark, before the lamp, and nothing read or heard by then says so.
   const save = freshSave()
   assert.deepEqual(listAsRead(items, save), [
     { line: 'notebook.todo.power', done: false, note: null, counts: ['0 de 3'] },
@@ -288,8 +292,25 @@ test('the list is data: every line has a box or a date, and counts what is done 
       note: null,
       counts: ['Átrio 0 de 4', 'Ala 1 · Holyoke 0 de 8'],
     },
-    { line: 'notebook.todo.vault', done: null, note: 'notebook.todo.vault.note', counts: [] },
+    { line: 'notebook.todo.vault', done: null, note: null, counts: [] },
   ])
+  // It is on the page from the state in which the curator can know: the
+  // lamp lit, which is when the porter's introduction is owed, and it is he
+  // who says the basement flooded. By what the save holds, never by the
+  // call having been heard (M32).
+  assert.deepEqual(vault.noteWhen, { powered: ['office'] })
+  assert.equal(listAsRead(items, { ...save, roomsPowered: ['office'] })[2].note, 'notebook.todo.vault.note')
+  const hello = MUSEUM.rooms.flatMap((room) => room.devices ?? []).flatMap((device) => (device.kind === 'radio' ? device.calls : [])).find((call) => call.id === 'porter-hello')
+  assert.deepEqual(hello?.when, vault.noteWhen, 'the note waits for something other than the call that says what it notes')
+  for (const [locale, dictionary, flood] of [['pt-BR', ptBR, /alag/i], ['en', en, /flood/i]] as const) {
+    const said = (hello?.lineKeys ?? []).map((key) => (dictionary as Record<string, string>)[key])
+    assert.ok(said.some((line) => flood.test(line)), `${locale}: his introduction no longer says the basement flooded`)
+    assert.match(dictionary['notebook.todo.vault.note'], flood, `${locale}: the note is about something else`)
+    // What is read before the lamp: the title's three lines and the two pages before the list.
+    for (const key of ['intro.line1', 'intro.line2', 'intro.line3', 'notebook.welcome.flyleaf', 'notebook.welcome.letter', 'notebook.welcome.postscript'] as const) {
+      assert.ok(!flood.test(dictionary[key]), `${key} (${locale}) says the basement flooded: the note no longer has to wait for the lamp`)
+    }
+  }
   assert.deepEqual(
     listAsRead(items, save, MUSEUM, en).map((row) => row.counts),
     [['0 of 3'], ['Atrium 0 of 4', 'Wing 1 · Holyoke 0 of 8'], []],
@@ -390,6 +411,18 @@ test('the list is data: every line has a box or a date, and counts what is done 
   for (const [locale, dictionary] of [['pt-BR', ptBR], ['en', en]] as const) {
     assert.ok(dictionary['notebook.todo.proof.note'].length > 0, `${locale}: the pencil promise says why not tonight`)
   }
+  // The line about the drawer is the curator's note of a question, and it
+  // is on the page for whoever touched the keypad without having heard the
+  // message: quotation marks made it somebody's words, and they were the
+  // words of a recording that player never heard.
+  for (const [locale, dictionary] of [['pt-BR', ptBR], ['en', en]] as const) {
+    assert.doesNotMatch(dictionary['notebook.todo.drawer'], /[“”"«»]/, `${locale}: the pencil line quotes a message the curator may not have heard`)
+    assert.match(dictionary['notebook.todo.drawer'], /Mintonette/)
+  }
+  // In English the line of the proof read, half way, as «the refit took off
+  // the plaques»: the plaques are on the wall, and what came off them is a line.
+  assert.doesNotMatch(en['notebook.todo.proof'], /took off the plaques/)
+  assert.match(en['notebook.todo.proof'], /one line off the plaques/)
   // What the list has just gained is news once, at the write that puts it
   // on the page; a tick is not a line.
   assert.deepEqual(checklistNews(items, night, opened, MUSEUM), ['notebook.todo.drawer', 'notebook.todo.safe-key'])
@@ -1071,6 +1104,14 @@ test('the lighthouse rule sees what stands in the room, and where the door is', 
  * but one that waits for the room's own power). A line that names no side
  * passes. The first call is not a hint: it is said once, in the office, and
  * names the door it counts from.
+ *
+ * «Do outro lado» is a side too, and went through for a lot: the hall's hint
+ * said «o quadro fica do outro lado do saguão», which is true of the door of
+ * the office and of no other. The hall's breaker is on the wall of Wing 1,
+ * two and a half metres from that wing's door: a player who asked from the
+ * wing, or from the hall having come in by it, was sent to the wall of the
+ * office. So the far side is measured as left and right are: a line may say
+ * it only if the control is on the wall opposite every way in.
  */
 const SIDE_WORDS: Record<'pt-BR' | 'en', readonly (readonly [RegExp, 'left' | 'right'])[]> = {
   'pt-BR': [
@@ -1082,6 +1123,13 @@ const SIDE_WORDS: Record<'pt-BR' | 'en', readonly (readonly [RegExp, 'left' | 'r
     [/\b(?:to|on) (?:your|the|his|her) left\b|\bleft of\b|\bleft-hand\b/i, 'left'],
     [/\b(?:to|on) (?:your|the|his|her) right\b|\bright of\b|\bright-hand\b/i, 'right'],
   ],
+}
+
+/** Words that put a thing on the wall opposite the one the player came in by. */
+const FAR_WORDS: Record<'pt-BR' | 'en', RegExp> = {
+  'pt-BR': /\bdo outro lado\b|\bparede do fundo\b|\bde frente pr[ao]s? portas?\b/i,
+  // "Cross in the dark" is something to do, not a place.
+  en: /\bfar (?:side|wall)\b|\bacross\b|\bfacing (?:the|its) doors?\b/i,
 }
 
 function sidedHintProblems(
@@ -1097,8 +1145,11 @@ function sidedHintProblems(
       const room = content.rooms.find((candidate) => candidate.id === roomId)
       const control = room?.powerControl
       if (!room || !control) continue
+      // The wall the control hangs on, by its normal into the room.
+      const wall = nearestWallFace(room, control.position)
 
-      // Each way in, with the side the control is on from 0.95 m inside it.
+      // Each way in, with the side the control is on from 0.95 m inside it,
+      // and whether its wall is the one facing whoever walks in.
       const ways = room.portals
         .filter((portal) => {
           const door = doors.find(
@@ -1117,7 +1168,9 @@ function sidedHintProblems(
             new Vector3(heading[0], 0, heading[1]),
             new Vector3(control.position[0], 0, control.position[2]),
           )
-          return { portalId: portal.id, side: across > 0 ? ('right' as const) : ('left' as const), degrees }
+          // A wall whose normal points back at the player is the far one.
+          const opposite = wall.inward[0] * heading[0] + wall.inward[1] * heading[1] < -0.5
+          return { portalId: portal.id, side: across > 0 ? ('right' as const) : ('left' as const), degrees, opposite }
         })
 
       for (const locale of ['pt-BR', 'en'] as const) {
@@ -1130,6 +1183,15 @@ function sidedHintProblems(
               problems.push(
                 `${key} (${locale}) says "${word}", and for a player who walks into ${room.id} by "${way.portalId}" ` +
                   `${control.id} is ${way.degrees.toFixed(1)}° to the ${way.side}`,
+              )
+            }
+          }
+          const far = FAR_WORDS[locale].exec(line)?.[0]
+          if (far) {
+            for (const way of ways.filter((candidate) => !candidate.opposite)) {
+              problems.push(
+                `${key} (${locale}) says "${far}", and for a player who walks into ${room.id} by "${way.portalId}" ` +
+                  `${control.id} is not on the wall facing them`,
               )
             }
           }
@@ -1177,6 +1239,41 @@ test('a hint to a dark room names a side only if it is that side from every door
     rooms: MUSEUM.rooms.map((room) => ({ ...room, portals: room.portals.filter((portal) => !/shortcut/.test(portal.id)) })),
   }
   assert.deepEqual(sidedHintProblems(oneDoor, asItWas), [])
+
+  // The far side, measured the same way. The hall's breaker is on the wall
+  // of Wing 1: across the hall from the office door, and on the very wall a
+  // player has just come through by either door of the wing. The lines of
+  // L3 said «do outro lado»; they give the wall and the door now.
+  const farSide = {
+    'pt-BR': { ...ptBR, 'radio.hint.atrium.where': 'O quadro fica do outro lado do saguão.' },
+    en: { ...en, 'radio.hint.atrium.where': "The breaker's on the far side of the hall." },
+  }
+  const sentAcross = sidedHintProblems(MUSEUM, farSide)
+  assert.deepEqual(
+    sentAcross.map((line) => line.replace(/, and for a player who walks into atrium by /, ' ← ').replace(/ atrium-breaker is not on the wall facing them$/, '')).sort(),
+    [
+      'radio.hint.atrium.where (en) says "far side" ← "atrium-from-holyoke-shortcut"',
+      'radio.hint.atrium.where (en) says "far side" ← "atrium-to-holyoke"',
+      'radio.hint.atrium.where (pt-BR) says "do outro lado" ← "atrium-from-holyoke-shortcut"',
+      'radio.hint.atrium.where (pt-BR) says "do outro lado" ← "atrium-to-holyoke"',
+    ],
+    sentAcross.join('\n'),
+  )
+  // The wing's own breaker IS across from both its doors, and its hint goes on saying so, in four lines.
+  const wingHint = radioEntry.device.hints.find((hint) => hint.targetId === 'holyoke-breaker')
+  assert.ok(wingHint)
+  const wingLines = [...wingHint.heightKeys, ...(wingHint.curtLineKeys ?? [])]
+  for (const [locale, dictionary] of [['pt-BR', ptBR], ['en', en]] as const) {
+    const far = wingLines.filter((key) => FAR_WORDS[locale].test((dictionary as Record<string, string>)[key]))
+    assert.ok(far.length >= 2, `${locale}: the wing's hint no longer says its breaker is across the room (${far.join(', ')})`)
+  }
+  assert.ok(!FAR_WORDS.en.test('Cross in the dark to the little red light.') && FAR_WORDS.en.test('A little red light, across the room.'))
+  // And the hall's hint says where by something that holds from anywhere: the wall, and the door.
+  for (const [locale, dictionary, wing] of [['pt-BR', ptBR, 'Ala 1'], ['en', en, 'Wing 1']] as const) {
+    for (const key of ['radio.hint.atrium.where', 'radio.hint.atrium.what', 'radio.hint.atrium.curt'] as const) {
+      assert.ok(dictionary[key].includes(wing), `${key} (${locale}) no longer says the breaker is by the door of ${wing}`)
+    }
+  }
 
   // What is a direction and what is not, in English.
   const side = (line: string) => SIDE_WORDS.en.flatMap(([pattern, said]) => (pattern.test(line) ? [said] : []))
@@ -1397,6 +1494,22 @@ test('each validator the gate lacked fails a museum broken on purpose', () => {
     ),
   }))
   proves('wall-item-over-opening', 'atrium/atrium-wall-bay-plain@-8.875,0,0.4', gate(slid))
+  // A container is furniture with something in it, and is held to the same
+  // rule. The iron safe was, as a kit placement, until it began to open and
+  // moved to the list of containers, which this rule did not read: pushed
+  // across the office's own door, it went through.
+  const office = MUSEUM.rooms.find((room) => room.id === 'office')
+  const officeDoor = office?.portals[0]
+  assert.ok(office && officeDoor && Math.abs(Math.abs(officeDoor.position[0]) - office.shell.width / 2) < 0.2, 'the office door, on its west or east wall')
+  const inward = officeDoor.position[0] < 0 ? 1 : -1
+  const acrossTheDoor = withRoom('office', (room) => ({
+    containers: (room.containers ?? []).map((container) =>
+      container.id === 'office-safe'
+        ? { ...container, position: [officeDoor.position[0] + inward * 0.5, 0, officeDoor.position[2]] as const }
+        : container,
+    ),
+  }))
+  proves('wall-item-over-opening', 'office-safe', gate(acrossTheDoor))
 
   // Geometry that is baked, downloaded and placed nowhere.
   const kit = BAKED_BUNDLES.find((bundle) => bundle.name === 'kit')

@@ -38,6 +38,7 @@ import { MUSEUM } from '../../src/content/museum.ts'
 import type { MuseumContent, PowerControlData, RoomData, Vec3 } from '../../src/content/schema.ts'
 import { nearestWallFace } from '../../src/content/validate.ts'
 import { CollisionWorld, movePlayer, worldFromMeshes } from '../../src/engine/collision.ts'
+import { openDoorSolid } from '../../src/engine/containerDoorSolid.ts'
 import { aimableDevices } from '../../src/engine/deviceRules.ts'
 import {
   deviceProxyMinimum,
@@ -147,15 +148,26 @@ export function mountPlacements(room: RoomData, content: MuseumContent = MUSEUM)
   })
 }
 
+/** What of the night the world is built at: which containers stand open. A new game has none. */
+export type WorldState = {
+  /** Ids of the containers whose door stands open: each leaf is solid where it came to rest. */
+  readonly openContainers?: readonly string[]
+}
+
 /**
  * Everything solid, placed as the runtime places it: the shells, then every
  * kit placement, container, power control, device and exhibit mount that the
  * manifest gives a collider. A recipe with no collider (a desk lamp, a
  * ceiling spot, a wall clock) adds nothing, exactly as in the game.
+ *
+ * And the one solid thing that depends on the save: the leaf of a door that
+ * stands open (`containerDoorSolid.ts`, which is where the game gets it
+ * from too). The world is the new game's unless `state` says otherwise.
  */
 export function buildMuseumWorld(
   content: MuseumContent = MUSEUM,
   bundles: readonly BakedBundle[] = BAKED_BUNDLES,
+  state: WorldState = {},
 ): CollisionWorld {
   const prepared = prepareRoomShells(content.rooms) as (Pick<RoomData, 'id'> & object)[]
   const preparedById = new Map(prepared.map((room) => [room.id, room]))
@@ -172,7 +184,19 @@ export function buildMuseumWorld(
     }
 
     for (const placement of room.kit) addColliders(meshes, room, placement, bundles)
-    for (const container of room.containers ?? []) addColliders(meshes, room, { ...container, scale: 1 }, bundles)
+    for (const container of room.containers ?? []) {
+      addColliders(meshes, room, { ...container, scale: 1 }, bundles)
+      if (!state.openContainers?.includes(container.id)) continue
+      const leaf = openDoorSolid(container, kitOf(bundles), room.origin)
+      if (!leaf) throw new Error(`container "${container.id}" has no door to stand open`)
+      const mesh = new Mesh(leaf.geometry, new MeshBasicMaterial())
+      mesh.name = `${room.id}__${container.id}__open-door`
+      // Placed by the matrix the game registers it with, not by a position
+      // and a turn of this module's own.
+      mesh.matrixAutoUpdate = false
+      mesh.matrix.copy(leaf.matrix)
+      meshes.push(mesh)
+    }
     if (room.powerControl) addColliders(meshes, room, room.powerControl, bundles)
     // `Devices.tsx` registers a device's collider as `Containers.tsx` does a
     // cabinet's: the plinth of the hall is solid as a device, as it was as

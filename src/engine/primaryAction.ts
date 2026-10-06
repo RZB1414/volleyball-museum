@@ -77,7 +77,8 @@ function step(event: HoldEvent): string | null {
  * A press that has to be held, begun: by the touch button through
  * `pressPrimaryAction`, and by the keyboard, whose handler already has the
  * request in hand. `acted` when the press was the answer to a question
- * already on screen («Assinar»), `holding` otherwise.
+ * already on screen («Assinar»), `holding` otherwise: a hold begun, or a
+ * press on a question too young to be answered, which changes nothing.
  */
 export function beginPrimaryHold(request: HoldRequest): 'acted' | 'holding' {
   return step({ kind: 'press', request }) === null ? 'holding' : 'acted'
@@ -103,7 +104,7 @@ export function releasePrimaryAction(): void {
   step({ kind: 'release' })
 }
 
-/** Escape, a lost focus, a hidden tab, «Cancelar»: whatever was held or asked is dropped. */
+/** Escape, a captured pointer let go, a lost focus, a hidden tab, «Cancelar»: whatever was held or asked is dropped. */
 export function cancelPrimaryHold(): void {
   step({ kind: 'cancel' })
 }

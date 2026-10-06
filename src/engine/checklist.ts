@@ -77,6 +77,19 @@ const onThePage = (item: ChecklistItem, progress: ConditionProgress, content: Co
   item.appearsWhen === undefined || progressConditionMet(item.appearsWhen, progress, content)
 
 /**
+ * The pencil note beside a line, if the save shows it yet.
+ *
+ * A note is the curator's own hand even beside a line in the director's ink,
+ * and the notebook is read before anything else in the house: a note that
+ * says the basement flooded was on the page before anybody had told the
+ * curator so. It waits for its own moment (`noteWhen`), like a pencil line.
+ */
+const noteBeside = (item: ChecklistItem, progress: ConditionProgress, content: ConditionContent) =>
+  item.noteKey !== undefined && (item.noteWhen === undefined || progressConditionMet(item.noteWhen, progress, content))
+    ? item.noteKey
+    : null
+
+/**
  * The lines a save shows, in the order they were written.
  *
  * A line with no `doneWhen` has no box: it is a promise with a date, and the
@@ -93,7 +106,7 @@ export function checklistRows(
       labelKey: item.labelKey,
       author: item.author,
       done: item.doneWhen ? progressConditionMet(item.doneWhen, progress, content) : null,
-      noteKey: item.noteKey ?? null,
+      noteKey: noteBeside(item, progress, content),
       counters: (item.counters ?? []).map((counter) => ({
         titleKey: counter.titleKey ?? null,
         ...conditionTally(counter.of, progress, content),

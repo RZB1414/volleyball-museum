@@ -52,6 +52,7 @@ import {
   STEP,
   WALK_SPEED,
   type InteractionVolume,
+  type WorldState,
 } from './museumWorld.ts'
 
 /** The grid of M15: a quarter of a metre, under the capsule's own radius. */
@@ -317,8 +318,9 @@ export type StandingSurvey = {
 export function surveyStanding(
   content: MuseumContent = MUSEUM,
   bundles: readonly BakedBundle[] = BAKED_BUNDLES,
+  state: WorldState = {},
 ): StandingSurvey {
-  const world = buildMuseumWorld(content, bundles)
+  const world = buildMuseumWorld(content, bundles, state)
   const spawn = roomPoint(content.spawn.room, content.spawn.position[0], content.spawn.position[2], content)
   const flood = floodFrom(world, spawn)
   const verdicts = standingVerdicts(flood, interactionVolumes(content, bundles), content)

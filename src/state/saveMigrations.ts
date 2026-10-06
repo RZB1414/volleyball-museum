@@ -22,6 +22,7 @@ import {
   SAVE_VERSION,
   stringList,
   withValue,
+  type ListField,
   type Progress,
 } from './progressFields.ts'
 
@@ -97,6 +98,13 @@ function locksSeenFromOpened(progress: Progress): Progress {
 }
 
 /**
+ * A field of the save that no build before the Posse wrote. A save that
+ * holds it, empty or not, was written at least once by a build that has the
+ * porter of this lot: as `radioCalls` tells a save from before the opening.
+ */
+const WRITTEN_SINCE_THE_POSSE: ListField = 'termsSigned'
+
+/**
  * The Posse (L3): the porter's old news, and the drawer that held a key.
  *
  * A save that has not heard his new introduction, and has already passed a
@@ -110,17 +118,27 @@ function locksSeenFromOpened(progress: Progress): Progress {
  * Once the introduction is in the save that half does nothing: from then on
  * a milestone is passed with him listening, and its call is owed.
  *
+ * Nor does it do anything to a save a build of this lot has written
+ * (`WRITTEN_SINCE_THE_POSSE`). The introduction is on record when its last
+ * line ends, half a minute after the lamp, and a game of this build can pass
+ * a milestone before that. Every read of the disk comes through here, the
+ * one a tab makes of another tab's write among them: a second tab, only
+ * open, used to take «the hall lit, no call heard» for another night's save,
+ * mark the hall's call as heard, and hand that back to the tab that played,
+ * where it had never been said. A game this build began has met the porter
+ * from its first write, heard or not yet; what it passes is news.
+ *
  * The other half asks nothing of the first. A drawer that is open with the
  * trigger that hands over its key not on record was opened before it held
  * one, and the save is marked as that (`PRE_POSSE_SAVE.drawer`). Only the
  * mark: the key is the content's to give, as a trigger owed at load, and
  * the store does not know the content.
  */
-function prePosse(progress: Progress): Progress {
+function prePosse(progress: Progress, { raw }: SavedAs): Progress {
   const { drawer } = PRE_POSSE_SAVE
   const before = progress.locksOpened.includes(drawer.lockId) && !progress.triggersFired.includes(drawer.triggerId)
   const marked = before ? grantProgress(progress, { flags: [drawer.flag] }) : progress
-  if (marked.radioCalls.includes(PRE_POSSE_SAVE.helloCallId)) return marked
+  if (WRITTEN_SINCE_THE_POSSE in raw || marked.radioCalls.includes(PRE_POSSE_SAVE.helloCallId)) return marked
   const oldNews = PRE_POSSE_SAVE.oldNews.filter((news) =>
     news.id === null ? marked[news.field].length > 0 : marked[news.field].includes(news.id),
   )

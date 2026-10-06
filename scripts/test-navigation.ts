@@ -33,14 +33,15 @@
  */
 
 
-import { BoxGeometry, Mesh, MeshBasicMaterial, Vector3 } from 'three'
+import { BoxGeometry, Mesh, MeshBasicMaterial, Vector3, type Box3 } from 'three'
 
 import { BAKED_BUNDLES, type BakedBundle } from '../src/content/bake.generated.ts'
 import { CONTENT_LOT, debtOf, settleKnownDebt } from '../src/content/knownDebt.ts'
 import { MUSEUM } from '../src/content/museum.ts'
 import type { MuseumContent, RoomData } from '../src/content/schema.ts'
 import type { ValidationIssue } from '../src/content/validate.ts'
-import { movePlayer, worldFromMeshes } from '../src/engine/collision.ts'
+import { movePlayer, worldFromMeshes, type CollisionWorld } from '../src/engine/collision.ts'
+import { openDoorSolid } from '../src/engine/containerDoorSolid.ts'
 import { aimableDevices, radioDevices } from '../src/engine/deviceRules.ts'
 import { deviceProxyMinimum, INTERACTION_REACH, PROXY_MINIMUM } from '../src/engine/interactionTarget.ts'
 import { isNotebook } from '../src/engine/notebook.ts'
@@ -1633,6 +1634,9 @@ for (const { id, list, side } of [
     ['the base under a mounted piece no longer solid', changed('scenes/MuseumScene.tsx', 'registerKitColliders(kit, spec?.part, KIT_BUNDLE, collision,', 'registerNothing(')],
     ['the base under a mounted piece solid five metres away', changed('scenes/MuseumScene.tsx', 'position: [exhibit.position[0], 0, exhibit.position[2]],\n        rotationY: exhibit.rotationY,', 'position: [exhibit.position[0] + 5, 0, exhibit.position[2]],\n        rotationY: exhibit.rotationY,')],
     ['a cabinet no longer solid', changed('engine/Containers.tsx', 'registerKitColliders(kit, container.part, kitBundle, collision,', 'registerNothing(')],
+    ['an open door the capsule walks through', changed('engine/Containers.tsx', 'const solid = open ? openDoorSolid(container, kitBundle, roomOrigin) : null', 'const solid = null')],
+    ['a door solid where it stands open, shut or not', changed('engine/Containers.tsx', 'const solid = open ? openDoorSolid(container, kitBundle, roomOrigin) : null', 'const solid = openDoorSolid(container, kitBundle, roomOrigin)')],
+    ['an open leaf worked out and never registered', changed('engine/Containers.tsx', 'const remove = collision.add(solid.geometry, solid.matrix)', 'const remove = () => undefined')],
     ['the furniture of a room no longer solid', changed('engine/RoomFurniture.tsx', 'registerKitColliders(kit, placement.part, kitBundle, collision,', 'registerNothing(')],
     ['a device no longer solid', changed('engine/Devices.tsx', 'registerKitColliders(kit, device.part, kitBundle, collision,', 'registerNothing(')],
     ['the devices of a room handed no collision world', changed('scenes/MuseumScene.tsx', /(<DeviceLayer\b[^>]*?)\s+collision=\{collision\}/, '$1')],
@@ -1641,6 +1645,172 @@ for (const { id, list, side } of [
     .filter(([, reader]) => interactionVolumeWiringProblems(reader).length === 0)
     .map(([name]) => name)
   check('and a component that mounts another is caught', uncaught.length === 0, uncaught.join('; '))
+}
+
+// ---------------------------------------------------------------------------
+// A door that stands open is solid where it stands (the iron safe, L3)
+// ---------------------------------------------------------------------------
+
+{
+  // Everything above walks the museum with the safe shut, which is how a new
+  // game finds it. Open, its door is a leaf of iron across the floor in front
+  // of it for the rest of the night, and the world of the suites did not have
+  // it because the game did not: the capsule walked through it both ways.
+  const office = MUSEUM.rooms.find((room) => room.id === 'office')
+  const safe = office?.containers?.find((container) => container.door !== undefined)
+  if (!office || !safe?.door) throw new Error('The office and its safe are required for the open-door checks.')
+  const solid = openDoorSolid(safe, kitBundle, office.origin)
+  if (!solid) throw new Error('The safe has a door and the bake has no node for it.')
+  // Its plan on the floor, as a rectangle: the box's four corners, turned and placed.
+  solid.geometry.computeBoundingBox()
+  const box = solid.geometry.boundingBox as Box3
+  const corners = (
+    [
+      [box.min.x, box.min.z],
+      [box.max.x, box.min.z],
+      [box.max.x, box.max.z],
+      [box.min.x, box.max.z],
+    ] as const
+  ).map(([x, z]) => new Vector3(x, box.min.y, z).applyMatrix4(solid.matrix))
+  const inThePlan = (point: Vector3) => {
+    let sign = 0
+    for (let index = 0; index < corners.length; index += 1) {
+      const from = corners[index]
+      const to = corners[(index + 1) % corners.length]
+      const cross = (to.x - from.x) * (point.z - from.z) - (to.z - from.z) * (point.x - from.x)
+      if (Math.abs(cross) < 1e-9) continue
+      if (sign === 0) sign = Math.sign(cross)
+      else if (Math.sign(cross) !== sign) return false
+    }
+    return true
+  }
+  const toThePlan = (point: Vector3) => {
+    if (inThePlan(point)) return 0
+    return Math.min(
+      ...corners.map((from, index) => {
+        const to = corners[(index + 1) % corners.length]
+        const along = Math.max(0, Math.min(1, ((point.x - from.x) * (to.x - from.x) + (point.z - from.z) * (to.z - from.z)) / from.distanceToSquared(to)))
+        return Math.hypot(point.x - (from.x + (to.x - from.x) * along), point.z - (from.z + (to.z - from.z) * along))
+      }),
+    )
+  }
+  // On the floor: the leaf hangs a hand above it, and the capsule walks under that.
+  const middle = corners.reduce((sum, corner) => sum.add(corner), new Vector3()).multiplyScalar(1 / corners.length).setY(office.origin[1])
+  const local = (point: Vector3) => `(${(point.x - office.origin[0]).toFixed(2)}, ${(point.z - office.origin[2]).toFixed(2)})`
+  check(
+    'the leaf of the open safe stands on floor the capsule walks, clear of the box it is hinged to',
+    box.max.y - box.min.y > 1 && roomContaining(middle)?.id === 'office' && toThePlan(roomPoint('office', safe.position[0], safe.position[2])) > 0.2,
+    `leaf ${(box.max.y - box.min.y).toFixed(2)} m tall, standing about ${local(middle)}`,
+  )
+
+  const OPEN = { openContainers: [safe.id] }
+  const openWorld = buildMuseumWorld(MUSEUM, BAKED_BUNDLES, OPEN)
+  /** The capsule, walked straight from one floor point at another; whether its axis was ever inside the leaf's plan. */
+  const walkAcross = (walked: CollisionWorld, from: Vector3, to: Vector3) => {
+    const position = from.clone()
+    let vertical = 0
+    let crossed = false
+    for (let elapsed = 0; elapsed < 6; elapsed += STEP) {
+      const heading = new Vector3(to.x - position.x, 0, to.z - position.z)
+      const left = heading.length()
+      if (left < 0.02) break
+      heading.multiplyScalar(Math.min(SPEED * STEP, left) / left)
+      const moved = movePlayer(walked, position, heading, vertical, STEP, CAPSULE)
+      position.copy(moved.position)
+      vertical = moved.verticalVelocity
+      crossed ||= inThePlan(position)
+    }
+    return { end: position, crossed }
+  }
+  // Square across the middle of the leaf, a metre to one side of it and to the other.
+  const edge = new Vector3().subVectors(corners[1], corners[0])
+  const longEdge = edge.length() > corners[2].distanceTo(corners[1]) ? edge : new Vector3().subVectors(corners[2], corners[1])
+  const normal = new Vector3(-longEdge.z, 0, longEdge.x).normalize()
+  const oneSide = middle.clone().addScaledVector(normal, 1)
+  const otherSide = middle.clone().addScaledVector(normal, -0.9)
+  for (const [from, to, way] of [
+    [oneSide, otherSide, 'one way'],
+    [otherSide, oneSide, 'and back'],
+  ] as const) {
+    const shut = walkAcross(world, from, to)
+    const open = walkAcross(openWorld, from, to)
+    check(
+      `with the safe shut the capsule walks where its door will stand (${way}): the walk is a real one`,
+      shut.crossed && shut.end.distanceTo(to) < 0.05,
+      `ended ${shut.end.distanceTo(to).toFixed(2)} m short, at ${local(shut.end)}`,
+    )
+    check(
+      `with the safe open the capsule does not walk through its door (${way})`,
+      !open.crossed && toThePlan(open.end) > CAPSULE.radius - 0.02,
+      `from ${local(from)} towards ${local(to)} it ${open.crossed ? 'PASSED THROUGH the leaf' : 'stopped'} at ${local(open.end)}, ${toThePlan(open.end).toFixed(2)} m from it`,
+    )
+  }
+
+  // The office with the safe open is still the office: flooded again, with
+  // the leaf in the world.
+  const shutSurvey = surveyStanding()
+  const openSurvey = surveyStanding(MUSEUM, BAKED_BUNDLES, OPEN)
+  const shutPlaces = shutSurvey.placesByRoom.get('office') ?? 0
+  const openPlaces = openSurvey.placesByRoom.get('office') ?? 0
+  check(
+    'the open door takes the floor it stands on and no more: the office keeps its places, and no other room changes',
+    openPlaces > 0 &&
+      openPlaces <= shutPlaces &&
+      shutPlaces - openPlaces <= 12 &&
+      MUSEUM.rooms.every((room) => room.id === 'office' || openSurvey.placesByRoom.get(room.id) === shutSurvey.placesByRoom.get(room.id)),
+    `office: ${shutPlaces} place(s) with the safe shut, ${openPlaces} with it open`,
+  )
+  const officeTargets = (survey: typeof shutSurvey) => survey.verdicts.filter(({ volume }) => volume.roomId === 'office')
+  const unreachable = officeTargets(openSurvey).filter((verdict) => verdict.usable === null)
+  const further = officeTargets(openSurvey).filter((verdict, index) => {
+    const before = officeTargets(shutSurvey)[index]
+    return before.volume.id !== verdict.volume.id || (before.usable !== null && verdict.usable !== null && verdict.usable.distance > before.usable.distance + 0.05)
+  })
+  check(
+    'and everything in it is worked from where it was: the safe itself, the clock beside it, the cabinet, the desk',
+    officeTargets(openSurvey).length >= 8 && unreachable.length === 0 && further.length === 0,
+    `no place to stand for: ${unreachable.map(({ volume }) => volume.id).join(', ') || 'nothing'}; pushed further from: ${further.map(({ volume }) => volume.id).join(', ') || 'nothing'}`,
+  )
+  const openIssues = openSurvey.issues
+    .filter((issue) => !shutSurvey.issues.some((before) => before.code === issue.code && before.id === issue.id))
+    .map((issue) => `[${issue.code}] ${issue.message}`)
+  check('the flood with the safe open accuses nothing the flood with it shut does not', openIssues.length === 0, openIssues.join('; '))
+
+  // The door is solid from the moment the lock opens. Whoever opened it
+  // stands where the safe is worked from, and that place is clear of the
+  // leaf: the reader comes up and the player is not moved under it.
+  const safeVerdict = officeTargets(shutSurvey).find(({ volume }) => volume.id === safe.id)
+  const stand = (walked: CollisionWorld, at: Vector3) => {
+    const position = at.clone()
+    let vertical = 0
+    for (let frame = 0; frame < 120; frame += 1) {
+      const moved = movePlayer(walked, position, new Vector3(), vertical, STEP, CAPSULE)
+      position.copy(moved.position)
+      vertical = moved.verticalVelocity
+    }
+    return position
+  }
+  const opensFrom = safeVerdict?.usable?.point
+  check(
+    'the place the safe is opened from is clear of its open door: nobody is moved by opening it',
+    opensFrom !== undefined && toThePlan(opensFrom) > CAPSULE.radius && stand(openWorld, opensFrom).distanceTo(opensFrom) < 0.01,
+    opensFrom ? `${local(opensFrom)} is ${toThePlan(opensFrom).toFixed(2)} m from the leaf` : 'the safe has no place to be opened from',
+  )
+  // And anywhere else the capsule may be standing as the door becomes solid
+  // (the safe opens from any place within reach), it is put down beside the
+  // leaf, on the floor, in the office: never left inside it, never dropped.
+  const caught = shutSurvey.flood.points
+    .filter((point) => roomContaining(point)?.id === 'office' && toThePlan(point) < CAPSULE.radius)
+    .map((point) => ({ from: point, to: stand(openWorld, point) }))
+  const stranded = caught.filter(
+    ({ from, to }) =>
+      !(toThePlan(to) > CAPSULE.radius - 0.02) || Math.abs(to.y - from.y) > 0.02 || to.distanceTo(from) > 0.6 || roomContaining(to)?.id !== 'office',
+  )
+  check(
+    'a capsule standing where the door comes to rest is put down beside it, on the floor',
+    caught.length >= 5 && stranded.length === 0,
+    `${caught.length} place(s) under the leaf; left inside it, dropped or thrown: ${stranded.map(({ from, to }) => `${local(from)} → ${local(to)}`).join(', ') || 'none'}`,
+  )
 }
 
 // ---------------------------------------------------------------------------

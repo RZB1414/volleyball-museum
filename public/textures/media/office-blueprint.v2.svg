@@ -47,9 +47,12 @@
   </g>
 
   <!-- The vault lies under the atrium: drawn in the dashed convention for
-       anything below the ground floor. -->
+       anything below the ground floor. Lettered by its own name, CAIXA-FORTE:
+       a bare COFRE is the word for the iron safe that stands in the office,
+       two metres from this sheet (D34). The file is served for a year
+       under its name, so a change to what is drawn here is a new name. -->
   <rect x="566" y="374" width="112" height="70" fill="none" stroke="#e4eef8" stroke-width="2.5" stroke-dasharray="6 6"/>
-  <text x="622" y="470" fill="#e4eef8" font-family="'Courier New', Courier, monospace" font-size="14" text-anchor="middle">COFRE · SUBSOLO</text>
+  <text x="622" y="470" fill="#e4eef8" font-family="'Courier New', Courier, monospace" font-size="14" text-anchor="middle">CAIXA-FORTE · SUBSOLO</text>
 
   <!-- The previous curator's red pencil. -->
   <g fill="none" stroke="#d2503c" stroke-width="4" stroke-linecap="round" opacity="0.9">

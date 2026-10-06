@@ -208,6 +208,11 @@ export const KNOWN_DEBT: readonly KnownDebt[] = [
       ['programs', 6, '35 shader programs against 25: measured again after the kit merge'],
       ['atrium-draws', 6, 'ÁT-K1: 101 draws on the south-east diagonal against 100, under a ceiling of 102'],
       ['pair-draws', 6, '125 draws with the Holyoke door open against 100 (L17 takes what L6 leaves)'],
+      [
+        'office-pair-draws',
+        6,
+        '186 draws with the office door open against 100: first measured by the review of L3, about 182 before the lot (L17 takes what L6 leaves)',
+      ],
       ['resident-texture', 7, '107.08 MiB against 45: KTX2, and wall media inside the budget (D23, D24)'],
     ] as const
   ).map(

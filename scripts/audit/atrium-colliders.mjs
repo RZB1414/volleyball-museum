@@ -18,7 +18,9 @@ const kit = BAKED_BUNDLES.find((b) => b.name === 'kit')
 const atrium = MUSEUM.rooms.find((r) => r.id === 'atrium')
 const seen = new Set()
 const fmt = (a) => a.map((n) => n.toFixed(3)).join(', ')
-for (const p of [...atrium.kit, atrium.powerControl]) {
+// By whichever list places it: the plinth and the lectern are devices since
+// L3, and were missing from a report that read the kit alone.
+for (const p of [...atrium.kit, ...(atrium.containers ?? []), ...(atrium.devices ?? []), ...(atrium.powerControl ? [atrium.powerControl] : [])]) {
   if (seen.has(p.part)) continue
   seen.add(p.part)
   const parts = kit.parts.filter((q) => q.name === p.part || q.name.startsWith(p.part + '__'))

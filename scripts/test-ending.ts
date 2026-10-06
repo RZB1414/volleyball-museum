@@ -48,9 +48,8 @@ const { actionGrant, availableActions, contentActions, simulateProgress } = awai
 const { validateEnding } = await import('../src/content/validate.ts')
 const { progressRulesFor } = await import('../src/engine/contentRegistry.ts')
 const { checklistNews, checklistRows } = await import('../src/engine/checklist.ts')
-const { aimableDevices, airTaken, deviceHeld, deviceInputOf, deviceIntent, deviceLive, nextRadioCall, radioCallReady, radioDeliveryStep, radioDevices } = await import(
-  '../src/engine/deviceRules.ts'
-)
+const { aimableDevices, airTaken, deviceHeld, deviceInputOf, deviceIntent, deviceLive, nextRadioCall, radioCallReady, radioDeliveryStep, radioDevices, radioWithinEarshot, transmissionLapsed } =
+  await import('../src/engine/deviceRules.ts')
 const { hiddenInScene, paintLenses, prepareDeskNodes, showDeskNodes } = await import('../src/engine/deviceNodes.ts')
 const { HOLD_IDLE, holdStep } = await import('../src/engine/holdAction.ts')
 const { interactionHeldIdOf, interactionHeldOf, interactionWinnerOf } = await import('../src/engine/interactionTarget.ts')
@@ -1111,7 +1110,9 @@ await test('on the museum: the lectern names the deed once the Book is read, sig
   assert.deepEqual(holdStep(gesture.gesture, { kind: 'release' }), { gesture: HOLD_IDLE, fired: null })
   // A tap asks instead («Assinar / Cancelar»). Cancel, or looking away, leaves the deed unsigned.
   const asked = holdStep(pressed.gesture, { kind: 'release' })
-  assert.deepEqual(asked, { gesture: { phase: 'confirming', id: LECTERN }, fired: null })
+  assert.deepEqual(asked, { gesture: { phase: 'confirming', id: LECTERN, asked: 0 }, fired: null })
+  // And a second tap straight after the first is not its answer: the question has not been read.
+  assert.deepEqual(holdStep(asked.gesture, { kind: 'press', request: request as { id: string; seconds: number } }), asked, 'two taps in a row signed the deed')
   assert.deepEqual(holdStep(asked.gesture, { kind: 'cancel' }), { gesture: HOLD_IDLE, fired: null })
   assert.deepEqual(holdStep(asked.gesture, { kind: 'tick', seconds: 0.016, aimed: null }), { gesture: HOLD_IDLE, fired: null })
   assert.deepEqual(page.progress().termsSigned, [], 'a press let go, or a tap never confirmed, signed the deed')
@@ -1434,6 +1435,153 @@ await test("the saves the lot left, in live tabs: the deed signed in one tab is 
   }
 })
 
+await test('one window, two tabs, and the player changes tab in the middle: what was seen or heard out in the tab they went to is taken down in the one they left, and is said once', async () => {
+  // The case above shows the other tab only once the first has finished.
+  // One window shows one tab at a time, and the player changes tab when they
+  // like: with the card of the deed still up, with the porter in the middle
+  // of a call. The tab they leave holds what it was showing (a hidden tab
+  // counts no time); the tab they go to is owed the same thing, since
+  // neither is on record before its last step, and shows it to the end. Back
+  // in the first, the held card used to start its full time again: the
+  // closing of the night, and every call of the porter's, twice.
+  const [{ device: radio, room: radioRoom }] = radioDevices(MUSEUM)
+  const settled = (browser: ReturnType<typeof openBrowser>, when: string) => {
+    const { quiet, rounds } = browser.settle()
+    assert.ok(quiet, `${when}: the tabs were still writing the save at each other (writes per round: ${rounds.join(', ')})`)
+  }
+  type Tab = Awaited<ReturnType<ReturnType<typeof openBrowser>['open']>>
+  /** Which tab the window shows. What `useDocumentHidden` tells the overlay and the subtitles of each. */
+  const shown = new Map<Tab, boolean>()
+  /** The player looks at another tab: the browser tells it what it missed, and what held its line lets go (`releaseHeldRadio`). */
+  const lookAt = (to: Tab, from: Tab) => {
+    from.hide()
+    shown.set(from, false)
+    to.hear()
+    to.show()
+    shown.set(to, true)
+    to.act((state) => {
+      if (transmissionLapsed(state.radio, state.progress, MUSEUM)) state.dropRadio()
+    })
+  }
+
+  // --- the card of the deed ---------------------------------------------------
+  const deed = openBrowser(SAVE_FIXTURES['l3-new-game-safe-open'].save)
+  try {
+    const signing = await deed.open('the tab that signs')
+    const other = await deed.open('the tab the player looks at next', 'idle')
+    shown.set(signing, true).set(other, false)
+    other.hide()
+    for (const tab of [signing, other]) {
+      tab.act((state) => state.start())
+      tab.registerRules(MUSEUM_RULES)
+    }
+    /** `SequenceOverlay`: what is owed starts, unless the tab is hidden. */
+    const director = (tab: Tab) => tab.act(() => startDueSequenceOn(tab.store.useMuseum, MUSEUM, !shown.get(tab)))
+    settled(deed, 'two tabs in the game')
+    const written = deed.writes.length
+
+    signing.act((state) => state.setCurrentRoom('atrium'))
+    signing.act(() => {
+      assert.deepEqual(pressSigningDeskOn(signing.store.useMuseum, MUSEUM, LECTERN), { id: LECTERN, seconds: 1.2 })
+      assert.equal(signAtDeskOn(signing.store.useMuseum, MUSEUM, LECTERN), true)
+    })
+    assert.equal(director(signing), true, 'no card followed the signature')
+    settled(deed, 'the deed was signed and its card is up')
+    assert.deepEqual([deed.disk()!.progress!.termsSigned, deed.disk()!.progress!.sequencesSeen], [[POSSE], []])
+
+    // The card is still up. The player looks at the other tab: owed there too, and shown.
+    lookAt(other, signing)
+    assert.deepEqual(signing.state().sequence && { id: signing.state().sequence!.id, index: signing.state().sequence!.index }, { id: 'seq-posse', index: 0 }, 'the tab left behind is not holding its card')
+    assert.equal(director(other), true, 'the tab the player went to did not show the card it is owed')
+    const steps = other.state().sequence!.steps
+    other.act((state) => {
+      for (let step = 0; step < steps; step += 1) state.advanceSequence()
+    })
+    settled(deed, 'the card and the two lines were seen out in the other tab')
+    assert.deepEqual(deed.disk()!.progress!.sequencesSeen, ['seq-posse'])
+
+    // Back. The first tab is told it was seen, and has nothing left on screen to show again.
+    lookAt(signing, other)
+    assert.deepEqual(signing.progress().sequencesSeen, ['seq-posse'])
+    assert.equal(signing.state().sequence, null, 'the tab that signed still has the card up, seen to its end in the other: it shows the closing of the night a second time')
+    assert.equal(director(signing), false)
+    assert.equal(signing.state().sequence, null)
+    settled(deed, 'the player came back to the tab that signed')
+    // The room and the signature leave in one write (the save is coalesced), the record of the card in another, by the tab that showed it out.
+    assert.deepEqual(deed.writes.slice(written).map((write) => write.by), [signing.name, other.name], 'coming back to a card already seen wrote to the save')
+  } finally {
+    deed.close()
+    shown.clear()
+  }
+
+  // --- a call of the porter's ---------------------------------------------------
+  // The save that opened the drawer before it held a key hears of the key
+  // once (the acceptance of the lot). The same change of tab, with that call
+  // in the air.
+  const older = openBrowser(SAVE_FIXTURES['production-drawer-open'].save)
+  try {
+    const first = await older.open('the tab he starts talking in')
+    const second = await older.open('the tab the player looks at next', 'idle')
+    shown.set(first, true).set(second, false)
+    second.hide()
+    for (const tab of [first, second]) {
+      tab.act((state) => state.start())
+      tab.registerRules(MUSEUM_RULES)
+    }
+    settled(older, 'two tabs on the older save')
+    const said: string[] = []
+    /** `RadioDirector`: the first call due, when the air is free, the tab is looked at and the radio can be heard. */
+    const deliver = (tab: Tab) =>
+      tab.act((state) => {
+        const call = nextRadioCall(radio, state.progress, MUSEUM)
+        if (!call) return null
+        const step = radioDeliveryStep(radioCallReady(radio, call.id, state.progress, MUSEUM), {
+          onAir: airTaken(state),
+          modal: false,
+          hidden: !shown.get(tab),
+          away: !radioWithinEarshot(radio, radioRoom.id, state.progress.devicesCarried, state.currentRoom),
+        })
+        if (step !== 'play') return null
+        state.startRadio({ deviceId: radio.id, speakerKey: radio.speakerKey, lineKeys: call.lineKeys, callId: call.id })
+        return call.id
+      })
+    /** `RadioSubtitles`: each line of what is on the air has its time, in a tab that is looked at. */
+    const hearOut = (tab: Tab) => {
+      assert.equal(shown.get(tab), true, 'a hidden tab counts no time')
+      while (tab.state().radio) {
+        const callId = tab.state().radio!.callId
+        if (callId && tab.state().radio!.index === 0) said.push(callId)
+        tab.act((state) => state.advanceRadio())
+      }
+    }
+
+    assert.equal(deliver(first), 'porter-hello')
+    hearOut(first)
+    assert.equal(deliver(first), 'porter-machine-reminder')
+    hearOut(first)
+    assert.equal(deliver(first), 'porter-legacy-drawer')
+    settled(older, 'the call about the drawer is on the air')
+
+    lookAt(second, first)
+    assert.equal(first.state().radio?.callId, 'porter-legacy-drawer', 'the tab left behind is not holding the call')
+    assert.equal(deliver(second), 'porter-legacy-drawer', 'not on record before its last line: owed to the other tab too')
+    hearOut(second)
+    settled(older, 'the call was heard out in the other tab')
+    assert.ok((older.disk()!.progress!.radioCalls as string[]).includes('porter-legacy-drawer'))
+
+    lookAt(first, second)
+    assert.ok(first.progress().radioCalls.includes('porter-legacy-drawer'))
+    assert.equal(first.state().radio, null, 'the call heard to its end in the other tab is still in the air here, and starts over')
+    if (first.state().radio) hearOut(first)
+    assert.equal(deliver(first), null)
+    assert.deepEqual(said, ['porter-hello', 'porter-machine-reminder', 'porter-legacy-drawer'], 'a call was said twice to one player in one game')
+    assert.deepEqual(first.progress().credentials, [KEY], 'the key, handed over once')
+    settled(older, 'the player came back to the first tab')
+  } finally {
+    older.close()
+  }
+})
+
 // ---------------------------------------------------------------------------
 // The components call these rules
 // ---------------------------------------------------------------------------
@@ -1468,6 +1616,7 @@ await test('the components ask those rules: the desk, its lamp and its Book, the
     ['a prompt of the desk worded in the component', changed('ui/Hud.tsx', 'deskMissingText(', 'String(')],
     ['a notebook that lists no signed term', changed('ui/Journal.tsx', 'signedTerms(MUSEUM.terms ?? [], progress)', '[]')],
     ['a term page that is never signed', changed('ui/Notebook.tsx', 'signedTerms(MUSEUM.terms ?? [], progress).some((term) => term.id === page.termId)', 'false')],
+    ['a term page headed by the title its body opens with', changed('ui/Notebook.tsx', '{paragraphs(text(shown.bodyKey))}', '<h3>{text(shown.titleKey)}</h3>\n        {paragraphs(text(shown.bodyKey))}')],
     // The sequence.
     ['a director with a rule of its own', changed('ui/SequenceOverlay.tsx', 'startDueSequence(held)', 'void held')],
     ['a director that starts over a modal', changed('ui/SequenceOverlay.tsx', 'radioHeld({ modal, hidden }) || !sceneReady', 'false')],
@@ -1487,6 +1636,9 @@ await test('the components ask those rules: the desk, its lamp and its Book, the
     ['R that calls the porter over a sequence', changed('engine/radioCall.ts', 'if (skipSequenceStepOn(store)) return true', '')],
     ['R that does nothing for a player with no radio', changed('engine/Devices.tsx', 'if (skipSequenceStep()) {', 'if (false) {')],
     ['a game started over with the old game\'s card still up', changed('state/store.ts', 'if (anotherGame && mine.sequence) taken.sequence = null', '')],
+    ['a card seen out in another tab that stays up in this one', changed('state/store.ts', 'if (mine.sequence && progress.sequencesSeen.includes(mine.sequence.id)) taken.sequence = null', '')],
+    ['a call heard out in another tab that stays in the air in this one', changed('state/store.ts', 'if (mine.radio?.callId !== undefined && progress.radioCalls.includes(mine.radio.callId)) taken.radio = null', '')],
+    ['a radio button that offers a call while its press skips a card', changed('ui/Hud.tsx', 'const onAir = useMuseum(airTaken)', 'const onAir = useMuseum((state) => state.radio !== null)')],
   ]
   const uncaught = refactors.filter(([, reader]) => endingWiringProblems(reader).length === 0).map(([name]) => name)
   assert.deepEqual(uncaught, [], 'a refactor this check exists to catch went through')

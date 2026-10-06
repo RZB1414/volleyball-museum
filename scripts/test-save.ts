@@ -1623,12 +1623,14 @@ function agreed(browser: LiveBrowser, when: string) {
   assert.ok(disk?.progress && disk.settings, `${when}: there is no save on the disk`)
   // One save, as a load reads it. A tab that takes another tab's write off
   // the disk reads it as a load does, and since L3 a load can add something
-  // by itself: the porter's calls for milestones passed before his
-  // introduction was heard (`PRE_POSSE_SAVE`). The tab that passed the
-  // milestone a moment ago holds no such thing, and neither does the disk it
-  // wrote. That is not a write anybody owes: read by the same rule, the
-  // three are the same save, and that is what is asked. (The case of the two
-  // builds, further down, says by name what a reading tab holds meanwhile.)
+  // by itself to a save no build of this lot wrote: the porter's calls for
+  // milestones passed before he had a line for them (`PRE_POSSE_SAVE`). The
+  // tab of the build before that passed the milestone a moment ago holds no
+  // such thing, and neither does the disk it wrote. That is not a write
+  // anybody owes: read by the same rule, the three are the same save, and
+  // that is what is asked. (The case of the two builds, further down, says
+  // by name what a reading tab holds meanwhile. Between two tabs of this
+  // build the reading adds nothing, and the case after it holds them to it.)
   const asLoaded = (progress: unknown) => throughJson(migrateProgress(throughJson(progress))) as Raw
   for (const tab of browser.tabs) {
     assert.deepEqual(
@@ -2647,6 +2649,92 @@ await test('a tab of the build before the Posse writes a save the porter has not
   }
 })
 
+await test("a game this build began has met the porter from its first write: a milestone passed while he is still introducing himself is news, with a second tab open beside it or after a reload (L3, review)", async () => {
+  // His introduction is on record when its last line ends, half a minute
+  // after the lamp. A player who knows the way lights the hall before that.
+  // The tab that plays writes «the hall lit, no call heard»; a second tab of
+  // this build, only open, read that write as a load reads a save of another
+  // night, took the call for the hall as old news, and wrote it back with
+  // the next thing it had to write. The call was then on record, unheard, in
+  // the tab that plays: «Saguão no painel!» was never said. With that tab
+  // alone it stayed owed. What tells the two saves apart is on the disk: a
+  // field no build before this lot wrote.
+  const [{ device: radio }] = radioDevices(MUSEUM)
+  const { rules } = await museumRules()
+  const HALL = 'porter-atrium-service'
+  const HELLO = PRE_POSSE_SAVE.helloCallId
+  const owed = (tab: LiveTab) => {
+    const heard = new Set(tab.progress().radioCalls)
+    return radio.calls.map((call) => call.id).filter((callId) => !heard.has(callId) && nextRadioCallAfter(tab, callId))
+  }
+  /** Whether `callId` is still to be said: due now, or queued behind one that is. */
+  const nextRadioCallAfter = (tab: LiveTab, callId: string) => {
+    let progress = tab.progress() as Progress
+    for (;;) {
+      const next = nextRadioCall(radio, progress, MUSEUM)
+      if (!next) return false
+      if (next.id === callId) return true
+      progress = grantProgress(progress, { radioCalls: [next.id] })
+    }
+  }
+
+  async function night(withSecondTab: boolean) {
+    const browser = openBrowser() // nothing under the key: a first visit
+    try {
+      const playing = await browser.open('the tab that plays')
+      const beside = withSecondTab ? await browser.open('a tab left on the title screen', 'idle') : null
+      playing.act((state) => state.start())
+      playing.registerRules(rules)
+      leftAlone(browser, 'a new game, begun')
+      assert.ok('termsSigned' in browser.disk()!.progress!, 'the first write of a game of this build lacks the field the migration reads it by')
+
+      // The lamp, and his introduction on the air: what `RadioDirector` starts.
+      playing.act((state) => state.powerRoom('office'))
+      const hello = nextRadioCall(radio, playing.progress(), MUSEUM)
+      assert.equal(hello?.id, HELLO)
+      playing.act((state) => state.startRadio({ deviceId: radio.id, speakerKey: radio.speakerKey, lineKeys: hello!.lineKeys, callId: HELLO }))
+      leftAlone(browser, 'the lamp is lit')
+
+      // He is on his second line of five, and the player is at the hall's breaker.
+      playing.act((state) => state.advanceRadio())
+      playing.act((state) => state.setCurrentRoom('atrium'))
+      playing.act((state) => state.powerRoom('atrium'))
+      leftAlone(browser, 'the hall lit, with the introduction still on the air')
+      assert.deepEqual(browser.disk()!.progress!.radioCalls, [])
+      if (beside) assert.deepEqual(beside.progress().radioCalls, [], 'the tab beside took a milestone of a minute ago, passed in a game of this build, for the old news of another night')
+
+      // The introduction, to its last line.
+      while (playing.state().radio) playing.act((state) => state.advanceRadio())
+      leftAlone(browser, 'the introduction was heard out')
+      assert.deepEqual(writersSince(browser, 0).filter((by) => by !== playing.name), [], 'a tab nobody played in wrote the save')
+      assert.deepEqual(playing.progress().radioCalls, [HELLO], 'a call nobody heard is on record in the tab that plays')
+      assert.ok(owed(playing).includes(HALL), 'the call for the hall, lit while he was introducing himself, is no longer owed')
+      agreed(browser, 'at the end of the introduction')
+
+      // And a reload is no way to lose it either: closed with the hall lit
+      // and the introduction unheard, the game is read back as it was left.
+      return throughJson(browser.disk()!.progress) as Raw
+    } finally {
+      browser.close()
+    }
+  }
+  assert.deepEqual(await night(true), await night(false), 'a second tab, only open, changed the save of the night')
+
+  // The same evidence at a load. A game of this build closed before he has
+  // finished (the radio on its desk, the player gone to the hall) is read
+  // back with the hall's call still owed; a save no build of this lot wrote
+  // is another night's, and its milestones are old news, as before.
+  const passed = { version: 1, radioCalls: [], roomsPowered: ['office', 'atrium'] }
+  assert.deepEqual(migrateProgress({ ...passed }).radioCalls, [HALL], 'a save from before the lot')
+  assert.deepEqual(migrateProgress({ ...passed, termsSigned: [] }).radioCalls, [], 'a game of this lot, reloaded before his introduction ended')
+  assert.deepEqual(migrateProgress({ ...passed, termsSigned: [], contentLot: 3 }).radioCalls, [])
+  // Junk in the field is still the field: what is asked is who wrote the save, not what they wrote in it.
+  assert.deepEqual(migrateProgress({ ...passed, termsSigned: 'junk' }).radioCalls, [])
+  // The other half of the migration asks nothing of this: a drawer opened before it held a key is marked in any save.
+  const drawer = { ...passed, termsSigned: [], locksOpened: ['office-drawer'] }
+  assert.deepEqual(migrateProgress(drawer).flags, [PRE_POSSE_SAVE.drawer.flag])
+})
+
 await test("the height of the porter's hint travels between two live tabs: each call takes it up from the last, whichever tab placed it (L3)", async () => {
   const [{ device: radio }] = radioDevices(MUSEUM)
   const fixture = SAVE_FIXTURES['l2-new-game-drawer-touched'].save
@@ -3209,11 +3297,13 @@ await test('a seeded run of tabs that play, hide, close and start over in any or
         nightsStartedOver += 1
         for (const field of listFields) {
           for (const id of disk[field] as string[]) {
-            // Not something anybody did, before or after: what a tab that
-            // read the new game off the disk took for the porter's old news
-            // (a piece catalogued, a room lit, with his introduction unheard),
-            // and wrote with the next thing it did.
-            if (field === 'radioCalls' && PRE_POSSE_SAVE.oldNews.some((news) => news.callId === id)) continue
+            // Everything, the porter's calls included. Until the review of
+            // L3 one kind of id was let off here: the call a tab that read
+            // the new game off the disk took for old news (a room lit, a
+            // piece catalogued, his introduction unheard) and wrote with the
+            // next thing it did. Nobody had done that, before or after, and
+            // it is no longer done: a game this build began is not read as
+            // another night's (`prePosse`).
             const at = /^step-(\d+)$/.exec(id)
             assert.ok(at && Number(at[1]) > startedOverAt, say(`${field} holds "${id}", from before the game was started over at step ${startedOverAt}`))
           }

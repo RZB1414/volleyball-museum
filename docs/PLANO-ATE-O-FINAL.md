@@ -2462,9 +2462,9 @@ chave geral, bomba, passos por superfície (madeira, pedra, tapete, areia, concr
 |---|---|---|---|---|
 | 1 | Helena | «Religar a energia: escritório, átrio e Ala 1», com contador | início | as três salas com energia (lista congelada) |
 | 2 | Helena | «Catalogar o acervo: conferir peça por peça», com contador por sala | início | as 12 peças da casa (dívida datada até L4) |
-| 3 | Helena | «Caixa-forte — só o Otávio sabia abrir» | início | o livro de tombo lido. Até L12 é promessa datada: leva a anotação a lápis «hoje não: o subsolo alagou» e não tem caixa de riscar |
+| 3 | Helena | «Caixa-forte — só o Otávio sabia abrir» | início | o livro de tombo lido. Até L12 é promessa datada: leva a anotação a lápis «hoje não: o subsolo alagou» e não tem caixa de riscar. A anotação é lápis, a mão do curador, e só entra na página com a luminária acesa (`noteWhen`): é o estado a partir do qual o Jorge, que diz o alagamento, é devido; o caderno é lido antes, no escuro (revisão de L3) |
 | 4 | Helena | «Plinto: as três medalhas, para a cerimônia das nove» | a partir de L11 (em save antigo, com o toast «A lista da Helena tinha mais uma linha») | as três assentadas |
-| 5 | você | «Gaveta do Otávio: "o ano em que o jogo deixou de se chamar Mintonette".» | recado ouvido, ou a gaveta tocada | gaveta aberta |
+| 5 | você | «Gaveta do Otávio: o ano em que o jogo deixou de se chamar Mintonette.» (sem aspas: a linha também nasce de quem tocou a gaveta sem ter ouvido o recado, e as palavras entre aspas eram as do recado; revisão de L3) | recado ouvido, ou a gaveta tocada | gaveta aberta |
 | 6 | você | «Chave do cofre de ferro.» | gaveta aberta | cofre de ferro aberto |
 | 7 | você | «Assinar o termo de posse, no púlpito.» | Livro em mãos | posse assinada |
 | 8 | você | «A reforma tirou das placas a linha que diz o que cada coisa é. O Otávio guardou a prova no cofre.» | prova de etiqueta lida | reabertura assinada |
@@ -3204,17 +3204,17 @@ chaves); toda fala declara `mentions`.
 
 | Id | Quando | Caduca quando | Falas |
 |---|---|---|---|
-| `porter-hello` | `power:office` (sempre devida) | nunca | «Curador? É o Jorge de novo, da portaria. Câmbio.» / «Vi no painel que a luz do escritório voltou. A tempestade desarmou os quadros do prédio inteiro.» / «O Otávio se aposentou hoje. Pegou o ônibus antes de a estrada fechar e deixou tudo com você.» / «Aqui eu tenho o painel do alarme: toda vitrine, gaveta e porta desse prédio acende uma luzinha pra mim.» / «O relógio aí parou com a luz: acerta. O subsolo alagou; hoje ninguém desce. Pega o rádio na mesa. Câmbio, desligo.» |
+| `porter-hello` | `power:office` (sempre devida) | nunca | «Curador? É o Jorge de novo, da portaria. Câmbio.» / «Vi no painel que a luz do escritório voltou. A tempestade desarmou os quadros do prédio inteiro.» / «O Otávio se aposentou hoje. Pegou o ônibus antes de a estrada fechar e deixou tudo com você.» / «Aqui eu tenho o painel do alarme: toda vitrine, gaveta e porta desse prédio acende uma luzinha pra mim.» / «O relógio aí parou com a luz. O subsolo alagou; hoje ninguém desce. Qualquer coisa, me chama no rádio. Câmbio, desligo.» (sem «acerta»: o relógio aceita o `E` enquanto ele fala e a chamada nunca caduca, então a ordem era dita a quem já tinha acertado; sem «pega o rádio»: é ouvida com o rádio na mesa e no bolso; revisão de L3) |
 | `porter-atrium-panel` | `power:office`, átrio sem energia | `power:atrium` | «O quadro do saguão fica do outro lado, em linha reta saindo daí. Procura a luzinha vermelha.» / «Saguão, átrio: é o mesmo lugar. A placa diz átrio; eu digo saguão. Câmbio.» |
 | `porter-notebook-reminder`, `porter-radio-taken` | como hoje | como hoje | como hoje |
 | `porter-machine-reminder` | recado não ouvido e o jogador já voltou do átrio | `doc-otavio-tape` | «Tem uma luz de recado piscando no ramal do escritório. Deve ser coisa do Otávio. Câmbio.» |
 | `porter-atrium-service` | `power:atrium` | `power:holyoke` | L3: «Saguão no painel! A Ala 1 é a porta com placa, perto do quadro. O quadro dela fica na parede do outro lado. Câmbio.» · a partir de L10, antes: «Mas ó: isso aí é luz de serviço. A geral, a de cima, o Fundador pendurou no plinto.» |
 | `porter-service-light` | `legacy-pre-L10`, com o átrio aceso | `flag:house-lights` | «O que acendeu aí foi a luz de serviço. A geral mesmo é a do plinto, e essa não acende desde a obra. Câmbio.» |
 | `porter-holyoke-lit` | `power:holyoke` | as oito catalogadas | L3: «Ala 1 acesa. Agora é conferir, peça por peça. Câmbio.» · a partir de L4: «Ala 1 acesa. Agora é conferir: pega a peça, vira e lê o que o Otávio colou atrás. Câmbio.» |
-| `porter-first-catalogued` | a primeira peça | as doze | «Uma vitrine abriu e fechou aqui no painel. Primeira conferida? Faltam… bom, faltam bastante. Câmbio.» |
+| `porter-first-catalogued` | a primeira peça | as doze | «Tem vitrine abrindo e fechando aqui no painel. Tá conferindo, é? Câmbio.» (sem contar: com o rádio na mesa a chamada só é ouvida na volta ao escritório, com quatro ou nove peças conferidas, e ele perguntava «Primeira conferida?»; revisão de L3) |
 | `porter-shortcut` | a porta de serviço aberta por dentro | nunca | «A porta de serviço abriu por dentro. Agora fica destrancada dos dois lados. Tá no meu painel. Câmbio.» |
 | `porter-drawer-open` | gaveta aberta | cofre de ferro aberto | «A gaveta do Otávio abriu aqui no painel. Trinta anos e eu nunca vi o que tinha dentro. Tinha o quê?» / «Se for chave, é do cofre de ferro. Ele era assim: chave dentro de gaveta, gaveta dentro de data. Câmbio.» |
-| `porter-legacy-drawer` | save antigo com a gaveta aberta | cofre de ferro aberto | «Olha de novo a gaveta do Otávio: o bilhete tinha uma chave presa. Câmbio.» |
+| `porter-legacy-drawer` | save antigo com a gaveta aberta | cofre de ferro aberto | «A gaveta do Otávio já tava aberta aqui no painel. Olha de novo lá dentro: se tiver chave, é do cofre de ferro. Câmbio.» (ele vê a gaveta aberta e nada do que há dentro, cânone 9: a fala anterior afirmava o bilhete e a chave; revisão de L3) |
 | `porter-safe-open` | cofre de ferro aberto | posse assinada | «O cofre de ferro abriu. Esse é o cofre. A caixa-forte é a do Fundador, lá embaixo: não confunde.» / «Se tem livro aí, é o de termos. Termo se assina no púlpito do saguão, com a casa acesa. Câmbio.» |
 | `seq-posse` (dirigida) | posse assinada | — | «A lâmpada do púlpito acendeu e apagou: assinou. O acervo é seu, curador. {hora}.» / L3 a L10: «O livro que a seguradora quer tá na caixa-forte, e o subsolo alagou. Hoje não se desce. Câmbio.» · a partir de L11: «A escada do subsolo alagou. O outro caminho é o plinto, e o plinto pede as três medalhas.» / «Era pra ser cerimônia amanhã, com discurso. Vai ser hoje, só nós dois. Câmbio.» |
 | `porter-livro-page` | Livro lido, página II não virada (a partir de L11) | `doc-three-medals` | «Abre de novo o Livro de Termos. Aposto que tem página do Otávio que você não virou. Câmbio.» |
@@ -3239,17 +3239,17 @@ Só a chuva.)»); depois da bomba, «(Nada. Parou de chover.)»; turno da noite,
 | Enquanto | Onde | O quê | Como | Prompt do objeto |
 |---|---|---|---|---|
 | caderno não lido **e** o jogador ainda não saiu do escritório | «Primeiro o caderno: a diretora, a Helena, deixou um na mesa.» | «Capa vermelha, do lado da luminária.» | «Aperta E nele e lê até a última página.» | «Caderno da Helena» |
-| átrio sem energia | «O quadro fica do outro lado do saguão.» | «Luzinha vermelha, perto da porta com placa.» | «Caixa cinza na parede. Alavanca. Aperta E.» | «Quadro de serviço» |
+| átrio sem energia | «O quadro do saguão fica na parede da Ala 1, do lado da porta dela.» | «Luzinha vermelha, do lado da porta da Ala 1, a que tem placa.» (endereço absoluto: «do outro lado do saguão» só valia para quem está na porta do escritório, e a dica é pedida de qualquer sala; `test:opening` mede «do outro lado» de toda porta, como mede esquerda e direita; revisão de L3) | «Caixa cinza na parede. Alavanca. Aperta E.» | «Quadro de serviço» |
 | Ala 1 sem energia | «A Ala 1 tem quadro próprio, na parede do outro lado da sala.» | «Na parede de frente para as portas.» (sem lado: desde L2 a ala tem duas entradas, e o que fica à esquerda de quem entra pela porta principal fica à direita de quem volta pelo atalho; `test:opening` mede toda dica que diz um lado; revisão de L2) | «Atravessa no escuro até o piloto vermelho. A lanterna dá conta.» | «Quadro de serviço» |
-| gaveta fechada | «A gaveta do Otávio abre com um ano. Ele deixou recado na secretária do escritório.» | «O ano tá na Ala 1, no retrato do Morgan.» | L3: «Pega a moldura e inclina: tá na borda de baixo. Ou na gaveta de cima do arquivo ao lado.» (não «plaqueta»: a moldura modelada não tem uma, e o texto ao pé dela é o crédito da foto, com 1897; revisão de L1) · L4 em diante: «Pega o retrato e vira a moldura.» | «Gaveta do Otávio — trancada (um ano)» |
+| gaveta fechada | «A gaveta do Otávio abre com um ano. O ano tá na Ala 1.» (o recado é da chamada `porter-machine-reminder`, que caduca quando ele é ouvido; a dica mandava de volta ao recado quem já o tinha ouvido; revisão de L3) | «O ano tá na Ala 1, no retrato do Morgan.» | L3: «Pega a moldura e inclina: tá na borda de baixo. Ou na gaveta de cima do arquivo ao lado.» (não «plaqueta»: a moldura modelada não tem uma, e o texto ao pé dela é o crédito da foto, com 1897; revisão de L1) · L4 em diante: «Pega o retrato e vira a moldura.» | «Gaveta do Otávio — trancada (um ano)» |
 | chave na mão | «Chave do Otávio? É do cofre de ferro.» | «Canto do escritório, do lado das estantes.» | «Encosta e aperta E. A chave fica lá.» | «Cofre de ferro — precisa de chave» |
-| Livro na mão, posse por assinar | «O termo se assina no púlpito do saguão.» | «O púlpito com a lâmpada acesa, perto do plinto.» | «Com luz nas três salas, segura o E até a pena parar.» | «Púlpito — Assinar: Posse» ou «falta luz em: [sala]» |
+| Livro na mão, posse por assinar | «O termo se assina no púlpito do saguão.» | «O púlpito com a lâmpada acesa, perto do plinto.» | «No púlpito, com luz nas três salas, segura a ação sem soltar até assinar.» (a pena volta à fala no lote que trouxer o som «pena no papel» de 8.4: em L3 não há pena na tela nem no som; revisão de L3) | «Púlpito — Assinar: Posse» ou «falta luz em: [sala]» |
 | falta a medalha do Curador | «O Otávio andava com a dele no chapéu, desde a obra.» | «O chapéu ficou no cabideiro, aí no escritório.» | «Pega o chapéu e vira: tá por dentro da fita.» | «Chapéu do cargo» |
 | falta a da Fundação ou a da Linhagem | «Tá atrás de um lacre do Otávio.» | «Falta conferir: [as peças que faltam, pelo nome].» | «Com todas conferidas e a posse assinada, aperta E no lacre.» | «Lacre de conferência — falta: [peça]» ou «falta o termo de posse» |
 | três medalhas na mão | «Plinto. Meio do saguão.» | «Três encaixes no tambor de latão.» | «Aperta E três vezes. Depois segura a chave, embaixo da tampa.» | «Plinto — n de 3 medalhas» |
 | luz geral acesa, poço cheio | «A plataforma do plinto.» | «Dentro do anel.» | «Aperta E e espera a bomba.» | «Plataforma — a bomba está trabalhando. Esperar?» |
 | poço seco, livro não lido | «A plataforma destravou. É descer.» | «Na caixa-forte: o livro grande, aberto na mesa.» | «Lê até a última folha.» (dita em cima: lá embaixo o rádio não pega) | «Livro de tombo — leia até a última folha»; ao subir sem ler: «o livro ficou por ler» |
-| livro lido, reabertura por assinar | «O termo de reabertura, no púlpito.» | «O mesmo púlpito.» | «Segura o E até a pena parar.» | «Púlpito — Assinar: Reabertura» ou «falta: [o que falta]» |
+| livro lido, reabertura por assinar | «O termo de reabertura, no púlpito.» | «O mesmo púlpito.» | «Segura o E até a pena parar.» (só com o som «pena no papel» de 8.4 no jogo; sem ele, a forma de L3: «…sem soltar até assinar») | «Púlpito — Assinar: Reabertura» ou «falta: [o que falta]» |
 | ala entregue, pasta fechada | «A obra entregou parede. A guia tá na caixa-forte.» | «Uma pasta do Otávio, sem lacre.» | «Desce pela plataforma e abre a pasta.» | «Pasta da Ala N» ou «lacrada: falta inaugurar a ala anterior» |
 | ala sem energia | «O quadro da ala fica na parede do outro lado.» | «Piloto vermelho.» | «Atravessa no escuro.» | «Quadro de serviço» |
 | tranca principal da ala fechada | a escada de 8.3 | | | a pergunta da tranca |
@@ -3412,7 +3412,7 @@ quando, está no verso de um retrato desta sala.» É o primeiro degrau da escad
 
 ### B.12 A Helena: o acréscimo à carta (`doc-welcome`, L3) e a página da ampliação (L12)
 
-> «A seguradora só libera a reabertura com o inventário conferido por você, contra o livro de tombo do Otávio, que ficou na caixa-forte. Coragem!»
+> «A seguradora só libera a reabertura com o inventário conferido por você, contra o livro de tombo do Otávio, o antigo curador. O livro ficou na caixa-forte. Coragem!»
 
 (A Helena anuncia a exigência; quem explica o gesto de pegar, virar e ler é o Otávio, na folha da
 gaveta.)
@@ -3480,6 +3480,7 @@ com data de L3 foram pagas nele: a linha da caixa-forte, `text-ages` e as três 
 | `placement-without-role` | recepção, gaveteiro, gavetas do console, torre, lounge, biombos, caixa de doação, instalação aérea, pódio | L9 (o pódio, L11) |
 | detalhe opcional × `anchors` | carimbo da Spalding sobre o bico; plaqueta do retrato | L14 |
 | tetos temporários do átrio | 58 lotes, 102 draws | L6 |
+| catraca do par do escritório (`office-pair-draws`) | 186 draws com a porta do escritório aberta e as duas salas no quadro, contra 100 do papel e os 125 do par da Holyoke. Medido pela primeira vez na revisão de L3 (a linha de base só mediu o par da ala); cerca de 182 antes do lote, que somou quatro | L6 (L17 leva o que L6 deixar) |
 | `flag-never-set` | `basement-drained`: «(Nada. Só a chuva.)» espera a ausência de uma flag que só a bomba põe; até lá chove a noite inteira (aberta em L3, DL3-14 do plano do lote) | L12 |
 | `deferred` (promessas datadas) | pódio (L11); plataforma (L12); tapumes (L18 a L22); grade do mezanino (L23); entrada (L24) | no lote de cada uma |
 

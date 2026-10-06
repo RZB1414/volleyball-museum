@@ -23,7 +23,7 @@ import { MUSEUM } from '../content/museum'
 import type { ExhibitData } from '../content/schema'
 import type { TranslationKey } from '../content/i18n/pt-BR'
 import { museumAudio } from '../engine/audio'
-import { aimableDevices, deviceInputOf, deviceIntent, deviceSetFlag, radioLineSeconds } from '../engine/deviceRules'
+import { aimableDevices, airTaken, deviceInputOf, deviceIntent, deviceSetFlag, radioLineSeconds } from '../engine/deviceRules'
 import { readHoldMark } from '../engine/holdAction'
 import {
   interactionWinnerKey,
@@ -993,9 +993,15 @@ function RadioIcon() {
  * The radio button, once the handset is in hand: a press calls the porter
  * from any room (or moves him on a line while he talks). It opens nothing,
  * so it leaves the pointer lock alone.
+ *
+ * While a directed sequence is on screen the same press moves that on a step
+ * (`placeRadioCall`), so the button has to say «Pular» then too: it is asked
+ * whether the air is taken, not whether the radio is talking. It used to
+ * offer a call to the porter over the card that closes the night, and skip
+ * the card.
  */
 function RadioTool({ radioId }: { readonly radioId: string }) {
-  const onAir = useMuseum((state) => state.radio !== null)
+  const onAir = useMuseum(airTaken)
   const hungUp = useMuseum((state) => state.radioHungUpUntil !== null)
   const calls = useMuseum((state) => state.progress.radioMemory[radioId]?.calls ?? 0)
   const t = useTranslate()

@@ -11,13 +11,23 @@
  *   press    the input went down, on something that asked to be held
  *   tick     a frame went by, with what is under the crosshair now
  *   release  the input came up
- *   cancel   Escape, the window lost focus, the tab was hidden
+ *   cancel   Escape (with the mouse captured, the pointer being let go:
+ *            the browser keeps that key), the window lost focus, the tab
+ *            was hidden
  *
  * Held for its whole time, it fires, once. Let go before that, it is
  * cancelled; let go at once (a tap, under `HOLD_TAP_SECONDS`), it asks
  * instead: «Assinar / Cancelar». That is the way for whoever cannot hold a
  * key down, and for a finger that slipped. Looking away at any point ends
  * it without a word.
+ *
+ * The question is answered by the input that asked it, and so it has to
+ * have stood for a moment first (`HOLD_CONFIRM_AFTER_SECONDS`): a press
+ * sooner than that is not heard. Without it two taps in a row were a
+ * signature, made faster than the hold the desk asks for and with nothing
+ * read in between, which is the very thing the hold is there to prevent.
+ * The press it does not hear is dropped, not kept as a hold: the question
+ * stays where it is until it is read, answered or cancelled.
  *
  * Time is counted frame by frame and a frame counts a quarter of a second
  * at the most, the limit the clock on the wall has: the first frame after a
@@ -30,6 +40,13 @@
 export const HOLD_TAP_SECONDS = 0.3
 /** The longest single frame a hold counts. */
 export const HOLD_MAX_STEP_SECONDS = 0.25
+/**
+ * How long the question has to have stood before the input that asked it
+ * can answer it. A second tap by reflex comes a tenth or two of a second
+ * after the first, and is not an answer to anything: nobody has read
+ * «Assinar / Cancelar» by then.
+ */
+export const HOLD_CONFIRM_AFTER_SECONDS = 0.5
 
 /** What a handler answers a press with when the press has to be held. */
 export type HoldRequest = {
@@ -42,7 +59,8 @@ export type HoldRequest = {
 export type HoldGesture =
   | { readonly phase: 'idle' }
   | { readonly phase: 'holding'; readonly id: string; readonly seconds: number; readonly held: number }
-  | { readonly phase: 'confirming'; readonly id: string }
+  /** `asked`: for how long the question has been on screen, counted like a hold, and no further than it has to stand. */
+  | { readonly phase: 'confirming'; readonly id: string; readonly asked: number }
 
 export type HoldEvent =
   | { readonly kind: 'press'; readonly request: HoldRequest }
@@ -65,9 +83,11 @@ const OVER: HoldStep = { gesture: HOLD_IDLE, fired: null }
  *   idle       holding, from zero   stays                         stays              stays
  *   holding    ignored              aim lost: idle; time up:      a tap: confirming; idle
  *                                   idle, FIRES; else counts      else idle
- *   confirming same id: idle,       aim lost: idle                stays              idle
- *              FIRES; another:
- *              holding on it
+ *   confirming same id, once the    aim lost: idle; else the      stays              idle
+ *              question has stood:  question has stood that
+ *              idle, FIRES; sooner: much longer
+ *              not heard; another
+ *              id: holding on it
  */
 export function holdStep(gesture: HoldGesture, event: HoldEvent): HoldStep {
   switch (gesture.phase) {
@@ -82,6 +102,9 @@ export function holdStep(gesture: HoldGesture, event: HoldEvent): HoldStep {
 
 const heldFromZero = (request: HoldRequest): HoldGesture => ({ phase: 'holding', id: request.id, seconds: request.seconds, held: 0 })
 
+/** What one frame counts: its own time, never negative, never junk, and a quarter of a second at the most. */
+const countedStep = (seconds: number) => (Number.isFinite(seconds) ? Math.min(Math.max(seconds, 0), HOLD_MAX_STEP_SECONDS) : 0)
+
 function whileHolding(gesture: Extract<HoldGesture, { readonly phase: 'holding' }>, event: HoldEvent): HoldStep {
   switch (event.kind) {
     // The same input does not go down twice: a key held and the button
@@ -90,7 +113,7 @@ function whileHolding(gesture: Extract<HoldGesture, { readonly phase: 'holding' 
       return stay(gesture)
     case 'tick': {
       if (event.aimed !== gesture.id) return OVER
-      const step = Number.isFinite(event.seconds) ? Math.min(Math.max(event.seconds, 0), HOLD_MAX_STEP_SECONDS) : 0
+      const step = countedStep(event.seconds)
       // A frame that counts nothing changes nothing: the same gesture back.
       if (step === 0) return stay(gesture)
       const held = gesture.held + step
@@ -98,7 +121,7 @@ function whileHolding(gesture: Extract<HoldGesture, { readonly phase: 'holding' 
       return held >= gesture.seconds ? { gesture: HOLD_IDLE, fired: gesture.id } : stay({ ...gesture, held })
     }
     case 'release':
-      return gesture.held < HOLD_TAP_SECONDS ? stay({ phase: 'confirming', id: gesture.id }) : OVER
+      return gesture.held < HOLD_TAP_SECONDS ? stay({ phase: 'confirming', id: gesture.id, asked: 0 }) : OVER
     case 'cancel':
       return OVER
   }
@@ -107,9 +130,18 @@ function whileHolding(gesture: Extract<HoldGesture, { readonly phase: 'holding' 
 function whileConfirming(gesture: Extract<HoldGesture, { readonly phase: 'confirming' }>, event: HoldEvent): HoldStep {
   switch (event.kind) {
     case 'press':
-      return event.request.id === gesture.id ? { gesture: HOLD_IDLE, fired: gesture.id } : stay(heldFromZero(event.request))
-    case 'tick':
-      return event.aimed === gesture.id ? stay(gesture) : OVER
+      if (event.request.id !== gesture.id) return stay(heldFromZero(event.request))
+      // The answer, if the question has been there to be read; otherwise the
+      // second tap of a reflex, which is not heard.
+      return gesture.asked >= HOLD_CONFIRM_AFTER_SECONDS ? { gesture: HOLD_IDLE, fired: gesture.id } : stay(gesture)
+    case 'tick': {
+      if (event.aimed !== gesture.id) return OVER
+      // Once it has stood its time there is nothing left to count: the same
+      // gesture back, frame after frame, for as long as the question waits.
+      if (gesture.asked >= HOLD_CONFIRM_AFTER_SECONDS) return stay(gesture)
+      const step = countedStep(event.seconds)
+      return step === 0 ? stay(gesture) : stay({ ...gesture, asked: Math.min(gesture.asked + step, HOLD_CONFIRM_AFTER_SECONDS) })
+    }
     case 'release':
       return stay(gesture)
     case 'cancel':
@@ -125,8 +157,8 @@ export function isHoldRequest(answer: boolean | HoldRequest): answer is HoldRequ
 /**
  * A gesture as one string, for a React selector: what the HUD draws of a
  * hold (a ring, a question) changes when the phase or its target does, and
- * never with the frames that count the time. The ring is a CSS animation of
- * the request's own length.
+ * never with the frames that count the time, of a hold or of a question.
+ * The ring is a CSS animation of the request's own length.
  */
 export function holdMark(gesture: HoldGesture): string {
   switch (gesture.phase) {

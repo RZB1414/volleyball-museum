@@ -17,8 +17,10 @@
  */
 
 import assert from 'node:assert/strict'
+import { fileURLToPath } from 'node:url'
 
 import { Box3, Group, Matrix4, Mesh, Ray, Vector3 } from 'three'
+import { readMediaTexts } from './lib/mediaTexts.ts'
 import { readText } from './lib/readText.ts'
 
 // ---------------------------------------------------------------------------
@@ -492,6 +494,9 @@ test('the press that is held is wired on both paths, and every other press is st
     ['Escape that leaves the hold going', changed('engine/Devices.tsx', 'if (isHoldCancelKey(event)) cancelPrimaryHold()', '')],
     ['a window that loses focus and goes on holding', changed('engine/Devices.tsx', "window.addEventListener('blur', dropHold)", '')],
     ['a hidden tab that goes on holding', changed('engine/Devices.tsx', "document.addEventListener('visibilitychange', dropHoldWhenHidden)", '')],
+    ['Escape under a captured pointer that cancels nothing', changed('engine/Devices.tsx', "document.addEventListener('pointerlockchange', dropHoldWhenReleased)", '')],
+    ['a pointer captured that cancels the hold it is aimed with', changed('engine/Devices.tsx', 'if (document.pointerLockElement === null) cancelPrimaryHold()', 'cancelPrimaryHold()')],
+    ['a listener for the pointer that is never taken away', changed('engine/Devices.tsx', "document.removeEventListener('pointerlockchange', dropHoldWhenReleased)", '')],
     ['a hold no frame counts', changed('engine/Devices.tsx', "if (primaryHold().phase !== 'idle') tickPrimaryHold(delta, interactionHeldIdOf(state, MUSEUM))", '')],
     ['a hold that goes on for whatever is aimed at', changed('engine/interactionTarget.ts', "if (winner?.kind !== 'device' || !winner.live) return null", 'if (!winner) return null')],
     ['a hold that goes on with the aim lost', changed('engine/Devices.tsx', 'tickPrimaryHold(delta, interactionHeldIdOf(state, MUSEUM))', 'tickPrimaryHold(delta, state.focusedDevice)')],
@@ -661,7 +666,11 @@ test('a thing that only says something holds the prompt and never the key (L3)',
     noticeKey: 'device.atrium-podium.notice',
   })
   assert.equal(`${ptBR['device.atrium-podium.title']} — ${ptBR['device.atrium-podium.notice']}`, 'Plinto do Fundador — Interditado: obra do piso.')
-  assert.equal(`${en['device.atrium-podium.title']} — ${en['device.atrium-podium.notice']}`, "The Founder's plinth — Closed off: the floor is being relaid.")
+  // In English as in Portuguese it says works, and not that the floor is
+  // being relaid: the new floor is down (the canon, §1.5.7), and the notice
+  // is still up in the lot that gives the plinth its medals. And the name
+  // has no article, like every other thing the crosshair names.
+  assert.equal(`${en['device.atrium-podium.title']} — ${en['device.atrium-podium.notice']}`, "Founder's plinth — Closed off: floor works.")
   // A device of another kind handed a notice's intent draws nothing.
   assert.equal(devicePrompt(radio, notice), null)
   assert.equal(devicePrompt(podium.device, { kind: 'none' }), null)
@@ -1989,6 +1998,20 @@ test('two safes, two names: the iron safe in the office, the vault under the hal
   }
   assert.deepEqual(bare, [])
   assert.deepEqual([...needed].sort(), [...LET_OFF].sort(), 'a text let off that no longer says it: take it off the list')
+  // A dictionary is not the only place the house prints a word. The plan on
+  // the office wall is lettered, in Portuguese, two metres from the iron
+  // safe: it called what lies under the hall «COFRE · SUBSOLO», the bare
+  // word, said of the wrong one of the two. (L9 redraws the plan and takes
+  // its lettering out of the image; until then the image is read like a
+  // dictionary.)
+  const lettered = Object.entries(readMediaTexts(MUSEUM.media, fileURLToPath(new URL('../public', import.meta.url)))).flatMap(([mediaId, texts]) =>
+    texts.filter((drawn) => BARE['pt-BR'].test(drawn)).map((drawn) => `media:${mediaId}: ${drawn}`),
+  )
+  assert.deepEqual(lettered, [], 'an image of the house says a bare «cofre»')
+  assert.ok(
+    readMediaTexts(MUSEUM.media, fileURLToPath(new URL('../public', import.meta.url)))['graphic-office-blueprint']?.some((drawn) => /CAIXA-FORTE/.test(drawn)),
+    'the plan on the office wall no longer names the vault',
+  )
   // The rule reads a compound as the name it is.
   assert.ok(!BARE['pt-BR'].test('A chave do cofre de ferro.') && BARE['pt-BR'].test('Está no cofre, sob o átrio.'))
   assert.ok(!BARE.en.test('The key to the iron safe.') && BARE.en.test('It is in the safe.') && !BARE.en.test('Keep it safely.'))

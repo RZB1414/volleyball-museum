@@ -1672,12 +1672,79 @@ test('every line of his exists in both languages and fits a subtitle', () => {
   // may already hold. (It used to end «pega o rádio aí na mesa».)
   const lastOfHello = radio.calls[0].lineKeys.at(-1) as 'radio.call.hello.5'
   assert.equal(lastOfHello, 'radio.call.hello.5')
-  assert.ok(/me chama no rádio/.test(ptBR[lastOfHello]) && /Call me on the radio/.test(en[lastOfHello]))
+  // An offer, in both languages: «Qualquer coisa, me chama». The English had
+  // lost the first half to the length of the line, and ended on an order to
+  // call him, two lines before he asks not to be called all the time.
+  assert.ok(/Qualquer coisa, me chama no rádio/.test(ptBR[lastOfHello]) && /Trouble\? Call me on the radio/.test(en[lastOfHello]))
   for (const key of radio.calls[0].lineKeys) {
     assert.ok(!/pega o rádio/i.test((ptBR as Record<string, string>)[key]), `${key} (pt-BR) tells the player to take the radio`)
     assert.ok(!/take the radio/i.test((en as Record<string, string>)[key]), `${key} (en) tells the player to take the radio`)
+    // Nor to set the clock. It answers E while he talks, his fifth line
+    // comes half a minute after the lamp, and the call never lapses: «acerta»
+    // was said to players who had just set it, and to every one who heard
+    // him later. He says it stopped; what E does to it is the clock's own prompt.
+    assert.ok(!/\bacert[ae]\b/i.test((ptBR as Record<string, string>)[key]), `${key} (pt-BR) orders the clock set, to a player who may have set it`)
+    assert.ok(!/\bset it\b/i.test((en as Record<string, string>)[key]), `${key} (en) orders the clock set, to a player who may have set it`)
   }
-  assert.ok(/portaria/.test(ptBR['radio.patience.t2.reception']) && /átrio/.test(ptBR['radio.patience.t2.reception']))
+  assert.ok(/relógio/.test(ptBR[lastOfHello]) && /clock/.test(en[lastOfHello]), 'he no longer says why the clock is stopped')
+  // The reminder of the notebook is heard wherever the radio is: with the
+  // handset in the pocket it comes almost a minute after the lamp, in the
+  // hall or in the wing. It says where the notebook is, and nothing that is
+  // only true in the office («aí na mesa», «antes de sair»).
+  for (const [locale, line, office] of [
+    ['pt-BR', ptBR['radio.call.notebook.1'], /mesa do escritório/],
+    ['en', en['radio.call.notebook.1'], /office desk/],
+  ] as const) {
+    assert.match(line, office, `radio.call.notebook.1 (${locale}) does not say which desk`)
+    assert.doesNotMatch(line, /\baí\b|antes de sair|\bthere on\b|before you go/i, `radio.call.notebook.1 (${locale}) is only true of a player still in the office`)
+  }
+  assert.ok(callOf('porter-notebook-reminder').mentions.includes('office'), 'the reminder names the office and does not say it mentions it')
+  // The call for a piece checked is said once, of however many are checked
+  // by the time it is heard: with the radio on its desk, that is when the
+  // player comes back. It asked «Primeira conferida?» with nine done.
+  for (const [locale, line] of [['pt-BR', ptBR['radio.call.catalogued.1']], ['en', en['radio.call.catalogued.1']]] as const) {
+    assert.doesNotMatch(line, /primeir|\bfirst\b|\bfalta|\bleaves\b/i, `radio.call.catalogued.1 (${locale}) counts what he cannot count`)
+  }
+  // What he knows of a drawer is that it is open (§1.5.9): he asks what was
+  // in it, and never says. To the save that opened it on another night he
+  // said «o bilhete tinha uma chave presa».
+  for (const [locale, line, safe] of [
+    ['pt-BR', ptBR['radio.call.legacy-drawer.1'], /cofre de ferro/],
+    ['en', en['radio.call.legacy-drawer.1'], /iron safe/],
+  ] as const) {
+    assert.doesNotMatch(line, /bilhete|tinha uma chave|\bnote\b|there was a key/i, `radio.call.legacy-drawer.1 (${locale}) says what was in a drawer he has never seen inside`)
+    assert.match(line, safe, `radio.call.legacy-drawer.1 (${locale}) does not say what the key is for`)
+  }
+  assert.deepEqual(callOf('porter-legacy-drawer').mentions, callOf('porter-drawer-open').mentions, 'the two calls about the drawer send the player to the same two things')
+  // The first height of the drawer's hint is where the year is. It sent the
+  // player to the message on the machine, heard or not (`test:speech-coherence`
+  // hears that); the message has a call of its own, which lapses.
+  for (const [locale, line] of [['pt-BR', ptBR['radio.hint.drawer.where']], ['en', en['radio.hint.drawer.where']]] as const) {
+    assert.doesNotMatch(line, /recado|secretária|message|answering machine/i, `radio.hint.drawer.where (${locale}) sends the player to the recording`)
+  }
+  // The deed is signed by a press that is held, and nothing in the game is
+  // a pen: not on the lectern, not on the screen, not in the sound. And the
+  // third height, the one he goes on repeating, says where.
+  for (const [locale, line, lectern] of [
+    ['pt-BR', ptBR['radio.hint.posse.how'], /púlpito/],
+    ['en', en['radio.hint.posse.how'], /lectern/],
+  ] as const) {
+    assert.doesNotMatch(line, /\bpena\b|\bcaneta\b|\bpen\b|\bquill\b/i, `radio.hint.posse.how (${locale}) waits for a pen the game does not have`)
+    assert.match(line, lectern, `radio.hint.posse.how (${locale}) does not say where`)
+  }
+  // An opener is said before the hint, whatever height the hint is at: the
+  // third call in a row is the first to say «como». «Repito» announced a
+  // repetition and was followed by a line never said before.
+  for (const [locale, line] of [['pt-BR', ptBR['radio.patience.t2.repeat']], ['en', en['radio.patience.t2.repeat']]] as const) {
+    assert.doesNotMatch(line, /\brepit|\brepet|\bagain\b|\brepeat/i, `radio.patience.t2.repeat (${locale}) says he repeats a line he may be saying for the first time`)
+  }
+  // And a closing line is said after the hint, on the same line of the
+  // screen: «Brincadeira.» took back the hint the player had just asked for.
+  for (const [locale, line] of [['pt-BR', ptBR['radio.patience.t3.torch.close']], ['en', en['radio.patience.t3.torch.close']]] as const) {
+    assert.doesNotMatch(line, /brincadeira|kidding|\bjoking\b/i, `radio.patience.t3.torch.close (${locale}) retracts whatever was said before it, which is the hint`)
+    assert.match(line, /motor/, `radio.patience.t3.torch.close (${locale}) no longer says why he does not come`)
+  }
+  assert.ok(/portaria/.test(ptBR['radio.patience.t2.reception']) && /saguão/.test(ptBR['radio.patience.t2.reception']))
   // In English he calls his post the front desk, which IS reception: the
   // joke that he is not reception cannot be told there.
   assert.ok(/front desk/.test(en['radio.call.hello.1']))
@@ -1711,6 +1778,18 @@ test('every line of his exists in both languages and fits a subtitle', () => {
   // The porter says «saguão», and says once that it is the atrium of the signs.
   assert.ok(/[Ss]aguão/.test(ptBR['radio.call.first.2']) && /átrio/.test(ptBR['radio.call.first.2']))
   assert.ok(/the hall/i.test(en['radio.call.first.2']) && /atrium/.test(en['radio.call.first.2']))
+  // And in no other line of his, calls, hints, answers or loudspeaker: the
+  // joke about reception went on saying «átrio» after he had said he does not.
+  const hisLines = [
+    ...radio.calls.flatMap((call) => call.lineKeys),
+    ...HINT_LINES,
+    ...patienceLines,
+    ...(MUSEUM.sequences ?? []).flatMap((sequence) => sequence.steps.flatMap((step) => (step.kind === 'line' ? [step.lineKey] : []))),
+  ]
+  const signWord = hisLines.filter(
+    (key) => key !== 'radio.call.first.2' && (/átrio/i.test((ptBR as Record<string, string>)[key]) || /\batrium\b/i.test((en as Record<string, string>)[key])),
+  )
+  assert.deepEqual(signWord, [], 'the porter calls the hall by the word on the signs')
   assert.ok(!/humming/.test(en['radio.patience.t5.song.1']), 'nobody hums words')
   assert.ok(!/Only not/.test(en['radio.call.taken.2']))
 })
@@ -1730,7 +1809,9 @@ test('every line of his exists in both languages and fits a subtitle', () => {
  */
 const HINT_TARGETS: Record<string, { readonly 'pt-BR': readonly string[]; readonly en: readonly string[] }> = {
   'radio.hint.notebook.where': { 'pt-BR': ['caderno', 'mesa'], en: ['notebook', 'desk'] },
-  'radio.hint.atrium.where': { 'pt-BR': ['saguão', 'luzinha vermelha', 'porta'], en: ['the hall', 'little red light', 'door'] },
+  // The breaker of the hall is by the door of Wing 1, and both heights and
+  // the curt line say so: «do outro lado do saguão» was only true of one door.
+  'radio.hint.atrium.where': { 'pt-BR': ['saguão', 'luzinha vermelha', 'porta', 'Ala 1'], en: ['the hall', 'little red light', 'door', 'Wing 1'] },
   'radio.hint.holyoke.where': { 'pt-BR': ['Ala 1', 'quadro', 'luzinha vermelha'], en: ['Wing 1', 'breaker', 'little red light'] },
   'radio.hint.drawer.where': { 'pt-BR': ['gaveta do Otávio', 'Ala 1', 'retrato do Morgan'], en: ["Otávio's drawer", 'Wing 1', "Morgan's portrait"] },
   'radio.hint.key.where': { 'pt-BR': ['chave', 'cofre de ferro', 'canto do escritório'], en: ['key', 'iron safe', 'corner of the office'] },

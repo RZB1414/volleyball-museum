@@ -114,7 +114,7 @@ const mediaBytes = media.reduce((sum, image) => sum + image.bytes, 0)
 const residentTexture = BAKE_TOTALS.textureVramBytes + mediaBytes + TEXT_ATLAS_BYTES
 
 const points = BROWSER_RECORD.points
-const drawsOf = (ratchet: 'roomDraws' | 'atriumDraws' | 'pairDraws') =>
+const drawsOf = (ratchet: 'roomDraws' | 'atriumDraws' | 'pairDraws' | 'officePairDraws') =>
   Math.max(...points.filter((point) => point.ratchet === ratchet).map((point) => point.draws))
 
 console.log('Ratchets:')
@@ -124,6 +124,7 @@ report(RATCHETS.programs, BROWSER_RECORD.programs)
 report(RATCHETS.roomDraws, drawsOf('roomDraws'))
 report(RATCHETS.atriumDraws, drawsOf('atriumDraws'))
 report(RATCHETS.pairDraws, drawsOf('pairDraws'))
+report(RATCHETS.officePairDraws, drawsOf('officePairDraws'))
 report(RATCHETS.frameTriangles, Math.max(...points.map((point) => point.triangles)))
 console.log(
   `  (texture: ${show(BAKE_TOTALS.textureVramBytes, 'MiB')} of materials, ${show(mediaBytes, 'MiB')} in ` +
@@ -154,9 +155,18 @@ await test('the browser record is recent, complete and within its ceilings', () 
   )
   assert.deepEqual(
     points.map((point) => point.id),
-    ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'R08', 'R09', 'R10'],
-    'the ten reference points, in order',
+    ['R01', 'R02', 'R03', 'R04', 'R05', 'R06', 'R07', 'R08', 'R09', 'R10', 'R11', 'R12', 'R13'],
+    'the ten reference points of the baseline and the three the review of L3 added, in order',
   )
+  // A ratchet nobody looks at holds nothing: each browser ratchet has a
+  // point, each open door a point from either side of it, and the office,
+  // the one room with two ends, a point at each.
+  for (const ratchet of ['roomDraws', 'atriumDraws', 'pairDraws', 'officePairDraws'] as const) {
+    assert.ok(points.some((point) => point.ratchet === ratchet), `no reference point reads ${RATCHETS[ratchet].id}`)
+  }
+  const xOf = (id: string) => Number(points.find((point) => point.id === id)?.camera.split(',')[0])
+  assert.ok(xOf('R11') > 12.25 && xOf('R12') < 9, 'the office pair is read from the office and from the hall')
+  assert.ok(xOf('R13') > 14 && xOf('R02') < 11, 'the office is read from beside its door and from its far wall')
   for (const point of points) {
     assert.match(point.camera, /^-?\d+(?:\.\d+)?(?:,-?\d+(?:\.\d+)?){4}$/, `${point.id} records its camera`)
     within(RATCHETS[point.ratchet], point.draws, `${point.id} draw calls`)

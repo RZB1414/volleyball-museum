@@ -657,6 +657,16 @@ export const useMuseum = create<MuseumStore>((set, get) => {
       // And so does a card on screen: seen out here, it would be on record
       // as shown in a game that never showed it.
       if (anotherGame && mine.sequence) taken.sequence = null
+      // Within one game, either can be over before this tab has finished
+      // with it: held here while the tab was hidden, and seen or heard to
+      // its end in the tab the player went to look at, which was owed it
+      // too (neither is on record before its last step). A sequence is only
+      // ever on screen, and a call only ever in the air, while it is NOT on
+      // record in the tab showing it; found on record now, another tab put
+      // it there. Left up, the held step would start its full time again as
+      // the player came back, and the night's closing be shown twice.
+      if (mine.sequence && progress.sequencesSeen.includes(mine.sequence.id)) taken.sequence = null
+      if (mine.radio?.callId !== undefined && progress.radioCalls.includes(mine.radio.callId)) taken.radio = null
       if (Object.keys(taken).length > 0) set(taken)
     } catch {
       // A disk that cannot be read is not a reason to stop the game.

@@ -921,6 +921,13 @@ await test('each accusation, on a museum broken for the purpose', () => {
     noisy.push('checklist-item-untickable accuses a dated promise of having no box')
   }
   proves('checklist-deferred-with-box', 'made.for.the.test', listed({ ...promise, doneWhen: { locksOpened: ['office-drawer'] } }))
+  // Its note may wait for its own moment (the review of L3: the pencil that
+  // says the basement flooded waits for the lamp). One that waits for what
+  // no play reaches is a promise the game never says.
+  proves('checklist-note-unreachable', 'made.for.the.test', listed({ ...promise, noteWhen: { catalogued: ['net-1897'] } }))
+  if (accused(simulateProgress(listed({ ...promise, noteWhen: { powered: ['office'] } })).issues, 'checklist-note-unreachable').length > 0) {
+    noisy.push('checklist-note-unreachable accuses a note the play gets to read')
+  }
   // What a line waits to appear for is a condition the content asks: a flag
   // only it reads is read.
   const flagged = simulateProgress({
@@ -960,6 +967,7 @@ await test('each accusation, on a museum broken for the purpose', () => {
       'lock-evidence-behind-lock',
       'checklist-item-untickable',
       'checklist-deferred-with-box',
+      'checklist-note-unreachable',
       'simulation-no-fixpoint',
       'transition-door-invalid',
       'no-start-room',

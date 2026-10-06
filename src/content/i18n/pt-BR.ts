@@ -178,7 +178,8 @@ export const ptBR = {
   // the catalogue, the office, the vault, the ending.
   // Two safes, two names (D34): the «cofre de ferro» stands in the office,
   // the «caixa-forte» is the Founder's vault under the hall. A bare «cofre»
-  // would be either (`test:opening-flow` holds every text to that).
+  // would be either (`test:opening-flow` holds every text to that: the two
+  // dictionaries, and what is lettered on the images of the house).
   'intro.line1': 'Você é o novo curador.',
   'intro.line2': 'É a noite anterior à reabertura. A energia caiu.',
   'intro.line3': 'Seu antecessor deixou alguma coisa na caixa-forte.',
@@ -217,7 +218,9 @@ export const ptBR = {
     'A tempestade desta tarde derrubou a energia do museu inteiro, e você vai ter que religá-la sala por sala.\n\n' +
     // Why the inventory matters tonight, and where the book it is checked
     // against was left: the reason for the second and third lines of the list.
-    'A seguradora só libera a reabertura com o inventário conferido por você, contra o livro de tombo do Otávio, o antigo curador, que ficou na caixa-forte. Coragem!\n\n' +
+    // Two sentences: «…do Otávio, o antigo curador, que ficou na caixa-forte»
+    // left the curator in the vault, not the book.
+    'A seguradora só libera a reabertura com o inventário conferido por você, contra o livro de tombo do Otávio, o antigo curador. O livro ficou na caixa-forte. Coragem!\n\n' +
     'Reabrimos amanhã às 9h. Bom trabalho!',
   'notebook.welcome.signature': '— Helena, diretora',
   'notebook.welcome.postscript':
@@ -228,12 +231,14 @@ export const ptBR = {
   'notebook.todo.power': 'Religar a energia: escritório, átrio e Ala 1',
   'notebook.todo.catalogue': 'Catalogar o acervo: conferir peça por peça',
   'notebook.todo.vault': 'Caixa-forte — só o Otávio sabia abrir',
-  // Pencil, beside a line with no box: why not tonight.
+  // Pencil, beside a line with no box: why not tonight. On the page once
+  // the lamp is lit: it is the porter who says the basement flooded.
   'notebook.todo.vault.note': 'hoje não: o subsolo alagou',
   // The curator's own lines, in pencil, as the night gives them something
-  // to write down. The first repeats the question of the drawer's lock and
-  // never the answer.
-  'notebook.todo.drawer': 'Gaveta do Otávio: “o ano em que o jogo deixou de se chamar Mintonette”.',
+  // to write down. The first is the question the drawer asks, and never the
+  // answer. A note, with no quotation marks: it is on the page for whoever
+  // touched the keypad too, and the words between them were the recording's.
+  'notebook.todo.drawer': 'Gaveta do Otávio: o ano em que o jogo deixou de se chamar Mintonette.',
   'notebook.todo.safe-key': 'Chave do cofre de ferro.',
   'notebook.todo.posse': 'Assinar o termo de posse, no púlpito.',
   'notebook.todo.proof':
@@ -301,17 +306,20 @@ export const ptBR = {
   // night's premises and no direction; where the hall's breaker is is the
   // call after this one, which is only said while the hall is dark. He does
   // not say «pega o rádio»: this is heard with the radio on its charger and
-  // with it in the pocket, and «me chama no rádio» is true of both.
+  // with it in the pocket, and «me chama no rádio» is true of both. Nor
+  // «acerta» of the clock: the clock answers E while he talks, the call
+  // never lapses, and he was heard ordering it set by players who had set
+  // it. He says why it stopped; what E does to it is its own prompt.
   'radio.call.hello.1': 'Curador? É o Jorge de novo, da portaria. Câmbio.',
   'radio.call.hello.2':
     'Vi no painel que a luz do escritório voltou. A tempestade desarmou os quadros do prédio inteiro.',
   'radio.call.hello.3':
-    'O Otávio se aposentou hoje. Pegou o ônibus antes de a estrada fechar e deixou tudo com você.',
+    'O Otávio se aposentou hoje. Pegou o ônibus antes da estrada fechar e deixou tudo com você.',
   'radio.call.hello.4':
     'Aqui eu tenho o painel do alarme: toda vitrine, gaveta e porta desse prédio acende uma luzinha pra mim.',
   // The porter forbids nothing that cannot be done: there is no way down yet.
   'radio.call.hello.5':
-    'O relógio aí parou com a luz: acerta. O subsolo alagou; hoje ninguém desce. Qualquer coisa, me chama no rádio. Câmbio, desligo.',
+    'O relógio aí parou com a luz. O subsolo alagou; hoje ninguém desce. Qualquer coisa, me chama no rádio. Câmbio, desligo.',
   // Directions are given from where the player stands and by what they can
   // see: there is no compass in the game (`speech-uses-cardinal`). The
   // porter calls «saguão» the room every sign calls «átrio», and says so
@@ -319,21 +327,29 @@ export const ptBR = {
   'radio.call.first.1':
     'O quadro do saguão fica do outro lado, um pouco à direita de quem sai daí, junto da entrada da Ala 1. Procura a luzinha vermelha.',
   'radio.call.first.2': 'Saguão, átrio: é o mesmo lugar. A placa diz átrio; eu digo saguão. Câmbio.',
+  // Heard wherever the handset is, nearly a minute after the lamp: it says
+  // which desk, and nothing that is only true of a player still in the
+  // office («aí na mesa», «antes de sair»).
   'radio.call.notebook.1':
-    'Ah, e a Helena, a diretora, deixou um caderno pra você aí na mesa. Pega antes de sair, que tá tudo explicado lá. Câmbio.',
+    'Ah, e a Helena, a diretora, deixou um caderno pra você na mesa do escritório. Pega, que tá tudo explicado lá. Câmbio.',
   // One call for each milestone of the night, said once. What he knows of
-  // it is what the alarm panel at the front desk shows him, and no more.
+  // it is what the alarm panel at the front desk shows him, and no more: a
+  // case that opens and shuts, never how many have. The call for a piece
+  // checked is heard with one piece done or with nine (with the radio on its
+  // desk, when the player comes back), and asks without counting.
   'radio.call.atrium.1':
     'Saguão no painel! A Ala 1 é a porta com placa, perto do quadro. O quadro dela fica na parede de frente pras portas. Câmbio.',
   'radio.call.holyoke.1': 'Ala 1 acesa. Agora é conferir, peça por peça. Câmbio.',
   'radio.call.catalogued.1':
-    'Uma vitrine abriu e fechou aqui no painel. Primeira conferida? Faltam… bom, faltam bastante. Câmbio.',
+    'Tem vitrine abrindo e fechando aqui no painel. Tá conferindo, é? Câmbio.',
   'radio.call.shortcut.1':
     'A porta de serviço abriu por dentro. Agora fica destrancada dos dois lados. Tá no meu painel. Câmbio.',
   // The Posse. He sees a light on the office extension, a drawer and a safe
   // open on his panel, and nothing of what is inside them: he asks. The one
   // for a drawer opened on another night is said to a save that holds a key
-  // it was never shown taking.
+  // it was never shown taking: he sends the player back to look, and says
+  // what a key would be for, without saying there was one (it used to say
+  // «o bilhete tinha uma chave presa», of a drawer he has never seen inside).
   'radio.call.machine.1':
     'Tem uma luz de recado piscando no ramal do escritório. Deve ser coisa do Otávio. Câmbio.',
   'radio.call.drawer.1':
@@ -341,7 +357,7 @@ export const ptBR = {
   'radio.call.drawer.2':
     'Se for chave, é do cofre de ferro. Ele era assim: chave dentro de gaveta, gaveta dentro de data. Câmbio.',
   'radio.call.legacy-drawer.1':
-    'Olha de novo a gaveta do Otávio: o bilhete tinha uma chave presa. Câmbio.',
+    'A gaveta do Otávio já tava aberta aqui no painel. Olha de novo lá dentro: se tiver chave, é do cofre de ferro. Câmbio.',
   // The one line that sets the two safes side by side, so that neither is
   // taken for the other again (D34): the only place a bare «o cofre» is said.
   'radio.call.safe.1':
@@ -364,8 +380,13 @@ export const ptBR = {
   'radio.hint.notebook.where': 'Primeiro o caderno: a diretora, a Helena, deixou um na mesa.',
   'radio.hint.notebook.what': 'Capa vermelha, do lado da luminária.',
   'radio.hint.notebook.how': 'Pega e lê até a última página.',
-  'radio.hint.atrium.where': 'O quadro fica do outro lado do saguão.',
-  'radio.hint.atrium.what': 'Luzinha vermelha, perto da porta com placa.',
+  // The wall and the door, which hold from wherever he is asked. «Do outro
+  // lado do saguão» was true of the office door alone: the breaker is on
+  // the wall of Wing 1, beside that wing's door, and a player who asked
+  // from the wing was sent to the wall of the office. Two doors of the hall
+  // have a sign and that wall has two doors: «a que tem placa» is the one.
+  'radio.hint.atrium.where': 'O quadro do saguão fica na parede da Ala 1, do lado da porta dela.',
+  'radio.hint.atrium.what': 'Luzinha vermelha, do lado da porta da Ala 1, a que tem placa.',
   'radio.hint.atrium.how': 'Caixa cinza na parede, com alavanca. É só acionar.',
   // No side is named. The wing has two ways in once the shortcut stays
   // open, and what is to the left of one is to the right of the other: the
@@ -374,13 +395,13 @@ export const ptBR = {
   'radio.hint.holyoke.where': 'A Ala 1 tem quadro próprio, na parede de frente pras portas.',
   'radio.hint.holyoke.what': 'Luzinha vermelha, do outro lado da sala.',
   'radio.hint.holyoke.how': 'Atravessa no escuro até a luzinha vermelha. A lanterna dá conta.',
-  // Where the year is, never the year. The first height sends the player to
-  // the message Otávio left on the answering machine, which asks the
-  // question in his words; the next two to the portrait. The second way to
-  // the year is the archive of the wing, some metres from the portrait:
-  // «perto da entrada», not «ao lado».
-  'radio.hint.drawer.where':
-    'A gaveta do Otávio abre com um ano. Ele deixou recado na secretária do escritório.',
+  // Where the year is, never the year: the wing, the portrait, the gesture.
+  // The message on the answering machine is not his to send anybody to
+  // here: it has a call of its own, which lapses once it is heard, and this
+  // hint was said to players who had heard it out. The second way to the
+  // year is the archive of the wing, some metres from the portrait: «perto
+  // da entrada», not «ao lado».
+  'radio.hint.drawer.where': 'A gaveta do Otávio abre com um ano. O ano tá na Ala 1.',
   'radio.hint.drawer.what': 'O ano tá na Ala 1, no retrato do Morgan.',
   'radio.hint.drawer.how':
     'Pega a moldura e inclina: tá na borda de baixo. Ou no arquivo de proveniência, perto da entrada da ala.',
@@ -389,10 +410,13 @@ export const ptBR = {
   'radio.hint.key.what': 'Canto do escritório, do lado das estantes.',
   'radio.hint.key.how': 'Chega perto e abre. A chave fica lá.',
   // The Book read and the deed not signed. «Segura a ação»: the press is
-  // held, at a keyboard and on glass alike.
+  // held, at a keyboard and on glass alike. Until it is signed, and nothing
+  // else: there is no pen on the lectern, on the screen or in the sound (it
+  // said «até a pena parar»), and the ring round the key is the HUD's, which
+  // he cannot see. The third height is the one he repeats: it says where.
   'radio.hint.posse.where': 'O termo se assina no púlpito do saguão.',
   'radio.hint.posse.what': 'O púlpito com a lâmpada acesa, entre as duas portas da parede da Ala 1.',
-  'radio.hint.posse.how': 'Com luz nas três salas, segura a ação até a pena parar.',
+  'radio.hint.posse.how': 'No púlpito, com luz nas três salas, segura a ação sem soltar até assinar.',
   // The last hint, when nothing is left to point at: the honest close. It
   // is only heard with the deed signed (every hint above it is spent by
   // then), and says what is left of the night and what is not for tonight,
@@ -426,8 +450,10 @@ export const ptBR = {
   'radio.patience.t2.again': 'De novo, curador? Tudo bem, tudo bem.',
   'radio.patience.t2.coffee': 'Pode falar. Meu café já esfriou mesmo.',
   'radio.patience.t2.reception':
-    'Só pra constar: aqui é a portaria. Recepção é aquele balcão vazio no átrio.',
-  'radio.patience.t2.repeat': 'Repito, que repetir é de graça:',
+    'Só pra constar: aqui é a portaria. Recepção é aquele balcão vazio no saguão.',
+  // Said before a hint at whatever height it stands: the third call in a
+  // row is the first to say «como», so he does not announce a repetition.
+  'radio.patience.t2.repeat': 'Explico, que explicar é de graça:',
   'radio.patience.t2.chat': 'Tô começando a achar que você gosta de conversar comigo.',
   'radio.patience.t3.hotline': 'Curador, isso aqui é portaria, não é Disque-Dica.',
   'radio.patience.t3.hotline.close': 'Anota no caderno, que é pra isso que ele serve.',
@@ -436,7 +462,9 @@ export const ptBR = {
   'radio.patience.t3.torch': 'Quer que eu vá aí segurar a lanterna também?',
   // Why the porter never comes: the door he raised by hand to let the
   // curator in has no motor until the mains are back, and he keeps his post.
-  'radio.patience.t3.torch.close': 'Brincadeira. A porta de enrolar tá sem motor, e posto é posto.',
+  // Said after the hint, on the same line of the screen: it answers his own
+  // joke without taking anything back («Brincadeira.» read as the hint's).
+  'radio.patience.t3.torch.close': '…Ir aí eu não vou: a porta de enrolar tá sem motor, e posto é posto.',
   'radio.patience.t3.crossword':
     'Eu tava quase fechando as palavras cruzadas. Faltava “chato”, cinco letras. Fala.',
   'radio.patience.t3.announcer':
