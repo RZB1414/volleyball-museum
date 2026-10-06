@@ -20,6 +20,7 @@ import {
   createDirectionalPadSession,
   NO_ACTION_POINTER,
   ownsDirectionalPadPointer,
+  pointerLeaveReleases,
   resetDirectionalPadSession,
   sampleDirectionalDrag,
 } from '../engine/mobileControls'
@@ -243,6 +244,8 @@ export function MobileControls() {
    * answers it.
    */
   const pointerRef = useRef(NO_ACTION_POINTER)
+  /** Whether the button holds the pointer that pressed it; true until a capture is refused. */
+  const capturedRef = useRef(true)
 
   /**
    * A pointer went down on an action button. `press` is what it does if it
@@ -258,9 +261,11 @@ export function MobileControls() {
     if (press === null) return
     try {
       event.currentTarget.setPointerCapture(event.pointerId)
+      capturedRef.current = true
     } catch {
-      // Without capture a release outside the button is lost; looking away
-      // still ends a hold, and the window losing focus cancels it.
+      // Without capture a release outside the button is lost: leaving the
+      // button is taken as the release instead (`pointerLeft`, below).
+      capturedRef.current = false
     }
     press()
   }, [])
@@ -270,6 +275,13 @@ export function MobileControls() {
     pointerRef.current = up.pointer
     if (up.release) releasePrimaryAction()
   }, [])
+  /** The pointer slid off the button: a release only for one the button could not capture. */
+  const pointerLeft = useCallback(
+    (event: ReactPointerEvent<HTMLButtonElement>) => {
+      if (pointerLeaveReleases(capturedRef.current)) pointerUp(event)
+    },
+    [pointerUp],
+  )
   /**
    * A click is the press unless a pointer already was: the click a tap
    * leaves behind would act a second time, and lands on whatever the tap put
@@ -346,6 +358,7 @@ export function MobileControls() {
             onPointerDown={(event) => pointerDown(event, pressPrimaryAction)}
             onPointerUp={pointerUp}
             onPointerCancel={pointerUp}
+            onPointerLeave={pointerLeft}
           >
             {t('desk.sign')}
           </button>
@@ -381,6 +394,7 @@ export function MobileControls() {
           onPointerUp={pointerUp}
           onPointerCancel={pointerUp}
           onLostPointerCapture={pointerUp}
+          onPointerLeave={pointerLeft}
         >
           {t('mobile.action')}
         </button>

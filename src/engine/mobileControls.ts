@@ -210,6 +210,19 @@ export function actionPointerUp(pointer: ActionPointer, at: number): { readonly 
 }
 
 /**
+ * Whether a pointer that leaves an action button has let it go.
+ *
+ * A captured pointer goes on reporting to the button wherever the thumb
+ * slides, and its release is heard there. Where the capture could not be had
+ * the release outside the button is never heard: with the crosshair resting
+ * on the desk, the hold would run its time and sign with nothing pressed.
+ * Leaving the button is then the release.
+ */
+export function pointerLeaveReleases(captured: boolean): boolean {
+  return !captured
+}
+
+/**
  * A click arrived on an action button. `press` says whether it is a press of
  * its own (`clickIsThePress`). The pointer is forgotten either way: one echo
  * to a pointer, and the next click, however soon, is asked afresh.

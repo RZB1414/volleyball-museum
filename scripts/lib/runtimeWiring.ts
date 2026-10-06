@@ -1618,8 +1618,13 @@ export function holdWiringProblems(read: SourceReader): string[] {
   )
   need(
     'engine/Devices.tsx',
-    'if (isHoldRequest(answer)) beginPrimaryHold(answer)',
-    'E on a desk with a term ready begins no hold',
+    'if (isHoldRequest(answer) && keyMayBeginHold(event)) beginPrimaryHold(answer)',
+    'E on a desk with a term ready begins no hold, or begins one with Ctrl, Cmd or Alt down (a key that may never say it came up)',
+  )
+  need(
+    'ui/MobileControls.tsx',
+    'if (pointerLeaveReleases(capturedRef.current)) pointerUp(event)',
+    'a thumb that slides off a button it could not capture goes on holding: the hold runs its time with nothing pressed',
   )
   need('engine/Devices.tsx', 'if (isInteractKey(event)) releasePrimaryAction()', 'E coming up is not the release: a tap never asks, and letting go never cancels')
   need("engine/Devices.tsx", "window.addEventListener('keyup', onKeyUp)", 'nobody hears E come up')

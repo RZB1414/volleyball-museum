@@ -487,7 +487,9 @@ test('the press that is held is wired on both paths, and every other press is st
   }
   const refactors: readonly (readonly [string, (path: string) => string])[] = [
     // The keyboard.
-    ['E on a desk that begins no hold', changed('engine/Devices.tsx', 'if (isHoldRequest(answer)) beginPrimaryHold(answer)', '')],
+    ['E on a desk that begins no hold', changed('engine/Devices.tsx', 'if (isHoldRequest(answer) && keyMayBeginHold(event)) beginPrimaryHold(answer)', '')],
+    ['a hold begun with a modifier down', changed('engine/Devices.tsx', 'if (isHoldRequest(answer) && keyMayBeginHold(event)) beginPrimaryHold(answer)', 'if (isHoldRequest(answer)) beginPrimaryHold(answer)')],
+    ['a thumb that leaves an uncaptured button and goes on holding', changed('ui/MobileControls.tsx', 'if (pointerLeaveReleases(capturedRef.current)) pointerUp(event)', 'void event')],
     ['E that claims a press it declined', changed('engine/Devices.tsx', 'if (answer === false) return\n', '')],
     ['a key that comes up and releases nothing', changed('engine/Devices.tsx', 'if (isInteractKey(event)) releasePrimaryAction()', 'void event')],
     ['a release nobody listens for', changed('engine/Devices.tsx', "window.addEventListener('keyup', onKeyUp)", '')],

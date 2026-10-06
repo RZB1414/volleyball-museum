@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 
+import { readText } from './lib/readText.ts'
+
 import {
   HOLD_CONFIRM_AFTER_SECONDS,
   HOLD_IDLE,
@@ -23,6 +25,7 @@ import {
   NO_ACTION_POINTER,
   ownsDirectionalPadPointer,
   POINTER_CLICK_ECHO_MS,
+  pointerLeaveReleases,
   resetDirectionalPadSession,
   sampleDirectionalDrag,
   sampleDirectionalPad,
@@ -31,6 +34,7 @@ import {
 import {
   cancelPrimaryHold,
   isInteractKey,
+  keyMayBeginHold,
   onPrimaryHoldFired,
   pressPrimaryAction,
   primaryHold,
@@ -303,9 +307,13 @@ await test('the table of the held press: every state against every event', () =>
   // question has stood long enough to be one; another thing starts its own hold.
   assert.equal(HOLD_CONFIRM_AFTER_SECONDS, 0.5)
   assert.deepEqual(holdStep(ASKED, press()), { gesture: HOLD_IDLE, fired: DESK.id })
+  // A press that comes sooner is not heard, and the question starts its time
+  // over: it has to stand untouched before the same input may answer it.
   for (const early of [0, 0.2, 0.49]) {
-    assert.deepEqual(holdStep(CONFIRMING(early), press()), { gesture: CONFIRMING(early), fired: null }, `a press ${early} s after the question signed`)
+    assert.deepEqual(holdStep(CONFIRMING(early), press()), { gesture: CONFIRMING(0), fired: null }, `a press ${early} s after the question signed`)
   }
+  const untouched = CONFIRMING(0)
+  assert.equal(holdStep(untouched, press()).gesture, untouched, 'a press on a question that has not counted yet made a new gesture')
   for (const stood of [0, HOLD_CONFIRM_AFTER_SECONDS]) {
     assert.deepEqual(holdStep(CONFIRMING(stood), press({ id: 'another-desk', seconds: 2 })), {
       gesture: { phase: 'holding', id: 'another-desk', seconds: 2, held: 0 },
@@ -371,17 +379,50 @@ await test('a second tap by reflex is not the signature: the question has to sta
   assert.deepEqual(gesture(press(), RELEASE, press()).fired, [])
   // Three in a burst, inside the half second.
   assert.deepEqual(gesture(...tap(), ...between(0.1), ...tap(), ...between(0.1), ...tap()).fired, [])
-  // The question is still there after them, and counts from when it went up:
-  // a press it did not hear does not start the wait over.
+  // The question is still there after them, and a press it did not hear
+  // starts its time over. Counting from when it went up let a hand that
+  // kept tapping sign with its third to sixth tap, 0.6 to 0.75 s in: half
+  // the time the hold asks for, and still with nothing read.
   const burst = gesture(...tap(), ...between(0.2), ...tap(), ...between(0.4))
-  assert.deepEqual(burst, { gesture: ASKED, fired: [] })
-  assert.deepEqual(gesture(...tap(), ...between(0.2), ...tap(), ...between(0.4), press()).fired, [DESK.id])
+  assert.equal(burst.gesture.phase, 'confirming')
+  assert.deepEqual(burst.fired, [])
+  assert.deepEqual(gesture(...tap(), ...between(0.2), ...tap(), ...between(0.4), press()).fired, [], 'the tap after a burst signed')
+  assert.deepEqual(gesture(...tap(), ...between(0.2), ...tap(), ...between(0.6), press()).fired, [DESK.id])
+  // E hammered, at any rate a hand keeps up, for two seconds: never a
+  // signature. Then the hand stops, the question stands, and one press signs.
+  for (const perSecond of [3, 4, 5, 6, 8]) {
+    const gap = 1 / perSecond - 0.06
+    const hammered: HoldEvent[] = []
+    for (let taps = 0; taps < perSecond * 2; taps += 1) {
+      hammered.push(press(), ...Array.from({ length: 3 }, () => tick(0.02)), RELEASE)
+      hammered.push(...Array.from({ length: Math.max(1, Math.round(gap / 0.02)) }, () => tick(0.02)))
+    }
+    assert.deepEqual(gesture(...hammered).fired, [], `${perSecond} taps a second signed the deed`)
+    assert.deepEqual(gesture(...hammered, ...between(0.6), press()).fired, [DESK.id], `after ${perSecond} taps a second the question could not be answered`)
+  }
   // Read, and answered: «Assinar» on glass and E at a keyboard are this press.
   assert.deepEqual(gesture(...tap(), ...between(0.9), ...tap()).fired, [DESK.id])
   // Escape answers at once, however young the question.
   assert.deepEqual(gesture(...tap(), CANCEL, press(), ...frames(0.1)).fired, [])
   // And a press the question did not hear is not a hold either: kept down, it signs nothing behind the question.
   assert.deepEqual(gesture(...tap(), ...between(0.1), press(), ...frames(0.2), RELEASE).fired, [], 'a press the question did not hear went on as a hold')
+})
+
+await test('a hold is never left running with nothing held: no modifier starts one, and an uncaptured thumb that leaves lets go', () => {
+  // Cmd+E on a Mac: the key coming up is never reported, and the hold would run its time and sign by itself.
+  assert.equal(keyMayBeginHold({ ctrlKey: false, metaKey: false, altKey: false }), true)
+  for (const modifier of ['ctrlKey', 'metaKey', 'altKey'] as const) {
+    assert.equal(keyMayBeginHold({ ctrlKey: false, metaKey: false, altKey: false, [modifier]: true }), false, modifier)
+  }
+  // A pointer the button could not capture: its release outside the button is never heard.
+  assert.equal(pointerLeaveReleases(false), true)
+  assert.equal(pointerLeaveReleases(true), false, 'a captured thumb sliding off the button let the hold go')
+  // And the components ask: the key handler before it begins a hold, the buttons that press as a pointer leaves.
+  const devices = readText(new URL('../src/engine/Devices.tsx', import.meta.url))
+  assert.ok(devices.includes('if (isHoldRequest(answer) && keyMayBeginHold(event)) beginPrimaryHold(answer)'), 'the key handler begins a hold whatever is held with it')
+  const controls = readText(new URL('../src/ui/MobileControls.tsx', import.meta.url))
+  assert.ok(controls.includes('if (pointerLeaveReleases(capturedRef.current)) pointerUp(event)'), 'a pointer leaving the button is not asked about')
+  assert.equal((controls.match(/onPointerLeave=\{pointerLeft\}/g) ?? []).length, 2, 'the Action button and «Assinar»')
 })
 
 await test('a frozen tab does not sign by itself: one frame counts a quarter of a second at the most', () => {

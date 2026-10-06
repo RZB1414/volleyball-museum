@@ -153,6 +153,17 @@ export function triggerPrimaryAction() {
 }
 
 /**
+ * Whether a key press may start a hold.
+ *
+ * Not with Ctrl, Cmd or Alt down. That press is a shortcut of the browser's,
+ * and on a Mac a key let go while Cmd is held never reports coming up: the
+ * hold would run its time with nothing held, and sign.
+ */
+export function keyMayBeginHold(event: Pick<KeyboardEvent, 'ctrlKey' | 'metaKey' | 'altKey'>) {
+  return !event.ctrlKey && !event.metaKey && !event.altKey
+}
+
+/**
  * True for an E press that no other system has already acted on.
  *
  * Every system listens to E on `window`, and every listener runs for the same

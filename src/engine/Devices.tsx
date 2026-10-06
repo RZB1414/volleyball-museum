@@ -73,6 +73,7 @@ import {
   isHoldCancelKey,
   isInteractKey,
   isUnclaimedInteractKey,
+  keyMayBeginHold,
   onPrimaryHoldFired,
   primaryHold,
   releasePrimaryAction,
@@ -586,7 +587,8 @@ export function DeviceTargeting() {
       event.preventDefault()
       // A press that has to be held goes on through the one gesture the
       // touch button drives too: the key coming up, below, is its release.
-      if (isHoldRequest(answer)) beginPrimaryHold(answer)
+      // A press made with a modifier down may never say it came up.
+      if (isHoldRequest(answer) && keyMayBeginHold(event)) beginPrimaryHold(answer)
     }
     const onKeyUp = (event: KeyboardEvent) => {
       if (isInteractKey(event)) releasePrimaryAction()

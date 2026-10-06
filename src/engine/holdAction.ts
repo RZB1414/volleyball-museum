@@ -26,8 +26,9 @@
  * sooner than that is not heard. Without it two taps in a row were a
  * signature, made faster than the hold the desk asks for and with nothing
  * read in between, which is the very thing the hold is there to prevent.
- * The press it does not hear is dropped, not kept as a hold: the question
- * stays where it is until it is read, answered or cancelled.
+ * The press it does not hear is dropped, not kept as a hold, and the moment
+ * starts over: the question stays where it is until it has stood untouched
+ * and is then answered, or is cancelled.
  *
  * Time is counted frame by frame and a frame counts a quarter of a second
  * at the most, the limit the clock on the wall has: the first frame after a
@@ -86,8 +87,10 @@ const OVER: HoldStep = { gesture: HOLD_IDLE, fired: null }
  *   confirming same id, once the    aim lost: idle; else the      stays              idle
  *              question has stood:  question has stood that
  *              idle, FIRES; sooner: much longer
- *              not heard; another
- *              id: holding on it
+ *              not heard, and its
+ *              time starts over;
+ *              another id: holding
+ *              on it
  */
 export function holdStep(gesture: HoldGesture, event: HoldEvent): HoldStep {
   switch (gesture.phase) {
@@ -133,7 +136,13 @@ function whileConfirming(gesture: Extract<HoldGesture, { readonly phase: 'confir
       if (event.request.id !== gesture.id) return stay(heldFromZero(event.request))
       // The answer, if the question has been there to be read; otherwise the
       // second tap of a reflex, which is not heard.
-      return gesture.asked >= HOLD_CONFIRM_AFTER_SECONDS ? { gesture: HOLD_IDLE, fired: gesture.id } : stay(gesture)
+      if (gesture.asked >= HOLD_CONFIRM_AFTER_SECONDS) return { gesture: HOLD_IDLE, fired: gesture.id }
+      // And it starts the question's time over. Counted from when the
+      // question went up, a hand that kept tapping signed with its third to
+      // sixth tap, 0.6 to 0.75 s in: sooner than the hold the desk asks for,
+      // and with nothing read. What answers is a press after half a second
+      // in which nothing was pressed.
+      return gesture.asked === 0 ? stay(gesture) : stay({ ...gesture, asked: 0 })
     case 'tick': {
       if (event.aimed !== gesture.id) return OVER
       // Once it has stood its time there is nothing left to count: the same
